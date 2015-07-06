@@ -1,0 +1,146 @@
+#!/usr/bin/perl
+use strict;
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+
+##### help message
+my $usage = '
+Usage : $progname [options] mds_file
+
+   --help            display this text and exit
+   --pseudo          create phenofile for pseudocase/psuedocontrol
+
+version: $version
+
+ converts a mds file into a covariate file with studyindicator
+ created by Stephan Ripke 2010 at MGH, Boston, MA
+';
+
+
+##########################################
+# split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+#### evaluate options
+use Getopt::Long;
+GetOptions(     
+  "help" => \my $help,
+  "pseudo" => \my $pseudo,
+);
+
+die "$usage" if ($help || @ARGV != 1);
+
+my $mds_in = $ARGV[0];
+my $mds_out = $mds_in."_cov";
+my $mds_pseudo = $mds_in."_pspt";
+
+
+##############################
+## mds file analysis
+############################
+die "$mds_in: ".$! unless open MDI, "< $mds_in";
+
+my %studies = ();
+my $line = <MDI>;
+my $cc=0;
+while ($line = <MDI>) {
+    chomp($line);
+#    my @cells = &split_line($line);
+    my @cells =  split /\*/, $line;
+    my @c1s=  split /_/, $cells[0];
+    my $si = "$c1s[1]_$c1s[2]_$c1s[3]_$c1s[4]";
+    unless (exists $studies{$si}) {
+	$studies{$si} = $cc;
+	$cc++;
+    }
+}
+close MDI;
+
+my $nst = $cc;  ## Nstudies
+print "$nst\n";
+foreach (keys %studies) {
+    print "$_\n";
+}
+#exit;
+
+
+##############################
+## mds file analysis
+############################
+die "$mds_in: ".$! unless open MDI, "< $mds_in";
+die "$mds_out: ".$! unless open MDO, "> $mds_out";
+die "$mds_pseudo: ".$! unless open PO, "> $mds_pseudo";
+
+my @cells=();
+
+my $line = <MDI>;
+chomp($line);
+my $ststr = "";
+foreach (1..$nst-1){
+    $ststr .= "\tst$_";
+}
+
+if ($pseudo) {
+   my @cells = split /\*/, $line;
+   my @cells_loc = &split_line($cells[1]);
+   print MDO "FID\tIID$ststr\n";
+   print PO "FID\tIID\tPT\n";
+}
+else {
+    print MDO "$line$ststr\n";
+}
+
+while ($line = <MDI>) {
+    chomp($line);
+    my @cells = split /\*/, $line;
+    my @c1s=  split /_/, $cells[0];
+    my $si = "$c1s[1]_$c1s[2]_$c1s[3]_$c1s[4]";
+    my $ststr = "";
+    unless (exists $studies{$si}) {
+	die "not existing:$si";
+    }
+    foreach (1..$studies{$si}){
+	$ststr .= "\t0";
+    }
+    $ststr .= "\t1" if ($studies{$si} != $nst-1);
+    foreach ($studies{$si}..($nst-3)){
+	$ststr .= "\t0";
+    }
+    if ($pseudo) {
+	my @cells_loc = &split_line($cells[1]);
+	print MDO "pcase_$si*$cells_loc[0]\t$cells_loc[1]_ca$ststr\n";
+	print MDO "pcontrol_$si*$cells_loc[0]\t$cells_loc[1]_co1$ststr\n";
+
+	print PO "$cells[0]*$cells_loc[0]"."_pca\t$cells_loc[1]\t2\n";
+	print PO "$cells[0]*$cells_loc[0]"."_pco\t$cells_loc[1]\t1\n";
+#	print PO "pcontrol_$si*$cells_loc[0]\t$cells_loc[1]_co1\t1\n";
+
+
+#	print PO "pcase_$si*$cells_loc[0]\t$cells_loc[1]_ca\t2\n";
+#	print PO "pcontrol_$si*$cells_loc[0]\t$cells_loc[1]_co1\t1\n";
+    }
+    else {
+	print MDO "$line$ststr\n";
+    }
+
+}
+
+close MDI;
+close MDO;
+close PO;
+
+

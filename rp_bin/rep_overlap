@@ -1,0 +1,405 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+
+
+##########################
+##### check for multiple occurencies!!!!!!!
+##########################
+######
+## if hm3 is in the sample
+### awk '{print $3,$4}' aut_off_hm3.famex | sort | uniq -c | sort -n | grep -v hm3 | awk '{if ($1>1) print }' 
+##
+
+##### help message
+my $usage = "
+Usage : $progname genome-file 
+
+version: $version
+
+guesses relationship of doublettes and makes a nice pdf.
+please let the genome-file only pihat > 0.2
+";
+
+
+##########################################
+# subroutine to split a genome-output-line
+##########################################
+
+sub split_line_gen {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /[\s]+/, $line;
+}
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+##########################################
+# subroutine to split a cell with underscores
+##########################################
+
+sub split_cell {
+    my ($cell)=@_;
+    my @cols=  split /_/, $cell;
+}
+
+
+my %orcount = ();
+my %or2count = ();
+my %idcount = ();
+
+my %study = ();
+
+
+my $genfile = $ARGV[0];
+
+die $! unless open GEN, "< $genfile";
+
+while (<GEN>) {
+    my @cells = &split_line_gen($_);
+    next if ($cells[0] eq "FID1");
+#    foreach my $cell (@cells){
+#	print$cells[0] $cell."\n";
+#    }
+    my $where = "";
+    my $how = "";
+
+
+#    print "$cells[9]\n";
+    if ($cells[9] > 0.9) {
+	$how ="overlap";
+    }
+    else {
+	$how = "related";
+    }
+#    elsif ($cells[9] > 0.9){
+#	$how = "parchil";
+#    }
+#    else {
+#	if ($cells[10] < 0.1){
+#	    $how = "2nd_deg";
+#	}
+#	else {
+#	    $how = "sibling";
+#	}
+#    }
+    $cells[0] =~ s/^[0-9]+_//;
+    $cells[0] =~ s/^[0-9]+_//;
+    $cells[2] =~ s/^[0-9]+_//;
+    $cells[2] =~ s/^[0-9]+_//;
+
+    my @st1 = &split_cell ($cells[0]);
+#    print "@st1\n";
+#    exit;
+    my @st2 = &split_cell ($cells[2]);
+    my $study1 = "$st1[1].$st1[2]";
+    my $study2 = "$st2[1].$st2[2]";
+
+#    if ($study1 > $study2) {
+#	my $temp = $study1;
+#	$study1 = $study2;
+#	$study2 = $temp;
+#    }
+
+    if ($study1 eq $study2) {
+	$where = "intra";
+    }
+    else {
+	$where = "cross";
+    }
+
+#    print $study1."\thirt:".$study2."\n";
+
+    $study{$study1} =1;
+    $study{$study2} =1;
+
+    if ($how eq "overlap"){
+	$idcount {"$cells[0]\t$cells[1]"}++;
+	$idcount {"$cells[2]\t$cells[3]"}++;
+    }
+
+
+#    print $cells[0]."\n";
+#    print $cells[1]."\n";
+#    print $cells[2]."\n";
+#    print $cells[3]."\n";
+#    print "\n";
+
+    if ($study1 gt $study2) {
+	my $tmp = $study2;
+	$study2 = $study1;
+	$study1 = $tmp;
+    }
+
+#    print "$st1[1]\t$st2[1]\t$how\t$where\t$st1[3]\t$st2[3]\n";
+
+    $orcount {"$st1[0]\t$st2[0]\t$how\t$where\t$study1\t$study2"} ++;
+    $or2count {"$st1[0]\t$st2[0]\t$how\t$study1\t$study2"} ++;
+}
+#exit;
+
+close GEN;
+
+foreach my $key (sort keys %orcount) {
+    print "$key\t$orcount{$key}\n";
+}
+
+#exit;
+
+sub tab2pdf () {
+
+    my ($table_txt) = @_;
+
+    my $latex_templ ='
+\documentclass{article}
+\usepackage{rotating}
+\usepackage{scalefnt}
+%\usepackage[left=0cm,top=3cm,right=0cm,nohead,nofoot,landscape]{geometry}
+\usepackage[landscape]{geometry}
+\title{Report on GENFILE}
+\begin{document}
+\maketitle
+\begin{abstract}
+This is a report on the relatedness analysis. CaCa and CoCo means overlap with same disease status in one and another study. 
+This is mostly known before. \\
+CaCo and CoCa is the undesirably fact of cases overlapping with controls of another study, and vice-versa.
+Overlap means an PHAT \verb+>+ 0.9. Related means 0.2 \verb+<+ PHAT \verb+<+ 0.9.
+\\\\Stephan Ripke, MGH, Boston; ripke (at) chgr mgh harvard edu
+
+\end{abstract}
+\tableofcontents
+\newpage
+\scalefont{.7}
+%\begin{center}
+%\begin{tabular}{l|r|r}
+%\hline
+%\textbf{Test} & \textbf{Result} &  \textbf{Result2}\\\\
+%\hline
+
+TABLE
+
+%\hline
+%\end{tabular}
+%\end{center}
+\end{document}
+';
+#   print "\n*****************\n$table_txt\n****************\n";
+
+    $table_txt =~ s/\t/\&/g;
+    $latex_templ=~ s/TABLE/$table_txt/;
+    my $genfile_over = $genfile;
+    $genfile_over =~ s/_/-/g;
+    $latex_templ=~ s/GENFILE/$genfile_over/;
+
+#    print "\n*****************\n$table_txt\n****************\n";
+
+    &a2file ("$genfile.tex",$latex_templ);
+    &mysystem ("pdflatex -halt-on-error $genfile.tex > /dev/null");
+    &mysystem ("pdflatex -halt-on-error $genfile.tex > /dev/null");
+
+    &mysystem ("rm $genfile.tex $genfile.aux $genfile.log $genfile.toc");
+
+}
+
+my $tab_all;
+
+
+sub print_matrix () {
+
+    my ($how_o, @arr_str_o) = @_;
+
+#    print "HOW:$how_o\n";
+
+    my @sostudy = sort keys %study;
+    my @resostudy = reverse sort keys %study;
+    
+    my $nust = keys %study ;
+    my $half = int ($nust / 2);
+    
+    
+    sub print_part () {
+	
+	my ($from, $to, $to2, $how, @arr_str) = @_;
+	
+	my $tab_str;
+	my $head_str;
+	
+	$head_str .= "\n";
+	
+#    $head_str .= "\\begin{center}\n";
+	$head_str .= "\\noindent\\makebox[\\textwidth]{%\n";
+	
+	
+	
+	$tab_str .= "\\textbf{ca/co}";
+	$head_str .= "\\begin{tabular}{l";
+#    foreach my $rrr (0..($#resostudy-10)) {
+	foreach my $rrr ($from..$to) {
+	    my $st2 = $resostudy[$rrr];
+	    $tab_str .= "\t\\begin{sideways}\\textbf{$st2}\\end{sideways}";
+	    $head_str .= "r";
+	}
+	$tab_str .= "\\\\\n";
+	$tab_str .= "\\hline\n";
+	$head_str .= "}\n";
+	
+	$tab_str = $head_str.$tab_str;
+	
+#    print "HOW2:$how\n";
+
+	foreach my $sss (0..$to2) {
+	    my $st1 = $sostudy[$sss];
+	    $tab_str .= "$st1";
+	    my $nill=1;
+	    foreach my $rrr ($from..$to) {
+		my $st2 = $resostudy[$rrr];
+#	foreach my $st2 (reverse sort keys %study) {
+		my $nca=0;
+		my $nco=0;
+		if (exists $or2count {"$arr_str[0]\t$arr_str[1]\t$how\t$st1\t$st2"}) {
+		    $nca = $or2count {"$arr_str[0]\t$arr_str[1]\t$how\t$st1\t$st2"};
+		}
+		if (exists $or2count {"$arr_str[2]\t$arr_str[3]\t$how\t$st1\t$st2"}) {
+		    $nco =$or2count {"$arr_str[2]\t$arr_str[3]\t$how\t$st1\t$st2"};
+		}
+		
+		
+		my $bold = "" ;
+		$bold = "\\textbf{" if ($st1 eq $st2);
+		$tab_str .= "\t$bold$nca/$nco" if ($nca || $nco);
+		
+		unless ($nca || $nco) {
+		    $tab_str .= "\t$bold-" if ($nill == 1);
+		    $tab_str .= "\t$bold" if ($nill == 0);
+		}
+		$tab_str .= "}" if ($st1 eq $st2);
+		
+		$nill = 0 if ($st1 eq $st2);
+#	print "\t$st2";
+	    }
+	    $tab_str .= "\\\\\n";
+	    
+	    
+	}
+	$tab_str .= "\\end{tabular}\n";
+#    $tab_str .= "\\end{center}\n";
+	$tab_str .= "}\n";
+	$tab_all .= $tab_str;
+	
+	
+    }
+    
+#    print "HOW3:$how_o\n";
+    &print_part (0,$half-1,$nust-1, $how_o, @arr_str_o);
+#    print "HOW4:$how_o\n";
+#    $tab_all.= "\\subsection {cont.}\n";
+    &print_part ($half, $nust,$half, $how_o, @arr_str_o);
+
+
+}
+
+
+
+
+
+
+
+$tab_all.= "\\section {caca and coco}\n";
+$tab_all.= "\\subsection {overlap}\n";
+
+
+#&print_matrix("overlap","case","case","control","control");
+&print_matrix("overlap","cas","cas","con","con");
+
+$tab_all.= "\\subsection {related}\n";
+
+#&print_matrix("related","case","case","control","control");
+&print_matrix("related","cas","cas","con","con");
+
+$tab_all.= "\\section {caco and coca}\n";
+$tab_all.= "\\subsection {overlap}\n";
+
+#&print_matrix("overlap","case","control","control","case");
+&print_matrix("overlap","cas","con","con","cas");
+
+$tab_all.= "\\subsection {related}\n";
+
+#&print_matrix("related","case","control","control","case");
+&print_matrix("related","cas","con","con","cas");
+
+
+$tab_all.= "\\section {family-data}\n";
+$tab_all.= "\\subsection {overlap}\n";
+
+&print_matrix("overlap","fam","fam","dum","dum");
+
+$tab_all.= "\\subsection {related}\n";
+
+&print_matrix("related","fam","fam","dum","dum");
+
+
+$tab_all.= "\\section {nocc-data}\n";
+$tab_all.= "\\subsection {overlap}\n";
+
+#&print_matrix("overlap","nocc","nocc","control","control");
+&print_matrix("overlap","nocc","nocc","con","con");
+
+$tab_all.= "\\subsection {related}\n";
+
+#&print_matrix("related","nocc","nocc","control","control");
+&print_matrix("related","nocc","nocc","con","con");
+
+
+&tab2pdf($tab_all);
+
+print "---------\n";
+print "$tab_all\n";
+
+exit;
+
+my @out_str;
+push @out_str, "\nIndividuals with multiple occurence\n";
+foreach my $key (keys %idcount) {
+    push @out_str, "$idcount{$key}\t$key\n" if ($idcount{$key} > 1);
+}
+
+&a2file ("overlap_single.txt", @out_str);
+
+#foreach my $key (sort keys %orcount) {
+#    my @cells = &split_line_gen ($key);
+#    if ($cells[0] eq "case" && $cells[1] eq "case" ) {
+#	if ($cells[2] eq "overlap"  ) {
+#	    print "$key\t$orcount{$key}\n";
+#	}
+#    }
+#}
+

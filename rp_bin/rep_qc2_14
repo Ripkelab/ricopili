@@ -1,0 +1,4634 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "8.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+my $noc = 0;
+
+my $minsize= 1000;
+
+###############################
+### version 7 with plink2
+###   removed all --maf 0
+###   not working with --het and --hardy
+###   reformating hafi.snpex
+### version 8
+###   histplots of Fhet and imendel
+###   sex-exclude and warning
+###
+### post version 8
+###   fix platfrom in meta
+###   fix prekno-link (two directories up)
+###   fix bug in detres reporting
+###
+### version 9
+###   forgot about it
+###
+### version 10
+###   new option: --withpna
+###
+### version 11
+###   new option: --noassoc
+###   with only_controls
+###
+### version 12
+###   with only_cases
+
+#############################
+# write log-file
+#############################
+
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+my $past_file = $ENV{HOME}."/repqc2_info";
+my $pwd_loc = $ENV{PWD};
+
+die $! unless open FILE, ">> $past_file";
+print FILE "$pwd_loc\t$command_line\n";
+close FILE;
+
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+#my $p1loc = &trans("ploc");
+my $ploc = &trans("p2loc");
+my $rloc = &trans("rloc");
+my $qloc = &trans("queue");
+
+
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+if ($qloc eq "msub") {
+    $r_sys = "module load R; R";
+}
+
+
+
+
+#my $noassoc=0; # restricted QC without association test	
+my $mind=0.02; # per ID	
+my $geno=0.02; # per SNP
+my $maf_th=0.00; # per SNP
+my $midi_th=0.02; # per SNP
+
+my $pre_geno=0.05; # per SNP
+
+my $mend_th=4; # per SNP
+my $imend_th=10000; # per ID
+my $Fhet_th=.2; # per ID
+my $faf_th=0.15; # per SNP
+
+my $hwe_th=0.000001; 
+my $hwe_th_ca=0.0000000001; 
+my $me_th1=0.05;
+my $me_th2=0.1;
+my $withpna=0;
+
+
+#############################################################################
+
+#### plink --het, and here the F-statistics!!!!
+
+##### help message
+my $usage = "
+Usage : $progname [options] bprefix
+
+version: $version
+
+options:
+  -noc             no calculation, only reporting
+  -mind NUM        include only IDs with missing-rate < NUM
+  -geno NUM        include only SNPs with missing-rate < NUM
+  -pre_geno NUM    include only SNPs with missing-rate < NUM (before ID filter)
+  -maf  NUM        include only SNPs with missing-rate < NUM
+  -midi NUM        include only SNPs with missing-rate-difference < NUM
+  -Fhet_th NUM        -NUM < FHET < NUM
+  -hwe_th_co NUM   HWE_controls < NUM
+  -hwe_th_ca NUM   HWE_cases < NUM
+  -faf NUM        include only SNPs with frequency difference to hapmap < NUM
+  -subno           force without subgrp (even when subgrps available)
+  -hardy2          use asymptotic HWE (for huge datasets)
+  -tdt             family dataset with use of tdt
+#  --noqc1b         no check of SNP strand, etc, outdated
+  --imend INT      number of mendelian errors per ID
+  --lmend INT      max number of mendelian errors per SNP
+  --chrx           chr X qc
+#  -co              case only or control only report
+  --minsize INT    for lahunt, default $minsize
+
+  --prekno FILE    prekno-file
+  --th_prekno FLOAT  p-value from where excluding new regions
+
+  --withpna 1       inlcude SNPs with p=NA (monomorph)
+  --noassoc         restricted QC for datasets without both, cases and controls
+
+   Defaults:
+
+   mind       $mind
+   geno       $geno
+   maf        $maf_th
+   midi       $midi_th
+   pre-geno   $pre_geno
+   lmend      $mend_th
+   imend      $imend_th
+   hwe_th_co  $hwe_th
+   hwe_th_ca  $hwe_th_ca
+   withpna    $withpna
+   Fhet_th    $Fhet_th
+
+
+   ################################
+
+    if prekno post-QC, then 
+       rm GWA-P*
+       rm prekno*
+
+   ################################
+
+
+
+ reports on the QC2 - Step for GWAS - Data, while using plink, R, latex
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+ since vs. 3.0.0 it is a perl-script
+
+ -> please look in advance that there are no duplicate markers!!
+
+";
+
+my $prekno_file = "";
+my $th_prekno = 5.0e-08;
+
+
+#print "perl_pack: ".$ENV{rp_perlpackages}."\n";
+##### switch on and off single parts of the report (for debugging)
+
+my $prop_ana=1;
+my $qq_sm=1;
+my $combine_sm=1;
+my $checkfaf=1;
+my $lambda_matrix=1;
+my $top_plot=1;
+my $gwa_plot=1;
+my $hist_id_plot=1;
+my $hist_snp_plot=1;
+my $fmatr_plot=1;
+my $tex_sum=1;
+my $subgroups=1;
+my $noqc1b=1;
+
+if (0){
+
+    $prop_ana=0;
+    $qq_sm=0;
+    $combine_sm=1;
+    $checkfaf=0;
+    $lambda_matrix=1;
+    $top_plot=0;
+    $gwa_plot=0;
+    $hist_id_plot=0;
+    $hist_snp_plot=0;
+    $tex_sum=1;
+    $subgroups=0;
+    $noc = 1;
+
+}
+
+my $proxy_assoc=0;
+my $assoc_text="--assoc --adjust";
+$assoc_text="--proxy-assoc" if $proxy_assoc;
+
+#### set up threshholds
+
+
+
+
+my $assoc_snps=0;
+my $adjustnumbers=0;
+
+my $tdt = 0;
+
+#### evaluate options
+
+use Getopt::Long;
+GetOptions( 
+    "noc"=> \$noc,   # no calculation, for a second faster run
+    "hardy2"=> \my $hardy2,   # use asymptotic HWE (huge datasetsget error with exact)
+    "help"=> \my $help, # prints help message
+    "subno"=> \my $ns,  # no subdirs, even when they are available
+    "tdt"=> \my $tdt_sw,  # tdt in family data
+#    "noqc1b"=> \my $noqc1b,  # no collect_hm_info, no checkannot
+    "chrx"=> \my $chrx,  # extra for chrx
+
+
+    "noassoc"=> \my $noassoc,  # restricted QC without association test
+    "mind=s"=> \$mind,  # missing per ID threshhold
+    "geno=s"=> \$geno,  # missing per SNP threshhold
+    "maf=s"=> \$maf_th,  # MAF per SNP threshhold
+    "midi=s"=> \$midi_th,  # missing per SNP threshhold
+    "imend=i"=> \$imend_th,  # mendel per ID threshhold
+    "lmend=i"=> \$mend_th,  # mendel per SNP threshhold
+    "Fhet_th=f"=> \$Fhet_th,  # Fhet threshold
+    "pre_geno=f"=> \$pre_geno,  # pre_geno threshold
+    "withpna=i"=> \$withpna, # mono threshold
+
+
+    "minsize=i"=> \$minsize,  # minsize for lambda in lahunt
+    "faf=f"=> \$faf_th,  # FAF per SNP threshhold
+
+
+    "prekno=s"=> \$prekno_file,
+    "th_prekno=f"=> \$th_prekno,
+
+    "hwe_th_co=f"=> \$hwe_th,
+    "hwe_th_ca=f"=> \$hwe_th_ca,
+
+
+#    "co"=> \my $conly,  # case/control only
+    );
+
+
+
+if ($noassoc) {
+    print "restricted QC\n";
+    print "-------------\n";
+#    exit;
+}
+
+
+my $calc=1; $calc=0 if $noc;
+
+$tdt=1 if ($tdt_sw);
+
+die "$usage\n" if $help;
+die "please try $progname --help\n" if @ARGV ne 1;
+
+# failed string in red for latex
+
+my $failedstr = '\textcolor{red}{***}';
+my $greenstr = '\textcolor{green}{***}';
+my $bluestr = '\textcolor{cyan}{***}';
+my $magentastr = '\textcolor{magenta}{***}';
+my $yellowstr = '\textcolor{yellow}{***}';
+
+
+#### set up subdirname an create it, if not existing
+my $prefix=$ARGV[0];
+
+
+### take of .bim
+$prefix =~ s/\.bim$//;
+
+
+
+#my $out_dir="tmp_report_".$prefix."_"."$mind"."_"."$geno"."_"."$midi_th";
+my $out_dir="tmp_report_".$prefix."_"."$mind"."_"."$geno"."_"."$midi_th"."_".$maf_th;
+$out_dir=$out_dir."_nosub" if $ns;
+
+
+use File::Path;
+my @created = mkpath(
+    "$out_dir",
+    {verbose => 0, mode => 0750},
+    );
+
+
+unless ($noqc1b){
+    print "$prefix.bim.hg18hapmap\n";
+    &mysystem ("collect_hm_info $prefix.bim") unless (-e "$prefix.bim.hg18hapmap");
+    &mysystem ("checkannot $prefix.bim") unless (-e "$prefix.bim.chinfo");
+    copy ("../$prefix.bim.hg18hapmap",".") or die "corresponding dataset missing (../$prefix.bim.hg18hapmap) $!";
+    copy ("../$prefix.bim.chinfo",".") or die "corresponding dataset missing (../$prefix.bim.chinfo) $!";
+
+}
+
+chdir $out_dir;
+
+die "corresponding dataset missing (../$prefix.bim) $!" unless (-e "../$prefix.bim");
+
+&mysystem ("ln -s ../$prefix.bim .") unless (-e "$prefix.bim");
+&mysystem ("ln -s ../$prefix.bed .") unless (-e "$prefix.bed");
+&mysystem ("ln -s ../$prefix.fam .") unless (-e "$prefix.fam");
+
+
+my $prekno_txt = "";
+unless ($prekno_file eq "") {
+    $prekno_txt = "--prekno $prekno_file";
+    die unless (-e "../../$prekno_file");
+    &mysystem ("ln -s ../../$prekno_file .") unless (-e "$prekno_file");
+}
+
+if ($prefix =~ /\./){
+    my $new_prefix = $prefix;
+    $new_prefix=~ s/\./-/g;
+
+    &mysystem ("mv $prefix.bim $new_prefix.bim");
+    &mysystem ("mv $prefix.fam $new_prefix.fam");
+    &mysystem ("mv $prefix.bed $new_prefix.bed");
+    print "point found\n";
+    $prefix = $new_prefix;
+#    exit;
+}
+
+#copy ("../$prefix.bim.hg18hapmap",".") or die "corresponding dataset missing (../$prefix.bim.hg18hapmap) $!";
+#copy ("../$prefix.bim.chinfo",".") or die "corresponding dataset missing (../$prefix.bim.chinfo) $!";
+
+
+
+###############################################
+#### check fam if only cases or only controls
+###############################################
+#if ($conly){
+my $conly_id_miss = 0;
+my %cc_num = ();
+$cc_num{1} = 0;
+$cc_num{2} = 0;
+$cc_num{-9} = 0;
+my %sex_num = ();
+my $nids_nofi ;
+    
+die $! unless open FAMI , "< $prefix.fam";
+while (<FAMI>){
+    chomp;
+    my @cells = &split_line($_);
+
+    $cc_num {$cells[5]} ++;
+    $sex_num {$cells[4]} ++;
+    $nids_nofi ++;
+#    print "hier: $cells[5]\n";
+}
+close FAMI;
+
+foreach (keys %cc_num) {
+    if ($_ ne "1") {
+	if ($_ ne "2") {
+	    if ($_ ne "-9") {
+		unless ($noassoc) {
+		    die "please only phenotypes 1,2,-9: <$_>";
+		}
+	    }
+	}
+    }
+}
+
+$conly_id_miss = 1 if ($cc_num{2} == 0);
+$conly_id_miss = 2 if ($cc_num{1} == 0);
+
+
+
+if ($conly_id_miss > 0 && $tdt == 0){
+    unless ($noassoc) {
+	die "please cases AND controls!";
+    }
+}
+
+
+#my @temp = keys %fam_check;
+#print "co: $conly_id_miss\n";
+
+#exit;
+
+#### set up temporary output-filenames, begin log-file
+my $progress_log="log-file.txt";
+
+
+
+my $outprefix="$prefix";
+$outprefix="$outprefix"."-qc";
+
+my $reportprefix="$prefix.qc";
+#my $reportprefix="report_qc2_$prefix";
+my $proprefix="prop_$prefix";
+my $mendiprefix="mendi_$prefix";  # mendi-error-check
+my $nofiprefix="nofi_$prefix";  # no filter
+my $hafiprefix="hafi_$prefix";  # half filter (only geno BEFORE mind)
+my $idfiprefix="idfi_$prefix";  # half filter (only id-filter BEFORE snp-filter)
+my $fifiprefix="fifi_$prefix";  # first filter (mind, geno, hwe)
+my $sefiprefix="sefi_$prefix";  # second filter (midi and faf)
+my $pofiprefix="pofi_$prefix";  # post all filters
+my $preknoprefix="prekno_$prefix";  # post all filters
+my $tdtprefix="tdt_$prefix";  # prefix for family dataset
+my $tdtnomeprefix="tdt_nome_$prefix";  # prefix for family dataset without mendel-errors (nulled)
+my $ccprefix="cc_$prefix";  # prefix for family dataset
+my $freq_prefix="prop_freq_$prefix";
+my $assoprefix="assoc_$prefix";
+
+my $excl_snps=0;
+my $excl_ids=0;
+my $ncases = 0;
+my $ncontrols = 0;
+
+
+
+#die $! unless open LOG , "> $progress_log";
+
+
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+#############################
+# test, if running on server
+#############################
+#use Sys::Hostname;
+#my $host = hostname();
+#my $lisa=0;
+#$lisa=1 if ($host =~ m/sara/) ;
+
+#my $lisamodule= "/home/ripke/plink/plink";
+#$lisamodule= "/home/gwas/plink/plink" if $lisa;
+
+#print "local running\n" unless $lisa;
+
+
+
+##########################################
+# split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+#####################################
+# subroutine to count lines of a file
+#####################################
+
+sub count_lines {
+    my ($file)=@_;
+    my $lc=0;
+    die "$file: ".$! unless open FILE, "< $file";
+    while (<FILE>){
+	$lc++;
+    }
+    close FILE;
+    $lc;
+}
+
+
+##################################################################
+# convert tdt-output in assoc output
+##################################################################
+
+sub asso2tdt {
+    my ($prefix)=@_;
+    die "$! ($prefix.tdt)" unless open FILE, "< $prefix.tdt";
+    die "$! ($prefix.assoc)" unless open OUT, "> $prefix.assoc";
+    while (<FILE>){
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+
+	print OUT $cells[0];
+	print OUT "\t".$cells[1];
+	print OUT "\t".$cells[2];
+	print OUT "\t".$cells[3];
+	print OUT "\t".$cells[5];
+	print OUT "\t".$cells[6];
+	print OUT "\t".$cells[4];
+	print OUT "\t".$cells[8];
+	print OUT "\t".$cells[9];
+	print OUT "\t".$cells[7];
+	print OUT "\n";
+    }
+    close FILE;
+    close OUT;
+}
+
+
+
+
+##################################################################
+# convert tdt-output in assoc output
+##################################################################
+
+sub asso2tdt_frq {
+    my ($prefix)=@_;
+    my %frq;
+    die "$! ($prefix.frq)" unless open FILE, "< $prefix.frq";
+    while (<FILE>){
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+	$frq{$cells[1]} = $cells[4];
+    }
+    close FILE;
+
+    die "$! ($prefix.tdt)" unless open FILE, "< $prefix.tdt";
+    die "$! ($prefix.assoc)" unless open OUT, "> $prefix.assoc";
+    while (<FILE>){
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+	unless (exists $frq{$cells[1]}) {
+	    print "Error: no frq for $cells[1], $prefix.tdt, $prefix.frq\n";
+	}
+	print OUT $cells[0];
+	print OUT "\t".$cells[1];
+	print OUT "\t".$cells[2];
+	print OUT "\t".$cells[3];
+	print OUT "\t".$cells[5];
+	print OUT "\t".$frq{$cells[1]};
+	print OUT "\t".$cells[4];
+	print OUT "\t".$cells[8];
+	print OUT "\t".$cells[9];
+	print OUT "\t".$cells[7];
+	print OUT "\n";
+    }
+    close FILE;
+    close OUT;
+}
+##################################################################
+# convert tdt-output in assoc output with SE
+##################################################################
+
+sub asso2tdt_se {
+    my ($prefix)=@_;
+
+
+    die "$! ($prefix.tdt)" unless open FILE, "< $prefix.tdt";
+    die "$! ($prefix.assoc)" unless open OUT, "> $prefix.assoc";
+    while (<FILE>){
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+
+
+	print OUT $cells[0];
+	print OUT "\t".$cells[1];
+	print OUT "\t".$cells[2];
+	print OUT "\t".$cells[3];
+	print OUT "\t".$cells[5];
+	print OUT "\t".$cells[6];
+	print OUT "\t".$cells[4];
+	print OUT "\t".$cells[10];
+	print OUT "\t".$cells[11];
+	print OUT "\t".$cells[7];
+	print OUT "\t".$cells[8];
+	print OUT "\t".$cells[8];
+	print OUT "\t".$cells[9];
+	print OUT "\n";
+    }
+    close FILE;
+    close OUT;
+}
+##################################################################
+# convert tdt-output in assoc output with SE
+##################################################################
+
+sub asso2tdt_se_frq {
+    my ($prefix)=@_;
+    my %frq;
+    die "$! ($prefix.frq)" unless open FILE, "< $prefix.frq";
+    while (<FILE>){
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+	$frq{$cells[1]} = $cells[4];
+    }
+    close FILE;
+
+    die "$! ($prefix.tdt)" unless open FILE, "< $prefix.tdt";
+    die "$! ($prefix.assoc)" unless open OUT, "> $prefix.assoc";
+    while (<FILE>){
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+
+	unless (exists $frq{$cells[1]}) {
+	    print "Error: no frq for $cells[1], $prefix.tdt, $prefix.frq\n";
+	}
+
+	print OUT $cells[0];
+	print OUT "\t".$cells[1];
+	print OUT "\t".$cells[2];
+	print OUT "\t".$cells[3];
+	print OUT "\t".$cells[5];
+	print OUT "\t".$frq{$cells[1]};
+	print OUT "\t".$cells[4];
+	print OUT "\t".$cells[10];
+	print OUT "\t".$cells[11];
+	print OUT "\t".$cells[7];
+	print OUT "\t".$cells[8];
+	print OUT "\t".$cells[8];
+	print OUT "\t".$cells[9];
+	print OUT "\n";
+    }
+    close FILE;
+    close OUT;
+}
+
+
+##################################################################
+# subroutine to count lines of a file with content cont in cell n
+##################################################################
+
+sub count_lines_cont {
+    my ($cont,$n,$file,$file_out, $file_out_2)=@_;
+    my $lc=0;
+    die "$! ($file)" unless open FILE, "< $file";
+    if ($file_out ne ""){
+	die "$! ($file_out)" unless open OUT, "$file_out";
+	die "$! ($file_out_2)" unless open OUT2, "$file_out_2";
+    }
+    else {
+	open OUT, "> /dev/null";
+    }
+    while (<FILE>){
+#	print "$file\n";
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+
+#	my @cells = &split_line($_);
+	if ($cells[$n-1] eq $cont){
+	    $lc++;
+	    print OUT2 "$cells[1]\tPNA\n" ;
+	}
+	print OUT "$_\n" unless ($cells[$n-1] eq $cont);
+    }
+    close FILE;
+    close OUT;
+    close OUT2;
+    $lc;
+}
+
+
+##################################################################
+# subroutine to count lines of a file with cell higher that calue
+##################################################################
+
+sub count_lines_high {
+    my ($th,$n,$file,$file_out, $file_out_2,$bs)=@_;
+    my $lc=0;
+    die "$! ($file)" unless open FILE, "< $file";
+    if ($file_out ne ""){
+	die "$! ($file_out)" unless open OUT, "$file_out";
+	die "$! ($file_out_2)" unless open OUT2, "$file_out_2";
+    }
+    else {
+	open OUT, "> /dev/null";
+    }
+
+    my $snpcol = -1;
+
+    #############################
+    ##  read SNPcol out of header
+    ##############################
+    my $head = <FILE>;
+    chomp($head);
+    my @cells = &split_line($head);
+    my $cc = 0;
+    foreach my $cloc (@cells) {
+	if ($cloc eq "SNP") {
+	    $snpcol = $cc;
+	}
+	$cc++;
+    }
+    if ($snpcol == -1) {
+	print "no SNP header: $file\n";
+#	exit;
+    }
+
+    print OUT $head."\n" ;
+    print OUT2 $head."\n" ;
+
+    while (my $line = <FILE>){
+#	print "$file\n";
+	chomp($line);
+	my @cells = @{&split_line_ref(\$line)};
+
+#	my @cells = &split_line($line);
+
+	my $outstr = "$line\t$file\n";
+#	if ($snpcol != -1) {
+#	    my $outstr = "$cells[$snpcol]\t$file\n";
+#	}
+
+	##### bs == 0 , means normal bigger than
+	if ($bs == 0){
+	    if ($cells[$n-1] > $th){
+		$lc++;
+		print OUT $outstr ;
+	    }
+	    else {
+		print OUT2 $outstr ;
+	    }
+	}
+
+	##### bs == 2 , means normal bigger than plus and smaller than minus (missing-difference)
+	elsif ($bs == 2){
+	    if ($cells[$n-1] > $th || $cells[$n-1] < -1*$th){
+		$lc++;
+		print OUT $outstr ;
+	    }
+	    else {
+		print OUT2 $outstr ;
+	    }
+	}
+
+	##### bs == 2 , means normal smaller than
+	elsif ($bs == 1){
+	    if ($cells[$n-1] < $th ){
+		$lc++;
+		print OUT $outstr ;
+	    }
+	    else {
+		print OUT2 $outstr ;
+	    }
+	}
+    }
+    close FILE;
+    close OUT;
+    close OUT2;
+    $lc;
+}
+
+
+
+#####################################
+# grep analog
+####################################
+
+sub greppi {
+    my ($expr, $file)=@_;
+    my @lc=();
+    die $!."($file)" unless open FILE, "< $file";
+    while (<FILE>){
+#	chomp;
+	push @lc, $_ if ($_ =~ "$expr");
+    }
+    close FILE;
+    @lc;
+}
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+print  "Progress of the QC2-Report of $prefix\n";
+
+
+##############################################
+# test, if subroup-filtering has been done
+# if so, count excluded and included IDs/SNPs
+##############################################
+
+my $sub_filter=0;
+my $sub_snp_name="$prefix.subgr_snps";
+my $sub_id_name="$prefix.subgr_ids";
+
+
+my $extract="";
+my $n_subid_excl=0;
+my $n_subsnp_excl=0;
+my $n_subid=0;
+my $n_subsnp=0;
+
+unless ($ns){
+    if (-e $sub_snp_name){
+	die "sub_filter not complete\n" unless (-e $sub_id_name);
+
+	$extract="--extract $sub_snp_name --keep $sub_id_name";
+	$sub_filter=1;
+
+	$n_subid= &count_lines ($sub_id_name);
+	$n_subsnp= &count_lines ($sub_snp_name);
+	$n_subid_excl= &count_lines ("$prefix.fam")-$n_subid;
+	$n_subsnp_excl= &count_lines ("$prefix.bim")-$n_subsnp;
+    }
+}
+
+
+###### test for hapmap-info and for annotation-checking
+###### react, if not
+
+#&mysystem ("collect_hm_info.sh $prefix.bim") unless -e "$prefix.bim.hg18hapmap";
+#&mysystem ("checkannot.sh $prefix.bim") unless -e "$prefix.bim.chinfo";
+
+
+
+die "proxy_assoc not yet finished" if ($proxy_assoc);
+
+##############################################################
+# perform testing for threshholds and aassociation
+###########################################################
+
+my @detex_files;
+
+my $idex_fifi;
+my $idex_fifi_ca;
+my $idex_fifi_co;
+my $idex_fifi_mend;
+my $idex_fifi_fhet;
+my $idex_fifi_fhet_ca;
+my $idex_fifi_fhet_co;
+my $idex_nofi;
+my $snpex_fifi;
+my $snpex_nofi;
+my $snpex_sefi_faf;
+my $snpex_sefi_maf;
+my $snpex_sefi_hwe;
+my $snpex_sefi_hwe_ca;
+my $snpex_sefi_midi;
+my $snpex_sefi_pna;
+my $snpex_sefi_mend;
+
+my $n_snps_nofi= &count_lines ("$prefix.bim");
+
+my $allow = "--allow-no-sex";
+my $assotdt = "--assoc";
+$assotdt = "--tdt" if ($tdt == 1);
+
+if ($noassoc) {
+    $assotdt = "";
+}
+
+
+
+#### without filter for prefilter (.05 SNP)
+################################################
+
+
+
+
+    print  "-> analysis without filter\n";
+if ($calc){
+    unless (-e "$nofiprefix.imiss") {
+	my $sys = "$ploc/plink $allow --bfile $prefix --out $nofiprefix.tmp --geno 1 --mind 1 --noweb $assotdt --missing";
+#	print "$sys\n";
+#	exit;  
+	&mysystem ("$ploc/plink $allow --bfile $prefix --out $nofiprefix.tmp --geno 1 --mind 1 --noweb $assotdt --missing --freq");  
+
+
+	&asso2tdt_frq("$nofiprefix.tmp") if ($tdt == 1);
+	unless ($noassoc) {
+	    &mysystem ("mv $nofiprefix.tmp.assoc $nofiprefix.assoc");
+	}
+
+	&mysystem ("mv $nofiprefix.tmp.lmiss $nofiprefix.lmiss");
+	&mysystem ("mv $nofiprefix.tmp.imiss $nofiprefix.imiss");
+    }
+
+
+}
+#exit;
+
+
+die "switch --noc?" unless (-e "$nofiprefix.lmiss");
+
+#exit;
+
+
+#$snpex_hafi = &count_lines_high($pre_geno,5,$nofiprefix.".lmiss","> $hafiprefix.snpex", "> /dev/null",0);
+#$idex_hafi = &count_lines_high($mind,6,$nofiprefix.".imiss","> $hafiprefix.idex", "> /dev/null",0);
+
+
+
+###### pre-snp
+push  @detex_files, "$nofiprefix.snpex.detex.txt"; 
+unless (-e "$nofiprefix.snpex.detex.txt") {
+    die $!."($nofiprefix.lmiss)" unless open IN, "< $nofiprefix.lmiss";
+    die $!."($nofiprefix.snpex.detex.txt.tmp)" unless open DX, "> $nofiprefix.snpex.detex.txt.tmp";
+
+    print DX "CHR\tSNP\tSNP_missing_pre_$pre_geno($nofiprefix.lmiss)\n";
+    <IN>;
+
+    my $mc = 0;
+    while (<IN>){
+	my @cells = @{&split_line_ref(\$_)};
+	next if ($cells[4] <= $pre_geno);
+	print DX $cells[0]."\t".$cells[1]."\t".$cells[4]."\n";
+	$mc++;
+    }
+    close IN;
+    close DX;
+
+    die $!."($nofiprefix.snpex.detex.txt.n)" unless open DXN, "> $nofiprefix.snpex.detex.txt.n";
+    print DXN "$mc\n";
+    close DXN;
+
+    &mysystem ("sort -k3,3n $nofiprefix.snpex.detex.txt.tmp > $nofiprefix.snpex.detex.txt.tmp.sorted");
+    &mysystem ("mv  $nofiprefix.snpex.detex.txt.tmp.sorted $nofiprefix.snpex.detex.txt");
+    &mysystem ("rm  $nofiprefix.snpex.detex.txt.tmp ");
+}
+
+
+die $!."($nofiprefix.snpex.detex.txt.n)" unless open DXN, "< $nofiprefix.snpex.detex.txt.n";
+$snpex_nofi = <DXN>;
+chomp($snpex_nofi);
+close DXN;
+
+
+
+### pre-id (only report no filter)
+unless (-e "$nofiprefix.idnopre.detex.txt") {
+    die $!."($nofiprefix.imiss)" unless open IN, "< $nofiprefix.imiss";
+    die $!."($nofiprefix.idnopre.detex.txt.tmp)" unless open DX, "> $nofiprefix.idnopre.detex.txt.tmp";
+
+    print DX "FID\tIID\tID_missing_pre_$mind($nofiprefix.imiss)\n";
+    <IN>;
+
+    my $mc = 0;
+    while (<IN>){
+	my @cells = @{&split_line_ref(\$_)};
+	next if ($cells[5] <= $mind);
+	print DX $cells[0]."\t".$cells[1]."\t".$cells[5]."\n";
+	$mc++;
+    }
+    close IN;
+    close DX;
+
+    die $!."($nofiprefix.idnopre.detex.txt.n)" unless open DXN, "> $nofiprefix.idnopre.detex.txt.n";
+    print DXN "$mc\n";
+    close DXN;
+
+    &mysystem ("sort -k3,3n $nofiprefix.idnopre.detex.txt.tmp > $nofiprefix.idnopre.detex.txt.tmp.sorted");
+    &mysystem ("mv  $nofiprefix.idnopre.detex.txt.tmp.sorted $nofiprefix.idnopre.detex.txt");
+    &mysystem ("rm  $nofiprefix.idnopre.detex.txt.tmp ");
+}
+
+die $!."($nofiprefix.idnopre.detex.txt.n)" unless open DXN, "< $nofiprefix.idnopre.detex.txt.n";
+$idex_nofi = <DXN>;
+chomp($idex_nofi);
+close DXN;
+
+
+
+#exit;
+
+#### without snps with miss > .05 to get ID-exclusions
+############################################################################
+    print  "-> analysis after pre-filter filter\n";
+if ($calc){
+    my $mend_txt ="";
+    $mend_txt = "--mendel" if ($tdt);
+
+    unless (-e "$idfiprefix.imiss") {
+	&mysystem ("$ploc/plink $allow --bfile $prefix $mend_txt --out $idfiprefix.tmp1 --geno 1 --mind 1 --exclude $nofiprefix.snpex.detex.txt --noweb --missing ") ;  
+	if ($tdt) {
+	    &mysystem ("mv $idfiprefix.tmp1.imendel $idfiprefix.imendel");
+	}
+	
+	&mysystem ("mv $idfiprefix.tmp1.imiss $idfiprefix.imiss");
+    }
+    
+    unless (-e "$idfiprefix.het") {
+	&mysystem ("$ploc/plink $allow --bfile $prefix --out $idfiprefix.tmp2 --het --geno 1 --mind 1 --exclude $nofiprefix.snpex.detex.txt --noweb ");  
+	
+	&mysystem ("mv $idfiprefix.tmp2.het $idfiprefix.het");
+    }
+
+}
+
+
+#$idex_fifi = &count_lines_high($mind,6,$idfiprefix.".imiss","> $fifiprefix.idex", "> /dev/null",0);
+
+
+### iddmiss (fist filter filter)
+push  @detex_files, "$fifiprefix.idmiss.detex.txt"; 
+unless (-e "$fifiprefix.idmiss.detex.txt") {
+    die $!."($idfiprefix.imiss)" unless open IN, "< $idfiprefix.imiss";
+    die $!."($fifiprefix.idmiss.detex.txt.tmp)" unless open DX, "> $fifiprefix.idmiss.detex.txt.tmp";
+
+    print DX "FID\tIID\tID_missing_$mind($idfiprefix.imiss)\n";
+    <IN>;
+
+    my $mc = 0;
+    my $mc_ca = 0;
+    my $mc_co = 0;
+    while (<IN>){
+	my @cells = @{&split_line_ref(\$_)};
+	next if ($cells[5] <= $mind);
+	print DX $cells[0]."\t".$cells[1]."\t".$cells[5]."\n";
+	$mc++;
+	if ($cells[0] =~ /^cas_/) {
+	    $mc_ca++;
+	}
+	if ($cells[0] =~ /^con_/) {
+	    $mc_co++;
+	}
+    }
+    close IN;
+    close DX;
+
+    die $!."($fifiprefix.idmiss.detex.txt.n)" unless open DXN, "> $fifiprefix.idmiss.detex.txt.n";
+    print DXN "$mc\n";
+    close DXN;
+    die $!."($fifiprefix.idmiss.ca.detex.txt.n)" unless open DXN, "> $fifiprefix.idmiss.ca.detex.txt.n";
+    print DXN "$mc_ca\n";
+    close DXN;
+    die $!."($fifiprefix.idmiss.co.detex.txt.n)" unless open DXN, "> $fifiprefix.idmiss.co.detex.txt.n";
+    print DXN "$mc_co\n";
+    close DXN;
+
+
+    &mysystem ("sort -k3,3n $fifiprefix.idmiss.detex.txt.tmp > $fifiprefix.idmiss.detex.txt.tmp.sorted");
+    &mysystem ("mv  $fifiprefix.idmiss.detex.txt.tmp.sorted $fifiprefix.idmiss.detex.txt");
+    &mysystem ("rm  $fifiprefix.idmiss.detex.txt.tmp ");
+}
+
+die $!."($fifiprefix.idmiss.detex.txt.n)" unless open DXN, "< $fifiprefix.idmiss.detex.txt.n";
+$idex_fifi = <DXN>;
+chomp($idex_fifi);
+close DXN;
+
+die $!."($fifiprefix.idmiss.ca.detex.txt.n)" unless open DXN, "< $fifiprefix.idmiss.ca.detex.txt.n";
+$idex_fifi_ca = <DXN>;
+chomp($idex_fifi_ca);
+close DXN;
+
+die $!."($fifiprefix.idmiss.co.detex.txt.n)" unless open DXN, "< $fifiprefix.idmiss.co.detex.txt.n";
+$idex_fifi_co = <DXN>;
+chomp($idex_fifi_co);
+close DXN;
+
+
+
+#exit;
+
+
+
+unless ($chrx) {
+### make absolute values out of Fhet
+
+#    die $!."($idfiprefix.het)" unless open IN, "< $idfiprefix.het";
+ #   die $!."($idfiprefix.heto)" unless open OUT, "> $idfiprefix.heto";
+ #   while (<IN>){
+#	chomp;
+#	my @cells = @{&split_line_ref(\$_)};	
+
+#	print OUT "@cells ".abs($cells[5])."\n";
+#    }
+#    close IN;
+#    close OUT;
+    
+
+
+### idhet (fist filter filter)
+    push  @detex_files, "$idfiprefix.idhet.detex.txt"; 
+
+#    print "continue filling detex_files\n";
+#    exit;
+
+    unless (-e "$idfiprefix.idhet.detex.txt") {
+	die $!."($idfiprefix.het)" unless open IN, "< $idfiprefix.het";
+	die $!."($idfiprefix.idhet.detex.txt.tmp)" unless open DX, "> $idfiprefix.idhet.detex.txt.tmp";
+	
+	print DX "FID\tIID\tID_het_$Fhet_th($idfiprefix.het)\n";
+	<IN>;
+	
+	my $mc = 0;
+	my $mc_ca = 0;
+	my $mc_co = 0;
+	while (<IN>){
+	    my @cells = @{&split_line_ref(\$_)};
+
+	    if ($cells[5] > -1.0 * $Fhet_th && $cells[5] < $Fhet_th) {
+		next;
+	    }
+
+	    print DX $cells[0]."\t".$cells[1]."\t".$cells[5]."\n";
+	    $mc++;
+	    if ($cells[0] =~ /^cas_/) {
+		$mc_ca++;
+	    }
+	    if ($cells[0] =~ /^con_/) {
+		$mc_co++;
+	    }
+	}
+	close IN;
+	close DX;
+	
+	die $!."($idfiprefix.idhet.detex.txt.n)" unless open DXN, "> $idfiprefix.idhet.detex.txt.n";
+	print DXN "$mc\n";
+	close DXN;
+
+	die $!."($idfiprefix.idhet.ca.detex.txt.n)" unless open DXN, "> $idfiprefix.idhet.ca.detex.txt.n";
+	print DXN "$mc_ca\n";
+	close DXN;	
+
+	die $!."($idfiprefix.idhet.co.detex.txt.n)" unless open DXN, "> $idfiprefix.idhet.co.detex.txt.n";
+	print DXN "$mc_co\n";
+	close DXN;
+
+	my $Fhet_th_2 = $Fhet_th *2;
+#	unless (-e "$idfiprefix.idhet.hisplot.pdf") {
+	&mysystem ("plothist2 --pcol 6 --out $idfiprefix-idhet-hisplot-all --thresh -$Fhet_th,$Fhet_th $idfiprefix.het");
+	&mysystem ("plothist2 --pcol 6 --out $idfiprefix-idhet-hisplot --thresh -$Fhet_th,$Fhet_th --xlim -$Fhet_th_2,$Fhet_th_2 $idfiprefix.het");
+
+
+#	print "plothist2 --pcol 6 --out $idfiprefix-idhet-hisplot-all --thresh -$Fhet_th,$Fhet_th $idfiprefix.het\n";
+#	print "plothist2 --pcol 6 --out $idfiprefix-idhet-hisplot --thresh -$Fhet_th,$Fhet_th --xlim -$Fhet_th_2,$Fhet_th_2 $idfiprefix.het\n";
+#	exit;
+#	    &mysystem ("plothist2 --out $idfiprefix.imendel.hisplot --thresh $imend_th,$imend_th --xlim 0,20000 $idfiprefix.imendel");
+#	}
+    
+
+	&mysystem ("sort -k3,3n $idfiprefix.idhet.detex.txt.tmp > $idfiprefix.idhet.detex.txt.tmp.sorted");
+	&mysystem ("mv  $idfiprefix.idhet.detex.txt.tmp.sorted $idfiprefix.idhet.detex.txt");
+	&mysystem ("rm  $idfiprefix.idhet.detex.txt.tmp ");
+
+
+    }
+
+    
+#    $idex_fifi_fhet = &count_lines_high($Fhet_th,7,$idfiprefix.".heto",">> $fifiprefix.idex", "> /dev/null",0);
+
+}
+
+die $!."($idfiprefix.idhet.detex.txt.n)" unless open DXN, "< $idfiprefix.idhet.detex.txt.n";
+$idex_fifi_fhet = <DXN>;
+chomp($idex_fifi_fhet);
+close DXN;
+
+die $!."($idfiprefix.idhet.ca.detex.txt.n)" unless open DXN, "< $idfiprefix.idhet.ca.detex.txt.n";
+$idex_fifi_fhet_ca = <DXN>;
+chomp($idex_fifi_fhet_ca);
+close DXN;
+
+die $!."($idfiprefix.idhet.co.detex.txt.n)" unless open DXN, "< $idfiprefix.idhet.co.detex.txt.n";
+$idex_fifi_fhet_co = <DXN>;
+chomp($idex_fifi_fhet_co);
+close DXN;
+	
+
+
+
+
+
+
+#exit;
+
+if ($tdt) {
+#    $idex_fifi_mend = &count_lines_high($imend_th,3,"$idfiprefix.imendel",">> $fifiprefix.idex","> $idfiprefix.imend",0) ;
+
+
+
+
+### idmend 
+
+  push  @detex_files, "$idfiprefix.idmend.detex.txt"; 
+
+    unless (-e "$idfiprefix.idmend.detex.txt") {
+	die $!."($idfiprefix.imendel)" unless open IN, "< $idfiprefix.imendel";
+	die $!."($idfiprefix.idmend.detex.txt.tmp)" unless open DX, "> $idfiprefix.idmend.detex.txt.tmp";
+
+	print DX "FID\tIID\tID_mend_$imend_th($idfiprefix.imendel)\n";	
+	<IN>;
+	
+	my $mc = 0;
+	while (<IN>){
+	    my @cells = @{&split_line_ref(\$_)};
+	    if ($cells[2] <= $imend_th) {
+		next;
+	    }
+	    print DX $cells[0]."\t".$cells[1]."\t".$cells[2]."\n";
+	    $mc++;
+	}
+	close IN;
+	close DX;
+	
+	die $!."($idfiprefix.idmend.detex.txt.n)" unless open DXN, "> $idfiprefix.idmend.detex.txt.n";
+	print DXN "$mc\n";
+	close DXN;
+	
+
+
+	
+	my $imend_th_2 = $imend_th *2;
+#	unless (-e "$idfiprefix.imendel.hisplot.pdf") {
+	    &mysystem ("plothist2 --pcol 3 --out $idfiprefix-imendel-hisplot-all --thresh $imend_th,$imend_th $idfiprefix.imendel");
+	    &mysystem ("plothist2 --pcol 3 --out $idfiprefix-imendel-hisplot --thresh $imend_th,$imend_th --xlim 0,$imend_th_2 $idfiprefix.imendel");
+#	}
+
+	&mysystem ("sort -k3,3n $idfiprefix.idmend.detex.txt.tmp > $idfiprefix.idmend.detex.txt.tmp.sorted");
+	&mysystem ("mv  $idfiprefix.idmend.detex.txt.tmp.sorted $idfiprefix.idmend.detex.txt");
+	&mysystem ("rm  $idfiprefix.idmend.detex.txt.tmp ");
+    }
+
+
+    die $!."($idfiprefix.idmend.detex.txt.n)" unless open DXN, "< $idfiprefix.idmend.detex.txt.n";
+    $idex_fifi_fhet = <DXN>;
+    chomp($idex_fifi_fhet);
+    close DXN;
+        
+    
+}
+
+
+print  "-> perform sex-check\n";
+unless (-e "$idfiprefix.sex.sexcheck") {
+    
+    die $!."$prefix.bim" unless open BIM, "< $prefix.bim";
+    my $n23 = 0;
+    while (my $line = <BIM>){
+	my @cells = @{&split_line_ref(\$line)};
+	if ($cells[0] == 23) {
+	    $n23++;
+	}
+    }
+    close BIM;
+    die $!."$nofiprefix.snpex.detex.txt" unless open BIM, "< $nofiprefix.snpex.detex.txt";
+    while (my $line = <BIM>){
+	my @cells = @{&split_line_ref(\$line)};
+	if ($cells[0] == 23) {
+	    $n23--;
+	}
+    }
+    close BIM;
+#	print "N23: $n23\n";
+#	exit;
+    if ($n23 > 10) {
+	&mysystem ("$ploc/plink $allow --bfile $prefix --out $idfiprefix.sextmp --mind 1 --geno 1 --check-sex $extract --exclude $nofiprefix.snpex.detex.txt --noweb ");  
+    }
+    else {
+	print "no X chromosome\n";
+	
+	die $!."" unless open SC, "> $idfiprefix.sextmp.sexcheck";
+	print SC "                            FID       IID       PEDSEX       SNPSEX       STATUS            F\n";
+	print SC "                            FAKE      FAKE      PEDSEX       SNPSEX       NOTOK            F\n";
+	
+	close SC;
+    }
+    &mysystem ("mv $idfiprefix.sextmp.sexcheck $idfiprefix.sex.sexcheck");
+}
+
+
+#print "$idfiprefix.sex.sexcheck\n";
+#exit;
+
+### sexcheck-id (only report no filter)
+
+push  @detex_files, "$idfiprefix.idsexcheck.detex.txt"; 
+push  @detex_files, "$idfiprefix.idsexcheck.warni.txt"; 
+unless (-e "$idfiprefix.idsexcheck.detex.txt") {
+    die $!."($idfiprefix.sex.sexcheck)" unless open IN, "< $idfiprefix.sex.sexcheck";
+    die $!."($idfiprefix.idsexcheck.detex.txt.tmp)" unless open DX, "> $idfiprefix.idsexcheck.detex.txt.tmp";
+    die $!."($idfiprefix.idsexcheck.warni.txt)" unless open DXP, "> $idfiprefix.idsexcheck.warni.txt";
+
+
+    print DX "FID\tIID\tPEDSEX\tSNPSEX\tSTATUS\tID_sexfail($idfiprefix.sex.sexcheck)\n";
+    print DXP "FID\tIID\tPEDSEX\tSNPSEX\tSTATUS\tID_sexwarning($idfiprefix.sex.sexcheck)\n";
+    <IN>;
+
+    my $mc = 0;
+    my $mw = 0;
+    my $mw_snpsex = 0;
+    my $mw_pedsex = 0;
+    my $mn = 0;
+    while (<IN>){
+	my @cells = @{&split_line_ref(\$_)};
+	unless ($cells[0] eq "FAKE") {
+	    $mn++;
+
+	    ## if ped_male
+	    if ($cells[2] == 1) {
+		if ($cells[5] < 0.5){
+#		    exclude;
+		    print DX $cells[0]."\t".$cells[1]."\t".$cells[2]."\t".$cells[3]."\t".$cells[4]."\t".$cells[5]."\n";
+		    $mc++;
+		}
+		elsif ($cells[5] < 0.8){
+#		    warning;
+		    print DXP $cells[0]."\t".$cells[1]."\t".$cells[2]."\t".$cells[3]."\t".$cells[4]."\t".$cells[5]."\n";
+		    $mw++;
+		    $mw_snpsex++
+
+		}
+	    }
+	    ## if ped_female
+	    if ($cells[2] == 2) {
+		if ($cells[5] > 0.5){
+#		    exclude;
+		    print DX $cells[0]."\t".$cells[1]."\t".$cells[2]."\t".$cells[3]."\t".$cells[4]."\t".$cells[5]."\n";
+		    $mc++;
+		}
+		elsif ($cells[5] > 0.2){
+#		    warning;
+		    print DXP $cells[0]."\t".$cells[1]."\t".$cells[2]."\t".$cells[3]."\t".$cells[4]."\t".$cells[5]."\n";
+		    $mw++;
+		    $mw_snpsex++
+		}
+	    }
+	    if ($cells[2] == 0) {
+#		warning;
+		print DXP $cells[0]."\t".$cells[1]."\t".$cells[2]."\t".$cells[3]."\t".$cells[4]."\t".$cells[5]."\n";
+		$mw++;
+		$mw_pedsex++ ;
+	    }
+
+
+
+#	    if ($cells[2] == 0) {
+#		print DXP $cells[0]."\t".$cells[1]."\t".$cells[2]."\t".$cells[3]."\t".$cells[4]."\t".$cells[5]."\n";
+#		$mw++;
+
+#		$mw_pedsex++ if ($cells[2] == 0) ;
+
+#		next;
+#	    }
+#	    if ($cells[3] == 0) {
+#		print DXP $cells[0]."\t".$cells[1]."\t".$cells[2]."\t".$cells[3]."\t".$cells[4]."\t".$cells[5]."\n";
+#		$mw_snpsex++ if ($cells[3] == 0) ;
+#	    }
+#	    next if ($cells[4] eq "OK");
+#	    print DX $cells[0]."\t".$cells[1]."\t".$cells[2]."\t".$cells[3]."\t".$cells[4]."\t".$cells[5]."\n";
+#	    $mc++;
+	}
+    }
+    close IN;
+    close DX;
+    close DXP;
+    
+    die $!."($idfiprefix.idsexcheck.detex.txt.n)" unless open DXN, "> $idfiprefix.idsexcheck.detex.txt.n";
+    print DXN "$mc\n";
+    close DXN;
+    die $!."($idfiprefix.idsexcheck.warni.txt.n)" unless open DXN, "> $idfiprefix.idsexcheck.warni.txt.n";
+    print DXN "$mw\n";
+    close DXN;
+    die $!."($idfiprefix.idsexcheck.warni.s.txt.n)" unless open DXN, "> $idfiprefix.idsexcheck.warni.s.txt.n";
+    print DXN "$mw_snpsex\n";
+    close DXN;
+    die $!."($idfiprefix.idsexcheck.warni.p.txt.n)" unless open DXN, "> $idfiprefix.idsexcheck.warni.p.txt.n";
+    print DXN "$mw_pedsex\n";
+    close DXN;
+    die $!."($idfiprefix.idsexcheck.ntest.txt.n)" unless open DXN, "> $idfiprefix.idsexcheck.ntest.txt.n";
+    print DXN "$mn\n";
+    close DXN;
+
+
+    ### nosort
+#    &mysystem ("sort -k3,3n $idfiprefix.idsexcheck.detex.txt.tmp > $idfiprefix.idsexcheck.detex.txt.tmp.sorted");
+    &mysystem ("mv  $idfiprefix.idsexcheck.detex.txt.tmp $idfiprefix.idsexcheck.detex.txt");
+#    &mysystem ("rm  $idfiprefix.idsexcheck.detex.txt.tmp ");
+}
+
+die $!."($idfiprefix.idsexcheck.detex.txt.n)" unless open DXN, "< $idfiprefix.idsexcheck.detex.txt.n";
+my $chex_idfi = <DXN>;
+chomp($chex_idfi);
+close DXN;
+
+die $!."($idfiprefix.idsexcheck.warni.txt.n)" unless open DXN, "< $idfiprefix.idsexcheck.warni.txt.n";
+my $chex_idfi_warni = <DXN>;
+chomp($chex_idfi_warni);
+close DXN;
+
+die $!."($idfiprefix.idsexcheck.warni.s.txt.n)" unless open DXN, "< $idfiprefix.idsexcheck.warni.s.txt.n";
+my $chex_idfi_warni_s = <DXN>;
+chomp($chex_idfi_warni_s);
+close DXN;
+
+die $!."($idfiprefix.idsexcheck.warni.p.txt.n)" unless open DXN, "< $idfiprefix.idsexcheck.warni.p.txt.n";
+my $chex_idfi_warni_p = <DXN>;
+chomp($chex_idfi_warni_p);
+close DXN;
+
+
+die $!."($idfiprefix.idsexcheck.ntest.txt.n)" unless open DXN, "< $idfiprefix.idsexcheck.ntest.txt.n";
+my $chex_idfi_ntest = <DXN>;
+chomp($chex_idfi_ntest);
+close DXN;
+
+#exit;
+
+#### without IDs below TH to get addional SNP-exclusion numbers < TH -> append snp-excl-list
+############################################################################
+    print  "-> analysis without filter\n";
+if ($calc){
+    unless (-e "$idfiprefix.lmiss") {
+
+	if (-e "$idfiprefix.idmend.detex.txt"){
+	    &mysystem ("cat $fifiprefix.idmiss.detex.txt $idfiprefix.idhet.detex.txt $idfiprefix.idmend.detex.txt $idfiprefix.idsexcheck.detex.txt > $fifiprefix.idfi.combex");  
+	}
+	else {
+	    &mysystem ("cat $fifiprefix.idmiss.detex.txt $idfiprefix.idhet.detex.txt $idfiprefix.idsexcheck.detex.txt > $fifiprefix.idfi.combex");  
+	}
+
+	&mysystem ("$ploc/plink $allow --bfile $prefix --out $idfiprefix --geno 1 --remove $fifiprefix.idfi.combex --noweb --make-bed ");  
+	&mysystem ("$ploc/plink $allow --bfile $idfiprefix --out $idfiprefix.misstmp --geno 1 --exclude $nofiprefix.snpex.detex.txt --noweb --missing ");  
+	&mysystem ("mv $idfiprefix.misstmp.lmiss $idfiprefix.lmiss");
+    }
+}
+
+#$snpex_fifi = &count_lines_high($geno,5,$hafiprefix.".lmiss",">> $hafiprefix.snpex", "> /dev/null",0);
+
+#exit;
+
+
+
+###### pre-snp
+push  @detex_files, "$idfiprefix.snpex.detex.txt";
+unless (-e "$idfiprefix.snpex.detex.txt") {
+    die $!."($idfiprefix.lmiss)" unless open IN, "< $idfiprefix.lmiss";
+    die $!."($idfiprefix.snpex.detex.txt.tmp)" unless open DX, "> $idfiprefix.snpex.detex.txt.tmp";
+
+    print DX "CHR\tSNP\tSNP_missing_$geno($idfiprefix.lmiss)\n";
+    <IN>;
+
+    my $mc = 0;
+    while (<IN>){
+	my @cells = @{&split_line_ref(\$_)};
+	next if ($cells[4] <= $geno);
+	print DX $cells[0]."\t".$cells[1]."\t".$cells[4]."\n";
+	$mc++;
+    }
+    close IN;
+    close DX;
+
+    die $!."($idfiprefix.snpex.detex.txt.n)" unless open DXN, "> $idfiprefix.snpex.detex.txt.n";
+    print DXN "$mc\n";
+    close DXN;
+
+    &mysystem ("sort -k3,3n $idfiprefix.snpex.detex.txt.tmp > $idfiprefix.snpex.detex.txt.tmp.sorted");
+    &mysystem ("mv  $idfiprefix.snpex.detex.txt.tmp.sorted $idfiprefix.snpex.detex.txt");
+    &mysystem ("rm  $idfiprefix.snpex.detex.txt.tmp ");
+}
+
+die $!."($idfiprefix.snpex.detex.txt.n)" unless open DXN, "< $idfiprefix.snpex.detex.txt.n";
+$snpex_fifi = <DXN>;
+chomp($snpex_fifi);
+close DXN;
+
+#exit;
+
+
+###### here stop of detex
+#unless (-e "$hafiprefix.snpex.ow2") {
+#    die $!."($hafiprefix.snpex)" unless open IN, "< $hafiprefix.snpex";
+#    die $!."($hafiprefix.snpex.ow2.tmp)" unless open OUT, "> $hafiprefix.snpex.ow2.tmp";
+
+#    while (<IN>){
+#	chomp;
+#	my @cells = @{&split_line_ref(\$_)};
+
+#	print OUT $cells[1]."\n";
+#    }
+#    close IN;
+#    close OUT;
+#    close DX;
+#    &mysystem ("mv $hafiprefix.snpex.ow2.tmp $hafiprefix.snpex.ow2");
+#}
+
+
+    print  "-> apply first filter\n";
+if ($calc) {
+
+    unless (-e "$fifiprefix.fam") {
+
+
+#	&mysystem ("$ploc/plink $allow --bfile $prefix --out $fifiprefix.tmp1  --remove $fifiprefix.idex --exclude $hafiprefix.snpex.ow2 --noweb --make-bed $extract ");	
+
+
+
+	&mysystem ("cat $idfiprefix.snpex.detex.txt $nofiprefix.snpex.detex.txt > $idfiprefix.snpex.detex.txt.comb");
+
+
+	&mysystem ("$ploc/plink $allow --bfile $idfiprefix --out $fifiprefix.tmp1 --exclude $idfiprefix.snpex.detex.txt.comb  --noweb --make-bed $extract ");
+	&mysystem ("mv $fifiprefix.tmp1.bed $fifiprefix.bed");
+	&mysystem ("mv $fifiprefix.tmp1.bim $fifiprefix.bim");
+	&mysystem ("mv $fifiprefix.tmp1.fam $fifiprefix.fam");
+    }
+
+    my $fifi_base = "$ploc/plink $allow --bfile $fifiprefix --noweb";
+#    my $fifi_base_p1 = "$ploc/plink $allow --bfile $fifiprefix --noweb";
+
+    unless (-e "$fifiprefix.frq") {
+	&mysystem ("$fifi_base --out $fifiprefix.freqtmp --freq ");  
+	&mysystem ("mv $fifiprefix.freqtmp.frq $fifiprefix.frq");
+    }
+
+
+    unless ($noassoc) {
+	unless (-e "$fifiprefix.assoc") {
+	    &mysystem ("$fifi_base --out $fifiprefix.assotmp $assotdt --ci 0.95 --freq");  
+	    
+#	print "assoc debug for se\n";
+#	exit;
+	    if ($tdt == 1) {
+		&asso2tdt_se_frq("$fifiprefix.assotmp") ;
+	    }
+	    
+	    
+	    
+	    &mysystem ("mv $fifiprefix.assotmp.assoc $fifiprefix.assoc");
+	}
+    }
+
+
+
+    unless ($tdt) {
+	unless (-e "$fifiprefix.missing") {
+	    unless ($noassoc) {
+		&mysystem ("$fifi_base --out $fifiprefix.temisstmp --test-missing ");  
+		&mysystem ("mv $fifiprefix.temisstmp.missing $fifiprefix.missing");
+	    }
+	}
+    }
+
+
+    unless (-e "$fifiprefix.hwe") {
+	if ($hardy2) {
+	    &mysystem ("$fifi_base --out $fifiprefix.hwetmp --hardy2 ") ;
+	}
+	else {
+	    &mysystem ("$fifi_base --out $fifiprefix.hwetmp --hardy ");
+	}
+	&mysystem ("mv $fifiprefix.hwetmp.hwe $fifiprefix.hwe");
+    }
+
+    unless (-e "$fifiprefix.imiss") {
+	&mysystem ("$fifi_base --out $fifiprefix.misstmp --missing ");  
+	&mysystem ("mv $fifiprefix.misstmp.lmiss $fifiprefix.lmiss");
+	&mysystem ("mv $fifiprefix.misstmp.imiss $fifiprefix.imiss");
+    }
+
+    if ($tdt){
+	print  "-> checking for medelian errors\n";
+
+	unless (-e "$fifiprefix.lmendel") {
+	    &mysystem ("$fifi_base --out $fifiprefix.mendtmp --mendel ");  
+	    &mysystem ("mv $fifiprefix.mendtmp.imendel $fifiprefix.imendel");
+	    &mysystem ("mv $fifiprefix.mendtmp.lmendel $fifiprefix.lmendel");
+	}
+
+
+#	&asso2tdt($nofiprefix);
+#	&asso2tdt($hafiprefix);
+#	&asso2tdt($fifiprefix);
+    }
+
+}
+####
+#  check sex
+#####
+
+    
+
+
+#exit;
+############ look here!!
+
+#    ## print out every information about Mendel in log-file
+#    my @tmp_lines = &greppi("Mendel", "$proprefix.log" );
+#    my @tmp_out_lines = ();
+#    foreach my $oneline (@tmp_lines){
+#	$oneline =~ s!$!\\\\!;
+#	push @tmp_out_lines, $oneline;
+#    }
+#    &a2file ("$outprefix"."_mend_info.txt", @tmp_out_lines);
+
+
+#    ## count sex-check-problems
+#    die $! unless open SSI ,"> $outprefix"."_sex_info.txt";
+#    printf SSI "%d Sex-Check problems occured \\\\\n",&count_lines_cont("PROBLEM",5,"$proprefix.sexcheck")-&count_lines_cont("0",4,"$proprefix.sexcheck");
+#    close SSI;
+
+
+
+
+##########################
+### prepare / check hwe file
+#########################
+   print  "-> analysis HWE\n";
+
+
+#print "ncases: $ncases $cc_num{2}\n";
+#print "ncontrols: $ncontrols $cc_num{1}\n";
+#exit;
+
+if ($calc) {
+    push  @detex_files, "$fifiprefix.snpex.hwe.con.detex.txt";
+    push  @detex_files, "$fifiprefix.snpex.hwe.cas.detex.txt";
+
+    unless (-e "$fifiprefix.snpex.hwe.con.detex.txt") {
+	
+#	print "$fifiprefix.snpex.hwe.con.detex.txt not existing....\n";
+	
+	die "$!" unless open FILE, "< $fifiprefix.hwe";    
+	die "$!" unless open OUT, "> $fifiprefix.hwe_unaff";
+	die "$!" unless open AFF, "> $fifiprefix.hwe_aff";
+	die "$!" unless open ALL, "> $fifiprefix.hwe_all";
+	my $head = <FILE>;
+
+	print OUT "SNP\tlog(P)_HWE_con\n";
+	print AFF "SNP\tlog(P)_HWE_cas\n";
+	print ALL "SNP\tlog(P)_HWE_all\n";
+
+	my %hwe_snps;
+
+
+	while (<FILE>){
+	    chomp;
+	    my @cells = @{&split_line_ref(\$_)};
+
+
+	    if ($tdt == 0) {
+		if ($cells[2] eq "UNAFF"){
+		    $hwe_snps{$cells[1]} = 1;
+
+#		    if ($cc_num{1}>0) {
+			if ($cells[8] > 0) {
+			    printf OUT "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+			}
+			else {
+			    printf OUT "%s\t%.3g\n",$cells[1],-200;
+			}
+#		    }
+		}
+		if ($cells[2] eq "AFF"){
+#		    if ($cc_num{1}==0) {
+#			if ($cells[8] > 0) {
+#			    printf OUT "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+#			}
+#			else {
+#			    printf OUT "%s\t%.3g\n",$cells[1],-200;
+#			}
+#		    }
+#		    else {
+			if ($cells[8] > 0) {
+			    printf AFF "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+			}
+			else {
+			    printf AFF "%s\t%.3g\n",$cells[1],-200;
+			}
+#		    }
+#		print AFF "$cells[1]\t$cells[8]\n";
+		}
+		if ($cells[2] eq "ALL"){
+		    if ($cells[8] > 0) {
+			printf ALL "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+		    }
+		    else {
+			printf ALL "%s\t%.3g\n",$cells[1],-200;
+		    }
+#		print ALL "$cells[1]\t$cells[8]\n";
+		}
+
+
+		if ($cells[2] eq "ALL(NP)"){
+		    $hwe_snps{$cells[1]} = 1;
+		    if ($cells[8] > 0) {
+			printf ALL "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+			printf AFF "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+			printf OUT "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+		    }
+		    else {
+			printf ALL "%s\t%.3g\n",$cells[1],-200;
+			printf AFF "%s\t%.3g\n",$cells[1],-200;
+			printf OUT "%s\t%.3g\n",$cells[1],-200;
+		    }
+#		print ALL "$cells[1]\t$cells[8]\n";
+		}
+
+
+
+	    }
+	    else {
+		if ($cells[2] eq "ALL"){
+		    $hwe_snps{$cells[1]} = 1;
+		    if ($cells[8] > 0) {
+			printf OUT "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+			printf ALL "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+			printf AFF "%s\t%.3g\n",$cells[1],log($cells[8])/log(10);
+		    }
+		    else {
+			printf OUT "%s\t%.3g\n",$cells[1],-200;
+			printf ALL "%s\t%.3g\n",$cells[1],-200;
+			printf AFF "%s\t%.3g\n",$cells[1],-200;
+		    }
+		}
+	    }
+	}
+
+
+
+	die "$!" unless open LMISS, "< $fifiprefix.lmiss";    
+	my $head = <LMISS>;
+	while (<LMISS>){
+	    chomp;
+	    my @cells = @{&split_line_ref(\$_)};
+	    next if exists ($hwe_snps{$cells[1]}) ;
+	    
+	    if ($cells[0] > 0 && $cells[0] < 24 ) {
+		print "warning: $cells[1] is autosomal or xchr, but without hwe\n";
+	    }
+	    printf OUT "%s\t%.3g\n",$cells[1],0;
+	    printf ALL "%s\t%.3g\n",$cells[1],0;
+	    printf AFF "%s\t%.3g\n",$cells[1],0;
+
+	}
+
+	close LMISS;
+
+#	print "debug\n";
+#	exit;
+
+
+
+	close AFF;
+	close ALL;
+	close OUT;
+
+
+
+	close FILE;
+
+
+#exit;
+	$hwe_th = log($hwe_th) / log(10);
+	$hwe_th_ca = log($hwe_th_ca) / log(10);
+
+#exit;
+
+
+
+
+	die $!."($fifiprefix.hwe_aff)" unless open IN, "< $fifiprefix.hwe_aff";
+	die $!."($fifiprefix.snpex.detex.txt.hwe.cas.tmp)" unless open DX, "> $fifiprefix.snpex.detex.txt.hwe.cas.tmp";
+	
+	print DX "SNP\tSNP_hwe_cases_log10_$hwe_th_ca($fifiprefix.hwe)\n";
+	<IN>;
+	
+	my $mc = 0;
+	while (<IN>){
+	    my @cells = @{&split_line_ref(\$_)};
+	    next if ($cells[1] >= $hwe_th_ca);
+	    print DX $cells[0]."\t".$cells[1]."\n";
+	    $mc++;
+	}
+	close IN;
+	
+
+
+
+    close DX;
+
+    die $!."($fifiprefix.snpex.hwe.cas.detex.txt.n)" unless open DXN, "> $fifiprefix.snpex.hwe.cas.detex.txt.n";
+    print DXN "$mc\n";
+    close DXN;
+
+    &mysystem ("sort -k2,2rn  $fifiprefix.snpex.detex.txt.hwe.cas.tmp > $fifiprefix.snpex.detex.txt.hwe.cas.tmp.sorted");
+    &mysystem ("mv  $fifiprefix.snpex.detex.txt.hwe.cas.tmp.sorted $fifiprefix.snpex.hwe.cas.detex.txt");
+    &mysystem ("rm   $fifiprefix.snpex.detex.txt.hwe.cas.tmp");
+
+
+
+
+	if ($cc_num {1} == 0){
+	    die $!."($fifiprefix.hwe_unaff)" unless open IN, "< $fifiprefix.hwe_aff";
+	}
+	else {
+	    die $!."($fifiprefix.hwe_unaff)" unless open IN, "< $fifiprefix.hwe_unaff";	    
+	}
+	
+    die $!."($fifiprefix.snpex.detex.txt.hwe.con.tmp)" unless open DX, "> $fifiprefix.snpex.detex.txt.hwe.con.tmp";
+
+    print DX "SNP\tSNP_hwe_controls_log10_$hwe_th($fifiprefix.hwe)\n";
+    <IN>;
+
+    my $mc = 0;
+    while (<IN>){
+	my @cells = @{&split_line_ref(\$_)};
+	next if ($cells[1] >= $hwe_th);
+	print DX $cells[0]."\t".$cells[1]."\n";
+	$mc++;
+    }
+    close IN;
+    close DX;
+
+    die $!."($fifiprefix.snpex.hwe.con.detex.txt.n)" unless open DXN, "> $fifiprefix.snpex.hwe.con.detex.txt.n";
+    print DXN "$mc\n";
+    close DXN;
+
+    &mysystem ("sort -k2,2rn  $fifiprefix.snpex.detex.txt.hwe.con.tmp > $fifiprefix.snpex.detex.txt.hwe.con.tmp.sorted");
+    &mysystem ("mv  $fifiprefix.snpex.detex.txt.hwe.con.tmp.sorted $fifiprefix.snpex.hwe.con.detex.txt");
+    &mysystem ("rm   $fifiprefix.snpex.detex.txt.hwe.con.tmp");
+
+#$snpex_sefi_hwe = &count_lines_high($hwe_th,2,"$fifiprefix.hwe_unaff","> $sefiprefix.snpex", "> $sefiprefix.hwe",1);
+#$snpex_sefi_hwe_ca = &count_lines_high($hwe_th_ca,2,"$fifiprefix.hwe_aff",">> $sefiprefix.snpex", "> $sefiprefix.hwe_ca",1);
+
+    }
+}
+
+die $!."($fifiprefix.snpex.hwe.con.detex.txt.n)" unless open DXN, "< $fifiprefix.snpex.hwe.con.detex.txt.n";
+$snpex_sefi_hwe = <DXN>;
+chomp($snpex_sefi_hwe);
+close DXN;
+
+die $!."($fifiprefix.snpex.hwe.cas.detex.txt.n)" unless open DXN, "< $fifiprefix.snpex.hwe.cas.detex.txt.n";
+$snpex_sefi_hwe_ca = <DXN>;
+chomp($snpex_sefi_hwe_ca);
+close DXN;
+
+
+
+
+##########################
+### prepare / check missing file
+#########################
+
+unless ($noassoc) {
+   print  "-> analysis missing\n";
+if ($calc){
+    push  @detex_files, "$fifiprefix.snpex.temiss.detex.txt";
+    unless (-e "$fifiprefix.snpex.temiss.detex.txt") {
+
+	unless ($tdt){
+
+
+	    my %midi_snps;
+
+	    die "$!" unless open FILE, "< $fifiprefix.missing";    
+	    die "$!" unless open OUT, "> $fifiprefix.missing_diff";
+	    while (<FILE>){
+		chomp;
+		my @cells = @{&split_line_ref(\$_)};
+		my $missdiff = $cells[2] - $cells[3];
+		print OUT "$cells[1]\t$missdiff\t$cells[4]\t$cells[2]\t$cells[3]\n";
+		$midi_snps{$cells[1]} = 1;
+	    }
+#	    close OUT;
+	    close FILE;
+
+	    die "$!" unless open FILE, "< $fifiprefix.lmiss";    
+#	    die "$!" unless open OUT, ">> $fifiprefix.missing_diff";
+	    my $head = <FILE>;
+	    while (<FILE>){
+		chomp;
+		my @cells = @{&split_line_ref(\$_)};
+		next if exists ($midi_snps{$cells[1]}) ;
+
+		if ($cells[4] > 0 && $cells[4] < 1 ) {
+		    print "warning: $cells[1] not null in $fifiprefix.lmiss, but without entry in $fifiprefix.missing\n";
+		}
+		print OUT "$cells[1]\t0\t1.0\t$cells[4]\t$cells[4]\n";
+	    }
+	    close OUT;
+	    close FILE;
+
+#	    print "debug: $fifiprefix.missing_diff\n";
+#	    exit;
+
+
+	}
+	else {
+	    die "$!" unless open FILE, "< $fifiprefix.lmiss";    
+	    die "$!" unless open OUT, "> $fifiprefix.missing_diff";
+	    while (<FILE>){
+		chomp;
+		my @cells = @{&split_line_ref(\$_)};
+		my $missdiff = 0;
+		print OUT "$cells[1]\t$missdiff\t0\t0\t0\n";
+	    }
+	    close OUT;
+	    close FILE;
+	}
+
+
+    die $!."($fifiprefix.missing_diff)" unless open IN, "< $fifiprefix.missing_diff";
+    die $!."($fifiprefix.snpex.temiss.detex.txt.tmp)" unless open DX, "> $fifiprefix.snpex.temiss.detex.txt.tmp";
+
+    print DX "SNP\tmiss_ca\tmiss_co\tP_missdiff\tSNP_missingdiff_$midi_th($fifiprefix.missing)\n";
+    <IN>;
+
+
+    my $mc = 0;
+    while (<IN>){
+	my @cells = @{&split_line_ref(\$_)};
+	next if ($cells[1] >= -$midi_th && $cells[1] <= $midi_th);
+	print DX $cells[0]."\t".$cells[3]."\t".$cells[4]."\t".$cells[2]."\t".$cells[1]."\n";
+	$mc++;
+    }
+    close IN;
+    close DX;
+
+    die $!."($fifiprefix.snpex.temiss.detex.txt.n)" unless open DXN, "> $fifiprefix.snpex.temiss.detex.txt.n";
+    print DXN "$mc\n";
+    close DXN;
+
+#    print "debug\n";
+#    exit;
+
+## no sort
+#    &mysystem ("sort -k5,5rn  $fifiprefix.snpex.temiss.detex.txt.tmp > $fifiprefix.snpex.temiss.detex.txt.tmp.sorted");
+    &mysystem ("mv    $fifiprefix.snpex.temiss.detex.txt.tmp  $fifiprefix.snpex.temiss.detex.txt");
+#    &mysystem ("rm  $fifiprefix.snpex.temiss.detex.txt.tmp");
+
+
+
+
+
+
+    }
+}
+
+
+
+
+die $!."($fifiprefix.snpex.temiss.detex.txt.n)" unless open DXN, "< $fifiprefix.snpex.temiss.detex.txt.n";
+$snpex_sefi_midi = <DXN>;
+chomp($snpex_sefi_midi);
+close DXN;
+}
+
+#    $snpex_sefi_midi = &count_lines_high($midi_th,2,"$fifiprefix.missing_diff",">> $sefiprefix.snpex",2);
+
+
+##########################
+### check frq file
+#########################
+   print  "-> analysis frequency\n";
+
+
+push  @detex_files, "$fifiprefix.snpex.frq.detex.txt";
+unless (-e "$fifiprefix.snpex.frq.detex.txt" ) {
+
+    print "$fifiprefix.snpex.frq.detex.txt not existing, dir: $out_dir\n";
+
+#    exit;
+
+
+    die $!."($fifiprefix.frq)" unless open IN, "< $fifiprefix.frq";
+    die $!."($fifiprefix.snpex.frq.detex.txt.tmp)" unless open DX, "> $fifiprefix.snpex.frq.detex.txt.tmp";
+
+    print DX "SNP\tSNP_frq_$maf_th($fifiprefix.frq)\n";
+    <IN>;
+
+
+    my $mc = 0;
+    while (<IN>){
+	my @cells = @{&split_line_ref(\$_)};
+	next if ($cells[4] >= $maf_th);
+	print DX $cells[1]."\t".$cells[4]."\n";
+	$mc++;
+    }
+    close IN;
+    close DX;
+
+    die $!."($fifiprefix.snpex.frq.detex.txt.n)" unless open DXN, "> $fifiprefix.snpex.frq.detex.txt.n";
+    print DXN "$mc\n";
+    close DXN;
+
+#    print "debug\n";
+#    exit;
+
+
+    &mysystem ("sort -k2,2rn  $fifiprefix.snpex.frq.detex.txt.tmp > $fifiprefix.snpex.frq.detex.txt.tmp.sorted");
+    &mysystem ("mv  $fifiprefix.snpex.frq.detex.txt.tmp.sorted   $fifiprefix.snpex.frq.detex.txt");
+    &mysystem ("rm  $fifiprefix.snpex.frq.detex.txt.tmp");
+}
+
+
+
+die $!."($fifiprefix.snpex.frq.detex.txt.n)" unless open DXN, "< $fifiprefix.snpex.frq.detex.txt.n";
+$snpex_sefi_maf = <DXN>;
+chomp($snpex_sefi_maf);
+close DXN;
+
+
+
+
+
+#$snpex_sefi_maf = &count_lines_high($maf_th,5,"$fifiprefix.frq",">> $sefiprefix.snpex","> $sefiprefix.frq",1);
+
+
+##########################
+### check mendelian file
+#########################
+   print  "-> analysis medelian\n";
+
+if ($tdt) {
+    push  @detex_files, "$fifiprefix.snpex.lmendel.detex.txt";
+    unless (-e " $fifiprefix.snpex.lmendel.detex.txt" ) {
+
+
+	die $!."($fifiprefix.lmendel)" unless open IN, "< $fifiprefix.lmendel";
+	die $!."($fifiprefix.snpex.lmendel.detex.txt.tmp)" unless open DX, "> $fifiprefix.snpex.lmendel.detex.txt.tmp";
+
+	print DX "SNP\tSNP_lmendel_$mend_th($fifiprefix.lmendel)\n";
+	<IN>;
+
+
+	my $mc = 0;
+	while (<IN>){
+	    my @cells = @{&split_line_ref(\$_)};
+	    next if ($cells[2] <= $mend_th);
+	    print DX $cells[1]."\t".$cells[2]."\n";
+	    $mc++;
+	}
+	close IN;
+	close DX;
+
+	die $!."($fifiprefix.snpex.lmendel.detex.txt.n)" unless open DXN, "> $fifiprefix.snpex.lmendel.detex.txt.n";
+	print DXN "$mc\n";
+	close DXN;
+
+#    print "debug\n";
+#    exit;
+
+
+	&mysystem ("sort -k2,2rn  $fifiprefix.snpex.lmendel.detex.txt.tmp > $fifiprefix.snpex.lmendel.detex.txt.tmp.sorted");
+	&mysystem ("mv  $fifiprefix.snpex.lmendel.detex.txt.tmp.sorted   $fifiprefix.snpex.lmendel.detex.txt");
+	&mysystem ("rm  $fifiprefix.snpex.lmendel.detex.txt.tmp");
+    }
+
+
+    else {
+	&mysystem ("touch $fifiprefix.snpex.lmendel.detex.txt");
+	&mysystem ("echo 0 > $fifiprefix.snpex.lmendel.detex.txt.n");
+    }
+
+
+    die $!."($fifiprefix.snpex.lmendel.detex.txt.n)" unless open DXN, "< $fifiprefix.snpex.lmendel.detex.txt.n";
+    $snpex_sefi_mend = <DXN>;
+    chomp($snpex_sefi_mend);
+    close DXN;
+}
+
+
+
+
+
+#$snpex_sefi_mend = &count_lines_high($mend_th,3,"$fifiprefix.lmendel",">> $sefiprefix.snpex","> $sefiprefix.lmend",0) if ($tdt);
+
+
+
+
+
+
+###################################
+## Check FAF -> not done any more
+##################################
+
+
+if (0) {
+print  "-> Checking FAF\n";
+my @hm_lines= ();
+my %faf_hm = ();
+
+
+if ($calc){
+    
+#die "$! ($prefix.bim.hg18hapmap)" unless open FILE, "< $prefix.bim.hg18hapmap";
+#while (<FILE>){
+#    my @cells = &split_line($_);
+#    $faf_hm{$cells[0]}=$cells[3] if ($cells[2] lt $cells[4]);
+#    $faf_hm{$cells[0]}=$cells[5] unless ($cells[2] lt $cells[4]);
+#}
+#close FILE;
+    
+## only faf
+############
+    die "$! ($fifiprefix.missmatch_faf.txt)" unless open OUT, "> $fifiprefix.missmatch_faf.txt";
+    die "$! ($fifiprefix.frq)" unless open FILE, "< $fifiprefix.frq";
+    print OUT "SNP\tFAF-diff\tFAF-data\tFAF-hapmap\n";
+    my $lc=0;
+    my ($faf_data,$frq_diff) = (0,0);
+    my @cells = ();
+    while (<FILE>){
+	unless ($lc++ ==0){
+	    @cells = @{&split_line_ref(\$_)};
+	    $faf_data=$cells[4] if ($cells[2] lt $cells[3]);
+	    $faf_data=1-$cells[4] unless ($cells[2] lt $cells[3]);
+#	if (exists $faf_hm{$cells[1]}){
+#	    $frq_diff= $faf_data-$faf_hm{$cells[1]};
+#	    $frq_diff=-$frq_diff if ($frq_diff < 0);
+#	}
+#	else {
+#	    print STDERR "big hapmap error at SNP $cells[1], (maybe not a QC1B-Set?)\n";
+#	}
+	    $frq_diff=0;
+	    printf OUT "%s\t%.4f\t%.4f\t%.4f\n",$cells[1],$frq_diff,$faf_data,$faf_hm{$cells[1]};
+	}
+	
+    }
+    close FILE;
+    close OUT;
+}
+
+$snpex_sefi_faf = &count_lines_high($faf_th,2,"$fifiprefix.missmatch_faf.txt",">> $sefiprefix.snpex","> $sefiprefix.missmatch_faf.txt",0);
+
+}
+
+
+
+
+
+## pvalues NA?
+###########
+
+unless ($noassoc) {
+print  "-> analysis p-value present\n";
+push  @detex_files, "$fifiprefix.snpex.nassoc.detex.txt";
+unless (-e "$fifiprefix.snpex.nassoc.detex.txt" ) {
+    die $!."($fifiprefix.assoc)" unless open IN, "< $fifiprefix.assoc";
+    die $!."($fifiprefix.snpex.nassoc.detex.txt.tmp)" unless open DX, "> $fifiprefix.snpex.nassoc.detex.txt.tmp";
+
+    print DX "SNP\tF_A\tF_U\tSNP_nassoc($fifiprefix.assoc)\n";
+    <IN>;
+
+#    if ($noassoc) {
+#	close DX;
+#	close IN;
+#    }
+#    else {
+
+
+	my $mc = 0;
+	while (<IN>){
+	    my @cells = @{&split_line_ref(\$_)};
+	    if ($withpna != 0) {
+		next;
+#	    next if ($mc > 0);
+	    }
+	    next if ($cells[8] ne "NA");
+	    print DX $cells[1]."\t".$cells[4]."\t".$cells[5]."\t".$cells[8]."\n";
+	    $mc++;
+	}
+	close IN;
+	close DX;
+
+	die $!."($fifiprefix.snpex.nassoc.detex.txt.n)" unless open DXN, "> $fifiprefix.snpex.nassoc.detex.txt.n";
+	print DXN "$mc\n";
+	close DXN;
+#    }
+#    print "debug\n";
+#    exit;
+
+## no sort
+#    &mysystem ("sort -k5,5rn  $fifiprefix.snpex.nassoc.detex.txt.tmp > $fifiprefix.snpex.nassoc.detex.txt.tmp.sorted");
+    &mysystem ("mv   $fifiprefix.snpex.nassoc.detex.txt.tmp  $fifiprefix.snpex.nassoc.detex.txt");
+#    &mysystem ("rm  $fifiprefix.snpex.nassoc.detex.txt.tmp");
+}
+
+
+
+################################################################################
+##### here the last time working on noassoc ############################
+##################################################################
+
+
+
+die $!."($fifiprefix.snpex.nassoc.detex.txt.n)" unless open DXN, "< $fifiprefix.snpex.nassoc.detex.txt.n";
+$snpex_sefi_pna = <DXN>;
+chomp($snpex_sefi_pna);
+close DXN;
+
+}
+
+#print "debug\n";
+#exit;
+
+#$snpex_sefi_pna =&count_lines_cont("NA",9,"$fifiprefix.assoc","> $fifiprefix.assoc_wo_na_tmp", ">> $sefiprefix.snpex");
+
+
+
+## check-sex
+#############
+
+#my $chex_nofi =&count_lines_cont("OK",5,"$nofiprefix.sex.sexcheck","> $nofiprefix.sexcheck.ok", ">> $nofiprefix.nook");
+
+
+
+
+#exit;
+
+############### no FAF comparison
+if (0) {
+    if ($calc){
+	die "$! ($fifiprefix.missmatch_faf_caco.txt)" unless open OUT, "> $fifiprefix.missmatch_faf_caco.txt";
+	die "$! ($fifiprefix.assoc_wo_na_tmp)" unless open FILE, "< $fifiprefix.assoc_wo_na_tmp";
+	
+	print OUT "SNP\tFAF-diff-case\tFAF-diff-contr\tFAF-hapmap\tCHR\tPOS\n";
+	my $lc=0;
+	my ($faf_data_ca, $faf_data_co, $frq_diff_ca, $frq_diff_co) = (0,0,0,0);
+	my @cells = ();
+	while (<FILE>){
+	    unless ($lc++ ==0){
+		@cells = @{&split_line_ref(\$_)};
+#	    @cells = &split_line($_);
+
+		
+		my $chr = $cells[0];
+		my $pos = $cells[2];
+		
+		$faf_data_ca=$cells[4] if ($cells[3] lt $cells[6]);
+		$faf_data_ca=1-$cells[4] unless ($cells[3] lt $cells[6]);
+		$faf_data_co=$cells[5] if ($cells[3] lt $cells[6]);
+		$faf_data_co=1-$cells[5] unless ($cells[3] lt $cells[6]);
+		
+		
+#if (0) {	#
+#	if (exists $faf_hm{$cells[1]}){
+#	    if ($tdt ==0){
+#		$frq_diff_ca= $faf_data_ca-$faf_hm{$cells[1]};
+#		$frq_diff_ca=-$frq_diff_ca if ($frq_diff_ca < 0);
+#		$frq_diff_co= $faf_data_co-$faf_hm{$cells[1]};
+#		$frq_diff_co=-$frq_diff_co if ($frq_diff_co < 0);
+#	    }
+#	    else {
+#		$frq_diff_ca= 0;
+#		$frq_diff_co= 0;
+#	    }
+#	}
+#	else {
+#	    print STDERR "big hapmap error at SNP $cells[1], (maybe not a QC1B-Set?)\n";		
+#	}
+#}
+		
+		
+		$frq_diff_ca= 0;
+		$frq_diff_co= 0;
+#	printf OUT "%s\t%.4f\t%.4f\t%.4f\t%s\t%s\n",$cells[1],$frq_diff_ca,$frq_diff_co,$faf_hm{$cells[1]},$chr,$pos;
+		printf OUT "%s\t%.4f\t%.4f\t%.4f\t%s\t%s\n",$cells[1],$frq_diff_ca,$frq_diff_co,0,$chr,$pos;
+	    }
+	    
+	}
+	close FILE;
+	close OUT;
+	
+    }
+
+}
+
+
+
+
+
+my $fam_excl = 0;
+my $n_imend = 0 ;
+my $n_pofi = 0;
+my %aff_off;
+
+
+
+
+
+
+
+## crete QC2 set
+if ($calc) {
+    unless (-e "$pofiprefix.fam") {
+
+
+
+#$nofiprefix.snpex.detex.txt      prefilter
+#$idfiprefix.snpex.detex.txt      missfilter
+#$idfiprefix.snpex.detex.txt.comb combined
+
+#$fifiprefix                  bfile with no missing failed SNPs and all failed IDs excluded
+
+#$fifiprefix.snpex.hwe.con.detex.txt   exclude for hwe_con
+#$fifiprefix.snpex.hwe.cas.detex.txt   exclude for hwe_cas
+#$fifiprefix.snpex.temiss.detex.txt    exclude for missing-difference
+#$fifiprefix.snpex.frq.detex.txt       exclude for maf
+#$fifiprefix.snpex.lmendel.detex.txt   exclude for lmendel (exists also if no tdt)
+#$fifiprefix.snpex.nassoc.detex.txt    exclude for NA in assoc
+
+	if ($tdt) {
+	    &mysystem ("cat $fifiprefix.snpex.hwe.con.detex.txt $fifiprefix.snpex.hwe.cas.detex.txt $fifiprefix.snpex.temiss.detex.txt $fifiprefix.snpex.frq.detex.txt $fifiprefix.snpex.lmendel.detex.txt $fifiprefix.snpex.nassoc.detex.txt > $fifiprefix.snpex.detex.txt.comb  ");
+	}
+	else {
+	    unless ($noassoc) {
+		&mysystem ("cat $fifiprefix.snpex.hwe.con.detex.txt $fifiprefix.snpex.hwe.cas.detex.txt $fifiprefix.snpex.temiss.detex.txt $fifiprefix.snpex.frq.detex.txt $fifiprefix.snpex.nassoc.detex.txt > $fifiprefix.snpex.detex.txt.comb  ");
+	    }
+	    else {
+		&mysystem ("cat $fifiprefix.snpex.hwe.con.detex.txt $fifiprefix.snpex.frq.detex.txt  > $fifiprefix.snpex.detex.txt.comb  ");
+	    }
+	}
+
+#	&mysystem ("$ploc/plink $allow --bfile $fifiprefix --out $pofiprefix.tmp  --noweb --exclude $sefiprefix.snpex --make-bed --missing ");
+	&mysystem ("$ploc/plink $allow --bfile $fifiprefix --out $pofiprefix.tmp  --noweb --exclude $fifiprefix.snpex.detex.txt.comb --make-bed --missing ");
+	&mysystem ("mv $pofiprefix.tmp.lmiss $pofiprefix.lmiss");
+	&mysystem ("mv $pofiprefix.tmp.imiss $pofiprefix.imiss");
+	&mysystem ("mv $pofiprefix.tmp.bed $pofiprefix.bed");
+	&mysystem ("mv $pofiprefix.tmp.bim $pofiprefix.bim");
+	&mysystem ("mv $pofiprefix.tmp.fam $pofiprefix.fam");
+
+    }
+
+
+    if ($tdt) {
+	$n_imend = &count_lines ("$fifiprefix.imendel") - 1;
+	$n_pofi = &count_lines ("$pofiprefix.fam");
+	$fam_excl = $n_pofi - $n_imend;
+	if ($fam_excl != 0){
+	    print "$fam_excl";
+	    unless (-e "$ccprefix.fam") {
+		&mysystem ("$ploc/plink $allow --bfile $pofiprefix --out $ccprefix.tmp --noweb --remove $fifiprefix.imendel --make-bed --missing ");
+		&mysystem ("mv $ccprefix.tmp.bed $ccprefix.bed");
+		&mysystem ("mv $ccprefix.tmp.bim $ccprefix.bim");
+		&mysystem ("mv $ccprefix.tmp.fam $ccprefix.fam");
+	    }
+
+	    unless (-e "$tdtprefix.fam") {
+		&mysystem ("$ploc/plink $allow --bfile $pofiprefix --out $tdtprefix.tmp  --noweb --keep $fifiprefix.imendel --make-bed --missing ");
+		&mysystem ("mv $tdtprefix.tmp.bed $tdtprefix.bed");
+		&mysystem ("mv $tdtprefix.tmp.bim $tdtprefix.bim");
+		&mysystem ("mv $tdtprefix.tmp.fam $tdtprefix.fam");
+	    }
+
+	    copy( "$ccprefix.bim","../") or die "Copy failed: $!";
+	    copy( "$ccprefix.fam","../") or die "Copy failed: $!";
+	    copy( "$ccprefix.bed","../") or die "Copy failed: $!";
+
+	}
+	else {   ### sample only with trios
+
+	    copy( "$pofiprefix.bim","$tdtprefix.bim") or die "Copy failed: $!";
+	    copy( "$pofiprefix.bed","$tdtprefix.bed") or die "Copy failed: $!";
+	    copy( "$pofiprefix.fam","$tdtprefix.fam") or die "Copy failed: $!";
+
+	}
+
+	############# null mendel errors in family files
+	
+	unless (-e "$tdtprefix.mendel") {
+	    &mysystem ("$ploc/plink $allow --bfile $tdtprefix --out $tdtprefix.tmp2  --noweb --mendel ");
+	    &mysystem ("mv $tdtprefix.tmp2.mendel $tdtprefix.mendel");
+	}
+	
+	my %zero;
+	my %clst;
+	die $! unless open MEN , "< $tdtprefix.mendel";
+	die $! unless open ZERO , "> $tdtprefix.zero";
+	die $! unless open CLST , "> $tdtprefix.clst";
+	while (<MEN>){
+	    chomp;
+	    my @cells = @{&split_line_ref(\$_)};
+#	    my @cells = &split_line($_);
+	    unless (exists $zero{"$cells[3] $cells[0]"}) {
+		print ZERO "$cells[3] $cells[0]\n";
+		$zero{"$cells[3] $cells[0]"} = 1;
+	    }
+	    unless (exists $clst{"$cells[0] $cells[1]"}) {
+		print CLST "$cells[0] $cells[1] $cells[0]\n";
+		$clst{"$cells[0] $cells[1]"} =1;
+	    }
+	}
+	close MEN;
+	close ZERO;
+	close CLST;
+
+	unless (-e "$tdtnomeprefix.fam") {
+	    &mysystem ("$ploc/plink  $allow --bfile $tdtprefix --out $tdtnomeprefix.tmp --make-bed --noweb --zero-cluster $tdtprefix.zero  --within $tdtprefix.clst ");
+	    &mysystem ("mv $tdtnomeprefix.tmp.bed $tdtnomeprefix.bed");
+	    &mysystem ("mv $tdtnomeprefix.tmp.bim $tdtnomeprefix.bim");
+	    &mysystem ("mv $tdtnomeprefix.tmp.fam $tdtnomeprefix.fam");
+	}
+	
+	
+	copy( "$tdtnomeprefix.bim","../") or die "Copy failed: $!";
+	copy( "$tdtnomeprefix.fam","../") or die "Copy failed: $!";
+	copy( "$tdtnomeprefix.bed","../") or die "Copy failed: $!";
+	
+	
+	die $! unless open FAMI , "< $tdtnomeprefix.fam";
+	while (<FAMI>){
+	    chomp;
+	    my @cells = @{&split_line_ref(\$_)};
+#	    my @cells = &split_line($_);
+	    if ($cells[2] ne "0" && $cells[3] ne "0") {
+		$cells[5] = 0 if ($cells[5] ne "1" && $cells[5] ne "2");
+		$aff_off {$cells[5]} ++;
+	    }
+	}
+	close FAMI;
+#	    print "\n";
+	$aff_off{0} = 0 unless (exists $aff_off{0});
+	$aff_off{1} = 0 unless (exists $aff_off{1});
+	$aff_off{2} = 0 unless (exists $aff_off{2});
+
+    }
+}
+
+#print "debug\n";
+#exit;
+
+
+
+
+
+#########################################
+## produce combined dataset
+########################################
+    print  "-> create smart combined set (maf, hwe, cr, ...) step 1\n";
+
+
+if ($combine_sm){
+
+    unless (-e "combined_set_alt.txt"){
+
+
+
+    my %comb=();
+    my %count=();
+    my $header="";
+    my $filenumber=0;
+
+
+    ##########################################################################
+    ## add_info takes filename, column of SNP-Name and further columns to add
+   ###########################################################################
+
+#    print "here I am\n";
+#    exit;
+
+    sub add_info {
+	$filenumber++;
+	my ($file,$col_snp,@col_array) = @_;
+	print "adding $file\n";
+	die "$!: $file" unless open FILE, "< $file";
+	my $headtmp=<FILE>;
+	chomp($headtmp);
+	my @cells = @{&split_line_ref(\$headtmp)};
+	foreach (@col_array){
+	    $header.= "\t$cells[$_]";
+	}
+	while (<FILE>){
+	    chomp;
+	    my @cells = @{&split_line_ref(\$_)};
+#	    my @cells = &split_line($_);
+	    $count{$cells[$col_snp]}++;
+	    foreach (@col_array){
+		$comb{$cells[$col_snp]} .= "\t$cells[$_]";
+	    }
+	}
+	close FILE;
+    }
+
+    sub add_info_bim {
+	$filenumber++;
+	my ($file,$col_snp,@col_array) = @_;
+	print "adding bim $file\n";
+	die "$!: $file" unless open FILE, "< $file";
+	my $headtmp="CHR SNP NA POS A1 A2";
+	chomp($headtmp);
+	my @cells = @{&split_line_ref(\$headtmp)};
+	foreach (@col_array){
+	    $header.= "\t$cells[$_]";
+	}
+	while (<FILE>){
+	    chomp;
+	    my @cells = @{&split_line_ref(\$_)};
+#	    my @cells = &split_line($_);
+	    $count{$cells[$col_snp]}++;
+	    foreach (@col_array){
+		$comb{$cells[$col_snp]} .= "\t$cells[$_]";
+	    }
+	}
+	close FILE;
+    }
+
+#    exit;
+
+    ## now simply one after the other
+#    &add_info("$fifiprefix.assoc_wo_na_tmp",1,4,5,8);
+
+
+#    &add_info("$pofiprefix.bim",1,0,3);
+
+
+##degub
+#    my @cells= @{&split_line_ref(\$header)};
+#    print "header:\n";
+#    print "@cells\n";
+#    exit;
+
+#CHR  SNP              BP  A1  F_A  F_U      A2                      CHISQ   P       OR
+#0    1KG_1_24687454   0   -   0    0        ACTG                    NA      NA      NA
+#0    1                2   3   4    5        6                       7       8       9
+
+#BIM
+#26	exm-rs41456348	0	4337	C	T
+#0      1               2       3       4       5
+
+
+    unless ($noassoc) {
+	&add_info("$fifiprefix.assoc",1,0,2,3,4,5,6,8,9,10);
+
+    }
+    else {
+	&add_info_bim("$fifiprefix.bim",1,0,3,4,3,3,5,2,2,2);
+    }
+    
+###################### STOP, look for SE!
+    
+    &add_info("$fifiprefix.frq",1,4);
+    &add_info("$pofiprefix.lmiss",1,4);
+
+#SNP                                  0          P         F_MISS_A  F_MISS_U
+#1KG_1_63063592                       0.044475   0.007552  0.04762   0.003145
+
+# CHR                                       SNP   N_MISS   N_GENO   F_MISS
+#   0                           1KG_16_30594708        0      402        0
+
+    unless ($noassoc){
+	&add_info("$fifiprefix.missing_diff",0,3,4,1,2) ;
+    }
+    else {
+	&add_info("$pofiprefix.lmiss",1,4,4,4,4);
+    }
+
+    &add_info("$fifiprefix.hwe_aff",0,1);
+    &add_info("$fifiprefix.hwe_unaff",0,1);
+    &add_info("$fifiprefix.hwe_all",0,1);
+
+#    &add_info("$sefiprefix.missmatch_faf.txt",0,1);
+#    &add_info("$fifiprefix.missmatch_faf_caco.txt",0,1,2,4,5);
+
+
+
+    &add_info("$fifiprefix.lmendel",1,2) if ($tdt);
+
+#    &add_info("$sefiprefix.lmend",1,2) if ($tdt);
+
+    die "$!" unless open OUT, "> combined_set_alt.txt_tmp";
+#    die "$!" unless open OUTREM, "> combined_removed_in_qc.txt_tmp";
+
+    ## rewrite header (to many single Ps
+    my @cells= @{&split_line_ref(\$header)};
+
+#    print "header:\n";
+#    print "@cells\n";
+#    exit;
+
+#    $cells[2]="P_ASSOC";
+#    $cells[6]="P_HWE_UNAFF";
+#    $cells[8]="MISSDIFF";
+#    $cells[9]="P_MIDI";
+#    $cells[17]="P_HWE_AFF";
+#    $cells[18]="P_HWE_ALL";
+
+    $cells[6]="P_ASSOC";
+#    $cells[6]="P_HWE_UNAFF";
+#    $cells[8]="MISSDIFF";
+    $cells[13]="F_MISS_DIFF";
+    $cells[14]="F_MISS_P";
+#    $cells[17]="P_HWE_AFF";
+#    $cells[18]="P_HWE_ALL";
+
+
+    print OUT "RSID";
+    foreach (@cells){
+	print OUT "\t$_";
+    }
+    print OUT "\n";
+
+    ## write out rest if they are in all files to OUT, if not to OUTREM
+    for my $snp_name (keys %comb){
+	print OUT "$snp_name$comb{$snp_name}\n" if ($count{$snp_name} == $filenumber);
+#	print OUTREM "$filenumber: $snp_name$comb{$snp_name}\n" unless ($count{$snp_name} == $filenumber);
+    }
+
+    close OUT;
+#    close OUTREM;
+
+#    exit;
+
+    die "there are way not enough SNPs in the combined sample, new plink-version?" if (&count_lines("combined_set_alt.txt_tmp") < 10);
+
+    &mysystem ("mv combined_set_alt.txt_tmp combined_set_alt.txt") ;
+    }
+}
+
+#print "debug\n";
+#exit;
+
+#my $assoc_snps = &count_lines("$assoprefix.assoc_wo_na_tmp");
+
+my $valid_snps;
+unless (-e "combined_set_alt.txt.n") {
+    $valid_snps = &count_lines("combined_set_alt.txt") - 1;
+    die $!."(combined_set_alt.txt.n)" unless open DXN, "> combined_set_alt.txt.n";
+    print DXN "$valid_snps\n";
+    close DXN;
+}
+die $!."(combined_set_alt.txt.n)" unless open DXN, "< combined_set_alt.txt.n";
+$valid_snps = <DXN>;
+chomp($valid_snps);
+close DXN;
+
+
+my $bim_snps;
+unless (-e "$prefix.bim.n") {
+    $bim_snps = &count_lines("$prefix.bim") - 1;
+    die $!."($prefix.bim.n)" unless open DXN, "> $prefix.bim.n";
+    print DXN "$bim_snps\n";
+    close DXN;
+}
+die $!."($prefix.bim.n)" unless open DXN, "< $prefix.bim.n";
+$bim_snps = <DXN>;
+chomp($bim_snps);
+close DXN;
+
+
+
+
+
+
+
+#print "valid: $valid_snps\n";
+#print "bim: $bim_snps\n";
+
+
+##############################
+# QQ Plot in external script
+#############################
+
+unless ($noassoc) {
+    print  "-> make QQ-Plots (external script)\n";
+if ($qq_sm) {
+
+#                fifi_dummy_cd_wtc_eur-qq.pdf 
+    my $outy = $pofiprefix;
+#    my $system = "qqplot_5 --ceiling 10 --out $outy --pcol 4 --lafa1000 $pofiprefix.fam combined_set_alt.txt";
+    my $system = "qqplot_5 --maf 0.02 --ceiling 10 --out $outy --frcol 6 --pcol 8 --lafa1000 $pofiprefix.fam combined_set_alt.txt";
+#    print "$system\n";
+#    exit;
+    &mysystem ($system) unless (-e "$outy-qq.pdf");
+
+    ##  here the no-filter qqplot
+    $outy = $nofiprefix;
+    my $system = "qqplot_5 --maf 0.02 --ceiling 10 --out $outy --frcol 6 --pcol 9 --lafa1000 $prefix.fam $nofiprefix.assoc";
+    &mysystem ($system) unless (-e "$outy-qq.pdf");
+
+    ##  here the first-filter qqplot
+    $outy = $fifiprefix;
+    my $system = "qqplot_5 --maf 0.02 --ceiling 10 --out $outy --frcol 6 --pcol 9 --lafa1000 $fifiprefix.fam $fifiprefix.assoc";
+    &mysystem ($system) unless (-e "$outy-qq.pdf");
+
+
+}
+}
+#exit;
+
+
+
+######################################################################
+##   the one and only WGA plot !!
+######################################################################
+
+unless ($noassoc) {
+    print  "-> make manhattan-Plots (external script)\n";
+if ($gwa_plot) {
+
+    my $systemGWA="gwa_plot_3 $prekno_txt --cols 2,9,1,3 --title GWA-Plot_nofi --sig-gwa $nofiprefix.assoc";
+#    print "$systemGWA\n";
+#    exit;
+    &mysystem ($systemGWA) unless (-e "GWA-Plot_nofi_gwa.pdf");
+
+
+#    exit;
+    my $systemGWA="gwa_plot_3 $prekno_txt --cols 2,9,1,3 --title GWA-Plot_fifi --sig-gwa $fifiprefix.assoc";
+#    print "$systemGWA\n";
+    &mysystem ($systemGWA) unless (-e "GWA-Plot_fifi_gwa.pdf");
+
+
+#    my $systemGWA="gwa_plot_3 $prekno_txt --cols 1,4,17,18 --title GWA-Plot --sig-gwa combined_set_alt.txt_tmp";
+    my $systemGWA="gwa_plot_3 $prekno_txt --cols 1,8,2,3 --title GWA-Plot --sig-gwa combined_set_alt.txt";
+#    print "$systemGWA\n";
+    &mysystem ($systemGWA) unless (-e "GWA-Plot_gwa.pdf");
+
+
+    my $la_comb = `cat combined_set_alt.txt.qq.la`;
+
+    $la_comb = $la_comb * 1;
+    die if ($la_comb eq "");
+    die if ($la_comb <= 0);
+    die if ($la_comb > 20);
+
+    my $systemGWA="gwa_plot_3 $prekno_txt --gc $la_comb --cols 1,8,2,3 --title GWA-Plot_gc --sig-gwa combined_set_alt.txt";
+#    print "$systemGWA\n";
+    &mysystem ($systemGWA) unless (-e "GWA-Plot_gc_gwa.pdf");
+
+
+
+}
+
+}
+
+#exit;
+my $prekno_new_file = "GWA-Plot_gwa.pdf.prekno_new";
+my $prekno_new_file_gc = "GWA-Plot_gc_gwa.pdf.prekno_new.gc";
+my $prepro_txt = "--prepro $prekno_new_file";
+
+#print "debug\n";
+#exit;
+
+
+###########################
+##  exclude prekno_new
+###########################
+
+my @snpex_prekno_arr;
+my @snpex_prekno_arr_autos;
+my @snpin_prekno_arr;
+
+
+my $prekno_ex_file = "$prekno_new_file_gc.snpex";
+my $prekno_info_file = "$prekno_new_file_gc.info";
+
+unless ($noassoc){
+#die $! unless open PREK , "< $prekno_new_file";
+die $! unless open PREK , "< $prekno_new_file_gc";
+die $! unless open EX , "> $prekno_ex_file";
+die $! unless open INFO , "> $prekno_info_file";
+print EX "SNP\tCHR\tPOS\tP\tnew\tP-corr\n";
+print INFO "SNP\tCHR\tPOS\tP\tnew\tP-corr\n";
+my $header = <PREK>;
+while (my $line = <PREK>){
+    chomp;
+    my @cells = @{&split_line_ref(\$line)};
+#    my @cells = &split_line($line);
+#    print "p: $cells[3]\t$th_prekno\n";
+#    print "p: $cells[4]\t$th_prekno\n";
+    if ($cells[5] < $th_prekno){
+#	print "kleiner\n";
+	if ($cells[4] == 1) {
+	    push @snpex_prekno_arr, $cells[0] ;
+	    if ($cells[1] > 0 && $cells[1] < 23) {
+		push @snpex_prekno_arr_autos, $cells[0] ;
+	    }
+	    print EX "$cells[0]\t$cells[1]\t$cells[2]\t$cells[3]\t$cells[4]\t$cells[5]\n";
+	}
+	elsif ($cells[4] == 0){
+	    push @snpin_prekno_arr, $cells[0] ;
+	}
+	print INFO "$cells[0]\t$cells[1]\t$cells[2]\t$cells[3]\t$cells[4]\t$cells[5]\n";
+    }
+}
+close PREK;
+close EX;
+close INFO;
+}
+
+
+#print "debug\n";
+#exit;
+#print "@snpex_prekno_arr\n";
+
+#unless (-e "$preknoprefix.fam") {
+#    if (@snpex_prekno_arr > 0){
+#	print "$preknoprefix\n";
+	
+#	&mysystem ("$ploc/plink $allow --bfile $pofiprefix --out $preknoprefix.tmp --noweb --exclude $prekno_ex_file --make-bed");
+#	&mysystem ("mv $preknoprefix.tmp.bed $preknoprefix.bed");
+#	&mysystem ("mv $preknoprefix.tmp.bim $preknoprefix.bim");
+#	&mysystem ("mv $preknoprefix.tmp.fam $preknoprefix.fam");
+
+#    }
+#    else {#
+#	&mysystem ("ln -s $pofiprefix.bed $preknoprefix.bed");
+#	&mysystem ("ln -s $pofiprefix.bim $preknoprefix.bim");
+#	&mysystem ("ln -s $pofiprefix.fam $preknoprefix.fam");
+ #   }
+#}
+#exit;
+
+
+
+##############################################################
+# analyse testing for threshholds and association
+###########################################################
+
+
+my %cc_num_pofi = ();
+my %sex_num_pofi = ();
+my $nids_pofi ;
+my $n_snps_pofi ;
+my $n_snps_fifi ;
+my $n_prekno;
+my $n_prekno_autos;
+my $n_prekno_in;
+
+$cc_num_pofi {1} =0;
+$cc_num_pofi {2} =0;
+$cc_num_pofi {-9} =0;
+
+print  "-> analysing step1 (general information)\n";
+if ($prop_ana){
+
+    # read the log-file
+
+
+
+
+    die $! unless open FAMI , "< $pofiprefix.fam";
+    while (<FAMI>){
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+#	my @cells = &split_line($_);
+	
+	$cc_num_pofi {$cells[5]} ++;
+	$sex_num_pofi {$cells[4]} ++;
+	$nids_pofi ++;
+
+#    print "hier: $cells[5]\n";
+    }
+    close FAMI;
+
+
+    $n_snps_pofi= &count_lines ("$pofiprefix.bim");
+    $n_snps_fifi= &count_lines ("$fifiprefix.bim");
+    my $no_pt_pofi = $nids_pofi - ($cc_num_pofi{2} + $cc_num_pofi{1}) ;
+    my $no_pt_nofi = $nids_nofi - ($cc_num{2} + $cc_num{1}) ;
+    my $no_sex_pofi = $nids_pofi - ($sex_num_pofi{2} + $sex_num_pofi{1}) ;
+
+
+    # no filter
+    die $! unless open GI ,"> $outprefix"."_nofi_info.txt";
+
+    my $pass = "optimal";
+
+    my $n_drop = $nids_nofi - $nids_pofi ;
+    $cc_num{1} = 0 unless (exists $cc_num{1});
+    $pass = "$greenstr" if ($n_drop != 0) ;
+
+#    print "$n_drop\n";
+#    exit;
+
+    my $drop_str = sprintf "%s,%s,%s",$cc_num{2} - $cc_num_pofi{2}, $cc_num{1} - $cc_num_pofi{1}, $no_pt_nofi - $no_pt_pofi;
+
+#    printf GI "Cases,Controls,Missing & %s,%s,%s & %s,%s,%s & %s & %s\\\\\n"
+#	,$cc_num{2},$cc_num{1},$no_pt_nofi,
+#	$cc_num_pofi{2},$cc_num_pofi{1},$no_pt_pofi,
+#	$drop_str, $pass;
+   printf GI "Cases,Controls,Missing & %s,%s,%s & %s,%s,%s & %s\\\\\n"
+	,$cc_num{2},$cc_num{1},$no_pt_nofi,
+	$cc_num_pofi{2},$cc_num_pofi{1},$no_pt_pofi,
+	$drop_str;
+    $ncases = 0;
+    $ncontrols = 0;
+
+
+
+    my $no_sex = $nids_nofi - ($sex_num{2} + $sex_num{1}) ;
+#    $pass="optimal" ;
+#    $pass = "$greenstr" if ($no_sex > 0) ;
+#    printf GI "Males,Females,Unspec & %s,%s,%s & %s,%s,%s & %s,%s,%s & %s\\\\\n"
+#	,$sex_num{1},$sex_num{2},$no_sex
+#	,$sex_num_pofi{1},$sex_num_pofi{2},$no_sex_pofi
+#	,$sex_num{1} - $sex_num_pofi{1},$sex_num{2} - $sex_num_pofi{2},$no_sex - $no_sex_pofi
+#	,$pass;
+    printf GI "Males,Females,Unspec & %s,%s,%s & %s,%s,%s & %s,%s,%s\\\\\n"
+	,$sex_num{1},$sex_num{2},$no_sex
+	,$sex_num_pofi{1},$sex_num_pofi{2},$no_sex_pofi
+	,$sex_num{1} - $sex_num_pofi{1},$sex_num{2} - $sex_num_pofi{2},$no_sex - $no_sex_pofi;
+
+
+
+    $pass="optimal";
+    $pass="$greenstr" if ($n_snps_nofi - $n_snps_pofi > 0) ;
+
+#    printf GI "SNPs in Sample & %s & %s & %s & %s\\\\\n"
+#	,$n_snps_nofi
+#	,$n_snps_pofi
+#	,$n_snps_nofi - $n_snps_pofi
+#	,$pass;
+    printf GI "SNPs & %s & %s & %s (%.1f\%)\\\\\n"
+	,$n_snps_nofi
+	,$n_snps_pofi
+	,$n_snps_nofi - $n_snps_pofi
+	,100*($n_snps_nofi - $n_snps_pofi)/$n_snps_nofi;
+
+
+    close GI;
+
+
+
+    die $! unless open FI ,"> $outprefix"."_fifi_info.txt";
+
+
+    my $idex_ca = $cc_num{2} - $cc_num_pofi{2};
+    my $idex_co = $cc_num{1} - $cc_num_pofi{1};
+#    print "$cc_num{1} - $cc_num_sefi{1}";
+#    print "$cc_num{2} - $cc_num_sefi{2}";
+
+    $pass="optimal" ;
+    $pass = "$failedstr" if ($snpex_nofi > 0);
+    $pass = "$greenstr" if ($snpex_nofi > 100);
+    $pass = "$bluestr" if ($snpex_nofi > 1000);
+    $pass = "$magentastr" if ($snpex_nofi > 10000);
+    $pass = "$yellowstr" if ($snpex_nofi > 100000);
+#    printf FI "N-SNPs with CR < %.3f (pre - filter) & %d & %s  \\\\\n",1-$pre_geno,$snpex_nofi,$pass;
+    printf FI "SNPs: call rate < %.3f (pre - filter) & %d (%.1f\%) \\\\\n",1-$pre_geno,$snpex_nofi, 100*$snpex_nofi/$n_snps_nofi;
+
+
+    $pass="optimal" ;
+    $pass = "$failedstr" if ($idex_fifi > 0);
+    $pass = "$greenstr" if ($idex_fifi > 10);
+    $pass = "$bluestr" if ($idex_fifi > 100);
+    $pass = "$magentastr" if ($idex_fifi > 1000);
+    $pass = "$yellowstr" if ($idex_fifi > 10000);
+#    printf FI "N-IDs with CR < %.3f & %d (ca: %d, co: %d, no: %d) & %s \\\\\n"
+#	, 1-$mind,$idex_fifi, $idex_ca ,$idex_co, $no_pt_pofi, $pass;
+    printf FI "IDs: call rate (cases/controls) < %.3f & %d (%d/%d) \\\\\n"
+	, 1-$mind,$idex_fifi, $idex_fifi_ca ,$idex_fifi_co;
+
+    if ($tdt){
+	$pass="optimal" ;
+	$pass = "$failedstr" if ($idex_fifi_mend > 0);
+	$pass = "$greenstr" if ($idex_fifi_mend > 10);
+	$pass = "$bluestr" if ($idex_fifi_mend > 100);
+	$pass = "$magentastr" if ($idex_fifi_mend > 1000);
+	$pass = "$yellowstr" if ($idex_fifi_mend > 10000);
+#	printf FI "N-IDs with MENDERR >  %d & %d & %s \\\\\n"
+#	    , $imend_th, $idex_fifi_mend, $pass;
+	printf FI "IDs: mendel error >  %d & %d \\\\\n"
+	    , $imend_th, $idex_fifi_mend;
+    }
+
+    $pass="optimal" ;
+    $pass = "$failedstr" if ($idex_fifi_fhet > 0);
+    $pass = "$greenstr" if ($idex_fifi_fhet > 10);
+    $pass = "$bluestr" if ($idex_fifi_fhet > 100);
+    $pass = "$magentastr" if ($idex_fifi_fhet > 1000);
+    $pass = "$yellowstr" if ($idex_fifi_fhet > 10000);
+#    printf FI "N-IDs %.2f < with FHET >  %.2f & %d & %s \\\\\n"
+#	, -$Fhet_th , $Fhet_th, $idex_fifi_fhet, $pass;
+    printf FI "IDs: FHET outside +-  %.2f (cases/controls) & %d (%d/%d) \\\\\n"
+	, $Fhet_th, $idex_fifi_fhet, $idex_fifi_fhet_ca, $idex_fifi_fhet_co;
+
+
+    my $no_chex_vio = $chex_idfi ;
+    $pass="optimal" ;
+    $pass = "$failedstr" if ($no_chex_vio > 0);
+    $pass = "$greenstr" if ($no_chex_vio > 10);
+    $pass = "$bluestr" if ($no_chex_vio > 100);
+    $pass = "$magentastr" if ($no_chex_vio > 1000);
+    $pass = "$yellowstr" if ($no_chex_vio > 10000);
+    $pass="optimal" ;
+    $pass = "$greenstr" if ($no_chex_vio > 0) ;
+
+#    printf FI "N-IDs with with Sex Check violations (excluded) & %s & %s \\\\\n"
+#	,$no_chex_vio
+#	,$pass;
+    if ($chex_idfi_ntest == 0) {
+	printf FI "IDs: Sex violations -excluded- (N-tested) & %s (0 - no sex-chromosomes?)\\\\\n"
+	    ,$no_chex_vio;
+    }
+    else {
+	printf FI "IDs: Sex violations -excluded- (N-tested) & %s (%s)\\\\\n"
+	    ,$no_chex_vio,$chex_idfi_ntest;
+    }
+
+
+    my $no_chex_vio_warni = $chex_idfi_warni ;
+    $pass="optimal" ;
+    $pass = "$failedstr" if ($no_chex_vio_warni > 0);
+    $pass = "$greenstr" if ($no_chex_vio_warni > 10);
+    $pass = "$bluestr" if ($no_chex_vio_warni > 100);
+    $pass = "$magentastr" if ($no_chex_vio_warni > 1000);
+    $pass = "$yellowstr" if ($no_chex_vio_warni > 10000);
+    $pass="optimal" ;
+    $pass = "$greenstr" if ($no_chex_vio_warni > 0) ;
+#    printf FI "N-IDs with with Sex Check warnings (not excluded) & %s & %s \\\\\n"
+#	,$no_chex_vio_warni
+#	,$pass;
+    printf FI "IDs: Sex warnings (undefined phenotype / ambiguous genotypes) & %s (%s/%s)\\\\\n"
+	,$chex_idfi_warni,$chex_idfi_warni_p,$chex_idfi_warni_s;
+
+
+
+
+#    printf FI "IDs: Snpsex undefined -not excluded- & %s (%s)\\\\\n"
+#	,$chex_idfi_warni_s,$chex_idfi_ntest;
+
+
+
+
+    $pass="optimal" ;
+    $pass = "$failedstr" if ($snpex_fifi > 0);
+    $pass = "$greenstr" if ($snpex_fifi > 100);
+    $pass = "$bluestr" if ($snpex_fifi > 1000);
+    $pass = "$magentastr" if ($snpex_fifi > 10000);
+    $pass = "$yellowstr" if ($snpex_fifi > 100000);
+#    printf FI "N-SNPs with CR < %.3f & %d & %s  \\\\\n",1-$geno,$snpex_fifi,$pass;
+    printf FI "SNPs: call rate < %.3f & %d (%.1f\%) \\\\\n",1-$geno,$snpex_fifi,100*$snpex_fifi/$n_snps_nofi;
+
+
+
+ #   close FI;
+
+
+
+
+#    die $! unless open FI ,"> $outprefix"."_sefi_info.txt";
+
+    unless ($noassoc) {
+	$pass="optimal" ;
+	$pass = "$failedstr" if ($snpex_sefi_midi > 0);
+	$pass = "$greenstr" if ($snpex_sefi_midi > 100);
+	$pass = "$bluestr" if ($snpex_sefi_midi > 1000);
+	printf FI "SNPs: missing difference > %.3f & %d (%.1f\%) \\\\\n",$midi_th,$snpex_sefi_midi,100*$snpex_sefi_midi/$n_snps_fifi;
+
+	$pass="optimal" ;
+	$pass = "$failedstr" if ($snpex_sefi_pna > 0);
+	$pass = "$greenstr" if ($snpex_sefi_pna > 100);
+	$pass = "$bluestr" if ($snpex_sefi_pna > 1000);
+	printf FI "SNPs: without valid association p-value (invariant) & %d  (%.1f\%) \\\\\n",$snpex_sefi_pna,100*$snpex_sefi_pna/$n_snps_fifi;
+
+    }
+
+    $pass="optimal" ;
+    $pass = "$failedstr" if ($snpex_sefi_maf > 0);
+    $pass = "$greenstr" if ($snpex_sefi_maf > 100);
+    $pass = "$bluestr" if ($snpex_sefi_maf > 1000);
+    if ($maf_th > 0) {
+	printf FI "SNPs: with MAF < %.3f & %d (%.1f\%) \\\\\n",$maf_th,$snpex_sefi_maf,100*$snpex_sefi_maf/$n_snps_fifi;
+    }
+
+#    $pass="optimal" ;
+#    $pass = "$failedstr" if ($snpex_sefi_faf > 0);
+#    $pass = "$greenstr" if ($snpex_sefi_faf > 100);
+#    $pass = "$bluestr" if ($snpex_sefi_faf > 1000);
+#    printf FI "N-SNPs with FAF > %.3f & %d  & %s \\\\\n",$faf_th,$snpex_sefi_faf;
+    unless ($noassoc) {
+    $pass="optimal" ;
+    $pass = "$failedstr" if ($snpex_sefi_hwe > 0);
+    $pass = "$greenstr" if ($snpex_sefi_hwe > 100);
+    $pass = "$bluestr" if ($snpex_sefi_hwe > 1000);
+    printf FI "SNPs: HWE-controls < %.3g & %d (%.1f\%) \\\\\n",$hwe_th,$snpex_sefi_hwe,100*$snpex_sefi_hwe/$n_snps_fifi;
+
+    $pass="optimal" ;
+    $pass = "$failedstr" if ($snpex_sefi_hwe_ca > 0);
+    $pass = "$greenstr" if ($snpex_sefi_hwe_ca > 100);
+    $pass = "$bluestr" if ($snpex_sefi_hwe_ca > 1000);
+    printf FI "SNPs: HWE-cases < %.3g & %d (%.1f\%) \\\\\n",$hwe_th_ca,$snpex_sefi_hwe_ca,100*$snpex_sefi_hwe_ca/$n_snps_fifi;
+
+    }
+    else {
+	$pass="optimal" ;
+	$pass = "$failedstr" if ($snpex_sefi_hwe > 0);
+	$pass = "$greenstr" if ($snpex_sefi_hwe > 100);
+	$pass = "$bluestr" if ($snpex_sefi_hwe > 1000);
+	printf FI "SNPs: HWE < %.3g & %d (%.1f\%) \\\\\n",$hwe_th,$snpex_sefi_hwe,100*$snpex_sefi_hwe/$n_snps_fifi;
+    }
+
+
+    if ($tdt) {
+	$pass="optimal" ;
+	$pass = "$failedstr" if ($snpex_sefi_mend > 0);
+	$pass = "$greenstr" if ($snpex_sefi_mend > 100);
+	$pass = "$bluestr" if ($snpex_sefi_mend > 1000);
+	printf FI "SNPs: mendelian errors > %.3g & %d (%.1f\%) \\\\\n",$mend_th,$snpex_sefi_mend,100*$snpex_sefi_mend/$n_snps_fifi;
+    }
+
+    $n_prekno = @snpex_prekno_arr ;
+    $n_prekno_autos = @snpex_prekno_arr_autos ;
+
+#    print "n_prekno: $n_prekno\n";
+#    exit;
+
+    unless ($noassoc) {
+	$n_prekno_in = @snpin_prekno_arr ;
+	$pass="optimal" ;
+	$pass = "$failedstr" if ($n_prekno > 0);
+	$pass = "$greenstr" if ($n_prekno > 100);
+	$pass = "$bluestr" if ($n_prekno > 1000);
+	printf FI "Warning: genomewide significant SNPs (autosomal/known) & %d (%d/%d) \\\\\n",$n_prekno, $n_prekno_autos, $n_prekno_in;
+    }
+
+
+
+
+    close FI;
+}
+
+
+
+#print "debug\n";
+#exit;
+
+#######################
+##  Lambda and Effect
+######################
+
+if (0) {
+
+
+    print  "-> estimate effects\n" ;
+if ($lambda_matrix){
+
+
+    my $meinskuo_str = "";
+
+    ## Kuo, Bukszar
+    die "$!" unless open IN, "< combined_set_alt.txt_tmp";
+    my $header_tmp=<IN>;
+    my $d_count=0;
+    my @pvals=();
+    while (<IN>){
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+#	my @cells=&split_line($_);
+	$d_count++ if ($cells[3] < 1/$valid_snps);
+	my $tmp=1/$valid_snps;
+	push @pvals, $cells[3];
+#	print "$cells[8]\t$tmp\n";
+    }
+    $meinskuo_str = sprintf "\\item Estimated %d main effects according to Kuo, Bukszar, van den Oord.\n", ($d_count-1);
+    $meinskuo_str .= "\\footnote {Kuo P, Bukszar J, Van den Oord EJCG. Estimating the number and size of the main effects in genome-wide case-control association studies. BMC Proceedings 2007, Epub 2007 Dec 18}\n";
+
+
+
+    close IN;
+
+
+#    print "LKJLKJLDJ\n";
+#    exit;
+
+
+    sub by_number { $a <=> $b}
+
+    ## Meinshausen, Rice
+    my @sort_p = sort by_number @pvals;
+    my $lc=1;
+    my $alpha=0.5;
+    my $bux=-100;
+    foreach (@sort_p){
+	my $res=($lc/$valid_snps-$_/$alpha)/(1.0001-$_);
+	$bux=$res if ($res>$bux);
+	$lc++;
+    }
+    $meinskuo_str .= sprintf "\\item Estimated %2.3f main effects according to Meinshausen, Rice.\n", $valid_snps*$bux;
+    $meinskuo_str .= "\\footnote { Meinshausen N, Rice J. Estimating the proportion of false null hypotheses among a large number of independently tested hypotheses. The Annals of Statistics 2006;34:373-393}\n";
+
+
+    die "$!" unless open OUT, "> $outprefix"."_asso_info.txt";
+    print OUT "$meinskuo_str";
+    close OUT;
+
+}
+}
+
+
+
+    ###############################
+    ###    Lambda Matrix
+    ###############################
+unless ($noassoc) {
+print "doing lambd-hunting....\n";
+
+#    $minsize =10 unless ($lisa);   LA2cd_wtc_eur-qc_lama-page1.pdf
+my $best_val = 4;
+
+#### missing
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 12,10 --pcol 8 --minsi $minsize --out LA1$outprefix combined_set_alt.txt";
+#    print "$systemstr\n";
+#sleep(5);
+&mysystem($systemstr) unless (-e "LA1$outprefix"."_lama-page1.pdf");
+
+
+##### MAF
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 11,15 --pcol 8 --minsi $minsize --out LA2$outprefix combined_set_alt.txt";
+#    print "$systemstr\n";
+#    exit;
+&mysystem($systemstr) unless (-e "LA2$outprefix"."_lama-page1.pdf");
+
+
+#### MAF with <.05
+my $mn;
+unless (-e "combined_set_alt.txt.maf_restr.n" && "combined_set_alt.txt.maf_restr") {
+    print "rewrite MAF\n";
+    die $! unless open IN , "< combined_set_alt.txt";
+    die $! unless open OUT , "> combined_set_alt.txt.maf_restr.tmp";
+    my $head = <FAMI>;
+    print OUT $head;
+    while (<IN>){#
+	chomp;
+	my @cells = @{&split_line_ref(\$_)};
+#	    my @cells = &split_line($_);
+	if ($cells[10] < .05) {
+	    print OUT "@cells\n";
+	    $mn++;
+	}
+    }
+    close IN;
+    close OUT;
+    die $! unless open OUT , "> combined_set_alt.txt.maf_restr.n";
+    print OUT "$mn";
+    close OUT;
+    &mysystem("mv combined_set_alt.txt.maf_restr.tmp combined_set_alt.txt.maf_restr");
+}
+
+open INFILE, "combined_set_alt.txt.maf_restr.n" or die "(combined_set_alt.txt.maf_restr.n) $!";
+my $mn = <INFILE>;
+chomp($mn);
+$mn=$mn*1;
+close (INFILE);
+
+#print "debug: $mn\n";
+#exit;
+
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 11,15 --pcol 8 --minsi $minsize --out LA2b$outprefix combined_set_alt.txt.maf_restr";
+#    print "$systemstr\n";
+#    exit;
+if ($mn > 50) {
+    &mysystem($systemstr) unless (-e "LA2b$outprefix"."_lama-page1.pdf");
+}
+else {
+    &mysystem("cp LA2$outprefix"."_lama-page1.pdf LA2b$outprefix"."_lama-page1.pdf");
+}
+
+
+
+my $midi_col = 15;
+$midi_col = 20 if ($tdt);   # no midi, we want mendelerrors.
+
+###MIDI
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 $midi_col,11 --pcol 8 --minsi $minsize --out LA3$outprefix combined_set_alt.txt";
+&mysystem($systemstr) unless (-e "LA3$outprefix"."_lama-page1.pdf");
+
+### chr
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 2,1 --pcol 8 --minsi $minsize --out LA4$outprefix combined_set_alt.txt";
+&mysystem($systemstr) unless (-e "LA4$outprefix"."_lama-page1.pdf");
+
+## HWE_con
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 18,11 --pcol 8 --minsi $minsize --out LA5$outprefix combined_set_alt.txt";
+&mysystem($systemstr) unless (-e "LA5$outprefix"."_lama-page1.pdf");
+
+## HWE_cas
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 17,11 --pcol 8 --minsi $minsize --out LA6$outprefix combined_set_alt.txt";
+&mysystem($systemstr) unless (-e "LA6$outprefix"."_lama-page1.pdf");
+
+## MISS_cas
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 13,11 --pcol 8 --minsi $minsize --out LA9$outprefix combined_set_alt.txt";
+&mysystem($systemstr) unless (-e "LA9$outprefix"."_lama-page1.pdf");
+
+## MISS_con
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 14,11 --pcol 8 --minsi $minsize --out LA10$outprefix combined_set_alt.txt";
+&mysystem($systemstr) unless (-e "LA10$outprefix"."_lama-page1.pdf");
+
+## HWE_all
+my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 19,11 --pcol 8 --minsi $minsize --out LA12$outprefix combined_set_alt.txt";
+&mysystem($systemstr) unless (-e "LA12$outprefix"."_lama-page1.pdf");
+
+}
+
+
+
+
+
+#############################################
+##  plot histogram of SNP-MRs
+#############################################
+    print  "-> plot SNP-Missing-Rates (no filter)\n";
+if ($hist_snp_plot){
+
+
+
+    ## template with IMISS and PDFNAME to be changed
+    my $R_hist_templ='read.table("LMISS", header=T)-> snp_miss
+pdf("PDFNAME",7.8,6,title="Lmiss-Plot")
+par(mfrow = c(2, 1))
+
+round(mean(snp_miss[,5]),5) ->mean
+hist(snp_miss[,5], 30, main="Histogram of SNP-Missing-Rate, all", sub = paste ("mean = ",mean,sep =""), xlab="missing-rate", cex.sub =.6, ylab ="counts", col = "grey", breaks = seq(0,1,by=.01), xlim = c(0,1), las =1)
+
+abline (v=FIGENO, col=colors()[100])
+abline (v=PREGENO, col="green")
+legend("topright",c("first-filter: FIGENO","pre-filter: PREGENO"),fill=c(colors()[100],"green"))
+
+hist(snp_miss[,5], 30, main="Histogram of SNP-Missing-Rate, zoomed", xlab = "", cex.sub =.6, ylab ="counts", col = "grey", breaks = seq(0,1,by=.002), xlim = c(0,.06), las =1)
+
+abline (v=FIGENO, col=colors()[100])
+abline (v=PREGENO, col="green")
+
+#mtext("ripke @ chgr mgh harvard edu",4,cex=.3)
+
+
+dev.off()
+' ;
+  
+    ## rework template
+    my $R_hist_in = $R_hist_templ;
+    my $pdf_name="$outprefix"."_lmiss_nofi.pdf";
+    $R_hist_in=~ s/PDFNAME/$pdf_name/;
+    $R_hist_in=~ s/LMISS/$nofiprefix.lmiss/;
+    $R_hist_in=~ s/FIGENO/$geno/g;
+    $R_hist_in=~ s/PREGENO/$pre_geno/g;
+
+    &a2file ("lmiss_hist_Rin", $R_hist_in);
+
+    my $system="$r_sys < lmiss_hist_Rin  --vanilla";
+#    my $system="source /broad/software/scripts/useuse; use R-2.14;  R < lmiss_hist_Rin  --vanilla";
+    &mysystem($system) unless (-e $pdf_name);
+
+
+}
+
+
+
+#############################################
+##  plot histogram of ID-MRs
+#############################################
+    print  "-> plot ID-Missing-Rates\n";
+if ($hist_id_plot){
+
+
+
+    ## template with IMISS and PDFNAME to be changed
+    my $R_hist_templ='read.table("IMISS", header=T)-> id_miss
+pdf("PDFNAME",7.8,6,title="Imiss-Plot")
+par(mfrow = c(2, 1))
+p_caco_name = "IMISS.pcaco"
+
+
+if (var(id_miss[,6]) == 0 && id_miss[1,6] == 0) {
+
+ plot(0,0,main = "ID-miss all zero")
+ write.table(1.00,p_caco_name,col.names=F,row.names=F)
+
+#}
+#if (CONLY > 0){
+#round(mean(id_miss[,6]),5) ->mean
+#hist(id_miss[,6], 15, main="Histogram of ID-Missing-Rate (all)", sub = paste ("mean = ",mean,sep =""), xlab="missing-rate", cex.sub =.6, ylab ="counts", col="grey")
+#abline (v=FIMIND, col=colors()[100])
+
+#write.table(1.00,p_caco_name,col.names=F,row.names=F)
+
+} else {
+
+ if (length(id_miss[grep("con_",id_miss[,1]),6] ) > 0 && length(id_miss[grep("cas_",id_miss[,1]),6] ) > 0 ) {
+round(mean(id_miss[grep("con_",id_miss[,1]),6]),5) ->mean
+hist(id_miss[grep("con_",id_miss[,1]),6], 15, main="Controls", sub = paste ("mean = ",mean,sep =""), xlab="missing-rate", cex.sub=.6, ylab ="counts", col = "grey", breaks = 20)
+abline (v=FIMIND, col=colors()[100])
+
+
+round(mean(id_miss[grep("cas_",id_miss[,1]),6]),5) ->mean
+hist(id_miss[grep("cas_",id_miss[,1]),6], 15, main="Cases", sub = paste ("mean = ",mean,sep =""), xlab = "", cex.sub=.6, ylab ="counts", col="grey", breaks =20)
+abline (v=FIMIND, col=colors()[100])
+
+
+colp = 1
+
+
+p_caco = signif(ks.test(id_miss[grep("con_",id_miss[,1]),6],id_miss[grep("cas_",id_miss[,1]),6])$p.value,2)
+if (p_caco < 0.05) {colp = 2}
+
+mtext(paste("p_value (Kolmogorov-Smirnov) case - control = ",p_caco,sep=""),3,3,cex=.8, col=colp)
+
+write.table(p_caco,p_caco_name,col.names=F,row.names=F)
+
+ } else {
+
+hist(id_miss[,6], 15, main="all IDs", xlab="missing-rate", cex.sub=.6, ylab ="counts", col = "grey")
+abline (v=FIMIND, col=colors()[100])
+
+write.table(1.00,p_caco_name,col.names=F,row.names=F)
+
+}
+
+
+
+}
+
+dev.off()
+' ;
+
+    $R_hist_templ=~ s/CONLY/1/ if ($tdt);
+    $R_hist_templ=~ s/CONLY/$conly_id_miss/ unless ($tdt);
+    $R_hist_templ=~ s/FIMIND/$mind/g;
+
+    ## rework template
+    my $R_hist_in = $R_hist_templ;
+    my $pdf_name="$outprefix"."_imiss_fifi.pdf";
+    $R_hist_in=~ s/PDFNAME/$pdf_name/;
+
+    &mysystem("tr \'\#\' \'\-\' <  $fifiprefix.imiss > $fifiprefix.imiss.tmp");
+
+    $R_hist_in=~ s/IMISS/$fifiprefix.imiss.tmp/g;
+
+
+    &a2file ("imiss_hist_Rin", $R_hist_in);
+    my $system="$r_sys < imiss_hist_Rin  --vanilla";
+#    my $system="source /broad/software/scripts/useuse; use R-2.14; R < imiss_hist_Rin  --vanilla";
+    &mysystem($system) unless (-e $pdf_name);
+
+
+
+    ## rework template
+    $R_hist_in = $R_hist_templ;
+    $pdf_name="$outprefix"."_imiss_nofi.pdf";
+    $R_hist_in=~ s/PDFNAME/$pdf_name/;
+
+    &mysystem("tr \'\#\' \'\-\' <  $nofiprefix.imiss > $nofiprefix.imiss.tmp");
+
+    $R_hist_in=~ s/IMISS/$nofiprefix.imiss.tmp/g;
+
+
+    &a2file ("imiss_hist_Rin", $R_hist_in);
+    $system="$r_sys < imiss_hist_Rin --vanilla";
+#    $system="source /broad/software/scripts/useuse; use R-2.14; R < imiss_hist_Rin --vanilla";
+    &mysystem($system) unless (-e $pdf_name);
+
+
+
+    ## rework template
+    $R_hist_in = $R_hist_templ;
+    $pdf_name="$outprefix"."_imiss_pofi.pdf";
+    $R_hist_in=~ s/PDFNAME/$pdf_name/;
+
+    &mysystem("tr \'\#\' \'\-\' <  $pofiprefix.imiss > $pofiprefix.imiss.tmp");
+
+    $R_hist_in=~ s/IMISS/$pofiprefix.imiss.tmp/g;
+
+    &a2file ("imiss_hist_Rin", $R_hist_in);
+    $system="$r_sys < imiss_hist_Rin  --vanilla";
+#    $system="source /broad/software/scripts/useuse; use R-2.14; R < imiss_hist_Rin  --vanilla";
+    &mysystem($system) unless (-e $pdf_name);
+
+
+}
+
+#print "debug\n";
+#exit;
+
+#############################################
+##  plot histogram of ME per ID
+#############################################
+my $imend_hist_txt = "";
+
+    print  "-> plot ID-ME (no filter)\n";
+
+
+
+
+if ($tdt){
+
+
+    $imend_hist_txt = '
+\subsection{Fhet - post QC}
+\includegraphics[width=.9\textwidth]{IDFIPREFIX-idmendel-hisplot-all.pdf}
+\subsection{Fhet - zoomed}
+\includegraphics[width=.9\textwidth]{IDFIPREFIX-idmendel-hisplot.pdf}
+';
+    
+    
+    $imend_hist_txt =~ s/IDFIPREFIX/$idfiprefix/g;
+    
+
+
+}
+
+
+
+
+#############################################
+##  plot histogram of Fhet per ID
+#############################################
+my $Fhet_hist_txt = "";
+
+unless ($chrx){
+
+$Fhet_hist_txt = '
+\subsection{Fhet - post QC}
+\includegraphics[width=.9\textwidth]{IDFIPREFIX-idhet-hisplot-all.pdf}
+\subsection{Fhet - zoomed}
+\includegraphics[width=.9\textwidth]{IDFIPREFIX-idhet-hisplot.pdf}
+';
+
+
+$Fhet_hist_txt =~ s/IDFIPREFIX/$idfiprefix/g;
+
+}
+
+
+#print "$imend_hist_txt\n";
+#exit;
+
+###################################################
+#######          plot TOPs
+###################################################
+
+unless ($noassoc) {
+    print  "-> create top-plot (to maf, missing, hwe, cc-missing)\n";
+if ($top_plot){
+    unless (-e "topplot.plotted"){
+
+
+    my @top_ma=();
+
+
+
+   # get a new brick of the R_in_file with cols, outname, number of fields and Kologorv-Smirnoff
+   # center histocols, if necessary
+
+   sub plot_brick{
+
+	my $R_templ='pdf("OUTNAME",7.8,6,title="Top1000-Plot")
+PARCOL
+for (x in c(COLS2EXCL)) {
+## this is only to bring the bars of the histpgramm in the middle
+ if (min(top[,x]) <0 && max(top[,x]) >0) {  
+    if (abs(min(top[,x])) < abs(max(top[,x]))) y = ((-10:11)*2-1)/(2*10/(abs(max(top[,x])))) 
+    else  y = ((-10:11)*2-1)/(2*10/(abs(min(top[,x]))))
+    if (abs(min(top[,x])) ==0 && abs(max(top[,x])) ==0) y=10;
+ }
+ else y=20
+r<-hist(top[,x], y, main=colnames(top)[x], xlab=paste(length(top[,x])," top_snps", sep=""), sub=paste("min= ", min(top[,x]),"; max= ", max(top[,x]), sep=""), ylab ="counts")
+mtext("ripke @ chgr mgh harvard edu",4,cex=.3)
+PLOT
+KOLO
+}
+dev.off()
+
+
+
+';
+
+
+	my $kolostr = '
+ptou =  signif(ks.test(all[,x],all[1:1000,x])$p.value,2);
+phu = signif(ks.test(all[,x],all[1:100,x])$p.value,2);
+if (ptou <0.05 || phu < 0.02 ){ colp =2}
+else {colp=1}
+mtext(paste("p_ (Kol-Smi) to TOP1000 = ", ptou ," and to TOP100 = ", phu, sep=""),3,0,cex=.5, col=colp)
+
+';
+
+	my ($all,$outname,@cols2plot)=@_;
+	my $n_cols=@cols2plot;
+	my $colslist= join (',', @cols2plot);
+
+	$R_templ =~ s/OUTNAME/$outname.pdf/g;
+	$R_templ =~ s/COLS2EXCL/$colslist/g;
+	$R_templ =~ s/INNAME/$outname.data.txt/g;
+	$R_templ =~ s/PARCOL/par(mfcol = c(2,$n_cols))/g if ($all==0);
+	$R_templ =~ s/PARCOL/par(mfcol = c(2,$n_cols\/2))/g if ($all==1);
+	$R_templ =~ s/PARCOL//g if ($all==2);
+	$R_templ =~ s/PLOT/plot (x=top[,x],y=-log10(top[,8]), main = \"\", ylab = \"-log10 (p)\",  xlab=\"\")/g if ($all == 0);
+	$R_templ =~ s/PLOT//g if ($all == 1);
+	$R_templ =~ s/PLOT//g if ($all == 2);
+	$R_templ =~ s/KOLO/$kolostr/g if ($all == 1);
+	$R_templ =~ s/KOLO//g if ($all == 0);
+	my $special_faf='tdf=(sort (all[,x]))[dim (all)[1]*0.997]
+abline(v=tdf,col=colors()[100])
+text(x=tdf,y= max(r$counts),paste (" 3df = ",tdf,sep=""),adj=c(0,1),col=colors()[100])';
+	$R_templ =~ s/KOLO/$special_faf/g if ($all == 2);
+
+	$R_templ;
+   }
+
+
+   sub plot_elem{
+
+	my $R_templ='pdf("OUTNAME",7.8,6,title="Top1000-Plot")
+PARCOL
+x= COL2PLOT
+
+if (is.na(min(all[,x])) || is.na(max(all[,x]))) {
+
+plot (0,0,main = "plot values not valid")
+
+} else { 
+
+
+#for (x in c(COLS2EXCL)) {
+## this is only to bring the bars of the histpgramm in the middle
+
+top<-top100
+
+ if (min(top[,x]) <0 && max(top[,x]) >0) {  
+    if (abs(min(top[,x])) < abs(max(top[,x]))) y = ((-10:11)*2-1)/(2*10/(abs(max(top[,x])))) 
+    else  y = ((-10:11)*2-1)/(2*10/(abs(min(top[,x]))))
+    if (abs(min(top[,x])) ==0 && abs(max(top[,x])) ==0) y=10
+
+} else { y=20 }
+r<-hist(top[,x], y, ylab ="counts", main=paste ("Histo of ", colnames(top)[x]," - TOP100", sep =""), xlab=paste(length(top[,x])," top_snps", sep=""),sub=paste("mean= ", round (mean (top[,x]),5), sep=""))
+
+
+top<-top1000
+
+ if (min(top[,x]) <0 && max(top[,x]) >0) {  
+    if (abs(min(top[,x])) < abs(max(top[,x]))) y = ((-10:11)*2-1)/(2*10/(abs(max(top[,x])))) 
+    else  y = ((-10:11)*2-1)/(2*10/(abs(min(top[,x]))))
+    if (abs(min(top[,x])) ==0 && abs(max(top[,x])) ==0) y=10
+
+
+} else {y=20}
+r<-hist(top[,x], y, ylab ="counts", main=paste ("Histo of ", colnames(top)[x]," - TOP1000", sep =""), xlab=paste(length(top[,x])," top_snps", sep=""), sub=paste("mean= ", round (mean (top[,x]),5), sep=""))
+
+
+ plot (x=top[,x],y=-log10(top[,8]), main = paste (colnames(top)[x]," - TOP1000", sep =""), ylab = "-log10 (p)",  xlab=paste(length(top[,x])," top_snps", sep=""))
+
+
+top<-topall
+
+print (x)
+print (top[1,x])
+print (top[2,x])
+print (colnames(top))
+print (min(top[,x]))
+print (max(top[,x]))
+
+# is.na (min(top[,x]) <0 && max(top[,x]) >0) {  
+
+ if (min(top[,x]) <0 && max(top[,x]) >0) {  
+    if (abs(min(top[,x])) < abs(max(top[,x]))) y = ((-10:11)*2-1)/(2*10/(abs(max(top[,x])))) 
+    else  y = ((-10:11)*2-1)/(2*10/(abs(min(top[,x]))))
+    if (abs(min(top[,x])) ==0 && abs(max(top[,x])) ==0) y=10
+}  else {y=20}
+r<-hist(top[,x], y, ylab ="counts", main=paste ("Histo of ", colnames(top)[x]," - ALL", sep =""), xlab=paste(length(top[,x])," top_snps", sep=""), sub=paste("min= ", min(top[,x]),"; max= ", max(top[,x]), "; mean= ", round (mean (top[,x]),5), sep=""))
+
+
+
+ptou =  signif(ks.test(topall[,x],top1000[,x])$p.value,2);
+phu = signif(ks.test(topall[,x],top100[,x])$p.value,2);
+
+if (ptou <0.05 || phu < 0.05 ){ colp =2 } else {colp=1}
+mtext(paste("p_ (Kol-Smi) to TOP1000 = ", ptou ," and to TOP100 = ", phu, sep=""),3,0,cex=.5, col=colp)
+
+write (c(ptou,phu),"ptouhu.txt")
+
+}
+
+#}
+dev.off()
+
+
+
+';
+
+
+	my $kolostr = '
+ptou =  signif(ks.test(all[,x],all[1:1000,x])$p.value,2);
+phu = signif(ks.test(all[,x],all[1:100,x])$p.value,2);
+if (ptou <0.05 || phu < 0.02 ){ colp =2}
+else {colp=1}
+mtext(paste("p_ (Kol-Smi) to TOP1000 = ", ptou ," and to TOP100 = ", phu, sep=""),3,0,cex=.5, col=colp)
+
+
+';
+
+	my ($outname,$col2plot)=@_;
+
+	$R_templ =~ s/OUTNAME/$outname.pdf/g;
+	$R_templ =~ s/COL2PLOT/$col2plot/g;
+#	$R_templ =~ s/INNAME/$outname.data.txt/g;
+	$R_templ =~ s/PARCOL/par(mfcol = c(2,2))/g;
+
+	$R_templ;
+   }
+
+
+
+    ## sort the combined file and load them all.
+    my $system = "grep -v NA combined_set_alt.txt | sort -k8,8g  >  $outprefix.sorted_combined.txt";
+    &mysystem($system);
+
+    my $R_in='read.table("INNAME", header=T)-> all'."\n";
+    $R_in =~ s/INNAME/$outprefix.sorted_combined.txt/g;
+
+    my @hundr=();
+    $hundr[0]=100;
+    $hundr[1]=1000;
+   
+
+    foreach my $t (0,1){
+	my $real = $hundr[$t];
+	$real = $valid_snps if ($hundr[$t] > $valid_snps);
+	$R_in.= "top$hundr[$t] <- all[1:$real,]\n";
+
+
+    }
+
+    $R_in.= "topall <- all\n";
+
+
+    $R_in .= &plot_elem("$outprefix"."_top_page1",11);
+    $R_in .= &plot_elem("$outprefix"."_top_page2",12);
+    $R_in .= &plot_elem("$outprefix"."_top_page3",15);
+    $R_in .= &plot_elem("$outprefix"."_top_page4",16);
+    $R_in .= &plot_elem("$outprefix"."_top_page5",13);
+    $R_in .= &plot_elem("$outprefix"."_top_page6",14);
+    $R_in .= &plot_elem("$outprefix"."_top_page7",18);
+    $R_in .= &plot_elem("$outprefix"."_top_page8",5);
+    $R_in .= &plot_elem("$outprefix"."_top_page9",6);
+#    $R_in .= &plot_elem("$outprefix"."_top_page10",14);
+#    $R_in .= &plot_elem("$outprefix"."_top_page11",15);
+#    $R_in .= &plot_elem("$outprefix"."_top_page12",16);
+#    $R_in .= &plot_elem("$outprefix"."_top_page13",21) if ($tdt);
+
+
+
+
+#    print "$R_in\n";
+    &a2file ("R_tp.in_tmp",$R_in);
+
+    my $systemR= "$r_sys < R_tp.in_tmp --vanilla  ";
+#    my $systemR= "source /broad/software/scripts/useuse; use R-2.14; R < R_tp.in_tmp --vanilla  ";
+#    my $systemR= "$rloc/R --save --no-restore < R_tp.in_tmp > R_tp_log.txt_tmp 2> R_tp_error.txt_tmp";
+    &mysystem($systemR) ;
+
+    &mysystem("touch topplot.plotted") ;
+
+
+
+}
+}
+}
+#exit;
+
+
+
+
+
+#############################
+## sumgroup-table
+##################################################
+
+#cut -f1 -d* SCZ6.fam  | cut -f2,4,6 -d "_" | sed 's/_/\t/' > test_file 
+#R: read.delim("test_file", header=F)->test
+#R: barplot(table (test),beside =T, legend=T)
+
+
+my $platform = "";
+
+
+die $! unless open IN , "< $pofiprefix.fam";
+my $headfam = <IN>;
+chomp;
+my @cells = &split_line ($headfam);
+my @subcell = split /[*_]/, $cells[0];
+$platform =$subcell[5];
+close IN;
+
+
+
+
+
+
+#################################################################
+#################################################################
+##            produce latex-pdf      ############################
+#################################################################
+#################################################################
+
+#my $long_prefix= "qc2report_".$prefix."_".$mind."_".$geno."_".$midi_th;
+my $long_prefix= "qc2_".$prefix;
+my $long_prefix= $outprefix;
+
+    print  "-> create TEX-File (look fo success)\n";
+if ($tex_sum){
+
+
+
+    my $prefix_for_tex = $prefix;
+    $prefix_for_tex =~ s/_/-/g;
+    if ($tdt == 1){
+	$prefix_for_tex =~ s/$/ (FAMILY)/g ;
+    }
+#    else {
+#	$prefix_for_tex =~ s/$/ (CONLY)/g if ($conly_id_miss > 0);
+#    }
+    $prefix_for_tex =~ s/$/ (NOASSOC)/g if ($noassoc);
+
+
+    ## For a detailed description of the whole pipeline of this Mega-analysis see the wikipage: https://sites.google.com/a/broadinstitute.org/ricopili/
+
+    
+
+    
+    my $latex_templ='
+
+
+\documentclass{article}
+\usepackage[landscape]{geometry}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+
+\fancyhead{}
+\fancyhead[CO,CE]{PREFIXFORTEX}
+
+\usepackage[latin1]{inputenc}
+\usepackage{graphicx}
+\usepackage{color}
+%\usepackage{ngerman}
+\date{\today}
+\author{Psychiatric GWAS Consortium}
+\title{QC2-Report of PREFIXFORTEX}
+\begin{document}
+\maketitle
+\begin{abstract}
+{\small This is an automatic output of the QC-Step of the ricopili-pipeline, created at MGH, April/Mai 2008. It is now in version VERSION.
+ It is supposed to check and clean a GWAS dataset
+ for technical problems and/or uncontrollable population stratification. 
+\\\\ This script is still
+under construction, so please be patient with formatting problems. If you have some ideas, questions, requests, feel free to write me. \\\\
+\\\\Stephan Ripke, MGH, Boston; sripke (at) broadinstitute org
+}
+\end{abstract}
+\tableofcontents
+
+
+
+
+
+%\section{Report of QC1B-Step (Annotation/Flipping)}
+%\begin{center}
+%\begin{tabular}{|l|r|}
+%\hline
+%\textbf{Test} & \textbf{Result} \\\\
+%\hline
+%%CHINFO
+
+%\hline
+%\end{tabular}
+%\end{center}
+
+\newpage
+
+\section{General Info}
+\subsection{Size of Sample}
+\begin{center}
+\begin{tabular}{l|r|r|r}
+%\begin{tabular}{l|r|r|r|r}
+%\hline
+\textbf{Test} & \textbf{pre QC} & \textbf{post QC} & \textbf{exclusion-N} \\\\
+%\textbf{Test} & \textbf{No Filter} & \textbf{Post Filter} & \textbf{exclusion-N} & \textbf{P/F} \\\\
+\hline
+GENERALINFO
+
+%\hline
+\end{tabular}
+%\footnote{ MR=minimal requirements} 
+\end{center}
+
+
+
+
+\subsection{Exclusion overview}
+\begin{itemize}
+%\item Missing-Rate per ID \verb+>+ MIND 
+%\item Missing-Rate per SNP \verb+>+ GENO
+\item would have excluded NHAFI individuals without pre-filter (SNP-Missing 0.05)
+\end{itemize}
+\begin{center}
+\begin{tabular}{l|r}
+%\begin{tabular}{l|r|r}
+%\hline
+\textbf{Filter} & \textbf{N} \\\\
+%\textbf{Test} & \textbf{Result} & \textbf{P/F} \\\\
+\hline
+FIFINFO
+
+%\hline
+\end{tabular}
+\end{center}
+
+%\subsection{Exclusion overview - secondary filter}
+
+%\begin{itemize}
+%\item Missing-Difference per SNP \verb+>+ MIDI
+%\item Frequency Difference to HapMap per SNP \verb+>+ FAF
+%\item HWE in Controls \verb+<+ HWETH
+%\item HWE in Cases \verb+<+ HWECATH
+%\item Mendelian Error (only for family data) METH1 and METH2
+%\end{itemize}
+%\begin{center}
+%\begin{tabular}{l|r}
+%\begin{tabular}{l|r|r}
+%\hline
+%\textbf{Filter} & \textbf{N} \\\\
+%\textbf{Test} & \textbf{Result} & \textbf{P/F} \\\\
+%\hline
+%SEFINFO
+
+%\hline
+%\end{tabular}
+%\end{center}
+
+
+\newpage
+MENDINFO
+
+
+
+%\newpage
+%\subsection{Size of Subgroups - 
+%SUBGROUPHEADER
+
+%\includegraphics[width=1\textwidth]{OUTPREFIX_subgr.pdf}
+
+
+
+%\section {Estimates of Main effects}
+%\begin{itemize}
+%MEINSKUOSTR
+%\end{itemize}
+
+NOASSOC\newpage
+NOASSOC\section{Manhattan}
+%\thispagestyle{empty}
+%\includegraphics[angle=-90,totalheight=1\textheight]{OUTPREFIX_gwa.pdf}
+NOASSOC\subsection {Manhattan-Plot - pre-QC (QQplot with MAF 0.02)}
+NOASSOC\includegraphics[width=.7\textwidth]{GWA-Plot_nofi_gwa.pdf}
+NOASSOC\includegraphics[width=.49\textwidth]{NOFIPREFIX-qq.pdf}
+%\subsection {Manhattan-Plot - first filter (QQplot with MAF 0.02)}
+%\includegraphics[width=.7\textwidth]{GWA-Plot_fifi_gwa.pdf}
+%\includegraphics[width=.49\textwidth]{FIFIPREFIX-qq.pdf}
+NOASSOC\subsection {Manhattan-Plot - post-QC (QQplot with MAF 0.02)}
+NOASSOC\includegraphics[width=.7\textwidth]{GWA-Plot_gwa.pdf}
+NOASSOC\includegraphics[width=.49\textwidth]{POFIPREFIX-qq.pdf}
+
+NOASSOC\subsection {Manhattan-Plot - post-QC, GC-corrected}
+NOASSOC\includegraphics[width=1\textwidth]{GWA-Plot_gc_gwa.pdf}
+
+%\includegraphics[width=1\textwidth]{GWA-Plot-ceiling_gwa.pdf}
+
+
+%\newpage
+%\section{Lambda - Analysis}
+%\subsection {QQ-Plot - no filter}
+%\begin{center}
+%\includegraphics[width=.49\textwidth]{NOFIPREFIX-qq.pdf}
+%\includegraphics[width=.49\textwidth]{NOFIPREFIX-lapa.pdf}
+%\end{center}
+
+%\subsection {QQ-Plot - first filter}
+%\begin{center}
+%\includegraphics[width=.49\textwidth]{FIFIPREFIX-qq.pdf}
+%\includegraphics[width=.49\textwidth]{FIFIPREFIX-lapa.pdf}
+%\end{center}
+
+%\subsection {QQ-Plot - second filter}
+%\begin{center}
+%\includegraphics[width=.49\textwidth]{POFIPREFIX-qq.pdf}
+%\includegraphics[width=.49\textwidth]{POFIPREFIX-lapa.pdf}
+%\end{center}
+
+
+
+\section {Per Individual Characteristics Analysis}
+
+\subsection{Missing Rates - pre-QC}
+\includegraphics[width=.9\textwidth]{OUTPREFIX_imiss_nofi.pdf}
+
+%\subsection{Missing Rates - first filter}
+%\includegraphics[width=.9\textwidth]{OUTPREFIX_imiss_fifi.pdf}
+
+\subsection{Missing Rates - post-QC}
+\includegraphics[width=.9\textwidth]{OUTPREFIX_imiss_pofi.pdf}
+
+
+
+
+
+
+%IMENDTXT
+IHETTXT
+
+
+\newpage
+\section {Per SNP Characteristics Analysis}
+
+
+
+%\newpage
+\subsection {pre-QC missing rate}
+\includegraphics[width=.9\textwidth]{OUTPREFIX_lmiss_nofi.pdf}
+
+
+NOASSOC\subsection {Lambda-Plot to various variables (all post-QC)}
+NOASSOC\includegraphics[width=1\textwidth]{LA1OUTPREFIX_lama-page1.pdf}
+NOASSOC\newpage
+NOASSOC\includegraphics[width=1\textwidth]{LA2OUTPREFIX_lama-page1.pdf}
+NOASSOC\newpage
+NOASSOC\includegraphics[width=1\textwidth]{LA2bOUTPREFIX_lama-page1.pdf}
+
+
+% missing (cases and controls, difference)
+NOASSOC\newpage
+NOASSOC\includegraphics[width=1\textwidth]{LA9OUTPREFIX_lama-page1.pdf}
+NOASSOC\newpage
+NOASSOC\includegraphics[width=1\textwidth]{LA10OUTPREFIX_lama-page1.pdf}
+NOASSOC\newpage
+NOASSOC\includegraphics[width=1\textwidth]{LA3OUTPREFIX_lama-page1.pdf}
+
+% missing (HWE cases and controls, all)
+NOASSOC\newpage
+NOASSOC\includegraphics[width=1\textwidth]{LA6OUTPREFIX_lama-page1.pdf}
+NOASSOC\newpage
+NOASSOC\includegraphics[width=1\textwidth]{LA5OUTPREFIX_lama-page1.pdf}
+NOASSOC\newpage
+NOASSOC\includegraphics[width=1\textwidth]{LA12OUTPREFIX_lama-page1.pdf}
+
+
+%chromosome
+NOASSOC\newpage
+NOASSOC\includegraphics[width=1\textwidth]{LA4OUTPREFIX_lama-page1.pdf}
+
+
+
+
+
+NOASSOC\section {Top-Plots for SNPs}
+NOASSOC\subsection {Minor Allele Frequency}
+NOASSOC\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page1.pdf} 
+
+NOASSOC\newpage
+NOASSOC\subsection {Missing Rate}
+NOASSOC\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page2.pdf} 
+
+NOASSOC\newpage
+NOASSOC\subsection {Missing - Difference (case-control)}
+NOASSOC\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page3.pdf} 
+
+NOASSOC\newpage
+NOASSOC\subsection {Significance of Missing - Difference (case-control)}
+NOASSOC\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page4.pdf} 
+
+NOASSOC\newpage
+NOASSOC\subsection {Missing Rate - affected}
+NOASSOC\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page5.pdf} 
+
+NOASSOC\newpage
+NOASSOC\subsection {Missing Rate - unaffected}
+NOASSOC\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page6.pdf} 
+
+NOASSOC\newpage
+NOASSOC\subsection {Hardy Weinberg Equilibrium - unaffected (exact test)}
+NOASSOC\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page7.pdf} 
+
+NOASSOC\newpage
+NOASSOC\subsection {"Minor" Allele Frequency - affected}
+NOASSOC\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page8.pdf} 
+
+NOASSOC\newpage
+NOASSOC\subsection {"Minor" Allele Frequency - unaffected}
+NOASSOC\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page9.pdf} 
+
+%\newpage
+%\subsection {Frequency Difference to HapMap}
+%\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page10.pdf} 
+
+%\newpage
+%\subsection {Frequency Difference to HapMap - affected}
+%\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page11.pdf} 
+
+%\newpage
+%\subsection {Frequency Difference to HapMap - unaffected}
+%\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page12.pdf} 
+
+MENTOPTEXT
+
+
+%\subsection{Top100-MAF/HWE/CR}
+%\includegraphics[width=1\textwidth]{OUTPREFIX_top100_page1.pdf} 
+%\newpage
+%\includegraphics[width=1\textwidth]{OUTPREFIX_top100_page2.pdf} 
+%\newpage
+%\includegraphics[width=1\textwidth]{OUTPREFIX_top100_page3.pdf} 
+%\newpage
+%\includegraphics[width=1\textwidth]{OUTPREFIX_top100_page4.pdf} 
+
+%\subsection{Top1000-MAF/HWE/CR}
+%\includegraphics[width=1\textwidth]{OUTPREFIX_top1000_page1.pdf}
+%\newpage
+%\includegraphics[width=1\textwidth]{OUTPREFIX_top1000_page2.pdf}
+%\newpage
+%\includegraphics[width=1\textwidth]{OUTPREFIX_top1000_page3.pdf}
+%\newpage
+%\includegraphics[width=1\textwidth]{OUTPREFIX_top1000_page4.pdf}
+
+%\subsection{Overall-Distribution of MAF/HWE/CR}
+%\includegraphics[width=1\textwidth]{OUTPREFIX_topall_page1.pdf}
+%\newpage
+%\includegraphics[width=1\textwidth]{OUTPREFIX_topall_page2.pdf}
+
+
+
+
+
+%\newpage
+%\begin{center}
+%\includegraphics[totalheight=1\textheight]{OUTPREFIX_topall_page3.pdf}
+%\end{center}
+
+\end{document}
+';
+
+
+
+
+my $mentoptxt = "";
+#if ($tdt){
+#$mentoptxt = '
+#\newpage
+#\subsection {Frequency Difference to HapMap - unaffected}
+#\includegraphics[width=.9\textwidth]{OUTPREFIX_top_page13.pdf} 
+#';
+#}
+
+
+    if ($noassoc) {
+	$latex_templ=~ s/NOASSOC/\%/g;
+	$latex_templ=~ s/MENTOPTEXT//g;
+    }
+    else {
+	$latex_templ=~ s/NOASSOC//g;
+	$latex_templ=~ s/MENTOPTEXT/$mentoptxt/g;
+    }
+
+
+
+$latex_templ=~ s/PREFIXFORTEX/$prefix_for_tex/g;
+$latex_templ=~ s/VERSION/$version/;
+$latex_templ=~ s/MIND/$mind/;
+$latex_templ=~ s/GENO/$geno/;
+$latex_templ=~ s/MIDI/$midi_th/;
+$latex_templ=~ s/FAF/$faf_th/;
+$latex_templ=~ s/HWETH/$hwe_th/;
+$latex_templ=~ s/HWECATH/$hwe_th_ca/;
+
+$latex_templ=~ s/OUTPREFIX/$outprefix/g;
+$latex_templ=~ s/FIFIPREFIX/$fifiprefix/g;
+$latex_templ=~ s/IDFIPREFIX/$idfiprefix/g;
+$latex_templ=~ s/SEFIPREFIX/$sefiprefix/g;
+$latex_templ=~ s/POFIPREFIX/$pofiprefix/g;
+$latex_templ=~ s/NOFIPREFIX/$nofiprefix/g;
+$latex_templ=~ s/NHAFI/$idex_nofi/g;
+#$latex_templ=~ s/IMENDTXT/$imend_hist_txt/g;
+$latex_templ=~ s/IHETTXT/$Fhet_hist_txt/g;
+
+
+sub repwifile(){
+
+
+    my ($repstr, $file, $verb)=@_;
+    die "$file: ".$! unless open FILE, "< $file";
+    my $newstr;
+    my $header=<FILE> if $verb == 2;
+    while (<FILE>){
+	my $tempstr = $_;
+	$tempstr =~ s/</\\verb+<+/g if ($verb==1);
+	$tempstr =~ s/>/\\verb+>+/g if ($verb==1);
+	$tempstr =~ s/%/\\verb+%+/g if ($verb==1);
+	$tempstr =~ s/$/\\\\/ if ($verb==2);
+	$tempstr =~ s/\t/\&/g if ($verb==2);
+	$tempstr =~ s/_/-/g;
+	$newstr .= $tempstr;
+    }
+    close FILE;
+    $latex_templ=~ s/$repstr/$newstr/;
+}
+
+my $mend_txt = "";
+
+if ($tdt) {
+
+    my $cmd ="awk \'{print dollar1}\' $pofiprefix.fam | sort | uniq -c | awk '{print \" & N=\"dollar1\"\\\\\\\\\"}' | sort | uniq -c > $prefix.famcount";
+    $cmd =~ s/dollar/\$/g;
+    &mysystem ($cmd);
+
+
+    $mend_txt .= '\section{Family-Sizes}'."\n";
+    $mend_txt .= '\begin{center}'."\n";
+    $mend_txt .= '\begin{tabular}{r|r}'."\n";
+    $mend_txt .= '\hline'."\n";
+    $mend_txt .= '\textbf{N families} & \textbf{members per family} \\\\'."\n";
+    $mend_txt .= '\hline'."\n";
+    $mend_txt .= 'FAMCOUNT'."\n";
+
+    $mend_txt .= '\hline'."\n";
+    $mend_txt .= '\end{tabular}'."\n";
+    $mend_txt .= '\end{center}'."\n";
+
+
+#    if ($fam_excl != 0) {
+	$mend_txt .= '\section {Trio - separation}'."\n";
+	$mend_txt .= '\begin{itemize}'."\n";
+	$mend_txt .= '\item created family dataset with '.$n_imend.' individuals'."\n";
+	$mend_txt .= '\begin{itemize}'."\n";
+	$mend_txt .= '\item '.$aff_off{2}.' affected offsprings'."\n";
+	$mend_txt .= '\item '.$aff_off{1}.' unaffected offsprings'."\n";
+	$mend_txt .= '\item '.$aff_off{0}.' offsprings with unknown aff-status'."\n";
+
+	$mend_txt .= '\end{itemize}'."\n";
+	$mend_txt .= '\item created case-control dataset with '.$fam_excl.' individuals'."\n";
+	$mend_txt .= '\end{itemize}'."\n";
+ #   }
+
+
+
+
+    $mend_txt .= '\newpage';
+
+
+
+}
+
+    $latex_templ =~ s /MENDINFO/$mend_txt/;
+
+&repwifile("FAMCOUNT",$prefix.".famcount",1) if ($tdt);
+#&repwifile("MEINSKUOSTR",$outprefix."_asso_info.txt",0);
+&repwifile("GENERALINFO",$outprefix."_nofi_info.txt",1); 
+&repwifile("FIFINFO",$outprefix."_fifi_info.txt",1);
+#&repwifile("SEFINFO",$outprefix."_sefi_info.txt",1);
+#&repwifile("CHINFO",$prefix.".bim.chinfo",2);
+
+
+my $substr="";
+if ($sub_filter){
+    $substr = '*** filtering on subgroups has been done ****}
+NSUBIDINCL IDs left (NSUBIDEXCL excluded) --- NSUBSNPINCL SNPs left (NSUBSNPEXCL excluded) \\
+'
+} 
+else {
+    $substr = '*** filtering on subgroups has \textcolor{red}{not} been done ****}'
+}
+$substr=~ s/NSUBIDINCL/$n_subid/;
+$substr=~ s/NSUBIDEXCL/$n_subid_excl/;
+$substr=~ s/NSUBSNPINCL/$n_subsnp/;
+$substr=~ s/NSUBSNPEXCL/$n_subsnp_excl/;
+
+    $latex_templ=~ s/SUBGROUPHEADER/$substr/;
+
+&a2file ("$reportprefix.tex",$latex_templ);
+
+
+my $systemtex="pdflatex -halt-on-error $reportprefix.tex ";
+#my $systemtex="pdflatex -halt-on-error $reportprefix.tex > /dev/null";
+&mysystem ($systemtex);
+&mysystem ($systemtex);
+
+
+
+
+
+if ($ns){
+    $long_prefix.= $long_prefix."_nosub";
+}
+
+use File::Copy;
+#&mysystem( "gzip -f $reportprefix.pdf");
+#copy( $reportprefix.".pdf.gz","../".$long_prefix.".pdf.gz") or die "Copy failed: $!";
+copy( $reportprefix.".pdf","../".$long_prefix.".pdf") or die "Copy failed: $!";
+
+print  "-> succeess\n";
+
+print "name of report:\nsd $long_prefix.pdf\n";
+
+}
+
+
+my @meta_str = ();
+push @meta_str, "study\t$prefix\n";
+push @meta_str, "platform\t$platform\n";
+
+push @meta_str, "miss-th\t$mind\n";
+push @meta_str, "fhet-th\t$Fhet_th\n";
+#push @meta_str, "imend-th\t$imend_th\n";
+
+push @meta_str, "lmiss-th\t$geno\n";
+push @meta_str, "midi-th\t$midi_th\n";
+push @meta_str, "hwe-th-co\t$hwe_th\n";
+unless ($noassoc) {
+    push @meta_str, "hwe-th-ca\t$hwe_th_ca\n";
+}
+else {
+    push @meta_str, "hwe-th-ca\tnan\n";
+}
+push @meta_str, "withpna\t$withpna\n";
+
+#push @meta_str, "smend-th\t$mend_th\n";
+
+
+
+
+push @meta_str, "ncases_preqc\t".$cc_num{2}."\n";
+push @meta_str, "ncases_postqc\t$cc_num_pofi{2}\n";
+push @meta_str, "ncontrols_preqc\t".$cc_num{1}."\n";
+push @meta_str, "ncontrols_postqc\t$cc_num_pofi{1}\n";
+push @meta_str, "nnopt_preqc\t".$cc_num{-9}."\n";
+push @meta_str, "nnopt_postqc\t$cc_num_pofi{-9}\n";
+
+
+push @meta_str, "nsnps_preqc\t$n_snps_nofi\n";
+push @meta_str, "nsnps_postqc\t$n_snps_pofi\n";
+
+push @meta_str, "nidex_miss\t$idex_fifi\n";
+push @meta_str, "nidex_miss_cases\t$idex_fifi_ca\n";
+push @meta_str, "nidex_miss_controls\t$idex_fifi_co\n";
+push @meta_str, "nidex_fhet\t$idex_fifi_fhet\n";
+push @meta_str, "nidex_fhet_cases\t$idex_fifi_fhet_ca\n";
+push @meta_str, "nidex_fhet_controls\t$idex_fifi_fhet_co\n";
+
+push @meta_str, "nidex_sexcheck_ex\t$chex_idfi\n";
+push @meta_str, "nidex_sexcheck_warni\t$chex_idfi_warni\n";
+push @meta_str, "nidex_sexcheck_undefined_snp\t$chex_idfi_warni_s\n";
+push @meta_str, "nidex_sexcheck_undefined_ped\t$chex_idfi_warni_p\n";
+
+
+push @meta_str, "nidex_miss_hafi_noex\t$idex_nofi\n";
+
+
+my $snpex = $n_snps_nofi - $n_snps_pofi;
+
+
+unless ($noassoc) {
+push @meta_str, "nsnpex_miss\t$snpex_fifi\n";
+push @meta_str, "nsnpex_hwe-co\t$snpex_sefi_hwe\n";
+push @meta_str, "nsnpex_hwe-ca\t$snpex_sefi_hwe_ca\n";
+push @meta_str, "nsnpex_midi\t$snpex_sefi_midi\n";
+push @meta_str, "nsnpex_mono\t$snpex_sefi_pna\n";
+push @meta_str, "nsnpex_prefilter\t$snpex_nofi\n";
+push @meta_str, "nsnpex_prekno\t$n_prekno\n";
+push @meta_str, "nsnpex_prekno_autosomes\t$n_prekno_autos\n";
+push @meta_str, "nsnpin_prekno\t$n_prekno_in\n";
+
+}
+else {
+push @meta_str, "nsnpex_miss\t$snpex_fifi\n";
+push @meta_str, "nsnpex_hwe-co\t$snpex_sefi_hwe\n";
+push @meta_str, "nsnpex_hwe-ca\tnan\n";
+push @meta_str, "nsnpex_midi\tnan\n";
+push @meta_str, "nsnpex_mono\t$snpex_sefi_pna\n";
+push @meta_str, "nsnpex_prefilter\t$snpex_nofi\n";
+push @meta_str, "nsnpex_prekno\tnan\n";
+push @meta_str, "nsnpex_prekno_autosomes\tnan\n";
+push @meta_str, "nsnpin_prekno\tnan\n";
+}
+
+
+if (1) {
+    
+    unless ($noassoc) {
+	die unless open LA , "< combined_set_alt.txt.qq.la";
+#die "$!: $pofiprefix".".qq.la" unless open LA , "< $pofiprefix".".qq.la";
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $lambda_pofi = $cells[0];
+	my $lambda1000_pofi = $cells[1];
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $nobs_pofi = $cells[1];
+	close LA;
+
+
+
+	die "$!:" unless open LA , "< $nofiprefix.assoc.qq.la";
+#die "$!: $nofiprefix".".qq.la" unless open LA , "< $nofiprefix".".qq.la";
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $lambda_nofi = $cells[0];
+	my $lambda1000_nofi = $cells[1];
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $nobs_nofi = $cells[1];
+	close LA;
+
+
+	die "$!:" unless open LA , "< $fifiprefix.assoc.qq.la";
+#die "$!: $fifiprefix".".qq.la" unless open LA , "< $nofiprefix".".qq.la";
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $lambda_fifi = $cells[0];
+	my $lambda1000_fifi = $cells[1];
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $nobs_fifi = $cells[1];
+	close LA;
+
+
+	push @meta_str, "lambda_preqc\t$lambda_nofi\n";
+	push @meta_str, "lambda_fifi\t$lambda_fifi\n";
+	push @meta_str, "lambda_postqc\t$lambda_pofi\n";
+
+	push @meta_str, "la1000_preqc:\t$lambda1000_nofi\n";
+	push @meta_str, "la1000_fifi:\t$lambda1000_fifi\n";
+	push @meta_str, "la1000_postqc:\t$lambda1000_pofi\n";
+
+	push @meta_str, "nobs_preqc_maf02:\t$nobs_nofi\n";
+	push @meta_str, "nobs_fifi_maf02:\t$nobs_fifi\n";
+	push @meta_str, "nobs_postqc_maf02:\t$nobs_pofi\n";
+
+
+	die "$!:" unless open P , "< $fifiprefix.imiss.tmp.pcaco";
+	$temp_str = <P>;
+	chomp($temp_str);
+	my $pcaco_fifi = $temp_str;
+	close P;
+
+	die "$!:" unless open P , "< $nofiprefix.imiss.tmp.pcaco";
+	$temp_str = <P>;
+	chomp($temp_str);
+	my $pcaco_nofi = $temp_str;
+	close P;
+
+	die "$!:" unless open P , "< $pofiprefix.imiss.tmp.pcaco";
+	$temp_str = <P>;
+	chomp($temp_str);
+	my $pcaco_pofi = $temp_str;
+	close P;
+
+
+
+	push @meta_str, "p_imiss_caco_preqc\t$pcaco_nofi\n";
+	push @meta_str, "p_imiss_caco_fifi\t$pcaco_fifi\n";
+	push @meta_str, "p_imiss_caco_postqc\t$pcaco_pofi\n";
+   }
+else {
+
+	push @meta_str, "lambda_preqc\tnan\n";
+	push @meta_str, "lambda_fifi\tnan\n";
+	push @meta_str, "lambda_postqc\tnan\n";
+
+	push @meta_str, "la1000_preqc:\tnan\n";
+	push @meta_str, "la1000_fifi:\tnan\n";
+	push @meta_str, "la1000_postqc:\tnan\n";
+
+	push @meta_str, "nobs_preqc_maf02:\tnan\n";
+	push @meta_str, "nobs_fifi_maf02:\tnan\n";
+	push @meta_str, "nobs_postqc_maf02:\tnan\n";
+
+	push @meta_str, "p_imiss_caco_preqc\tnan\n";
+	push @meta_str, "p_imiss_caco_fifi\tnan\n";
+	push @meta_str, "p_imiss_caco_postqc\tnan\n";
+
+
+}
+}
+
+my $ngenotypes = ($cc_num_pofi{2} + $cc_num_pofi{1}) * $n_snps_pofi;
+push @meta_str, "ngenotypes_postqc\t$ngenotypes\n";
+
+
+
+
+&a2file("$pofiprefix.meta", @meta_str);
+
+
+
+#if ($conly_id_miss > 0 && $tdt == 0){
+
+#    die $! unless open FAMI , "< $pofiprefix.fam";
+#    die $! unless open FAMO , "> $pofiprefix.fam_orig";
+#    while (<FAMI>){#
+#	chomp;
+#	my @cells = @{&split_line_ref(\$_)};
+#	$cells[5] = $conly_id_miss;
+#	print FAMO "@cells\n";
+ #   }
+  #  close FAMI;
+ #   close FAMO;
+
+#    copy ("$pofiprefix.fam_orig", "$pofiprefix.fam");
+#}
+
+
+die $!."(README.ex.txt)" unless open DXN, "> README.ex.txt";
+print DXN "----------------------------------------------------\n";
+print DXN "$nofiprefix.snpex.detex.txt:\tfirst missing filter SNPs\n";
+print DXN "----------------------------------------------------\n";
+print DXN "$fifiprefix.idmiss.detex.txt:\tmissing filter IDs\n";
+print DXN "$fifiprefix.idhet.detex.txt:\theterozygosity filter IDs\n";
+print DXN "$fifiprefix.idmend.detex.txt:\tmendel error filter IDs (only for trios)\n";
+print DXN "$idfiprefix.idsexcheck.detex.txt:\tsexcheck filter IDs (exclusions)\n";
+print DXN "$idfiprefix.idsexcheck.warni.txt:\tsexcheck filter IDs (warnings)\n";
+print DXN "----------------------------------------------------\n";
+print DXN "$idfiprefix.snpex.detex.txt:\tsecond missing filter SNPs\n";
+print DXN "$idfiprefix.snpex.hwe.con.detex.txt:\tHWE_controls filter SNPs\n";
+print DXN "$idfiprefix.snpex.frq.detex.txt:\tFrequence filter SNPs\n";
+
+unless ($noassoc) {
+print DXN "$idfiprefix.snpex.hwe.cas.detex.txt:\tHWE_cases filter SNPs\n";
+print DXN "$idfiprefix.snpex.temiss.detex.txt:\tMissing-Difference filter SNPs\n";
+
+print DXN "$idfiprefix.snpex.lmendel.detex.txt:\tMendel-error filter SNPs (only for trios)\n";
+print DXN "$idfiprefix.snpex.nassoc.detex.txt:\tassociation-error filter SNPs (monomorph)\n";
+}
+
+
+close DXN;
+
+#print " @detex_files\n";
+
+unless (-e "../$long_prefix.fini") {
+
+copy( "$pofiprefix.meta","../".$long_prefix.".meta") or die "Copy failed: $!";
+
+
+copy( "$pofiprefix.bim","../".$long_prefix.".bim") or die "Copy failed: $!";
+copy( "$pofiprefix.fam","../".$long_prefix.".fam") or die "Copy failed: $!";
+copy( "$pofiprefix.bed","../".$long_prefix.".bed") or die "Copy failed: $!";
+
+#copy( "$preknoprefix.bim","../".$long_prefix.".bim") or die "Copy failed: $!";
+#copy( "$preknoprefix.fam","../".$long_prefix.".fam") or die "Copy failed: $!";
+#copy( "$preknoprefix.bed","../".$long_prefix.".bed") or die "Copy failed: $!";
+
+unless ($noassoc) {
+    &mysystem ("tar -cvzf $long_prefix.ex.tar.gz @detex_files README.ex.txt $prekno_info_file\n");
+}
+else {
+    &mysystem ("tar -cvzf $long_prefix.ex.tar.gz @detex_files README.ex.txt\n");
+}
+
+copy( "$long_prefix.ex.tar.gz","../") or die "Copy failed: $!";
+
+copy( "combined_set_alt.txt","../".$long_prefix.".detres") or die "Copy failed: $!";
+&mysystem ("touch ../$long_prefix.fini");
+
+
+
+}
+
+die $!."(../$long_prefix.README)" unless open DXN, "> ../$long_prefix.README";
+print DXN "------------------------------------\n";
+print DXN "QC report for $long_prefix\n";
+print DXN "------------------------------------\n\n";
+print DXN "## find some rough meta-data: $long_prefix.meta\n\n";
+print DXN "--------------------------\n\n";
+print DXN "## details about QC-passed SNPs: $long_prefix.detres\n\n";
+print DXN "--------------------------\n\n";
+print DXN "## details about QC-failed SNPs (see README in tar-ball): $long_prefix.ex.tar.gz\n\n";
+print DXN "--------------------------\n";
+print DXN "## look at genomewide significant SNPs (and their coverage in prekno-file): $long_prefix.prekno_info\n";
+print DXN "## exclude the not covered from the QCed dataset:\n\n";
+print DXN "awk \'\$5==1\' $long_prefix.prekno_info > $long_prefix.prekno_info.new\n";
+print DXN "$ploc/plink --bfile $long_prefix --out $long_prefix"."2 --make-bed --exclude $long_prefix.prekno_info.new\n\n";
+
+print DXN "## list GWS from the QCed dataset:\n\n";
+print DXN "awk \'\$8<5.0e-08 || NR ==1\' $long_prefix.detres > $long_prefix.detres.gws\n";
+print DXN "column -t $long_prefix.detres.gws\n";
+print DXN "$ploc/plink --bfile $long_prefix --out $long_prefix"."2 --make-bed --exclude $long_prefix.detres.gws.ex\n\n";
+
+
+print DXN "--------------------------------------------\n";
+
+close DXN;
+
+
+
+
+
+print "QC success\n";
+#close ;
+
+
+

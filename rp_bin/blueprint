@@ -1,0 +1,1303 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "3.1.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+my $command_line = "$progname @ARGV";
+
+
+
+#print "blueprint @ARGV\n";
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $qloc = &trans("queue");
+
+
+my $qsub =1 if ($qloc eq "qsub");
+my $bsub =1 if ($qloc eq "bsub");
+my $msub =1 if ($qloc eq "msub");
+my $slurm =1 if ($qloc eq "slurm");
+
+
+##########################################
+
+my $bp = "";
+my $sample="plink --bfile prefix --out QC2/prefix-qc2 --geno 0.1 --mind 0.1 --make-bed";
+
+my $prefix="prefix";
+
+my $jl_file="blueprint_joblist_file";
+
+my $core=12;
+my $inst=11;
+my $walltime="1";
+
+my $name_of_job="";
+
+my $week = -1;
+my $multi = -1;
+my $threads = 4;
+my $multi_str = "";
+my $errname="errandout";
+my $jmem = 1000;
+
+my $hhmm = "";
+
+my $cores = 16;
+
+my $job_bn_th = 1000;
+my $maxpar = 0;
+
+use Cwd;
+my $rootdir = &Cwd::cwd();
+
+my $usage = "
+Usage : $progname [options] -b \"blueprint\"
+
+version: $version
+
+##  --inst INT,INT           2 or 8 core, 16,24 gb number of instancies in one job, default=$core,$inst
+  --cores INT              on LISA, how many cores per node (default $16)
+  --walltime               walltime per job, default=$walltime
+  --week INT               the first N jobs go to the week queue
+  --multi INT,INT          the first N jobs getting multithreading frame, second number the number of threads, default 4
+  --job                    launches job on cluster or serail comands on home
+  --mach                   loads module mach in jobs
+#  --R                      loads module R in jobs
+  --plink                  loads module plink in jobs
+  --fortran                loads module fortran/intel in jobs
+  --blueprint STRING       uses STRING containing prefix and launches commands
+  --prefix STRING          uses STRING instead of prefix 
+  --px STRING,INT,INT      substitute STRING by a seq from INT to INT
+  --linech FILE,INT,STRING make own seq with fam-file and chunksize into STRING
+  --direct                 start job without reading prefixes
+  --name STRING            name of job
+  --wt STRING            wait for OK from joblist from this file
+  --fwt STRING            wait for finished from joblist from this file
+  --serial                not all the commands parallel
+  --errname STRING        name of errandout-subdir, default: $errname
+
+  --time HHMM             time, when the job is eligible
+
+  --mem INT               memory requested for each job (bsub), default = $jmem
+
+  --start                 directly start the commands, no jobs.
+
+  --njob INT            start INT jobs at a time
+
+  --noerr               noerrandout
+  --array FILE       jobarray, much quicker submission of larger numbers
+  --maxpar INT       max number of parallel jobs (this is for high IO jobs)
+
+sample of blueprint: $sample
+
+
+outdated {
+ cores 2: 2 cores
+ cores 8: any eight (any RAM)
+ cores 12: strictly 8gb RAM
+ cores 16: strictly 16gb RAM
+ cores 24: strictly 24gb RAM
+}
+
+new: changes between 8 and 12 cores, instancies always one less
+
+
+ writes output to a specific file $jl_file
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ 
+";
+
+#print "cd $ENV{PWD}\n";
+
+my $NOJ="";
+my $jobarray="";
+
+
+
+use Getopt::Long;
+GetOptions( "blueprint=s"=> \$bp,
+	    "job" => \my $job,
+	    "serial" => \my $serial,
+	    "week=i" => \$week,
+	    "multi=s" => \$multi_str,
+	    "inst=s" => \my $inst_str,
+	    "cores=i" => \$cores,
+	    "prefix=s"=> \$prefix,
+	    "wt=s"=> \my $wait_file,
+	    "fwt=s"=> \my $wait_fi_file,
+	    "time=s"=> \$hhmm,
+	    "errname=s"=> \$errname,
+	    "walltime=i" => \$walltime,
+	    "mem=i" => \$jmem,
+	    "njob=i" => \$job_bn_th,
+	    "maxpar=i" => \$maxpar,
+	    "mach" => \my $mach,
+	    "start" => \my $start,
+	    "direct" => \my $direct,
+	    "noerr" => \my $noerr,
+#	    "R" => \my $R,
+	    "plink" => \my $plink,
+	    "fortran" => \my $fortran,
+	    "px=s" => \my $pxarg,
+	    "linech=s" => \my $linechunk_str,
+	    "name=s" => \$NOJ,
+	    "array=s" => \$jobarray,
+	    "help!"=> \my $help );
+
+
+if ($help){
+    print $usage;
+    exit 2;
+}
+
+if ($bp eq "" && $jobarray eq ""){
+    print $usage;
+    exit 2;
+}
+
+#print "all is right\n";
+
+if ($hhmm ne ""){
+    $hhmm = "-a $hhmm";
+}
+
+
+$bp =~ s/dollarsign/\$/;
+#print "$bp\n";
+#exit;
+
+if ($NOJ eq ""){
+    $NOJ = $bp;
+    $NOJ =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $NOJ;
+    $cols[0] =~ s/[^a-zA-Z]//g;
+    $NOJ = $cols[0];
+}
+
+$name_of_job = "-N $NOJ";
+
+
+
+
+#####################################
+# subroutine to count lines of a file
+#####################################
+
+sub count_lines {
+    my ($file)=@_;
+    my $lc=0;
+    die "$file: ".$! unless open FILE, "< $file";
+    while (<FILE>){
+	$lc++;
+    }
+    close FILE;
+    $lc;
+}
+
+
+
+
+#print "$pxstart\t$pxend\n";
+#print "core: $core\n";
+
+my @blueprint_out;
+
+
+#############################
+# test, if running on server
+#############################
+#use Sys::Hostname;
+#my $host = hostname();
+#my $lisa=0;
+#$lisa=1 if ($host =~ m/sara/) ;
+
+#my $broad = 1 if ($ENV{"DOMAINNAME"} =~ /broadinstitute/);
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    my $test_str = `$systemstr`;
+    push @blueprint_out, $test_str;
+#    print "$test_str";
+#system($systemstr);
+    my $status = ($? >> 8);
+    print "$systemstr\n->system call failed: $status\n" if ($status != 0);
+}
+
+
+
+my $wait_str = "";
+my $addon_str = "";
+
+my $count_jobs = 1 ;
+if ($wait_file){
+
+    my $wc = &count_lines($wait_file);
+    my $skip_lines = $wc-50 ;
+    die $! unless open WF, "< $wait_file";
+    $wait_str = "#PBS -W depend=afterok";
+
+    while (my $line = <WF>) {
+	$count_jobs ++;
+	next if ($count_jobs < $skip_lines);
+	chomp($line);
+	$line =~ s/[^0-9]//g;
+	$wait_str .= ":$line";
+	$addon_str .= ":$line";
+
+    }
+    close WF;
+
+#    print "$wait_str\n";
+
+}
+
+if ($wait_fi_file){
+    if ($qsub) {
+
+	$count_jobs = 1 ;
+	die "$! <$wait_fi_file>;<$ENV{PWD}>" unless open WF, "< $wait_fi_file";
+	my $wc = &count_lines($wait_fi_file);
+	my $skip_lines = $wc-50;
+	$wait_str = "#PBS -W depend=afterany";
+	
+	while (my $line = <WF>) {
+	    $count_jobs ++;
+	    next if ($count_jobs < $skip_lines);
+	    chomp($line);
+	    $line =~ s/[^0-9]//g;
+	    $wait_str .= ":$line";
+	    
+#	    $wait_str .= ":$line.batch1.irc.sara.nl";
+	}
+	close WF;
+    }
+}
+
+
+my ($pxstring,$pxstart,$pxend) = split ',', $pxarg if ($pxarg);
+my ($lc_file,$lc_size, $lc_str) = split ',', $linechunk_str if ($linechunk_str);
+($core,$inst) = split ',', $inst_str if ($inst_str);
+
+$inst = 10000 if ($serial);
+
+
+if ($lc_file) {
+    print "file:$lc_file\n";
+    print "csize:$lc_size\n";
+    my $temp_size = &count_lines($lc_file);
+    print "fsize:$temp_size\n";
+    $pxstring = $lc_str;
+    $pxstart=0;
+    $pxend= sprintf "%d", $temp_size/$lc_size-1;
+    $pxend++ if ($temp_size % $lc_size != 0);
+    $pxarg = 1;
+}
+
+
+
+
+my $row_count=0;
+
+my @job_arr=();
+
+
+
+if ($direct){
+    push @job_arr, $bp;
+}
+else {
+    if ($jobarray eq "") {
+	while (<>){
+	    chomp;
+	    my $line=$bp;
+	    $line =~ s/$prefix/$_/g;
+#	print $line."\n";
+	    if ($pxarg){
+		foreach my $subs ($pxstart..$pxend){
+#		print "$subs\n";
+		    my $line2=$line;
+		    $line2 =~ s/$pxstring/$subs/g;
+		    push @job_arr, $line2;
+		}
+	    }
+	    else {
+		push @job_arr, $line;
+	    }
+	}
+    }
+}
+
+
+
+my $module ="";
+$module = "module load plink\n" if $plink;
+$module .= "module load mach\n" if $mach;
+$module .= "module load fortran/intel\n" if $fortran;
+#$module .= "module load R\n" if $R;
+
+
+
+
+
+
+if ($job){
+    
+#    print "entering job\n";
+
+    
+    use File::Path;
+    my @created = mkpath(   ## $created ?
+			    $errname,
+			    {verbose => 0, mode => 0750},
+	);
+    
+    
+    
+
+
+    if ($NOJ eq "prefix") {
+	$NOJ = $job_arr[0];
+	$NOJ =~ s/^[\s]+//g;
+	my @cols=  split /\s+/, $NOJ;
+	$cols[0] =~ s/[^a-zA-Z]//g;
+	$NOJ = $cols[0];
+    } 
+
+########################################
+### BROAD (bsub)
+##########################################
+
+
+    if ($bsub) {
+#	print "entering bsub\n";
+	($multi,$threads) = split ',', $multi_str if ($multi_str ne "");
+#	print "multi: $multi\n";
+#	print "threads: $threads\n";
+#	sleep(10);
+	$threads = 4 if ($threads eq "");
+
+
+	my $wallmin = $walltime * 60;
+	$wallmin = 240 if ($walltime > 240);
+	my $wallstr = "-W $wallmin";
+
+
+	if ($wallmin < 10){
+	    $wallstr = "-app shortjobs";
+#	    $wallmin = 10 ;
+	}
+	
+
+
+	my $sla_deadline = "";
+#	    $sla_deadline = "-sla DEADLINEsla";
+
+	my $time = "hour";
+
+	if ($jobarray ne "") {
+
+	    print "starting job_array\n";
+
+	    my $mem_str = ($jmem / 1000) * 1;
+	    $mem_str = 1 if ($mem_str < 1);
+	    my $Rusage  = "-R \"rusage[mem=$mem_str]\"";
+
+	    if ($multi >= 0){
+		my $threads_loc = $threads;
+		my $threads_loc_half = sprintf "%d",$threads / 2;
+		my $mem_loc = $mem_str * 1100;
+#		$Rusage  = "-n $threads_loc,$threads_loc -R \"rusage[mem=$mem_str]span[hosts=1]\"";
+		$Rusage  = "-n $threads_loc_half,$threads_loc -R \"rusage[mem=$mem_str]span[hosts=1]\" -M $mem_loc";
+#		print "$cmd\n";
+
+	    }
+
+	    if ($week > 0) {
+		$time = "week";
+		$wallstr = "-W 10000";
+	    }
+
+
+#	    my $pretext = "";
+	    my $pretext = "$sla_deadline $wallstr -q $time $Rusage";
+
+	    my $sys = 'bsub -P unspecified--broadfolk '.$pretext.' -J "'.$NOJ.'[1-'.$job_bn_th.']" -o "errandout/'.$NOJ.'..%J.%I"  my.start_job --n n\$LSB_JOBINDEX  --jobfile '.$jobarray;
+
+	    if ($maxpar > 0) {	  
+
+## change maxpar of running job to 100 
+##  bmod -J "%100" 123 
+		## see here
+		## http://www.ccs.miami.edu/hpc/lsf/7.0.6/admin/jobarrays.html
+
+
+		  
+		$sys = 'bsub -P unspecified--broadfolk '.$pretext.' -J "'.$NOJ.'[1-'.$job_bn_th.']%'.$maxpar.'" -o "errandout/'.$NOJ.'..%J.%I"  my.start_job --n n\$LSB_JOBINDEX  --jobfile '.$jobarray;
+		print "$sys\n";
+	    }
+#	    exit;
+
+#	    print "sys: $sys\n";
+
+	    my $acmd_file = "$jobarray.array_cmd";
+	    while (-e $acmd_file) {
+		$acmd_file .= ".a";
+	    }
+	    die $! unless open AC, "> $acmd_file";
+	    print AC "$sys\n";
+	    close AC;
+#	    exit;
+	    &mysystem ($sys);  
+	    exit;
+	}
+
+	my $job_bn=0;
+	my $job_bn_name=0;
+	my $job_bn_str = sprintf "%09d", $job_bn_name;
+	
+#	$NOJ = substr($NOJ,0,8);
+	my $dirname = "";
+	$dirname = "$errname/" if ($errname ne "errandout");
+	my $blue_n = 0 ;
+	my $blue_name = "$dirname"."blueprint_jobs_$NOJ.$blue_n";
+
+	while (-e "$blue_name") {
+	    $blue_n++;
+	    $blue_name = "$dirname"."blueprint_jobs_$NOJ.$blue_n";
+	}
+
+	die "$! $blue_name" unless open JOB, "> $blue_name";
+
+	my $week_count = 0;
+	my $multi_count = 0;
+
+	my $zaehler = 2*$job_bn_th;
+	my $rand_th = $zaehler / @job_arr;
+	
+	foreach my $cmd (@job_arr){
+
+
+	    if ($noerr) {
+		$job_bn_str = "dump";
+	    }
+	    else {
+		$job_bn_str = sprintf "%09d", $job_bn_name;
+		while (-e "$errname/$NOJ.$job_bn_str") {
+		    $job_bn_name++;
+		    $job_bn_str = sprintf "%09d", $job_bn_name;
+		}
+	    }
+
+
+
+	    if ($start) {
+		&mysystem($cmd);
+		next;
+	    }
+
+	    my $wt_str = "";
+	    if ($wait_fi_file) {
+#		my $substr_wf = substr($wait_fi_file,0,8);
+		my $substr_wf = $wait_fi_file;
+	        $wt_str = '-w \'ended ("'.$substr_wf.'")\'';
+	    }
+
+	    $time = "hour";
+
+	    my $jmem_loc = $jmem;
+
+
+
+	    if ($week >= 0){
+#  here change from priority to week!!!
+#		$time = "priority";
+		$time = "week";
+#		$time = "week -G deadline";
+		$week = $week -1;
+#		$jmem_loc = $jmem * 2;
+		$jmem_loc = $jmem + 3000 ;
+#		$wallstr = '-W 2400';
+		$wallstr = '';
+	    }
+	    else {
+#		$time = "hour -G psychfolk";
+		$time = "hour";
+	    }
+
+
+#bsub -sla DEADLINEsla -q hou
+
+
+	    my $mem_str = ($jmem_loc / 1000) * 1;
+	    $mem_str = 1 if ($mem_str < 1);
+
+
+	    my $Rusage  = "-R \"rusage[mem=$mem_str]\"";
+
+
+	    if ($multi >= 0){
+		$multi = $multi -1;
+#		$jmem_loc = $jmem * 2;
+#		$Rusage  = "-n 2,4 -R \"rusage[mem=$mem_str]span[hosts=1]\"";
+
+#		my $threads_loc = $threads + 2;
+		my $threads_loc = $threads;
+		my $threads_loc_half = sprintf "%d",$threads / 2;
+		my $mem_loc = $mem_str * 1100;
+#		$Rusage  = "-n $threads_loc,$threads_loc -R \"rusage[mem=$mem_str]span[hosts=1]\"";
+		$Rusage  = "-n $threads_loc_half,$threads_loc -R \"rusage[mem=$mem_str]span[hosts=1]\" -M $mem_loc";
+#		print "$cmd\n";
+
+	    }
+
+	    next if (rand() > $rand_th);
+
+	    if ($week >= 0){
+		$week_count++;
+#		next if ($week_count > 25);
+	    }
+
+	    my $locname = $NOJ;
+	    if ($multi >= 0){
+		$multi_count++;
+#		$locname .= ".mu";
+	    }
+
+
+
+	    my $errstr = "$errname/$NOJ.$job_bn_str";
+	    if ($noerr) {
+		$errstr = "/dev/null";
+	    }
+
+	    my $jcmd = "bsub $sla_deadline $wt_str $wallstr $Rusage -J $locname -q $time -o $errstr \"$cmd\"";
+
+	    print JOB "$jcmd\n";
+
+	    
+
+	    if (1) {
+#		&mysystem ("$jcmd ");
+		&mysystem ("$jcmd 2> /dev/null > /dev/null");  # 0113
+	    }
+	    else {
+		print "$jcmd\n";
+	    }
+#	    sleep(1);
+#	    exit;
+	    $job_bn++;
+	    $job_bn_name++;
+
+	    last if ($job_bn > $job_bn_th);
+
+	}
+	close JOB;
+	exit;	
+    }
+    
+########################################
+### MSSM (msub)
+##########################################
+
+    if ($msub) {
+#	print "entering bsub\n";
+	($multi,$threads) = split ',', $multi_str if ($multi_str ne "");
+#	print "multi: $multi\n";
+#	print "threads: $threads\n";
+#	sleep(10);
+	$threads = 4 if ($threads eq "");
+
+
+	my $wallmin = $walltime * 60;
+	$wallmin = 240 if ($walltime > 240);
+	my $wallstr = "-W $wallmin";
+
+
+	if ($wallmin < 10){
+	    $wallstr = "-app shortjobs";
+#	    $wallmin = 10 ;
+	}
+	
+
+
+	my $sla_deadline = "";
+#	    $sla_deadline = "-sla DEADLINEsla";
+
+#	my $time = "hour";
+	my $time = "scavenger"; ## (this is msub)
+
+	if ($jobarray ne "") {
+
+	    print "starting job_array\n";
+
+	    my $mem_str = ($jmem / 1000) * 1;
+	    $mem_str = 1 if ($mem_str < 1);
+	    my $Rusage  = "-R \"rusage[mem=$mem_str]\"";
+
+	    if ($multi >= 0){
+		my $threads_loc = $threads;
+		my $threads_loc_half = sprintf "%d",$threads / 2;
+		my $mem_loc = $mem_str * 1100;
+#		$Rusage  = "-n $threads_loc,$threads_loc -R \"rusage[mem=$mem_str]span[hosts=1]\"";
+		$Rusage  = "-n $threads_loc_half,$threads_loc -R \"rusage[mem=$mem_str]span[hosts=1]\" -M $mem_loc";
+#		print "$cmd\n";
+
+	    }
+
+
+
+#	    my $pretext = "";
+	    my $pretext = "$sla_deadline $wallstr -q $time $Rusage";
+	    my $sys = 'bsub  '.$pretext.' -J "'.$NOJ.'[1-'.$job_bn_th.']" -o "errandout/'.$NOJ.'..%J.%I"  my.start_job --n n\$LSB_JOBINDEX  --jobfile '.$jobarray;  
+
+
+#	    print "$sys\n";
+
+	    my $acmd_file = "$jobarray.array_cmd";
+	    while (-e $acmd_file) {
+		$acmd_file .= ".a";
+	    }
+	    die $! unless open AC, "> $acmd_file";
+	    print AC "$sys\n";
+	    close AC;
+#	    exit;
+#	    print "$sys\n";
+	    &mysystem ($sys);  
+	    exit;
+	}
+
+	my $job_bn=0;
+	my $job_bn_name=0;
+	my $job_bn_str = sprintf "%09d", $job_bn_name;
+	
+#	$NOJ = substr($NOJ,0,8);
+	my $dirname = "";
+	$dirname = "$errname/" if ($errname ne "errandout");
+	my $blue_n = 0 ;
+	my $blue_name = "$dirname"."blueprint_jobs_$NOJ.$blue_n";
+
+	while (-e "$blue_name") {
+	    $blue_n++;
+	    $blue_name = "$dirname"."blueprint_jobs_$NOJ.$blue_n";
+	}
+
+	die "$! $blue_name" unless open JOB, "> $blue_name";
+
+	my $week_count = 0;
+	my $multi_count = 0;
+
+	my $zaehler = 2*$job_bn_th;
+	my $rand_th = $zaehler / @job_arr;
+	
+	foreach my $cmd (@job_arr){
+
+
+	    if ($noerr) {
+		$job_bn_str = "dump";
+	    }
+	    else {
+		$job_bn_str = sprintf "%09d", $job_bn_name;
+		while (-e "$errname/$NOJ.$job_bn_str") {
+		    $job_bn_name++;
+		    $job_bn_str = sprintf "%09d", $job_bn_name;
+		}
+	    }
+
+
+
+	    if ($start) {
+#		print "cmd\n";
+		&mysystem($cmd);
+		next;
+	    }
+
+	    my $wt_str = "";
+	    if ($wait_fi_file) {
+#		my $substr_wf = substr($wait_fi_file,0,8);
+		my $substr_wf = $wait_fi_file;
+	        $wt_str = '-w \'ended ("'.$substr_wf.'")\'';
+	    }
+
+	    $time = "scavenger";
+
+	    my $jmem_loc = $jmem;
+
+
+
+	    if ($week >= 0){
+#  here change from priority to week!!!
+#		$time = "priority";
+		$time = "week";
+#		$time = "week -G deadline";
+		$week = $week -1;
+#		$jmem_loc = $jmem * 2;
+		$jmem_loc = $jmem + 3000 ;
+#		$wallstr = '-W 2400';
+		$wallstr = '';
+	    }
+	    else {
+#		$time = "hour -G psychfolk";
+#		$time = "hour";
+		$time = "scavenger";
+	    }
+
+
+#bsub -sla DEADLINEsla -q hou
+
+
+	    my $mem_str = ($jmem_loc / 1000) * 1;
+	    $mem_str = 1 if ($mem_str < 1);
+
+
+	    my $Rusage  = "-R \"rusage[mem=$mem_str]\"";
+
+
+	    if ($multi >= 0){
+		$multi = $multi -1;
+#		$jmem_loc = $jmem * 2;
+#		$Rusage  = "-n 2,4 -R \"rusage[mem=$mem_str]span[hosts=1]\"";
+
+#		my $threads_loc = $threads + 2;
+		my $threads_loc = $threads;
+		my $threads_loc_half = sprintf "%d",$threads / 2;
+		my $mem_loc = $mem_str * 1100;
+#		$Rusage  = "-n $threads_loc,$threads_loc -R \"rusage[mem=$mem_str]span[hosts=1]\"";
+		$Rusage  = "-n $threads_loc_half,$threads_loc -R \"rusage[mem=$mem_str]span[hosts=1]\" -M $mem_loc";
+#		print "$cmd\n";
+
+	    }
+
+	    next if (rand() > $rand_th);
+
+	    if ($week >= 0){
+		$week_count++;
+#		next if ($week_count > 25);
+	    }
+
+	    my $locname = $NOJ;
+	    if ($multi >= 0){
+		$multi_count++;
+#		$locname .= ".mu";
+	    }
+
+
+
+	    my $errstr = "$errname/$NOJ.$job_bn_str";
+	    if ($noerr) {
+		$errstr = "/dev/null";
+	    }
+
+	    my $jcmd = "bsub  $sla_deadline $wt_str $wallstr $Rusage -J $locname -q $time -o $errstr \"$cmd\"";
+
+	    print JOB "$jcmd\n";
+
+	    
+
+	    if (1) {
+#		&mysystem ("$jcmd ");
+#		print "$jcmd\n";
+		&mysystem ("$jcmd 2> /dev/null > /dev/null");  # 0113
+	    }
+	    else {
+		print "$jcmd\n";
+	    }
+#	    sleep(1);
+#	    exit;
+	    $job_bn++;
+	    $job_bn_name++;
+
+	    last if ($job_bn > $job_bn_th);
+
+	}
+	close JOB;
+	exit;	
+    }
+    
+
+
+
+########################################
+### SLURM (genomedk(
+##########################################
+
+    if ($slurm) {
+
+#	my $job_n=0;
+	my $sum=0;
+	
+	my $jobname;
+
+#	print "cmds: @job_arr\n";
+#	print "cmds: $jobarray\n";
+
+
+	my $wallstr = "$walltime:00:00";
+
+	if ($walltime == 0) {
+	    $wallstr = "00:10:00";
+	}
+	
+#	    if ($start) {
+#		&mysystem($cmd);
+#		next;
+#	    }
+	
+	
+	if ($week > 0){
+#		my $walltime_loc = $walltime * 6;
+	    $wallstr = "48:00:00";
+	    $week = $week - 1;
+	}
+
+	$jobname="j.$job_bn_th.$NOJ";
+
+	my $jobfile = $jobarray.".script";
+
+
+	my $mem_str = ($jmem / 1000) * 1;
+	$mem_str = 1 if ($mem_str < 1);
+
+#	print "here\n";
+
+	my ($multi,$threads) = split ',', $multi_str if ($multi_str ne "");
+
+
+	if ($wait_fi_file){
+
+	    $jobfile = $wait_fi_file.".script";
+
+
+
+	    my $idn;
+	    die $!."($wait_fi_file)" unless open FILE, "< $wait_fi_file";
+	    my $line = <FILE>;
+	    my @cells = split /\s+/, $line;
+	    $idn = $cells[3];
+	    close FILE;
+
+	    die "$! ($jobfile)" unless open JOB, "> $jobfile";
+	    print JOB "#!/bin/sh\n";
+	    print JOB "#SBATCH --job-name $NOJ\n";
+	    print JOB "#SBATCH --output errandout/$NOJ.-%j.out\n";
+	    print JOB "#SBATCH --ntasks 1\n";
+	    print JOB "#SBATCH --cpus-per-task 1\n";
+	    print JOB "#SBATCH --mem-per-cpu $mem_str"."g\n";
+	    print JOB "#SBATCH --time $wallstr\n";
+	    print JOB "#SBATCH --dependency afterany:$idn\n";
+	    
+	    print JOB "$bp\n";
+	    close (JOB);
+
+	    
+	}
+	else {
+
+	    if ($jobarray eq "") {
+		$job_bn_th = 0;
+		$jobfile = "$NOJ.start";
+		$jobarray = "$NOJ.scripts";
+		die $! unless open JF, "> $jobarray";
+		foreach (@job_arr) {
+		    print JF "$_\n";
+		    $job_bn_th++;
+		}
+		close JF;
+		print $jobfile."\n";
+	    }
+#	    exit;
+
+
+
+
+
+	    die "$! ($jobfile)" unless open JOB, "> $jobfile";
+	    print JOB "#!/bin/sh\n";
+	    print JOB "#SBATCH --job-name $NOJ\n";
+	    print JOB "#SBATCH --output errandout/$NOJ.-%j.out\n";
+
+
+#	    print JOB "#SBATCH --ntasks $job_bn_th\n";
+	    my $aend = $job_bn_th;
+	    if ($aend > 1000) {
+		$aend = 1000;
+	    }
+	    print JOB "#SBATCH --array=1-$aend\n";
+	    if ($multi > 0) {
+		print JOB "#SBATCH --cpus-per-task $threads\n";
+	    }
+	    else {
+		print JOB "#SBATCH --cpus-per-task 1\n";
+	    }
+	    print JOB "#SBATCH --mem-per-cpu $mem_str"."g\n";
+	    print JOB "#SBATCH --time $wallstr\n";
+	    
+#	    print JOB "dispatch -r $jobarray\n";
+	    print JOB "my.start_job --n \$SLURM_ARRAY_TASK_ID  --jobfile $jobarray\n";
+	    close (JOB);
+	}
+#	print "debug: $jobfile\n";
+#	exit;
+
+	&mysystem ("sbatch $jobfile > $jobfile.id");	    
+#	print "send $jobfile to queue\n";
+#	exit;	    
+
+
+#	&a2file ($jl_file."-".$NOJ, @blueprint_out);
+
+
+	exit;	
+
+    }
+
+
+
+########################################
+### LISA
+##########################################
+
+    my $inst_n=0;
+    my $job_n=0;
+    my $sum=0;
+    
+#    my $cores=$inst;
+#    $cores=2 if ($cores < 2);
+    
+    my $jobname;
+
+
+
+
+    if ($jobarray ne "") {
+
+
+	my $wallstr = "$walltime:00:00";
+	if ($walltime ==0){
+	    $wallstr = "0:10:00";
+	}
+
+
+	#	$cores = 16;
+
+	## very complicated to get the ceiling of the job-N = number of nodes
+	my $numnode = ($job_bn_th-0.000001)/$cores;
+	$numnode=sprintf "%d",$numnode;
+	$numnode++;
+	
+	
+	print "starting job_array, $jobname\n";
+	$jobname="j.$NOJ";
+#	print "$ENV{PWD}"."\n";
+#	print "$rootdir"."\n";
+#	print "jpbname: $jobname"."\n";
+#	exit;
+
+
+ 
+
+	    
+	die "$! ($jobname)" unless open JOB, "> $jobname";
+	print JOB "#PBS -lnodes=1:cores$cores:ppn=$cores\n";
+	print JOB "#PBS -lwalltime=$wallstr\n";
+	print JOB "cd $rootdir\n";
+	print JOB "my.start_job --parn $cores -n ".'$PBS_ARRAYID'." --jobfile $jobarray\n";
+	close JOB;
+	
+	#PBS -lnodes=1:cores16:ppn=16 -lwalltime=1:00:00
+	#cd /home/gwas/pgc-samples/scz_sing/data-upload-sgChinese/rerun_0115
+	#my.start_job -n $PBS_ARRAYID --jobfile array_test_2
+
+      
+#	my $qsub_txt = "qsub -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+	my $qsub_txt = "qsub -t 1-$numnode -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+
+#	print "$qsub_txt\n";
+
+#	exit;
+	&mysystem ($qsub_txt);
+#	sleep (3);	
+	exit;
+    }
+    
+    
+
+
+    if ($wait_fi_file){
+	die "$! <$wait_fi_file>" unless open WF, "< $wait_fi_file";
+	my $id_str = <WF>;
+	chomp($id_str);
+	close WF;
+
+	my $wallstr = "$walltime:00:00";
+	
+	print "starting motherscript, depending on $id_str\n";
+	
+	$jobname="j.$NOJ";
+	die "$! ($jobname)" unless open JOB, "> $jobname";
+	print JOB "#PBS -lnodes=1\n";
+	print JOB "#PBS -lwalltime=$wallstr\n";
+	print JOB "cd $ENV{PWD}\n";
+	print JOB "$bp\n";
+	close JOB;
+	
+	#PBS -lnodes=1:cores16:ppn=16 -lwalltime=1:00:00
+	#cd /home/gwas/pgc-samples/scz_sing/data-upload-sgChinese/rerun_0115
+	#my.start_job -n $PBS_ARRAYID --jobfile array_test_2
+
+      
+	my $qsub_txt = "qsub -W depend=afteranyarray:$id_str -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+
+	print "$qsub_txt\n";
+
+	#	    exit;
+	&mysystem ($qsub_txt);
+	exit;
+    }
+
+
+
+
+
+    #####
+    ## here without jobarray
+    #####
+    
+    if (1) {
+
+	$jobname="j.$NOJ";
+	
+	die "$! ($jobname.jobarray)" unless open JOBA, "> $jobname.jobarray";
+	foreach my $cmd (@job_arr){
+	    print JOBA "$cmd\n";
+	}
+	close JOBA;
+	
+
+	my $wallstr = "$walltime:00:00";
+	if ($walltime ==0){
+	    $wallstr = "0:10:00";
+	}
+
+	$job_bn_th = @job_arr;
+
+#	print "N: $job_bn_th\n";
+#	exit;
+	#	$cores = 16;
+
+	## very complicated to get the ceiling of the job-N = number of nodes
+	my $numnode = ($job_bn_th-0.000001)/$cores;
+	$numnode=sprintf "%d",$numnode;
+	$numnode++;
+	
+	
+	print "starting job_array, $jobname\n";
+	$jobname="j.$NOJ";
+#	print "$ENV{PWD}"."\n";
+#	print "$rootdir"."\n";
+#	print "jpbname: $jobname"."\n";
+#	exit;
+
+
+ 
+
+	    
+	die "$! ($jobname)" unless open JOB, "> $jobname";
+	print JOB "#PBS -lnodes=1:cores$cores:ppn=$cores\n";
+	print JOB "#PBS -lwalltime=$wallstr\n";
+	print JOB "cd $rootdir\n";
+	print JOB "my.start_job --parn $cores -n ".'$PBS_ARRAYID'." --jobfile $jobname.jobarray\n";
+	close JOB;
+	
+	#PBS -lnodes=1:cores16:ppn=16 -lwalltime=1:00:00
+	#cd /home/gwas/pgc-samples/scz_sing/data-upload-sgChinese/rerun_0115
+	#my.start_job -n $PBS_ARRAYID --jobfile array_test_2
+
+      
+#	my $qsub_txt = "qsub -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+	my $qsub_txt = "qsub -t 1-$numnode -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+
+#	print "$qsub_txt\n";
+
+#	exit;
+	&mysystem ($qsub_txt);
+#	sleep (3);	
+	exit;
+    }
+    
+    
+
+    
+    
+
+
+
+    
+    if (0) {
+	foreach my $cmd (@job_arr){
+
+	my $wallstr = "$walltime:00:00";
+
+	if ($walltime == 0) {
+	    $wallstr = "00:10:00";
+	}
+
+	if ($start) {
+	    &mysystem($cmd);
+	    next;
+	}
+
+
+	if ($week > 0){
+	    my $walltime_loc = $walltime * 6;
+	    $wallstr = "$walltime_loc:00:00";
+	    $week = $week - 1;
+	}
+
+
+
+	if ($inst_n == 0){
+
+	    my $rn = int(rand(2));
+#	    if ($rn == 0){
+
+#	    $core = 8;
+#	    $inst = 7 unless ($inst == 1);
+
+#	    }
+#	    else {
+#		$core = 12;
+#		$inst = 11;
+#	    }
+
+	    $jobname="j.$job_n.$NOJ";
+#	    print " $jobname\n";
+	    if ($qsub){
+		die "$! ($jobname)" unless open JOB, "> $jobname";
+#		print JOB "#PBS -lnodes=1:cores$core\n";
+		print JOB "#PBS -lnodes=1\n";
+
+		if (0) {
+		    print JOB "#PBS -lnodes=1:cores$core\n" if ($core == 2);
+		    print JOB "#PBS -lnodes=1:cores8\n" if ($core == 8);
+		    print JOB "#PBS -lnodes=1:cores8:mem8gb\n" if ($core == 12);
+		    print JOB "#PBS -lnodes=1:cores8:mem16gb\n" if ($core == 16);
+		    print JOB "#PBS -lnodes=1:cores8:mem24gb\n" if ($core == 24);
+		}
+
+		print JOB "#PBS -lwalltime=$wallstr\n";
+
+
+		##### as long as dependencies don't work
+		if (0) {
+		    print JOB "$wait_str\n";
+		}
+
+		print JOB "$module\n";
+		print JOB "cd $ENV{PWD}\n";
+	    }
+	}
+	if ($qsub){
+	    
+	    if ($wait_fi_file){
+		die $! unless open CMD, "> $NOJ.cmd";
+		print CMD "$bp\n";
+		close CMD;
+#		print "blueprint_addon --cmd $NOJ.cmd --fwt $wait_fi_file --out $NOJ\n";
+		print JOB "blueprint_addon --cmd $NOJ.cmd --fwt $wait_fi_file --out $NOJ\n";
+
+	    }
+	    else {
+		print JOB $cmd;
+#		print JOB " &" unless ($serial);
+		print JOB " &" ;
+#		print JOB " &" unless ($cmd =~ /;$/);
+		print JOB "\n";
+	    }
+
+
+
+
+	    $inst_n++;
+	    $sum++;
+	    if ($inst_n == $inst || $sum == @job_arr || $week > 0){
+		print JOB "wait\n";
+		close JOB;
+		$inst_n=0;
+		$job_n++;
+
+		my $qsub_txt = "qsub -e $errname/ -o $errname/ $name_of_job $hhmm $jobname";
+#		print "$qsub_txt\n";
+#		&mysystem ("qsub $wait_str -e $errname/ -o $errname/ $name_of_job $jobname") if $lisa;
+		&mysystem ($qsub_txt) if $qsub;
+		last if ($job_n > 200);
+
+	    }
+	}
+	else {
+	    &mysystem ($cmd);
+	}
+    }
+	
+	&a2file ($jl_file."-".$NOJ, @blueprint_out);
+    }
+}
+
+else {
+    foreach (@job_arr){
+	print $_."\n";
+
+    }
+    if ($qsub){
+	my $wallstr = "$walltime:00:00";
+	print "walltime: $wallstr\n";
+	print "cores: $core\n";
+	print "instancies: $inst\n";
+	print "module: $module\n";
+	print "dir: $ENV{PWD}\n";
+    }
+}

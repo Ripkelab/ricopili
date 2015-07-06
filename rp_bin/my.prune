@@ -1,0 +1,83 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $p2loc = &trans("p2loc");
+
+###########################################
+
+
+
+my $bfile = $ARGV[0];
+
+unless (-e "$bfile.bim") {
+    print "error: no $bfile.bim\n";
+    exit;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+######################
+# BEGIN
+##############################
+my $sys = "$p2loc/plink --memory 2000 --bfile $bfile --out prune.$bfile --indep-pairwise 200 100 0.2 --maf 0.05";
+my $sc = system ($sys);
+
+my $nin = 0;
+$nin = `wc -l prune.$bfile.prune.in`;
+$nin = sprintf "%d", $nin;
+if ($nin == 0){
+    &mysystem ("touch prune.$bfile.out");
+}
+print "$nin SNPs in\n";
+
+############################
+## create subset 
+
+my $sys = "$p2loc/plink --memory 2000 --bfile $bfile --out prune.bfile.$bfile --extract prune.$bfile.prune.in --make-bed";
+
+my $sc = system ($sys);
+if ($sc == 0 ) {
+    &mysystem ("touch prune.$bfile.fini");
+    print "success2\n";
+}
+
+
+
+
+
+

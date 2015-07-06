@@ -1,0 +1,1064 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.5.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+my $tfile = 1; ## switch between memory and disk
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+#my $ploc = &trans("ploc");
+my $sloc = &trans("sloc");
+my $rloc = &trans("rloc");
+
+
+###############################################
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+
+
+
+use Compress::Zlib ;
+
+
+my $pcol=9;
+
+#my $nint =10;
+
+my $minimum_size=1000;
+my $top_int=5000;
+
+
+my $best = -1;
+my $scol = 0;
+
+##### help message
+my $usage = "
+Usage : $progname [options] p-file
+
+version: $version
+
+  --pcol INT    column containing pvals
+  --scol INT    column containing snp-names
+  --c1 STRING   col and intercept COL,INTER, INTER=1 for categorical ariable, INTER=f for MAF,
+  --help        print this message and exit
+  --check       give header with cell-numbers
+  --out         name to add in the prefix
+  --minsize INT minimum size of obs. to calc a lambda
+  --nohead      no header
+  --nopdf       no pdf-creation, no 3D
+  --best INT    print p_values smaller than 10e-INT
+  --prepro STRING preknown SNPs, preprocessed from gwa-file.
+  --top INT     only the top INT single values, default - $top_int;
+
+
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ 
+";
+
+
+
+my $outname = "lahunt";
+
+use Getopt::Long;
+GetOptions( 
+    "pcol=i"=> \$pcol,
+    "scol=i"=> \$scol,
+    "minsize=i"=> \$minimum_size,
+    "c1=s"=> \my $c1s,
+    "out=s"=> \$outname,
+    "help"=> \my $help,
+    "prepro=s"=> \my $prepro_file,
+    "check"=> \my $check,
+    "nohead"=> \my $nohead,
+    "nopdf"=> \my $nopdf,
+    "best=i"=> \$best,
+    "top=i"=> \$top_int,
+    );
+
+#print "";
+die "$usage\n" if $help;
+die "$usage\n" if (@ARGV==0);
+
+my $pfile=$ARGV[0];
+
+#my $t = 1.6;
+#print $t."\n";
+#$t = int($t);
+#print $t."\n";
+#exit;
+if ($best == -1){
+    print "no best-th\n";
+    $best = 7;
+#    exit;
+}
+
+
+$best = sprintf "%.10f\n", 1 / 10**($best) if ($best);
+$best = -1 if ($best > 1);
+#print "$best\n";
+#exit;
+
+#my $correct = 0.000001; # otherwise comparison failes
+
+my ($c1,$nint1,$f1)= split ',', $c1s if ($c1s);
+
+
+$nint1 = 10 if $nint1 == 0;
+
+
+my $phead;
+my $cc1head;
+
+
+
+sub by_number { $a <=> $b}
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+
+#############################
+# test, if running on server
+#############################
+use Sys::Hostname;
+my $host = hostname();
+
+my $pid = $$;
+
+#############################
+#   memory test
+#############################
+
+sub mem_p {
+    my $mem_loc = `grep VmPeak /proc/$pid/status`;
+    print "$mem_loc";
+    $mem_loc = `grep VmSize /proc/$pid/status`;
+    print "$mem_loc";
+#    my $mesg = shift;
+#    print "$mesg used memory = ".&BSD::Resource::getrusage()."\n";
+#    print "$mesg used memory = ".print GTop->new->proc_mem($$)->size."\n";
+#    print "$mesg used memory = ".(BSD::Resource::getrusage)[2]."\n"
+}
+
+##########################################
+# subroutine to produce lambda out of a p-list
+##########################################
+
+
+sub calc_lambda {
+    my ($p_arr) = @_;
+    my $la;
+    if (@{$p_arr} >= $minimum_size) {
+	my @p_values = sort by_number (@{$p_arr});
+	my $narr = @{$p_arr};
+	my $halfway = $p_values[$narr/2];
+
+
+	my @outp ;
+	if ($rloc eq "broadinstitute") {
+	    @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \"  qchisq (1-$halfway,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
+	}
+	else {
+	    @outp = split "\n", `echo \"  qchisq (1-$halfway,1)/ qchisq (0.5,1) \" | $r_sys --vanilla -q`;
+	}
+
+
+	foreach (@outp) {
+	    if ($_ =~ /[1]/ ) {
+		$la = $_;
+	    }
+	}
+
+#	my @outp = split "\n", `echo \"qchisq (1-$halfway,1)/ qchisq (0.5,1) \" | $rloc/R --vanilla -q`;
+	$la = $outp[2];
+	$la =~ s/\[1\]//;
+	$la =~ s/ //g;
+	
+#	print "halfway: $halfway\n";
+#	print "Lambda: $la\n";
+	
+    }
+    else {
+	$la = "NA";
+    }
+#    Statistics::Distributions::chisqrdistr(1,$halfway)/$chis_ref;
+    $la;
+}
+
+##################################################################
+# subroutine to produce lambda out of a p-list, the very smart way
+#################################################################
+
+
+sub find_element_at_rank {
+    my ($p_arr,$low,$high,$rank) = @_;
+    my ($arr) = @_;
+
+    my $pivot = $low;
+    my $l = $low;
+    my $h = $high;
+
+#    print $arr->[$pivot]."\t$l\t$h"."\n";
+    if ($l <= $h) {
+	while ($l < $h) {
+	    while ($arr->[$l] <= $arr->[$pivot]) {
+		$l++; 
+#		print "lo:$l\n"
+	    }
+	    while ($arr->[$h] >  $arr->[$pivot]) {
+		$h--; 
+#		print "hi:$h\n"
+	    }
+
+	    if ($l < $h) {
+		# Swapping the left and right
+		my $temp = $arr->[$l];
+		$arr->[$l] = $arr->[$h];
+		$arr->[$h] = $temp;
+	    }
+	}
+	# Swapping the pivote with the high pointer
+	my $temp = $arr->[$pivot];
+	$arr->[$pivot] = $arr->[$h];
+	$arr->[$h] = $temp;
+#	print "$h,$l\n";
+    }
+
+
+#    print "$h,$low\n";
+    my $p_half;
+    if ($rank < $h) {
+	$p_half = &find_element_at_rank ($arr,$low,$h-1,$rank);
+    }
+    elsif ($rank > $h) {
+	$p_half = &find_element_at_rank ($arr,$h+1,$high,$rank);
+    }
+    else {
+	$p_half = $arr->[$h];
+    }
+    $p_half;
+
+}
+
+sub calc_lambda_qs {
+    my $la;
+
+    my ($p_arr) = @_;
+    
+    if (@{$p_arr} >= $minimum_size) {
+	
+	my $low = 0;
+	my $high = @{$p_arr} - 1;
+	my $halfway = int (($high+1) / 2);
+#    print "find halway: $halfway, high: $high\n";
+	my $p_half = &find_element_at_rank ($p_arr,$low,$high,$halfway);
+#    print "chisq into p-value\n";
+
+
+#	my @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \" qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
+
+	my @outp ;
+	if ($rloc eq "broadinstitute") {
+	    @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
+	}
+	else {
+	    @outp = split "\n", `echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | $r_sys --vanilla -q`;
+	}
+
+
+#	my @outp = split "\n", `echo \"qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | $rloc/R --vanilla -q`;
+#    print "done\n";
+
+#	print "$outp[0]\n";
+#	print "$outp[1]\n";
+#	print "$outp[2]\n";
+#	exit;
+
+	foreach (@outp) {
+	    if ($_ =~ /[1]/ ) {
+		$la = $_;
+	    }
+	}
+
+#	$la = $outp[2];
+	$la =~ s/\[1\]//;
+	$la =~ s/ //g;
+	$la;
+    }
+    else {
+	$la = "NA";
+    }
+#    Statistics::Distributions::chisqrdistr(1,$halfway)/$chis_ref;
+    $la;
+
+}
+
+
+sub calc_lambda_file {
+    my $la;
+
+    my ($pfile,$pcount) = @_;
+
+#    print "$pfile, $pcount\n";
+#    exit;
+
+    if ($pcount >= $minimum_size) {
+
+	&mysystem ("sort -k1,1g $pfile > $pfile.sorted");	
+	my $pcount_h = int($pcount / 2);
+#	print "$pcount, $pcount_h\n";
+
+#	&mysystem ("wc -l $pfile.sorted");
+	die $!."($pfile.sorted)" unless open BIN, "< $pfile.sorted";
+	foreach (1..$pcount_h) {
+	    my $line = <BIN>;
+	}
+	my $p_half = <BIN>;
+	close BIN;
+
+	chomp($p_half);
+#	print "find halway: $pcount_h, $p_half\n";
+
+#    if (0) {
+#	exit;
+#    print "chisq into p-value\n";
+
+#	my @outp = split "\n", `echo \"qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | $rloc/R --vanilla -q`;
+#	my $sys = "source /broad/software/scripts/useuse; use R-2.14; echo \" qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q";
+#	print "$sys\n";
+#	exit;
+
+
+#	my @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \" qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
+
+
+	my @outp ;
+	if ($rloc eq "broadinstitute") {
+	    @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
+	}
+	else {
+	    @outp = split "\n", `echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | $r_sys --vanilla -q`;
+	}
+
+
+
+
+
+#    print "done\n";
+
+
+#	print "$outp[0]\n";
+#	print "$outp[1]\n";
+#	print "$outp[2]\n";
+#	exit;
+	foreach (@outp) {
+	    if ($_ =~ /[1]/ ) {
+		$la = $_;
+	    }
+	}
+	$la =~ s/\[1\]//;
+	$la =~ s/ //g;
+#	print "la:$la\n";
+#	exit;
+#	my $la_zahl = $la*1;
+	$la = "NA" if ($la eq "Inf");
+	print "la:$la\n";
+	$la;
+    }
+    else {
+	$la = "NA";
+    }
+#    Statistics::Distributions::chisqrdistr(1,$halfway)/$chis_ref;
+    $la;
+#    exit;
+}
+
+
+
+
+
+use Cwd;
+my $rootdir = &Cwd::cwd();
+
+
+my $workdir="$sloc/lahunt_$outname";
+
+
+while (-e $workdir) {
+    $workdir .= ".l";
+}
+
+print "workdir: $workdir\n";
+#&mysystem("rm -rf $workdir");
+
+use File::Path;
+my @created = mkpath(   ## $created ?
+    "$workdir",
+    {verbose => 0, mode => 0750},
+    );
+
+
+chdir ($workdir);
+
+#print "@ARGV\n";
+#exit;
+
+&mysystem ("cp $rootdir/$pfile .");
+
+my %prepro_hash;
+if ($prepro_file) {
+    &mysystem ("cp $rootdir/$prepro_file .");
+    die "$prepro_file not existing" unless open PF, "< $prepro_file";
+    while (my $line =<PF>){
+	my @cells = &split_line($line);
+	$prepro_hash{$cells[0]} =1 ;
+    }
+    close PF;
+}
+
+unless ($pfile =~ /.gz$/){
+    &mysystem ("gzip -f $pfile");
+    $pfile .= ".gz";
+}
+
+
+
+
+
+my $pdfname1 ;
+my $pdfname2 ;
+
+my $igz;
+
+
+
+###########################################################################
+# create plist with 2 contracol  alternative on playground -> more speed?
+###########################################################################
+
+sub lamco3_alt (){
+    my ($col1, $inter1) = @_;
+    
+    my $prefix = $outname."_";
+    my $lafile = $prefix."lambda_file_tmp";
+    my $lasifile_c1 = $prefix."lasi_c1_tmp";
+
+    my $sizefile = $prefix."size_file_tmp";
+    my $matrixfile = $prefix."matrix_file_tmp";   ## contains best values
+    my $R_infile = $prefix."Rin_tmp";
+    my $R_outfile = $prefix."Rout_tmp";
+    $pdfname1 = $prefix."lama-page1.pdf";
+    $pdfname2 = $prefix."lama-page2.pdf";
+###    $pdfname3 = $prefix."lapa.pdf";
+    
+    
+    
+    my $size_str;  ## contains the second table
+    
+    my $lambda_str;  ## contains the first table
+    
+    my $lasi_str_c1;  ## contains only one variable, but both of size and lambda
+    
+#    my @p_bowl=();
+#    my @cc1_bowl=();
+#    my @cc2_bowl=();
+    
+    
+    
+    
+    my $line;
+    print  "read file, define min and max of C1 and C2\n";
+    $igz->gzreadline($line);
+#    my $line = <PF>;
+    my @cells = &split_line($line);
+    ## process first line
+    while ($cells[$pcol-1] eq "NA") {
+	$igz->gzreadline($line);
+#	$line = <PF>;
+	@cells = &split_line($line);
+    }
+    my $cc1=$cells[$col1-1];
+    $cc1 = 1-$cc1 if ($f1 && $cc1 > .5 );
+
+    my $cc1_min = $cc1 ;
+    my $cc1_max = $cc1 ;
+
+#    print "$cc1_min\t$cc1_max\n";
+
+
+    my $p_val = $cells[$pcol-1];
+    $p_val = 10**(-300) if ($p_val eq "0");
+#    print "1: $p_val\n" if ($p_val eq "NA");
+#    push @p_bowl, $p_val ;
+
+    my $lc = 0;
+    ## read all other lines
+
+    my $file1 = "$outname.cc1";
+
+    my $min_p = 2;
+
+#    unless (-e "$file1") {
+    die $! unless open FILE1, "> $file1";
+    die $! unless open BEST, "> $matrixfile.tmp";
+#    my $nbest = 0;
+#    while ($nbest < 10) {
+    while ($min_p == 2) {
+	while ($igz->gzreadline($line)) {
+	    my @cells = &split_line($line);
+	    $cc1=$cells[$col1-1];
+
+#print "hier: $cc1\n";	    
+	    unless ($cc1 =~ /^[0-9\-]/ ) {
+#	    print "excluding $cc1,$cc2\n";
+		next;
+	    }
+
+	    $cc1 = 1-$cc1 if ($f1 && $cc1 > .5 );
+	    
+
+	    if ($f1) {
+		if ($cc1 > .499){
+		    $cc1 = .499 ;
+#		    print "$cc1\n";
+		}
+	    }
+#print "hier: $cc1\n";	    
+	    if ($cc1 < $cc1_min){
+		$cc1_min = $cc1 ;
+#		print "$cc1_min\n";
+	    }
+	    $cc1_max = $cc1 if ($cc1 > $cc1_max);
+	    
+	    my $p_val = $cells[$pcol-1];
+	    my $snpname = "";
+	    if ($scol != 0){
+		$snpname = $cells[$scol-1];
+	    }
+
+	    next if ($p_val eq "NA");	
+	    next if ($p_val eq "");	
+	    next if ($p_val <= 0 || $p_val > 1);	
+	    $p_val = 10**(-200) if ($p_val eq "0");
+
+
+	    
+	    printf FILE1 "%.4g\t%.4g\n",$cc1,$p_val;
+
+	    if ($p_val < $best) {
+		printf BEST "%.10g\t%.10g\t%s",$p_val,$cc1,$snpname;
+		if (exists $prepro_hash{$snpname}) {
+		    print BEST "\t2";
+		}
+		else {
+		    print BEST "\t1";
+		}
+		print BEST "\n";
+#		$nbest++;
+		if ($p_val < $min_p) {
+		    $min_p = $p_val;
+		    print "min_p: $min_p\n";
+		}
+	    }
+
+#	    print FILE2 "$cc2\t$p_val\n";
+	    
+	    $lc++;
+	    if ($lc % 100000 == 0){
+		print "$lc lines read\n" ;
+#		&mem_p;
+	    }
+	}
+#	if ($nbest < 10){
+	if ($min_p == 2){
+	    $igz -> gzclose ();
+	    $best = 10 * $best;
+	    print "hier: $min_p\t$best\n";
+	    if ($best > 1) {
+		print "-----------------------\n";
+		print "Error: reaching p > 1\n";
+		print "File empty?\n";
+		print "$lc lines read\n";
+		if ($lc < 10) {
+
+		    my $R_templ='
+
+                       pdf("OUTNAME1",7.8,6)
+                       plot(0,0,type="n", ylab="", xlab = "", xaxt = "n", yaxt="n",
+                       main = "not enough data points")
+                       dev.off();
+                    ';
+
+		    $R_templ =~ s/OUTNAME1/$pdfname1/g;
+		    &a2file ( $R_infile , $R_templ);
+		    &mysystem ("$r_sys < $R_infile --vanilla \n");
+
+		}
+		exit;
+	    }
+	    $igz = gzopen($pfile, "rb")  or die "Cannot open $pfile: $gzerrno\n"; 
+	}
+    }
+#    else {#
+#	while ($igz->gzreadline($line)) {
+#	    $lc ++;
+#	}
+#    }
+    
+    
+    close FILE1;
+#    }
+    close FILE2;
+    close BEST;
+
+
+    $top_int++;
+    &mysystem("sort -k1,1g $matrixfile.tmp | head -n $top_int > $matrixfile");
+    
+
+    print  "finished....., $lc lines\n";
+    
+#    exit;
+    
+    ######################################
+    #### print  "round min/max\n";
+    ######################################
+    unless ($inter1 == 1) {
+	$cc1_min = int($cc1_min*1000-0.5)/1000;
+	$cc1_max = int($cc1_max*1000+0.5)/1000;
+    }
+
+    $cc1_max = .5 if ($f1 && $cc1_max > .4);
+
+    ## define stepsize
+    my $step1= ($cc1_max-$cc1_min) / $inter1;
+ 
+    my $categ1=0;
+
+
+## categorical vars
+    if ($inter1 == 1){
+	$step1 = 1;
+	$inter1 = $cc1_max - $cc1_min + 1;
+	$categ1 = 1;
+    }
+
+
+##
+
+    print  "min1: $cc1_min, max: $cc1_max, step: $step1\n";
+    if ($step1 > 0) {
+########################################
+##    overall lambda
+######################################
+
+#    my $lambda_oa =  &calc_lambda_qs (\@p_bowl);
+#    my $size_oa =  @p_bowl;
+#    printf "\nLAMBDA-ALL\t%.3f\tSIZE-ALL\t%d\n",$lambda_oa,$size_oa;
+#    exit;
+
+#    print "$step1\t$cc1_min\n";
+#    exit;
+
+    print  "sort file 1....\n";
+    &mysystem ("sort -k1,1g $file1 > $file1.sorted") unless (-e "$file1.sorted");
+    print  "... finished\n";
+#    print  "sort file 2\n";
+#    &mysystem ("sort -k1,1g $file2 > $file2.sorted");
+
+
+    my $file_loc = "$file1.sorted";
+    my $file_bin = "$file1.sorted.bin";
+    my $cc_loc_min = $cc1_min;
+
+    my @p_bowl_loc = ();
+    my $pcount = 0;
+    my $cc_loc_next = $cc_loc_min + $step1;
+
+    print  "go through sorted file....$file_loc\n";
+    $lasi_str_c1= "$cc1head\tlambda\tsize\n";
+    die $!."($file_loc)" unless open FILE, "< $file_loc";
+    die $!."($file_bin)" unless open PLOC, "> $file_bin";
+    while (my $line = <FILE>){
+	my @cells = split /\s+/, $line;
+	my $cc_loc = $cells[0];
+	my $p_loc = $cells[1];
+	$pcount++;
+#	print "@p_bowl_loc\n";
+	if ($tfile) {
+	    print PLOC "$p_loc\n";
+	}
+	else {
+	    push @p_bowl_loc, $p_loc;
+	}
+
+
+	if ($cc_loc >= $cc_loc_next) {
+#	    print "found!!!!!\n";
+	    close PLOC;
+	    
+	    my $lambda_loc ;
+	    my $p_n_loc;
+	    if ($tfile) {
+		$lambda_loc =  &calc_lambda_file ($file_bin,$pcount);
+		$p_n_loc = $pcount;
+	    }
+	    else {
+		$lambda_loc =  &calc_lambda_qs (\@p_bowl_loc);
+		$p_n_loc = @p_bowl_loc;
+	    }
+#	    my $lambda_loc =  &calc_lambda (\@p_bowl_loc);
+	    my $cc_val_loc = ($cc_loc_min + $cc_loc_next) / 2 ;
+	    if ($categ1 == 1){
+		$cc_val_loc = $cc_loc_min ;
+	    }
+
+	    print "$cc_val_loc\t$lambda_loc\t$p_n_loc\n";
+#	    exit;
+#if ()
+	    $lasi_str_c1 .= "$cc_val_loc\t$lambda_loc\t$p_n_loc\n";
+	    @p_bowl_loc = ();
+
+	    die $!."($file_bin)" unless open PLOC, "> $file_bin";
+	    $pcount = 0;
+
+	    $cc_loc_min = $cc_loc_next;
+	    $cc_loc_next = $cc_loc_min + $step1;
+	}
+    }
+#    my $lambda_loc =  &calc_lambda (\@p_bowl_loc);
+#    print "@p_bowl_loc\n";
+    my $p_n_loc = @p_bowl_loc;
+    if ($tfile) {
+	$p_n_loc = $pcount;
+    }
+    close PLOC;
+
+    if ($p_n_loc > 0) {
+	my $cc_val_loc = ($cc_loc_min + $cc_loc_next) / 2 ;
+
+	print "$cc_val_loc\t$p_n_loc\n";
+	my $lambda_loc ;
+	
+	if ($tfile) {
+	    $lambda_loc =  &calc_lambda_file ($file_bin,$pcount);
+	}
+	else {
+	    $lambda_loc =  &calc_lambda_qs (\@p_bowl_loc);
+	}	    
+	if ($categ1 == 1){
+	    $cc_val_loc = $cc_loc_min ;
+	}
+	$lasi_str_c1 .= "$cc_val_loc\t$lambda_loc\t$p_n_loc\n";
+    }
+
+    close FILE;
+
+    }
+
+
+    &a2file($lasifile_c1,$lasi_str_c1);
+
+#    exit;
+
+    print  "use R to plot\n";
+#    exit;
+
+################
+### R script, direct
+#################
+
+    unless ($nopdf){
+
+print  "R-scripting-for plot and regression\n";
+
+my $R_templ='
+
+
+p_c1 = 1;
+p_c2 = 1;
+
+pdf("OUTNAME1",7.8,6)
+par (mar = c(5, 4, 4, 4))
+if (STEP1 > 0){
+#if ((STEP1 > 0) && (min(lasi1[,2],na.rm=T) != Inf)){
+
+if (MINP < 1){
+read.delim ("MATRIX", header=F) -> best
+}
+read.delim ("LASI1") -> lasi1
+
+
+#layout(matrix(c(1,1,2,3),2,2,byrow=T),heights=c(.2,.55))
+#################### 2D models
+
+#plot(1,type="n",axes=F,xlab="",ylab="", main="Overall Values of TITLE (PHEAD)")
+#mtext(paste("Lambda=",signif(LAALL,3),sep=""),3,cex=.8,line=-1)
+#mtext(paste("N=",SIALL,sep=""),3,cex=.8, line=-3)
+
+#coefficients(summary(glm(ma[,1]~ma[,2])))[2,4] -> p_c1
+#signif(PC1,3)->p_c1
+
+print (lasi1)
+
+barplot(lasi1[,3], ylab="n_observ./Lambda", main=paste ("Lambda of TITLE (PHEAD) stratified by",colnames(lasi1)[1]), cex.lab=.6, cex.axis=.6, cex.main=.6);
+#barplot(lasi1[,3], ylab="n_observ./Lambda", cex.lab=.6, cex.axis=.6);
+abline (h=THRESHHOLD); 
+par(new=T);
+
+xlim1 = min(lasi1[,1],na.rm=T)-.5*STEP1
+xlim2 = max(lasi1[,1],na.rm=T)+.5*STEP1
+
+print (dim(best))
+
+mycol = c("blue","green")
+
+if (MINP < 1){
+   plot(best[,2],-log10(best[,1]),pch=19,cex=.4,
+        ylim = c(0,-log10(MINP)),xaxt="n",yaxt="n",ylab="", xlim = c(xlim1, xlim2),xlab="",
+        col="blue" ) 
+
+  for (cc in 1:dim(best[1])) {
+    text(best[cc,2],-log10(best[cc,1]),best[cc,3],col="blue",pos=3,cex=.6 ) 
+   }
+
+  points(best[best[,4] == 2,2],-log10(best[best[,4] == 2,1]),pch=21,cex=1.0,col="darkgreen" ) 
+
+
+#   axis(4, at = round (seq (0,-log10(MINP),length.out=4)), cex.axis=1, col.axis="blue")
+    axis(4, at = round (seq (0,floor(-log10(MINP)),length.out=4)), cex.axis=1,line =2, las =1,lty=0, col.axis="blue")
+   par(new=T)
+}
+
+laminin = .9
+lamaxax = 1.2
+
+
+lamin = floor (min(lasi1[,2],na.rm=T)*100)/100
+lamax = ceiling(max(lasi1[,2],na.rm=T)*100)/100
+
+#lamin = min (lasi1[,2],na.rm=T)
+if (lamin > laminin) {lamin = laminin}
+#lamax = max (lasi1[,2],na.rm=T)
+if (lamax < lamaxax) {lamax = lamaxax}
+print (lamax)
+print (lamaxax)
+
+lasi1_xow = lasi1[!is.na(lasi1[,2]),1]
+lasi1_yow = lasi1[!is.na(lasi1[,2]),2]
+
+plot(lasi1_xow,lasi1_yow,col=colors()[100], type="b",ylim=c(lamin,lamax),yaxt="n", xlab=colnames(lasi1)[1], ylab="", 
+#plot(lasi1[,1],lasi1[,2],col=colors()[100], type="l",yaxt="n", xlab=colnames(lasi1)[1], ylab="", 
+#      main = paste ("PHEAD - 2D Lambda Plot - ",colnames(lasi1)[1] ,sep=""), xlim = c(xlim1, xlim2),
+      xlim = c(xlim1, xlim2),
+      cex.sub=.6, cex.main=.8, cex.lab =.6, cex.axis=.6); 
+    axis(4, cex.axis=.6,col=colors()[100], col.axis=colors()[100]
+)
+
+abline(h=1.0, lty="dotted", lwd=1, col=colors()[100])
+
+
+
+      
+
+colp=1
+
+
+#mtext(paste("Lambda=",signif(LAALL,3),sep=""),3,cex=.8,line=-1)
+#mtext(paste("N=",SIALL,sep=""),3,cex=.8, line=-3)
+
+
+#if (p_c1 < 0.05) {colp=colors()[100]}
+#mtext (paste("p (GLM of PHEAD ~ ",colnames(lasi1)[1],") = ",p_c1,sep=""), side=3, col=colp,cex=.6, adj =0)
+
+mtext("Lambda", cex=.6, side = 4, line =2,col=colors()[100])
+#mtext("ripke @ chgr mgh harvard edu",3,adj=1,cex=.3)
+
+} else {
+    par(mfcol = c(1, 2))
+    plot(0,0,type="n", ylab="", xlab = "", xaxt = "n", yaxt="n",
+     main =paste("not enough data for C1 - 2D Lambda Plot, STEP1:",STEP1), cex.main=.6)
+    p_c1 = NaN
+}
+
+
+
+
+dev.off();
+
+p_out <- c (p_c1,p_c2);
+write.table (p_out, file = "TITLE.pout", quote=F);
+
+
+
+
+
+
+#  OUTNAME1
+#  OUTNAME2
+
+';
+
+#     main =paste("not enough data for C1 - 2D Lambda Plot, STEP1:",STEP1,"min:", min(lasi1[,2],na.rm=T)), cex.main=.6)
+
+$R_templ =~ s/MATRIX/$matrixfile/;
+die "wrong MIN-P: $min_p" if ($min_p <= 0 || $min_p > 1.0);
+$R_templ =~ s/MINP/$min_p/g;
+$R_templ =~ s/LASI1/$lasifile_c1/;
+
+$R_templ =~ s/LAMBDA/$lafile/;
+$R_templ =~ s/SIZE/$sizefile/;
+
+
+$R_templ =~ s/INTER1/$inter1/g;
+
+$R_templ =~ s/CC1HEAD/$cc1head/g;
+
+$R_templ =~ s/PHEAD/$phead/g;
+$R_templ =~ s/THRESHHOLD/$minimum_size/g;
+#$R_templ =~ s/LAALL/$lambda_oa/g;
+#$R_templ =~ s/SIALL/$size_oa/g;
+$R_templ =~ s/TITLE/$outname/g if ($outname);
+$step1 =0 if ($step1 eq "nan");
+
+$R_templ =~ s/STEP1/$step1/g;
+
+$R_templ =~ s/OUTNAME1/$pdfname1/g;
+
+#$R_templ =~ s/PC1/$p_stat_c1/g;
+
+
+#print "after subst\n";
+
+&a2file ( $R_infile , $R_templ);
+
+print "after file-writing\n";
+
+&mysystem ("$r_sys < $R_infile --vanilla \n");
+#&mysystem ("source /broad/software/scripts/useuse; use R-2.14; R < $R_infile --vanilla \n");
+
+## source /broad/software/scripts/useuse; use R-2.14; R
+
+    }
+}
+
+
+#############################################
+#############################################
+#############################################
+#######     END
+#############################################
+#############################################
+#############################################
+#    exit;
+
+
+
+########################################
+##        BEGIN
+########################################
+
+#### process header
+
+$igz = gzopen($pfile, "rb")  or die "Cannot open $pfile: $gzerrno\n"; 
+
+unless ($nohead){
+    my $header ;
+    $igz->gzreadline($header);
+
+    my @cells = &split_line($header);
+    $phead=$cells[$pcol-1];
+    $cc1head=$cells[$c1-1];
+
+    
+    if ($check){
+	print "$usage\n";
+	foreach (0..$#cells){
+	    my $celln = $_ + 1;
+	    print "$celln\t$cells[$_]\n";
+	}
+	print "pcol:\t$phead\n";
+	exit ;
+    }
+}
+else{
+    $phead = "no_head";
+}
+
+
+
+&lamco3_alt($c1, $nint1);
+
+
+$igz -> gzclose ();
+
+use File::Copy;
+copy ($pdfname1,"$rootdir");
+#copy ($pdfname2,"$rootdir");
+
+&mysystem("rm -rf $workdir");
+
+
+exit 0;
+

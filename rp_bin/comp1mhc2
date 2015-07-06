@@ -1,0 +1,320 @@
+#!/usr/bin/perl
+use strict;
+
+
+##########################################################################################
+#
+#         counts independent regions of areator file
+##
+#
+#
+#
+#
+#
+#
+##########################################################################################
+
+#my $txt_name = "no_input";
+my $out_name = "no_output";
+my $incol = 0; # index column 
+my $ldcol = 12; # ld friend column
+my $pvcol = 3; # ld friend column
+my $chrcol = 1; # ld friend column
+my $poscol = 2; # ld friend column
+my $leftcol = 14; # ld friend column
+my $rightcol = 15; # ld friend column
+my $gtcol = 6; # ld friend column
+my $frcol = 8; # ld friend column
+
+my $pth = 1.0e-05;
+my $r2th = .4;
+my $kbwin = 500; ## window in kb for defining a region 
+
+use Getopt::Long;
+GetOptions( 
+#   "txt=s"=> \$txt_name,
+   "help"=> \my $help,
+   "meta"=> \my $meta,
+   "m2eta"=> \my $meta2,
+   "incol=i"=> \$incol,
+   "ldcol=i"=> \$ldcol,
+   "pth=f"=> \$pth,
+   "r2th=f"=> \$r2th,
+   "kbwin=i"=> \$kbwin,
+   "out=s"=> \$out_name,
+ );
+
+#if ($help || $txt_name eq "no_input"){
+if ($help){
+    print "usage: $0 OPTIONS 1mhc-files
+
+      options:
+
+	--help          print this message and exit
+#        --txt STRING    name of txt-file, white space delimited
+        --out STRING    name of out file, white space delimited
+
+        --incol STR     column (starting with 0) with index snp
+        --ldcol STR     column (starting with 0) with ld friends
+
+        --pth FLOAT     pval threshhold
+        --r2th FLOAT    rth threshhold
+        --kbwin INT     window in kb
+
+        --meta          do the same with meta-file (different columns)
+        --m2eta         do the same with meta-file (different columns)
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ Psychiatric Genomics Consortium
+\n";
+    exit 2;
+}
+
+if ($meta) {
+    $incol = 1; # index column 
+
+    $pvcol = 10; # ld friend column
+    $chrcol = 0; # ld friend column
+    $poscol = 2; # ld friend column
+
+    $frcol = 6; # ld friend column
+
+}
+
+if ($meta2) {
+    $incol = 1; # index column 
+
+    $pvcol = 7; # ld friend column
+    $chrcol = 0; # ld friend column
+    $poscol = 2; # ld friend column
+
+    $frcol = 6; # ld friend column
+
+}
+
+
+if ($out_name eq "no_output"){
+#    $out_name = $txt_name.".repl";
+    $out_name = "stdout";
+}
+#$out_name .= ".txt";
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+
+
+#####################################
+### BEGIN
+#####################################
+
+
+
+
+#################################################
+## go through infile
+##########################################
+
+
+my $txt_name = $ARGV[0];
+my $txt_name_sorted = $txt_name.".pvsorted";
+
+my $pvcols = $pvcol + 1;
+
+#unless (-e $txt_name_sorted) {
+my $sortsys = "sort -k$pvcols,$pvcols"."g $txt_name > $txt_name_sorted";
+#print "$sortsys\n";
+system($sortsys);
+#}
+
+my @chr_arr;
+my @pv_arr;
+my @pos_arr;
+my @left_arr;
+my @right_arr;
+my @index_arr;
+my @snp_arr;
+#my $new_count = 0;
+my $bwin = $kbwin *1000;
+
+my %new_count;
+my %ind_count;
+my @pth_arr = qw/5.0e-08 1.0e-06 1.0e-05 1.0e-04 1.0/;
+foreach (@pth_arr) {
+    $new_count{$_} = 0;
+    $ind_count{$_} = 0;
+}
+
+###########  go through txt-file
+my $lc = 1;
+my $alc = 1;
+die $!."($txt_name_sorted)" unless open IN, "< $txt_name_sorted";
+
+my $line = <IN>;
+
+while (my $line = <IN>){
+    my @cells = @{&split_line_ref(\$line)};
+
+    my $pv_loc = $cells[$pvcol];
+    $pv_loc *= 1;
+
+
+#    next if ($cells[$pvcol] eq "NA");
+
+#    next if ($cells[$pvcol]*1 = 0);
+#    next if ($cells[$pvcol] > $pth);
+    next if ($pv_loc == 0);
+#    last if ($pv_loc > 5.0e-08);
+
+
+
+    my $pos_loc = $cells[$poscol];
+    my $chr_loc = $cells[$chrcol];
+    my $snp_loc = $cells[$incol];
+
+    my $left_loc = $pos_loc - $kbwin * 1000;
+    my $right_loc = $pos_loc + $kbwin * 1000;
+
+#    my $left_loc = $cells[$leftcol] - 100000;
+#    my $right_loc = $cells[$rightcol] + 100000;
+
+#    if ($snp_loc eq "rs9607782" || $snp_loc eq "rs6002655" || $snp_loc eq "rs12691307") {
+    if (0) {
+	print "$snp_loc";
+	print "\t$chr_loc";
+	print "\t$pos_loc";
+	print "\t$pv_loc";
+	print "\t$left_loc";
+	print "\t$right_loc";
+
+	print "\n";
+	
+#	sleep(1);
+    }
+
+    my $new = 1;
+    foreach my $cc (0..$#chr_arr) {
+	if ($chr_loc == $chr_arr[$cc]) {
+
+#	    if ($right_loc > $left_arr[$cc] && $left_loc < $right_arr[$cc]) {
+	    if ($pos_loc > $left_arr[$cc] && $pos_loc < $right_arr[$cc]) {
+	       
+#		if ($pv_loc < $pv_arr[$cc]) {
+#		    $pv_arr[$cc] = $pv_loc ;
+#		}
+		
+
+#	    if ($pos_loc - $bwin < $pos_arr[$cc] && $pos_loc + $bwin > $pos_arr[$cc]) {
+
+
+#		print "region already seen: $snp_loc, $chr_loc, $pos_loc, $chr_arr[$cc], $pos_arr[$cc]\n";
+		$new = 0;
+	    }
+	}
+    }
+
+    foreach (@pth_arr) {
+	if ($pv_loc <= $_) {
+	    $ind_count{$_}++;
+	    if ($new ==1) {
+#		print "$_ @cells\n";
+		$new_count{$_}++;
+	    }
+	}
+    }
+
+    if ($new == 1) {
+	push @snp_arr, $snp_loc;
+	push @pv_arr, $pv_loc;
+	push @chr_arr, $chr_loc;
+	push @pos_arr, $pos_loc;
+#	push @snp_arr, $snp_loc;
+	push @index_arr, $snp_loc;
+	push @left_arr, $left_loc;
+	push @right_arr, $right_loc;
+	
+    }
+
+
+}
+
+close IN;
+
+
+
+#print "$new_count separate regions with $kbwin window and pth of $pth\n";
+print "pth\tN_reg($kbwin","kb)\tN_snps\n";
+
+foreach (@pth_arr) {
+    print "$_\t";
+    print $new_count{$_}."\t";
+    print $ind_count{$_}."\n";
+}
+
+die $!."($txt_name_sorted.regs.txt)" unless open OUT, "> $txt_name_sorted.regs.txt";
+print OUT "SNP";
+print OUT " P";
+print OUT " CHR";
+print OUT " left";
+print OUT " right";
+print OUT "\n";
+foreach my $cc (0..$#chr_arr) {
+    if ($pv_arr[$cc] < 5.0e-08) {
+	print OUT $index_arr[$cc];
+	print OUT " ".$pv_arr[$cc];
+
+	print OUT " ".$chr_arr[$cc];
+	print OUT " ".$left_arr[$cc];
+	print OUT " ".$right_arr[$cc];
+	print OUT "\n";
+    }
+}
+
+close OUT;
+
+
+exit;
+
+foreach my $cc (0..$#chr_arr) {
+    if ($pv_arr[$cc] < 5.0e-08) {
+	print "--title PGC_SCZ51_0413.$cc.chr$chr_arr[$cc]";
+	print " --out PGC_SCZ51_0413.$cc.chr$chr_arr[$cc]";
+	print " --snp";
+	print " ".$index_arr[$cc];
+	print " --area";
+	print " ".$chr_arr[$cc];
+	print ",".$left_arr[$cc];
+	print ",".$right_arr[$cc];
+	print "\n";
+    }
+}
+
+
+
+
+

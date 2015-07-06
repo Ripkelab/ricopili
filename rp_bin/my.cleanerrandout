@@ -1,0 +1,352 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+use Getopt::Long;
+GetOptions( 
+	    "help"=> \my $help,
+    );
+
+
+
+if ($help){
+    print "usage: $progname 
+
+version: $version
+
+      options:
+
+        --help          print this message then quit
+
+ cleans a errandout dir and saves info about resources needed.
+
+ created by Stephan Ripke 2014 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+
+use Cwd;
+use File::Path;
+use File::Copy;
+
+print "reading directory...\n";
+
+my $target_dir = $ARGV[0];
+
+die unless (@ARGV == 1);
+die unless (-e $target_dir);
+
+
+chdir ($target_dir);
+
+
+my $deldir = "deldir";
+my $safedir = "safedir";
+
+unless (-e $deldir){
+    print "deldir is not existing, create one for you\n";
+    my @created = mkpath(   ## $created ?
+			    $deldir,
+			    {verbose => 0, mode => 0750},
+	);
+}
+unless (-e $safedir){
+    print "safedir is not existing, create one for you\n";
+    my @created = mkpath(   ## $created ?
+			    $safedir,
+			    {verbose => 0, mode => 0750},
+	);
+}
+
+if (-e "cleaned.tar.gz") {
+
+    print "cleaned.tar.gz already existing, trying to clean up and set as cleaned\n";
+
+
+    &mysystem ("rm -r $safedir") if (-e $safedir);
+    &mysystem ("rm -r $deldir") if (-e $deldir);
+
+
+    system ("touch $target_dir/cleaned");
+    exit;
+
+}
+
+
+
+
+
+
+
+
+
+my @files = ();
+opendir(DIR, ".") || die "can't opendir .: $!";
+@files = readdir(DIR);
+closedir DIR;
+
+my $fc = 0;
+
+
+if (-e "$target_dir/clean_block") {
+    print "Error: incomplete cleaning in $target_dir, please revisit\n";
+#    system ("touch $target_dir/cleaned");
+    exit;
+}
+
+my %exclude;
+$exclude {"cleaned.tar.gz"} = 1;
+$exclude {"errandout_sum"} = 1;
+$exclude {"clean_block"} = 1;
+$exclude {"to_delete.tar.gz"} = 1;
+
+$exclude {$safedir} = 1;
+$exclude {$deldir} = 1;
+
+
+my @tar_files;
+my @ex_files;
+
+
+
+print "go through files...\n";
+
+
+
+die $! unless open EOS, ">> $target_dir/errandout_sum";
+print EOS "job-id filesize error success sec mem-Mb nodes queue user jobid command\n";
+
+foreach my $fi (@files) {
+    if ($fi eq '.' || $fi eq '..') {
+#	print "dir-file: $fi\n";
+	next;
+    }
+    next if (exists $exclude{$fi});
+
+#    print "$fi\n";
+
+		
+    my $success = 0;
+    my $error = 0;
+    my $c_time = 0;
+    my $mmem = 0;
+    my $mthread = 0;
+    my $queue = 0;
+    my $user = 0;
+    my $lc = 0;
+    my $add_info = "";
+    my $subject = "";
+    
+    die $! unless open EOI, "< $fi";
+    while (my $line = <EOI>){
+	my @cells = @{&split_line_ref(\$line)};
+	if ($line =~ /[eE]rror/) {
+	    $error = 1;
+	}
+	next if (@cells < 2);
+
+	if ($cells[0] eq "Successfully" && $cells[1] eq "completed."){
+	    $success = 1;
+	}
+	if ($cells[0] eq "Subject:" && $cells[1] eq "Job"){
+	    $subject = $cells[2];
+	    $subject =~ s/:$//;
+
+	}
+	if ($cells[0] eq "CPU" && $cells[1] eq "time"){
+	    $c_time = sprintf "%d",$cells[3] + 0.5;
+	}
+	if ($cells[0] eq "Max" && $cells[1] eq "Memory"){
+	    $mmem = $cells[3];
+	}
+	
+	if ($cells[0] eq "Job" && $cells[4] eq "host(s)"){
+	    $mthread = $cells[5];
+	    $queue = $cells[8];
+	    $user = $cells[11];
+	    $mthread =~ s/,$//;
+	    $queue =~ s/,$//;
+	}
+
+	
+
+	if ($cells[0] eq "#" && $cells[1] eq "LSBATCH:"){
+	    my $nextline = <EOI>;
+	    chomp($nextline);
+	    $add_info = $nextline;
+	}
+
+
+
+	$lc++;
+
+
+    }
+    close EOI;
+
+    my $size = -s $fi;
+
+    print EOS "$fi $size $error $success $c_time $mmem $mthread $queue $user $subject $add_info\n";
+
+    if ($error == 1 || $success == 0) {
+	unless (exists $exclude{$fi}) {
+	    push @tar_files, $fi;
+	}
+    }
+    else {
+	push @ex_files, $fi;
+    }
+
+
+
+
+    $fc++;
+    if ($fc % 100 == 0) {
+	print "read $fc files\n";
+    }
+
+}
+
+close EOS;
+
+
+
+
+
+#exit;
+print "moving files without errors into $deldir...\n";
+
+print "N = ".@ex_files."\n";
+
+foreach (@ex_files) {
+    move ($_,"$deldir/$_");
+}
+
+
+print "moving files into $safedir: the ones to keep...\n";
+print "N = ".@tar_files."\n";
+
+foreach (@tar_files) {
+#    print "$safedir/$_\n";
+    move ($_,"$safedir/$_");
+}
+#exit;
+
+
+
+print "tarball the rest...\n";
+my $stro = system ("tar -czf cleaned.tmp.tar.gz $safedir");
+
+if ($stro !=0 ) {
+    print "something went wrong with creating the to_keep tar-ball\n";
+    exit;
+}
+
+
+&mysystem ("mv cleaned.tmp.tar.gz cleaned.tar.gz");
+
+
+print "deleting safedir...\n";
+&mysystem ("rm -r $safedir");
+print "deleting deldir...\n";
+&mysystem ("rm -r $deldir");
+
+system ("touch $target_dir/cleaned");
+
+
+
+
+
+exit;
+
+
+
+print "removing files without errors...\n";
+
+if (-e "to_delete.tar.gz") {
+    if (@ex_files == 0) {
+	print "to_delete.tar.gz is existing and doesnt need to be continued\n";
+    }
+    else {
+	print "to_delete.tar.gz is existing and more are about to come, so exiting\n";
+	exit;
+    }
+}
+else {
+    my $strm = system ("tar --remove-files -czf to_delete.tar.gz @ex_files");
+
+    if ($strm !=0) {
+	print "something went wrong with creating the empty tar-ball\n";
+	exit ;
+    }
+}
+
+
+print "tar ball the rest\n";
+my $stro = 1;
+if (-e "cleaned.tar.gz") {
+    print "stopped because cleaned.tar.gz is existing\n";
+    exit;
+}
+
+if (@tar_files > 0) {
+    $stro = system ("tar --remove-files -czf cleaned.tar.gz @tar_files");
+}
+else {
+    system ("touch cleaned.tar.gz");
+    $stro = 0;
+}
+
+
+#exit;
+
+if ($stro == 0) {
+    print "success, mark directory as cleaned\n";
+    system ("rm $target_dir/to_delete.tar.gz");
+    system ("touch $target_dir/cleaned");
+    system ("rm $target_dir/clean_block");
+}
+
+
+print "success\n";
+exit;
+
+
+
+

@@ -1,0 +1,41 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+if (0) {
+if (@ARGV > 1) {
+    print "make tar-ball\n";
+    unless ($ARGV[0] =~ /tar.gz$/) {
+	print "error: if multiple files, the first must be the name of tar-ball\n";
+	exit;
+    }
+    system ("tar -chvzf @ARGV");
+}
+}
+
+my $systype = "";
+$systype = $ENV{SYS_TYPE};
+
+#exit;
+
+my $db_bin = "~/dropbox/april2014/Dropbox-Uploader-master/dropbox_uploader.sh";
+if ($systype) {
+    print "systype: ".$systype."\n";
+    if ($systype =~ /redhat_6/) {
+	$db_bin = "~/dropbox/april2014_gold/Dropbox-Uploader-master/dropbox_uploader.sh";
+    }
+}
+
+foreach my $file (@ARGV) {
+#my $file = $ARGV[0];
+    print "upload $file\n";
+    
+    system("$db_bin upload $file /sent_from_server/$file");
+
+}
+#print "success....\n";
+
+
+
+ 

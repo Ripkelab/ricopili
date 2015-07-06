@@ -1,0 +1,175 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+my $out = "transfuse.out";
+
+##### help message
+my $usage = "
+Usage : $progname famlocfile mds-file
+
+version: $version
+
+  --help          print this mssage and exit
+  --out STRING    take STRING as output filename, default: $out
+
+ transfers PCAs (from mds-file) to members (in famlocfile: one row: fid <TAB> iid <TAB> fid-mds <TAB> iid-mds)
+
+ created by Stephan Ripke 2009 at MGH, Boston, MA
+ 
+";
+
+#### evaluate options
+use Getopt::Long;
+GetOptions( 
+    "help" => \my $help,
+    "out=s" => \$out,
+    );
+
+die "$usage\n" if (@ARGV ne 2 || $help);
+
+
+my $famlocfile = $ARGV[0];
+my $mds_file = $ARGV[1];
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+#####################################
+# print header,hash to file
+####################################
+
+sub ah2file {
+    my ($file, $head, %lines)=@_;
+    die $! unless open FILE, "> $file";
+    print FILE "$head";
+    foreach (keys %lines){
+	print FILE "$_\t$lines{$_}\n";
+    }
+    close FILE;
+}
+
+
+#####################################
+# read mds-file per family
+####################################
+
+my %mds_fam = ();
+my %mds_id = ();
+
+die $! unless open MDS, "< $mds_file";
+my $header = <MDS>;
+while (my $line = <MDS>){
+   my @cells = &split_line($line);
+   foreach (2..$#cells){
+       $mds_id {"$cells[0]\t$cells[1]"} .= "\t$cells[$_]";
+   }
+#    print "$_\n";
+}
+close MDS;
+
+#####################################
+# read fam_loc the first time
+####################################
+
+#my @mds_out = ();
+my %mds_loc;
+
+die $! unless open ID, "< $famlocfile";
+while (my $line = <ID>){
+    
+    my @cells = &split_line ($line);
+#    print @cells."\n";
+    next if ($cells[0] eq "FID1" || $cells[0] eq "FID2") ;
+    if (@cells != 4){
+	print "$cells[0]\t$cells[1]\t without friend, full exclusion\n";
+	next;
+    }
+
+    my $id1 = "$cells[0]\t$cells[1]";
+    my $id2 = "$cells[2]\t$cells[3]";
+
+    $mds_loc{$id1} =  $id2;
+
+}
+close ID;
+
+#####################################
+# read fam_loc
+####################################
+
+#my @mds_out = ();
+my $error = 0;
+die $! unless open ID, "< $famlocfile";
+while (my $line = <ID>){
+    
+    my @cells = &split_line ($line);
+    next if ($cells[0] eq "FID1" || $cells[0] eq "FID2") ;
+    if (@cells != 4){
+	print "$cells[0]\t$cells[1]\t without friend, full exclusion\n";
+	next;
+    }
+    my $id1 = "$cells[0]\t$cells[1]";
+    my $id2 = "$cells[2]\t$cells[3]";
+
+#    print "$famlocfile\n";
+#    print "$id1\n";
+#    print "$id2\n";
+#    print "\n";
+    if (exists $mds_id{$id2}){
+	$mds_id{$id1} =  $mds_id{$id2};
+    }
+    else {
+	if (exists $mds_id{$mds_loc{$id2}}){
+	    $mds_id{$id1} =  $mds_id{$mds_loc{$id2}};
+	    print "took secondary mds for $id2\n";
+	}
+	else {
+	    print "error: no mds info of $id2 , partner of $id1\n";
+	    $error = 1;
+	}
+    }
+
+}
+close ID;
+if ($error == 1) {
+    print "error in transfusion\n";
+    die;
+}
+
+
+
+###############################
+## write result
+#################################
+
+&ah2file ($out,$header,%mds_id);
+
+

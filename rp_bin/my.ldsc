@@ -1,0 +1,220 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ldsc = &trans("ldloc");
+
+###########################################
+
+my $danerfile = $ARGV[0];
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+######################
+# BEGIN
+##############################
+
+my $ldsc_sys = "source /broad/software/scripts/useuse; use .anaconda-2.1.0-no-mkl; python $ldsc/";
+
+if ($ldsc eq "/home/gwas/ldsc/") {
+    $ldsc_sys = "module load ldsc; ";
+}
+
+
+
+
+
+
+my $sys = "$ldsc_sys"."munge_sumstats.py --sumstats $danerfile  --daner --out $danerfile.ldsc --merge-alleles $ldsc/w_hm3.snplist";
+
+#exit;
+
+
+
+
+die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
+print OUT "$sys\n";
+close OUT;
+
+#print "$sys\n";
+#exit;
+
+my $sc;
+
+if (1){
+    $sc = system ($sys);
+    
+    if ($sc != 0) {
+	print "Error with munging\n";
+	exit;
+    }
+}
+#exit;
+
+
+
+### infer ratio
+my $logfile = "$danerfile.ldsc.log";
+die $!."($logfile)" unless open FILE, "< $logfile";
+my $nca = 0;
+my $nco = 0;
+my $sample_prev = 0.5;
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    if (@cells > 0) {
+	if ($cells[0] eq "Inferred") {
+	    $nca = $cells[4];
+	    $nca =~ s/,//g;
+	    $nco = $cells[7];
+	    if ($nca > 0 && $nco > 0){
+		$sample_prev = $nca / ($nca + $nco);
+	    }
+	}
+    }
+}
+close FILE;
+
+$sample_prev = sprintf "%.4f", $sample_prev;
+print "nca: $nca\n";
+print "nco: $nco\n";
+print "ratio: $sample_prev\n";
+
+
+#exit;
+my $pop_prev = 0.01;
+if ($danerfile =~ /mdd/ || $danerfile =~ /MDD/) {
+    $pop_prev = 0.1;
+}
+
+## this is just one, intercept
+$sys = "$ldsc_sys"."ldsc.py --h2 $danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out h2.$danerfile.observed";
+#$sys = "$ldsc_sys"."ldsc.py --h2 $danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out h2.$danerfile.nointercept --samp-prev $sample_prev --pop-prev $pop_prev --no-intercept";
+
+die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
+print OUT "$sys\n";
+close OUT;
+
+$sc = system ($sys);
+
+if ($sc != 0) {
+    print "Error with observed h2\n";
+    exit;
+}
+
+## this is just one, intercept
+  $sys = "$ldsc_sys"."ldsc.py --h2 $danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out h2.$danerfile.liability --samp-prev $sample_prev --pop-prev $pop_prev ";
+
+die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
+print OUT "$sys\n";
+close OUT;
+
+$sc = system ($sys);
+
+if ($sc != 0) {
+    print "Error with liabilty h2\n";
+    exit;
+}
+
+
+
+
+################################################
+### compare to SCZ
+####################################################
+
+
+
+my $scz_sumstats = "$ldsc/scz52/daner_PGC_SCZ49.sh2_mds10.gz.ldsc.sumstats.gz";
+my $scz_sumstats_loc = "daner_PGC_SCZ49.sh2_mds10.gz.ldsc.sumstats.gz";
+
+unless (-e $scz_sumstats_loc) {
+    system ("ln -s $scz_sumstats .");
+}
+
+
+
+
+$sys = "$ldsc_sys"."ldsc.py --rg $scz_sumstats_loc,$danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out rg.PGC_SCZ49.sh2_mds10.$danerfile.observed";
+#$sys = "$ldsc_sys"."ldsc.py --rg $scz_sumstats_loc,$danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out rg.PGC_SCZ49.sh2_mds10.$danerfile.nointercept --samp-prev 0.4310,$sample_prev --pop-prev 0.01,$pop_prev --no-intercept";
+
+die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
+print OUT "$sys\n";
+close OUT;
+
+$sc = system ($sys);
+
+if ($sc != 0) {
+    print "Error with observed rg\n";
+    exit;
+}
+
+
+
+$sys = "$ldsc_sys"."ldsc.py --rg $scz_sumstats_loc,$danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out rg.PGC_SCZ49.sh2_mds10.$danerfile.liability --samp-prev 0.4310,$sample_prev --pop-prev 0.01,$pop_prev";
+
+die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
+print OUT "$sys\n";
+close OUT;
+
+$sc = system ($sys);
+
+if ($sc != 0) {
+    print "Error with liability rg\n";
+    exit;
+}
+
+die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
+print OUT "-----------------------\n";
+print OUT "SCZ file: $scz_sumstats\n";
+print OUT "-----------------------\n";
+close OUT;
+
+
+
+
+if ($sc == 0) {
+    &mysystem ("touch $danerfile.ldsc.fini");
+}
+
+
+print "success2\n";
+
+
+
+
+

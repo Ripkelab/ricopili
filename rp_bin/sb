@@ -1,0 +1,58 @@
+#!/usr/bin/perl
+use strict;
+
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+###########################################################################################################
+#
+#
+#    sync to box
+#
+#
+##########################################################################################################
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+my $cmd_templ = 'curl --disable-epsv -u sripke@broadinstitute.org:broad44box -T FILE ftp://ftp.box.com/upload_from_broad/';
+
+my $version = "1.0.0";
+
+my $usage = "
+Usage : $progname [options] ......
+
+version: $version
+
+  --help              print this message and exit
+
+  command : $cmd_templ
+
+ created by Stephan Ripke 2010: sripke\@broadinstitute.org
+
+";
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    );
+
+
+die "$usage\n" if ($help);
+
+foreach (@ARGV) {
+    my $cmd_loc = $cmd_templ;
+    $cmd_loc =~ s/FILE/$_/;
+    print "$cmd_loc\n";
+    &mysystem($cmd_loc);
+}
+
+

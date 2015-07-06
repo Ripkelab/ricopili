@@ -1,0 +1,445 @@
+#!/usr/bin/perl
+use strict;
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $hmloc = &trans("hmloc");
+
+
+##########################################
+
+
+my $usage = "
+
+COMAND DIR1 DIR2 DIR3 .....
+
+  --help              print help massage and exits
+#  --clean             clean directory
+  --dirfile STRING       file containing merge directories
+#  --out               name of imputation run
+ 
+
+# --out is mandatory
+
+ created by Stephan Ripke 2014 at MGH, Boston, MA
+
+
+join multiple imputation directories, created with rp_pipeline
+
+start within new (empty directory)
+
+
+";
+
+
+
+
+print "replace reference_info\n";
+print "look for triset\n";
+print "do not redo cobg\n";
+print "put cobg_gw into original collectiona and copy over\n";
+#sleep (5);
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+###################################################
+###  soft link to here 
+###################################################
+sub mylink(){
+    my $source = "@_";
+    unless (-e $source) {
+	print "could not find source data ($source) please check your specified directories\n";
+	exit;
+    }
+    &mysystem("ln -s $source .");
+}
+
+
+
+my $out = "";
+
+use Getopt::Long;
+GetOptions(
+    "dirfile=s"=> \my $dirfile,
+#    "out=s"=> \$outname,
+    "clean"=> \my $cleandir,
+    "help"=> \my $help );
+
+
+die "$usage" if $help;
+#die "$usage" if $out eq "";
+
+
+####################################
+## BEGIN
+#######################################
+
+
+
+my @sourcedirs = @ARGV;
+
+if ($dirfile) {
+
+    die $! unless open DI, "< $dirfile";
+    while (my $line = <DI>){
+	chomp($line);
+	push @sourcedirs, $line;
+    }
+    close DI;
+}
+
+if (@sourcedirs == 0) {
+    print "Error: please specify source directories\n";
+    exit 2;
+}
+
+opendir(DIR, ".") || die "can't opendir .: $!";
+my @targetfiles = readdir(DIR);
+closedir DIR;
+@targetfiles = grep {!/^\./} @targetfiles;
+#@targetfiles = grep {!/$dirfile/} @targetfiles;
+#@targetfiles = grep {!/README/} @targetfiles;
+
+
+
+
+
+#@targetfiles = grep {!/^\.bim$/} @files;
+#print "komishc\n";
+#foreach (@targetfiles) {
+#    print "$_\n";
+#}
+
+
+#if ($cleandir) {
+#    &mysystem("rm buigue_done");
+#    &mysystem("rm chucking_done");
+#    &mysystem("rm clean_done");
+#    &mysystem("rm dabg_done");
+#    &mysystem("rm dos_done");
+#    &mysystem("rm flipping_done");
+#    &mysystem("rm imp2_done");
+#    &mysystem("rm posing_done");
+#    &mysystem("rm prephase_done");
+#    &mysystem("rm pseudo_done");
+#}
+
+
+
+if (@targetfiles > 0) {
+    print "---------------------------\n";
+    print "Error: workdir is not empty\n";
+    print "please create new directory and restart from within\n";
+    print "---------------------------------------------------\n";
+    exit;
+}
+
+&mysystem("mkdir pi_sub");
+&mysystem("mkdir cobg_dir_genome_wide");
+
+my %bhash;
+my %reference_info;
+die $! unless open JI, "> joininfo.txt";
+foreach my $sd (@sourcedirs) {
+    opendir(DIR, "$sd") || die "can't opendir $sd: $!";
+    my @files = readdir(DIR);
+    closedir DIR;
+    my @bimfiles = grep {/\.bim$/} @files;
+    my @mds_cov_files = grep {/\.mds_cov$/} @files;
+    my @cobg_dir = grep {/cobg_dir_genome_wide/} @files;
+    if (@cobg_dir > 1) {
+	print "more than 1 cobg_dir in source dir: $sd\n";
+	exit;
+    }
+    
+    
+    if (@bimfiles == 0) {
+	print "---------------------------\n";
+	print "Error: directory without plink datasets: $sd\n";
+	print "please check\n";
+	print "---------------------------------------------------\n";
+	exit;
+    }
+
+
+    foreach my $bf (@bimfiles) {
+	my $bfile = $bf;
+	print "linking $bfile\n";
+	$bfile =~ s/\.bim$//;
+	if (exists $bhash{$bfile}) {
+	    print "---------------------------\n";
+	    print "Error: same dataset name from different directories: $bfile\n";
+	    print "please rerun preimp/imputation with different naming of one of these\n";
+	    print "---------------------------------------------------\n";
+	    exit;
+	}
+	else {
+	    $bhash{$bfile} = 1;
+	}
+
+
+	 
+	&mylink("$sd/$bfile.bed");
+	&mylink("$sd/$bfile.bim");
+	&mylink("$sd/$bfile.fam");
+
+#	print "do I get here?\n";
+	my $nohg19 = 0;
+	if (-d "$sd/dasuqc1_$bfile.ch.fl") {
+	    &mylink("$sd/dasuqc1_$bfile.ch.fl");
+	    $nohg19 = 1;
+	}
+	else {
+#	    print "seems to not exist: $sd/dasuqc1_$bfile.ch.fl\n";
+#	    exit;
+	    &mylink("$sd/dasuqc1_$bfile.hg19.ch.fl");
+	}
+#	exit;
+
+	
+	unless (-e "reference_info") {
+	    &mysystem("cp $sd/reference_info .");
+	}
+	else {
+	    my $es = `diff $sd/reference_info reference_info`;
+	    if ($es != 0) {
+		print "----------------------------------------------------------------\n";
+		print "Warning: directories seem to be from different reference sets....?\n";
+		print "compare ./reference_info with $sd/reference_info\n";
+		print "----------------------------------------------\n";
+		sleep (3);
+	    }
+	}
+	
+	chdir("pi_sub");
+
+	if ($nohg19 == 0) {
+	    &mylink("$sd/pi_sub/$bfile.hg19.bed") if (-e "$sd/pi_sub/$bfile.hg19.bed");
+	    &mylink("$sd/pi_sub/$bfile.hg19.bim");
+	    &mylink("$sd/pi_sub/$bfile.hg19.fam")  if (-e "$sd/pi_sub/$bfile.hg19.fam");
+	    &mylink("$sd/pi_sub/$bfile.hg19.ch.bed")  if (-e "$sd/pi_sub/$bfile.hg19.ch.bed");
+	    &mylink("$sd/pi_sub/$bfile.hg19.ch.bim");
+	    &mylink("$sd/pi_sub/$bfile.hg19.ch.fam")  if (-e "$sd/pi_sub/$bfile.hg19.ch.fam");
+	    &mylink("$sd/pi_sub/$bfile.hg19.ch.fl.bed")  if (-e "$sd/pi_sub/$bfile.hg19.ch.fl.bed");
+	    &mylink("$sd/pi_sub/$bfile.hg19.ch.fl.bim");
+	    &mylink("$sd/pi_sub/$bfile.hg19.ch.fl.fam")  if (-e "$sd/pi_sub/$bfile.hg19.ch.fl.fam");
+	    &mylink("$sd/pi_sub/$bfile.bed");
+	    &mylink("$sd/pi_sub/$bfile.bim");
+	    &mylink("$sd/pi_sub/$bfile.fam");
+	    
+	}
+	else {
+
+	    &mysystem("touch $bfile.bed");
+	    &mysystem("touch $bfile.bim");
+	    &mysystem("touch $bfile.fam");
+	    &mysystem("touch $bfile.fam.fake");
+	    &mysystem("touch $bfile.ch.bed");
+	    &mysystem("touch $bfile.ch.bim");
+	    &mysystem("touch $bfile.ch.fam");
+	    &mysystem("touch $bfile.ch.fam.fake");
+	    &mysystem("touch $bfile.ch.fl.bed");
+	    &mysystem("touch $bfile.ch.fl.bim");
+	    &mysystem("touch $bfile.ch.fl.fam");
+	    &mysystem("touch $bfile.ch.fl.fam.fake");	    
+
+	    
+	}
+	
+
+	chdir("../");
+
+
+	chdir("cobg_dir_genome_wide");
+	
+	#	print "1\n";
+	if (@cobg_dir > 0) {
+	    if (-e "$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgs.fini") {
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgs.fini");
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgs.bed");
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgs.bim");
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgs.fam");
+	    }
+	    #	print "2: $sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgn.bed\n";
+	    if (-e "$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgn.fini") {
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgn.fini");
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgn.bed");
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgn.bim");
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bgn.fam");
+	    }
+	    #	print "3\n";
+	    if (-e "$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bg.fini") {
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bg.fini");
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bg.bed");
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bg.bim");
+		&mylink("$sd/$cobg_dir[0]/$bfile.hg19.ch.fl.bg.fam");
+	    }
+	}
+	else {
+	    print "---------------------------------------------------------------------\n";
+	    print "Warning: $bfile without whole genome best guess\n";
+	    print "it is recommend to restart imputation pipeline after joinimp then\n";
+	    print "---------------------------------------------------------------------\n";
+	}
+#	print "4\n";
+
+	chdir("../");
+
+	
+	print JI "$sd\t$bfile\n" ;
+    }
+
+    print "getting additional files for association analysis\n";
+    my $triset_found = 0;
+    if (-e "$sd/triset_loc") {
+	&mylink("$sd/triset_loc");
+	$triset_found = 1;
+    }
+    
+    my $mdscov_found = 0;
+    if (@mds_cov_files > 0) {
+	foreach (@mds_cov_files) {
+	    &mylink("$sd/$_");
+	}
+	$mdscov_found = 1;
+    }
+
+}
+
+
+	
+
+print "renaming reference_info\n";
+#print "have to rename with config file\n";
+#exit;
+
+&mysystem("mv reference_info reference_info.sich");
+die $! unless open FI, "< reference_info.sich";
+die $! unless open FO, "> reference_info";
+my $cc=1;
+while (my $line = <FI>){
+    chomp($line);
+    if ($cc==1) {
+	$line =~ s!/home/radon01/sripke/bakker_ripke/hapmap_ref!/psych/genetics_data/ripke/references_outdated/hapmap_ref!;
+	unless (-e $line) {
+	    print "-------------------------------------------\n";
+	    print "Warning: reference location does not exist:\n";
+	    print "$line\n";
+	    print "-------------------------------------------\n";
+	    if ($line =~ "/psych/genetics_data/ripke/references_outdated/hapmap_ref/") {
+		print "detected Broad location, will translate\n";
+		$line =~ s!/psych/genetics_data/ripke/references_outdated/hapmap_ref!$hmloc!;
+		if (-e $line) {
+		    print "translated location exists, have look at reference_info to doublecheck\n";
+		}
+		else {
+		    print "------------------------------------------\n";
+		    print "Error: reference location does not exist:\n";
+		    print "$line\n";
+		    print "------------------------------------------\n";
+		    exit;
+		}
+	    }
+	    else {
+		print "Error: cannot translate reference location, exit now\n";
+		exit;
+	    }
+	}
+
+    }
+#sleep(3);
+    print FO "$line\n";
+    $cc++;
+
+}
+close FI;
+close FO;
+		    
+
+&mysystem("touch buigue_done");
+&mysystem("touch chucking_done");
+&mysystem("touch clean_done");
+&mysystem("touch dabg_done");
+&mysystem("touch dos_done");
+&mysystem("touch flipping_done");
+&mysystem("touch imp2_done");
+&mysystem("touch posing_done");
+&mysystem("touch prephase_done");
+&mysystem("touch pseudo_done");
+
+
+close JI;
+
+print "--------------------------------------\n";
+print "Success: joined the named directories, ";
+print "see joininfo.txt for detailed information\n";
+print "please start new run of impute_pipeline, it will only perform the last steps: ";
+print "(combining/pruning best guess genotypes for PCAer)\n";
+
+print "example (replace [NUMBER] and [NAME]): impute_dirsub_[NUMBER] --phase [NUMBER] --out [NAME]\n";
+print "be aware that this restart of the impute pipeline can take some time (around 20 minutes)\n";
+print "after that, check your impute_log file for progress (should start with around 900 cobg jobs)\n";
+print "--------------------------------------------------------\n";
+
+#die $!." <$deffile>" unless open IN, "< $deffile";
+#while (my $line = <IN>){
+#    my @cells = @{&split_line_ref(\$line)};
+#    $trans{$cells[0]} = $cells[7];
+#    print "$cells[7]\n";
+
+#}
+
+
+
+
+#########################################
+exit
+########################################
+
+
+

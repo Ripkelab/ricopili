@@ -1,0 +1,250 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.0.0";
+my $progname = $0;
+
+
+###################################################
+## creates a subfile of reference based on bimfile
+######################################################
+
+
+
+##### help message
+my $usage = "
+Usage : $progname [options] bimfile
+
+version: $version
+
+  --ref      reffile with this format:
+              SNP	CHR	POS	A1	A2	FA1
+  --chr INT  chromosome
+  --help     print this help message and exit
+
+ works with gzipped files on the ref-side
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ 
+";
+
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+#    "col=i"=> \ $coln,
+#    "th=i"=> \ $th,
+    "ref=s"=> \my $reffile,
+    "chr=i"=> \my $chrstr,
+    );
+
+die $usage if $help;
+
+my $bimfile = $ARGV[0];
+unless (-e $bimfile) {
+    print "ERROR: $bimfile is not existing\n";
+    exit;
+}
+unless (-e $reffile) {
+    print "ERROR: $bimfile is not existing\n";
+    exit;
+}
+unless ($chrstr) {
+    print "ERROR: please specify chromosome --chr\n";
+    exit;
+}
+my $outfile = $bimfile.".ref.chr$chrstr"; 
+
+print "$bimfile\n$reffile\t$chrstr\n";
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+use Compress::Zlib ;
+
+
+###############################
+# BEGIN
+#####################################
+
+#read bimfile
+print "read bimfile into hash\n";
+my %snphash;
+my %lochash;
+my %lochash_frq;
+my %loctrans;
+die $!."$bimfile" unless open FILE, "< $bimfile";
+die "$outfile.renames".$! unless open FD , "> $outfile.renames";
+while (my $line = <FILE>){
+    my @cells = @{&split_line_ref(\$line)};
+
+    my $snp = $cells[1];
+    my $chr = $cells[0] ;
+    my $pos = $cells[3] ;
+
+
+
+    my $chrpos = "$chr\t$pos";
+
+
+    $snphash{$snp} = 1;
+    if ($chrstr == $chr) {
+	$lochash{$chrpos} = $snp;
+    }
+
+
+
+    if ($snp !~ /^rs[0-9]*$/) {
+
+
+	if ($snp =~ /rs[0-9]/) {
+	    my $csnp = $snp;
+	    $csnp =~ s/.*(rs[0-9]*).*/\1/;
+	    unless (exists $snphash {$csnp}) {
+		if ($chr == $chrstr) {
+		    print FD "rs_name extracted from snp_name: $snp $csnp\n";
+		}
+		$snphash{$csnp} = 1;
+	    }
+	}
+	elsif  ($snp =~ /chr[0-9]*_[0-9]*/) {
+
+	    my $psnp = $snp;
+	    $psnp =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
+
+	    my @tarr = split '_', $psnp;
+	    my $cname = $tarr[0];
+	    my $pname = $tarr[1];
+	    $cname =~ s/chr//;
+	    my $in = 0;
+	    if ($chr == 0 && $pos == 0) {
+		if ($chr == $chrstr) {
+		    print FD "position extracted from snp_name: $snp $chr $pos $cname $pname\n";
+		}
+		$in =1;
+	    }
+	    else {
+		if ($chr != $cname || $pos != $pname){
+		    if ($chr == $chrstr) {
+			print FD "Warning: pos_name doesnt match positions: $snp $cname $pname $chr $pos\n";
+		    }
+		    $in =1;
+		}
+	    }
+	    if ($in ==1) {
+		my $chrpos_loc = "$cname\t$pname";
+		if ($cname==$chrstr) {
+		    $lochash{$chrpos_loc} = $snp;
+		}
+	    }
+	}
+
+	elsif  ($snp =~ /var_[0-9]*_[0-9]*/) {
+
+	    my $psnp = $snp;
+	    $psnp =~ s/.*(var_[0-9]*_[0-9]*).*/\1/;
+	    $psnp =~ s/var_//;
+
+	    my @tarr = split '_', $psnp;
+	    my $cname = $tarr[0];
+	    my $pname = $tarr[1];
+	    $cname =~ s/chr//;
+	    my $in = 0;
+	    if ($chr == 0 && $pos == 0) {
+		if ($chr == $chrstr) {
+		    print FD "position extracted from snp_name: $snp $chr $pos $cname $pname\n";
+		}
+		$in =1;
+	    }
+	    else {
+		if ($chr != $cname || $pos != $pname){
+		    if ($chr == $chrstr) {
+			print FD "Warning: pos_name doesnt match positions: $snp $cname $pname $chr $pos\n";
+		    }
+		    $in =1;
+		}
+	    }
+	    if ($in ==1) {
+		my $chrpos_loc = "$cname\t$pname";
+		if ($cname==$chrstr) {
+		    $lochash{$chrpos_loc} = $snp;
+		}
+	    }
+	}
+
+    }
+
+}
+close FILE;
+close FD;
+
+## read reference
+
+my $inz = gzopen("$reffile", "rb")  or die "Cannot open $reffile\n" ;
+die $!."$outfile.tmp" unless open OF, "> $outfile.tmp";
+
+
+$inz->gzreadline(my $head);
+print OF "$head";
+
+my $line;
+#my %snpin;
+while ($inz->gzreadline($line)){
+    my @cells = @{&split_line_ref(\$line)};
+    my $sname = $cells[0];
+    my $pos = "$cells[1]\t$cells[2]";
+    my $in = 0;
+    if (exists $snphash{$sname}) {
+	$in = 1;
+	delete $snphash{$sname};
+#	delete $lochash{$pos};
+    } 
+    if  (exists $lochash{$pos}) {
+	$in = 1;
+	delete $lochash{$pos};
+    }
+    if ($in) {
+#	$snpin{$sname} = 1;
+	print OF "$line";
+    }
+
+}
+$inz -> gzclose();
+close OF;
+
+die $!."$outfile.leftloc" unless open OF, "> $outfile.leftloc";
+foreach my $locpos (keys %lochash) {
+ #   unless (exists $snpin{$lochash{$locpos}}) {
+	print OF "$locpos\t$lochash{$locpos}\n";
+  #  }
+}
+close OF;
+
+&mysystem ("mv $outfile.tmp $outfile");
+
+print "done\n";
+

@@ -1,0 +1,448 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+###########################################################################################################
+#
+#
+#    lift18219
+#
+#          created by Stephan Ripke, Broadinstitute, sripke@broadinstitute.org
+#
+#                                  01/14/10
+#
+#
+#
+#    lifts a plink binary from hg18 to hg19
+#
+#
+#
+#
+##########################################################################################################
+
+#echo "#chrom chromStart chromEnd name" > tolift
+
+#awk '{print "chr"$1,$4,$4+1,$2}' *.bim   >> tolift
+#~/liftover/liftOver tolift hg18ToHg19.over.chain.gz liftes unmapped
+#awk '{print $4,$2}' liftes > liftes.new
+#/fg/debakkerscratch/ripke/plink/1.08/src/plink --bfile ../cmc2_051310.8_toimpute --update-map liftes.new --make-bed
+
+
+
+#############################
+# read config file
+#############################
+
+#print "host: ".$ENV{HOST}."\n";
+#exit;
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("p2loc");
+my $liloc = &trans("liloc");
+
+if ($ENV{SYS_TYPE} =~ /redhat_6/) {
+    print "running on gold\n";
+    $liloc .= "64bit/";
+    print "using $liloc\n";
+}
+#exit;
+
+#######################################
+
+my $scol = 2;  ## snp-col in bim-file
+my $ccol = 1;  ## chr-col in bim-file
+my $kcol = 4;  ## kb-col in bim-file
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+
+my $usage = "
+Usage : $progname [options] bim-file
+
+version: $version
+
+  --posfile          file with just positions instead of bed/bim/fam: format CHR:POS
+  --ibdrep           file with ibd-replication (also a daner file unzipped)
+  --help             print this message and exit
+
+  --markers INT      markers-file from beagle file, needs chromosome INT
+
+  --reverse          lift from hg19 to hg18
+
+  --lilofile STRING  lift_chain file from ucsc, e.g. hg18ToHg19.over.chain.gz
+
+  --noex             do not exclude the non-lifted SNPs
+
+  here a seletion of lilofiles:
+  $liloc
+
+ created by Stephan Ripke 2010: sripke\@broadinstitute.org
+
+";
+
+
+
+my $lilofile = "$liloc/hg18ToHg19.over.chain.gz";
+
+
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "lilofile=s"=> \$lilofile,
+    "posfile"=> \my $posfile,
+    "ibdrep"=> \my $ibdrep,
+    "reverse"=> \my $reverse,
+    "markers=i"=> \my $markers,
+    "noex"=> \my $noex,
+
+    );
+
+die "$usage\n" if (@ARGV != 1 || $help);
+
+
+if ($reverse) {
+    $lilofile = "$liloc/hg19ToHg18.over.chain.gz";
+}
+
+
+my $bim_file=$ARGV[0];
+my $bim_2lift=$bim_file.".2lift";
+my $bim_out=$bim_file.".out";
+my $bim_lifted=$bim_file.".lifted";
+my $bim_update=$bim_file.".update";
+my $bim_unmapped=$bim_file.".unmapped";
+my $bim_exclude=$bim_file.".exclude";
+
+my $bfile = $bim_file;
+print "Warning, no bim_file no create please\n" unless ($bfile =~ /.bim$/);
+$bfile =~ s/.bim$//;
+
+my $bfile_out = $bfile.".hg19";
+
+
+my @cmd_collect;
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+    push @cmd_collect, $systemstr;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+##########################################
+# split a whitespace line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die "$!: $file" unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+###############################
+###   BEGIN
+######################
+
+
+
+
+
+if ($ibdrep){
+    die $!." <$bim_file>" unless open BIM, "< $bim_file";
+    die $!." <$bim_2lift>" unless open B2L, "> $bim_2lift";
+    print B2L "#chrom chromStart chromEnd name\n";
+    while (my $line = <BIM>) {
+	my @cells = @{&split_line_ref(\$line)};
+	my ($chr,$pos)=  ($cells[0],$cells[2]);
+#	print "$chr\t$pos\n";
+#	sleep(1);
+	printf B2L "chr%i %i %i %s\n",$chr,$pos,$pos+1,$cells[1];
+    }
+    close BIM;
+    close B2L;
+    
+    
+    &mysystem("$liloc/liftOver $bim_2lift $lilofile $bim_lifted $bim_unmapped");
+
+
+######### write update map
+    my $bim_hg19=$bim_file.".hg19";
+
+    my %new_pos;
+    my %new_chr;
+
+    die $!." <$bim_lifted>" unless open LIF, "< $bim_lifted";
+
+    while (my $line = <LIF>) {
+	my @cells = @{&split_line_ref(\$line)};
+	$cells[0] =~ s/chr//;
+	$new_chr{$cells[3]} = $cells[0];
+	$new_pos{$cells[3]} = $cells[1];
+    }
+    close LIF;
+
+
+
+    die $!." <$bim_file>" unless open BIM, "< $bim_file";
+    die $!." <$bim_hg19>" unless open UP, "> $bim_hg19";
+    print B2L "#chrom chromStart chromEnd name\n";
+    while (my $line = <BIM>) {
+	my @cells = @{&split_line_ref(\$line)};
+	if (exists $new_pos{$cells[1]}){
+	    die "wrong chromosome at $cells[0]\t$cells[1]\t$cells[2]\tnew:$new_chr{$cells[1]}" if ($new_chr{$cells[1]} != $cells[0]);
+	    $cells[2] = $new_pos{$cells[1]};
+	}
+	print UP "@cells\n";
+    }
+    close BIM;
+    close UP;
+
+
+    die $!."($bim_file).buigue.liftover" unless open BC, "> $bim_file.buigue.liftover";
+    foreach (@cmd_collect) {
+	print BC "$_\n";
+    }
+    close BC;
+    print "finished\n";
+    exit;
+}
+
+
+##########################
+## posfile
+
+if ($posfile){
+    die $!." <$bim_file>" unless open BIM, "< $bim_file";
+    die $!." <$bim_2lift>" unless open B2L, "> $bim_2lift";
+    print B2L "#chrom chromStart chromEnd name\n";
+    while (my $line = <BIM>) {
+	my @cells = &split_line($line);
+	my ($chr,$pos)=  split /:/, $cells[0];
+	printf B2L "chr%i %i %i %s\n",$chr,$pos,$pos+1,$cells[0];
+    }
+    close BIM;
+    close B2L;
+
+
+    
+    
+    &mysystem("$liloc/liftOver $bim_2lift $lilofile $bim_lifted $bim_unmapped");
+
+######### write update map
+    my $bim_hg19=$bim_file.".hg19";
+
+    die $!." <$bim_lifted>" unless open LIF, "< $bim_lifted";
+    die $!." <$bim_hg19>" unless open UP, "> $bim_hg19";
+    while (my $line = <LIF>) {
+	my @cells = &split_line($line);
+	$cells[0] =~ s/chr//;
+	print UP "$cells[0]:$cells[1]\n";
+    }
+    close LIF;
+    close UP;
+
+
+    
+    die $!."($bim_file).buigue.liftover" unless open BC, "> $bim_file.buigue.liftover";
+    foreach (@cmd_collect) {
+	print BC "$_\n";
+    }
+    close BC;
+    exit;
+}
+
+
+##########################
+## markers
+
+if ($markers){
+    die $!." <$bim_file>" unless open BIM, "< $bim_file";
+    die $!." <$bim_2lift>" unless open B2L, "> $bim_2lift";
+    print B2L "#chrom chromStart chromEnd name\n";
+    while (my $line = <BIM>) {
+	my @cells = &split_line($line);
+	printf B2L "chr%i %i %i %s\n",$markers,$cells[1],$cells[1]+1,$cells[0];
+    }
+    close BIM;
+    close B2L;
+
+
+    
+    
+    &mysystem("$liloc/liftOver $bim_2lift $lilofile $bim_lifted $bim_unmapped");
+
+
+#    print "debug\n";
+#    exit;
+######### write update map
+    my $bim_hg19=$bim_file.".hg19";
+    my %new_pos;
+
+    die $!." <$bim_lifted>" unless open LIF, "< $bim_lifted";
+
+    while (my $line = <LIF>) {
+	my @cells = &split_line($line);
+	$cells[0] =~ s/chr//;
+	$new_pos{$cells[3]} = $cells[1];
+    }
+    close LIF;
+
+
+
+    die $!." <$bim_hg19>" unless open UP, "> $bim_hg19";
+    die $!." <$bim_file>" unless open BIM, "< $bim_file";
+    while (my $line = <BIM>) {
+	my @cells = &split_line($line);
+	unless (exists $new_pos{$cells[0]}) {
+	    print "error: $cells[0] not lifted\n";
+	    exit;
+	}
+	printf UP "$cells[0]  $new_pos{$cells[0]} $cells[2] $cells[3]\n";
+    }
+    close BIM;
+    close UP;
+
+    die $!."($bim_file).buigue.liftover" unless open BC, "> $bim_file.buigue.liftover";
+    foreach (@cmd_collect) {
+	print BC "$_\n";
+    }
+    close BC;
+#    print "succes: $bim_hg19\n";
+    exit;
+}
+
+
+
+#############################
+## bedbimfam
+
+die $!." <$bim_file>" unless open BIM, "< $bim_file";
+die $!." <$bim_2lift>" unless open B2L, "> $bim_2lift";
+print B2L "#chrom chromStart chromEnd name\n";
+while (my $line = <BIM>) {
+    my @cells = &split_line($line);
+    printf B2L "chr%i %i %i %s\n",$cells[0],$cells[3],$cells[3]+1,$cells[1];
+}
+close BIM;
+close B2L;
+
+
+&mysystem("$liloc/liftOver $bim_2lift $lilofile $bim_lifted $bim_unmapped");
+
+
+
+######### write update map
+my %uppos;
+die $!." <$bim_lifted>" unless open LIF, "< $bim_lifted";
+die $!." <$bim_update>" unless open UP, "> $bim_update";
+while (my $line = <LIF>) {
+    my @cells = &split_line($line);
+    printf UP "%s %s\n",$cells[3],$cells[1];
+    $uppos {$cells[3]} = $cells[1];
+}
+close LIF;
+close UP;
+
+
+######### write exclusion map
+
+die $!." <$bim_unmapped>" unless open UN, "< $bim_unmapped";
+die $!." <$bim_exclude>" unless open EX, "> $bim_exclude";
+while (my $line = <UN>) {
+    my @cells = &split_line($line);
+    printf EX $cells[3]."\n" if ($cells[0]=~/^chr/);
+}
+close UN;
+close EX;
+
+
+######### write new bimfiles
+
+die $!." <$bim_file>" unless open BI, "< $bim_file";
+die $!." <$bim_out>" unless open BO, "> $bim_out";
+while (my $line = <BI>) {
+    my @cells = &split_line($line);
+    my $snp = $cells[1];
+    if (exists $uppos{$snp}) {
+	$cells[3] = $uppos{$snp};
+	printf BO "@cells\n";
+    }
+}
+close BI;
+close BO;
+
+my $ex_txt = "";
+unless ($noex) {
+    $ex_txt = "--exclude $bim_exclude";
+}
+
+if (-e "$bfile.bed") {
+    &mysystem("$ploc/plink --memory 2000  --bfile $bfile $ex_txt --out $bfile_out --update-map $bim_update --make-bed");
+}
+
+die $!."($bim_file).buigue.liftover" unless open BC, "> $bim_file.buigue.liftover";
+foreach (@cmd_collect) {
+    print BC "$_\n";
+}
+close BC;
+
+print "success\n";
+exit;

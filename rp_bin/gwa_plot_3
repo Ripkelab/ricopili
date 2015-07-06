@@ -1,0 +1,1089 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "3.0.1";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $rloc = &trans("rloc");
+my $sloc = &trans("sloc");
+my $home = &trans("home");
+
+########################
+## read study names
+
+my %stuna ;
+print "study.names not found in homedir\n" unless open FILE, "< $home/study.names";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $stuna{$cells[0]} = $cells[1];
+}
+close FILE;
+
+########################
+
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+else {
+    unless (-e "$rloc/R" ){
+	print "\n***** Error: couldn't find the following:\n";
+	print "$rloc/R\n";
+	exit;
+    }
+}
+
+
+#############################
+# test, if running on server
+#############################
+use Sys::Hostname;
+my $host = hostname();
+#my $lisa=0;
+#$lisa=1 if ($host =~ m/sara/) ;
+#my $broad = 1 if ($ENV{"DOMAINNAME"} =~ /broadinstitute/);
+
+
+#my $rloc = "/home/radon01/sripke/bakker_ripke/R-base";
+#my $rloc_lisa = "/home/gwas/bin/R-base";
+
+my $last_th = 0.01;
+
+my $pcol=4;
+my $poscol=3;
+my $chrcol=1;
+my $snpcol=2;
+my $pth=1.0e-04; ## from here thin them down
+my $ceiling=10e-200; # log-ceiling
+
+my $title="";
+my $ndots=5000;
+
+my $expar=10000;
+
+my $fac=3000;  # the highest 50 ones for sure, rest randomly
+
+##### help message
+my $usage = "
+Usage : $progname [options] p-file
+
+version: $version
+
+  --title STRING title of plot, default= filename
+  --top INT      number of top-values to mark
+  --chr INT      plot one chromosome
+  --cp STRING    plot all chromosomes that appear in arafile STRING
+  --reg INT.INT  region (beginning and end, separated by commma)
+  --check        check columns with sample output
+  --cols STRING  combined column-string, separated by commas, overwrites other options
+                     SNPCOL,PCOL,CHRCOL,POSCOL
+  --areas STRING area surrounding a SNP
+  --expar INT    expanding area of SNP (in KB), default=$expar
+  --ceiling INT  ceiling for 10e-(INT)
+  --maxy    INT  yaxis exactly here
+  --sig-gwa      add gwa-singificance level 5x 10e-8
+  --genef STR    name of file containing gene-reference
+  --nolog        print p-vlues as they stand there
+
+  --pth FLOAT    threshold, from where thinning down
+  --last FLOAT   threshold, from where no p-values
+  --help         print this message and exit  
+
+  --fac INT      use these many as minimum, then scale down
+                     default: $fac
+
+  --prekno FILE  pre-reported regions, outside GWsig will be colored blue
+
+  --gc FLOAT     genomic control with FLOAT = lsmbda
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ 
+ pfile will be sorted for pvalue if nercessary, iv you do it in advance you save time and money
+
+";
+use File::Path;
+use Cwd;
+my $rootdir = &Cwd::cwd();
+
+
+#### evaluate options
+my $areafile = "";
+my $lambda = 1.0;
+
+use Getopt::Long;
+GetOptions( 
+    "title=s"=> \$title,
+    "top=i"=> \my $ntop,
+    "chr=i"=> \my $chr,
+    "cp=s"=> \$areafile,
+
+    "bp"=> \my $bpaxis,
+    "check"=> \my $check,
+    "cols=s"=> \my $colstr,
+    "reg=s"=> \my $regstr,
+    "areas=s"=> \my $areas,
+    "genef=s"=> \my $gene_file,
+    "expar=i"=> \$expar,
+    "pth=f"=> \$pth,
+    "last=f"=> \$last_th,
+    "fac=i"=> \$fac,
+
+    "ceiling=i"=> \my $ceiling_sw,
+    "maxy=i"=> \my $maxy_sw,
+    "sig-gwa"=> \my $sig_sw,
+    "nolog"=> \my $nolog,
+    "help"=> \my $help,
+    "prekno=s"=> \my $prekno_file,
+    "gc=f"=> \$lambda,
+
+    );
+
+
+die "$usage\n" if @ARGV ne 1 || $help;
+
+
+
+
+my $prekno_th = 5.0e-08;
+
+
+$ceiling = 10**(-$ceiling_sw) if ($ceiling_sw);
+my $maxy = 0;
+$maxy = 10**(-$maxy_sw) if ($maxy_sw);
+
+my $pfile=$ARGV[0];
+
+
+my $workdir = "$sloc/gwa_$title";
+
+while (-e $workdir) {
+    $workdir .= ".g";
+}
+
+my @created = mkpath(   ## $created ?
+			"$workdir",
+			{verbose => 0, mode => 0750},
+    );
+
+
+
+chdir ($workdir);
+
+&mysystem ("cp $rootdir/$pfile .");
+
+
+my @prekno_arr;
+
+if ($prekno_file) {
+    &mysystem ("cp $rootdir/$prekno_file .");
+
+    die "$prekno_file not existing" unless open PF, "< $prekno_file";
+    while (my $line =<PF>){
+	my @cells = &split_line($line);
+	my $str_tmp = sprintf "%d\t%d\t%d",$cells[1],$cells[2]*1000000,$cells[3]*1000000;
+	push @prekno_arr, $str_tmp;
+#	print "$str_tmp\t$line\n";
+    }
+    close PF;
+
+}
+#exit;
+
+
+if ($pfile =~ /.gz$/){
+    &mysystem ("gunzip -f $pfile");
+    $pfile =~ s/.gz$//;
+}
+#print $ceiling."\n";
+#exit;
+
+($snpcol,$pcol,$chrcol,$poscol)= split ',', $colstr if ($colstr);
+
+(my $regbeg,my $regend)= split ',', $regstr if $regstr;
+
+my $genbeg=-1000;
+my $genend=-1000;
+
+unless ($chr){
+    die "please specify chromosome" if ($regstr);
+}
+
+$regbeg *= 1000;
+$regend *= 1000;
+#print "$regbeg\t$regend\n";
+#exit;
+
+
+
+
+
+my $outdir=$pfile."_tmp_gwa_plot";
+my $top5Kfile=$pfile.".top5K";
+my $positionfile=$pfile.".pos";
+my $refgene_file="refGene_processed.txt";
+
+my $pdfout = $pfile."_gwa.pdf" if ($title eq "");
+$pdfout = $title."_gwa.pdf" unless ($title eq "");
+$title = $pfile."_GWA" if ($title eq "") ; 
+
+foreach my $sn (keys %stuna) {
+    $title = $stuna{$sn} if ($title =~ /$sn/);
+}
+
+
+
+use File::Path;
+my @created = mkpath(   ## $created ?
+    "$outdir",
+    {verbose => 0, mode => 0750},
+    );
+
+
+#####################################
+# grep analog
+####################################
+
+sub greppi {
+    my ($expr, $file)=@_;
+    my @lc=();
+    die $! unless open FILE, "< $file";
+    while (<FILE>){
+	push @lc, $_ if ($_ =~ "$expr");
+    }
+    close FILE;
+    @lc;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+#####################################
+# subroutine to count lines of a file
+#####################################
+
+sub count_lines {
+    my ($file)=@_;
+    my $lc=0;
+    die "$file: ".$! unless open FILE, "< $file";
+    while (<FILE>){
+	$lc++;
+    }
+    close FILE;
+    $lc;
+}
+
+
+###   here preparation of ucsc-file: 
+###   sed  -r '/chr[0-9XY]+_.*/d'  refGene.txt | sed 's/chrX/chr23/' | sed 's/chrY/chr24/' | sed 's/chr//' |cut -f3,5,6,13 | sort | uniq > refGene_processed.txt
+
+
+#&mysystem ("use R-2.10") if ($broad);
+
+####################################
+################################
+#######BEGIN
+#################################
+###################################
+
+######################################
+##  if cols are not sure, check them
+######################################
+my $count_p=0;
+if ($check){
+    print "$usage\n";
+    print "SNPCOL\tPCOL\tCHRCOL\tPOSCOL\n";
+    die $! unless open PF , "< $pfile";
+    while ($count_p++ < 5){
+	last unless (my $line=<PF>);
+	my @cells = &split_line($line);
+	printf "%s\t%s\t%s\t%s\n",$cells[$snpcol-1],$cells[$pcol-1],$cells[$chrcol-1],$cells[$poscol-1];
+    }
+    close PF;
+    print "\n";
+    print "\nHeader of original File:\n";
+    die $! unless open PF , "< $pfile";
+    my $line=<PF>;
+    my @cells = &split_line($line);
+    $count_p=0;
+    foreach (@cells){
+	$count_p++;
+	printf "$count_p\t$_\n";
+    }
+    close PF;
+    exit 1;
+}
+
+
+
+
+#############################
+##   check sorting
+#############################
+
+#print "checking sorting\n";
+my $systemcheck="sort -k$pcol,$pcol"."g"." -c $pfile 2> /dev/null";
+system ($systemcheck);
+my $status = ($? >> 8);
+if ($status != 0){
+
+    print "pfile not sorted, will do it for you\n";
+    my $systemsort="head -1 $pfile > sorted_$pfile; tail -n +2 $pfile | sort -k$pcol,$pcol"."g"." >> sorted_$pfile";
+    &mysystem ($systemsort);
+    $pfile = "sorted_$pfile";
+}
+
+
+
+
+
+###############################
+##   areas surrounding SNP
+##############################
+
+
+if ($areas){
+
+
+    my ($line) = &greppi($areas,$pfile);
+    my @cells = &split_line($line);
+    $regbeg = $cells[$poscol-1] - $expar*1000;
+    $regend = $cells[$poscol-1] + $expar*1000;
+    $genbeg = $cells[$poscol-1] - 200*1000;
+    $genend = $cells[$poscol-1] + 200*1000;
+
+    $chr = $cells[$chrcol-1];
+    $regstr="on";
+#    print "$line\n";
+#    exit;
+
+#print "$regbeg\t$regend\t$cells[$poscol-1]\n";
+#exit;
+
+}
+
+
+################################
+##  get gene list
+###############################
+my %gene_list=();
+my $gene_list_str;
+if ($gene_file){
+    die "gene-list only only with area-SNP" unless $areas;
+
+    die $! unless open GENE , "< $gene_file";
+
+
+    while (<GENE>){
+	chomp;
+	my @cells = &split_line($_);
+	if ($chr == $cells[0]){
+
+#	    if ($cells[1] <= $regbeg){
+#		$gene_list{$cells[3]}++ if ($cells[2] > $regend);
+#	    }
+#	    if ($cells[1] > $regbeg){
+#		$gene_list{$cells[3]}++ if ($cells[2] < $regend);
+#	    }
+
+
+	    if ($cells[1] <= $genbeg){
+		if ($cells[2] > $genbeg){
+		    $gene_list{$cells[3]}++;
+#		    print "$_\t$cells[1]\t$genend\n";
+		}
+	    }
+
+
+	    if ($cells[1] > $genbeg){
+		if ($cells[1] <= $genend){
+		    $gene_list{$cells[3]}++ if ($cells[1] <= $genend);
+#		    print "$_\t$cells[1]\t$genend\n";
+		}
+	    }
+	}
+    }
+
+    close GENE;
+
+#    print "$genbeg\t$genend\n";
+    foreach (sort keys %gene_list){
+	$gene_list_str .= "$_ ";
+    }
+
+}
+
+my $nsnps = &count_lines ($pfile);
+
+
+################################
+##  prep Best-File
+###############################
+srand(0);
+#print "prep Best File\n";
+
+
+my $lc=0;
+##################!!!!!!
+
+die $! unless open PF , "< $pfile";
+die $! unless open T5 , "> $outdir/$top5Kfile";
+$count_p=0;
+my $header= <PF>;
+#while ($count_p++ < $ndots){
+
+$last_th = $pth if ($pth > $last_th);
+my $rth=1;
+my $pc = 0;
+my $smallest_p = 2;
+my $smallest_p_count = 0;
+
+#print "pth: $pth\n";
+#print "fac: $fac\n";
+#print "lc: $lc\n";
+while (1){
+    last unless (my $line=<PF>);
+
+
+
+    my @cells = &split_line($line);
+
+    next if ($cells[$chrcol-1] < 1 || $cells[$chrcol-1] > 30);
+
+    next if ($cells[$pcol-1] eq "NA");
+
+
+
+    $lc++; #########!!
+    $rth -= 1/$ndots;
+    if (rand() > $fac/($lc) && $cells[$pcol-1] > $pth){
+#	print "pth: $pth\n";
+#	print "p: $cells[$pcol-1]\n";
+#	print "fac: $fac\n";
+#	print "lc: $lc\n";
+	next;
+#	exit;
+    }; ###############!!
+#    next if (rand() > $rth+1 && $cells[$pcol-1] > $pth); ###############!!
+
+
+
+    last if ( $cells[$pcol-1] > $last_th);
+    next if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0);
+    $smallest_p = $cells[$pcol-1] if ($smallest_p_count == 10);
+    $smallest_p_count++ ;
+
+
+#    print "$cells[$pcol-1]\n";
+    unless ($nolog) {
+	$cells[$pcol-1]=$ceiling if ($cells[$pcol-1] < $ceiling);
+    }
+    if ($chr){
+	unless ($cells[$chrcol-1] == $chr){
+	    $count_p--;
+	    next;
+	}
+	if ($regstr){
+	    unless ($cells[$poscol-1] > $regbeg && $cells[$poscol-1] < $regend){
+		$count_p--;
+		next;
+	    }
+	}
+    }
+    printf T5 "%s\t%s\t%s\t%s\n",$cells[$snpcol-1],$cells[$pcol-1],$cells[$chrcol-1],$cells[$poscol-1];
+
+    $pc++;
+
+
+
+#	print "$cells[0]\n";
+}
+close PF;
+close T5;
+
+#print "smallest: $smallest_p\n";
+#my $smallest_p1 = log($smallest_p);
+if ($smallest_p > $prekno_th) {
+    my $smallest_p1 = sprintf "%i",log($smallest_p)/log(10);
+    $prekno_th = 10 ** ($smallest_p1);
+}
+#print "smallest: $smallest_p1\n";
+#print "smallest: $prekno_th\n";
+#exit;
+
+die "no values left" if ($pc == 0);
+
+my $systempos="sort -k3,3n -k4,4n $outdir/$top5Kfile > $outdir/$positionfile";
+&mysystem ($systempos);
+
+
+## create Best_processed
+die $! unless open IN , "< $outdir/$positionfile";
+my $old_chr=0;
+my $old_pos=0;
+my $new_pos=0;
+my $chrcol=2;
+my $poscol=3;
+my $snpcol=0;
+my $pcol=1;
+my @out_lines=();
+my @prekno_new=();
+while (<IN>){
+    chomp;
+    my @cells = &split_line($_);
+    if ($cells[$chrcol] != $old_chr){
+	$old_chr = $cells[$chrcol];
+	$old_pos = $new_pos;
+    }
+    $new_pos = $old_pos + $cells[$poscol];	
+    my $linestr=$cells[$snpcol];
+    $linestr.="\t$cells[$chrcol]";
+    $linestr.="\t$cells[$poscol]";
+    $linestr.="\t$cells[$pcol]";
+    $linestr.="\t$cells[$chrcol]";
+    $linestr.="\t$new_pos";
+
+
+    my $new = 0;
+    if ($cells[$pcol] < $prekno_th){
+	my $found = 0;
+	foreach my $reg (@prekno_arr) {	
+	    my ($chr_prekno, $start_prekno, $end_prekno) = &split_line($reg);
+	    if ($chr_prekno == $cells[$chrcol]){
+		if ($start_prekno < $cells[$poscol] && $end_prekno > $cells[$poscol]){
+		    $found = 1;
+		}
+#		else {
+#		    $new = 1;
+#		}
+	    }
+	}
+	$new = 1 if ($found == 0);
+	
+#	if ($new == 0) {
+#	    print "prekno: $linestr" ;
+#	}
+#	else {
+#	    print "new: $linestr" ;
+#	}
+    }
+    $linestr.="\t$new\n";
+    push @out_lines, $linestr;
+    push @prekno_new, $linestr if ($new == 1);
+
+}
+close IN;
+
+&a2file ( "$outdir/Best_processed.txt_tmp" , @out_lines);
+&a2file ( "$outdir/prekno_new" , @prekno_new);
+
+
+#exit;
+
+
+
+##############################
+##    prep ticks file
+#############################
+
+@out_lines=();
+$old_chr=0;
+die $! unless open IN , "< $outdir/Best_processed.txt_tmp";
+my $mean_pos;
+my $lc=0;
+my @cells = ();
+my $linestr;
+while (<IN>){
+    chomp;
+    @cells = &split_line($_);
+    if ($lc++ == 0){
+	$old_pos=$cells[$#cells];
+	$new_pos=$old_pos;
+	
+    }
+    if ($cells[1] != $old_chr){
+	$new_pos=$cells[5];
+#	$new_pos=$cells[$#cells];
+	$mean_pos=($old_pos+$new_pos)/2;
+	$old_chr=$cells[1];
+	$old_pos=$cells[5];
+#	$old_pos=$cells[$#cells];
+	
+	$linestr=$cells[1];
+	$linestr.="\t$new_pos";
+	$linestr.="\t$mean_pos\n";
+	push @out_lines, $linestr;
+    }
+    
+}
+
+$linestr=$cells[1];
+$new_pos=$cells[5];
+#$new_pos=$cells[$#cells];
+$mean_pos=($old_pos+$new_pos)/2;
+$linestr.="\t$new_pos";
+$linestr.="\t$mean_pos\n";
+push @out_lines, $linestr;
+
+close IN;
+
+&a2file ( "$outdir/ticks.txt_tmp" , @out_lines);
+
+#print "@out_lines\n";
+#exit;
+
+
+
+
+
+######################################################################
+##   R templates
+######################################################################
+
+    my $R_templ='
+pdf("OUTNAME",title="GWA-Plot",PLOTSHAPE)
+
+
+
+## png("OUTNAME.png",width = 11, height = 7.5, units="in",res=300)
+
+read.table ("TICKNAME",header=F)-> pos 
+read.table ("INNAME",header=F)-> asnp
+
+ymin = min(asnp[,4]);
+
+if (MAXY != 0){
+  ymin = MAXY;
+}
+
+asnp[,"pch"]=19
+asnp[asnp[,4]<PTHRESH,"pch"]=21
+
+
+if (LOG){
+plot ( 0,0, type="n",  ylim = c(-log10(max(asnp[,4])),-log10(ymin)), xlim = c(min(asnp[,6]),max(asnp[,6])), axes=F, xlab="", ylab="-log10(p_val)", main="TITLE", col=colors()[100], sub=paste("(n=",length(asnp[,4])," out of NUMBERSNPS)",sep=""), cex.sub=.8, cex.lab = 1.2)
+abline (h=-log10(PTHRESH),col="grey",lwd=.5)
+} else {
+plot ( 0,0, type="n",  ylim = c(min(asnp[,4]),max(asnp[,4])), xlim = c(min(asnp[,6]),max(asnp[,6])), axes=F, xlab="", ylab="-log10(p_val)", main="TITLE", col=colors()[100], sub=paste("(n=",length(asnp[,4]),")",sep=""), cex.sub=.8, cex.lab = 1.2)
+abline (h=PTHRESH,col="grey",lwd=.5)
+}
+
+if (asnp[1,2]%%2==1){
+col1="black"
+col2=colors()[100]
+}else{
+col2="black"
+col1=colors()[100]
+}
+
+
+if (0) {
+  liz_col = c("black","orange","green","blue","cyan","magenta","yellow","red","black","orange","green","blue","cyan","magenta","yellow","red","black","orange","green","blue","cyan","magenta","yellow","red","black","orange","green","blue","cyan","magenta","yellow","red")
+  points (x=asnp[,6],y=-log10(asnp[,4]), col=liz_col[asnp[,2]], cex=0.8, pch=19 ) 
+
+
+} else {
+ if (LOG){
+
+
+  asnp[,"gc"] = pchisq(qchisq(asnp[,4],1,lower.tail=F)/LAMBDA,1, lower.tail=F)
+
+
+#print (head (asnp))
+snp_out = asnp[ asnp[,"gc"]<PTHRESH , c("V1","V2","V3","V4","V7","gc")]
+print (head (snp_out))
+
+
+write.table (snp_out, file="OUTNAME.prekno.gc", row.names=F, quote=F)
+
+#  asnp[,"gc"] = 1-pchisq(qchisq(1 - asnp[,4],1)/LAMBDA,1)
+
+  points (x=asnp[asnp[,2]%%2==1,6],y=-log10(asnp[asnp[,2]%%2==1,"gc"]), col=col1, cex=0.5, pch=asnp[asnp[,2]%%2==1,"pch"] ) 
+  points (x=asnp[asnp[,2]%%2==0,6],y=-log10(asnp[asnp[,2]%%2==0,"gc"]), col=col2, cex=0.5, pch=asnp[asnp[,2]%%2==0,"pch"])
+  points (x=asnp[asnp[,4]==MAXY,6],y=-log10(asnp[asnp[,4]==MAXY,"gc"]), col="green", cex=0.8)
+  points (x=asnp[asnp[,7] == 1,6],y=-log10(asnp[asnp[,7] == 1,"gc"]), col="blue", cex=1.2)
+
+
+
+ } else {
+  points (x=asnp[asnp[,2]%%2==1,6],y=asnp[asnp[,2]%%2==1,4], col=col1, cex=0.5)
+  points (x=asnp[asnp[,2]%%2==0,6],y=asnp[asnp[,2]%%2==0,4], col=col2, cex=0.5)
+ }
+}
+
+#print (asnp[asnp[,7] == 1,])
+
+mtext("Chr / Position(kb)",1,3, cex=1.2)
+#mtext("ripke @ chgr mgh harvard edu",4,cex=.3)
+
+mtext("GENELIST",3,3, cex=0.3)
+
+if (GENBEG != -1000){
+abline (v=GENBEG,col=colors()[100])
+abline (v=GENEND,col=colors()[100])
+}
+
+if (SIGGWA == 1){
+abline (h=7.30103,col=colors()[100])
+
+
+}
+
+if (LOG) {
+ ticks = round(seq.int(from = floor(min(-log10(asnp[,4]))), to = ceiling(-log10(ymin)), length.out =4))
+#   axis(2,floor(min(-log10(asnp[,4]))):ceiling(-log10(ymin)), cex.axis=0.4, las=1, labels=ticks)
+ print (ticks)
+   axis(2, cex.axis=1.2, las=1, at= ticks,
+   ,labels = ticks, lty= "solid")
+
+} else {
+axis(2,floor(min(asnp[,4])):ceiling(max(asnp[,4])), cex.axis=1.2, las =1)
+}
+
+
+axis(1, at= pos[,2], lab=F, lwd=3, cex.axis=1.2)
+axis(1, at= pos[-1,3], lab=pos[1:(length(pos[,1])-1),1], lwd=3, cex.axis=.6, line=-.5, tick=F)
+axis(1, at= seq(min(asnp[,6]),max(asnp[,6]),length=BPAX), lab = trunc(seq(min(asnp[,6]),max(asnp[,6]),length=BPAX)/(10^3)), las=1, line = 2, cex.axis=1.2, lty=3)
+
+BESTSNPS
+
+dev.off()
+
+CHRPLOT
+';
+
+
+my $R_templ_cp ='
+
+
+#############################    Chromosome plot
+
+pdf("Chromosomeplot%03d.pdf",7.8,6,onefile=F);
+
+read.table ("AREANAME",header=F)-> are   ### areas
+
+ymax = -log10(min(asnp[,4]))
+
+
+drawchrom <- function (ymax_chr) {
+
+	    plot ( 0,0, type="n",  
+		   ylim = c(-log10(max(asnp[,4])),ymax_chr), 
+		   xlim = c(min(asnp[,3]),xmax), 
+		   axes=F, 
+		   xlab="", ylab="-log10(p_val)", 
+		   main=paste ("TITLE, Chr. ",chr,", (n=",length(asnp[asnp[,2]==chr,4]),")",sep=""), col=colors()[100], 
+		   cex.lab = 0.6,cex.main=.6)
+	    
+# here the area-makrs
+	    if (chr %in% are[,1]){
+		for (x in 1:dim(are)[1]){
+		    if (are[x,1] == chr){
+			abline(v=are[x,2],col=colors()[are[x,4]], lwd = .6)
+			abline(v=are[x,3],col=colors()[are[x,4]], lwd = .6)
+			if (are[x,5] == "OWNAREA"){
+			    text(x=are[x,2], y=ymax_chr, pos=2 , srt=90, col=colors()[are[x,4]], labels = are[x,5], cex=.6);
+			}
+			else {
+			    text(x=are[x,3], y=ymax_chr, pos=4 , srt=270, col=colors()[are[x,4]], labels = are[x,5], cex=.6);
+			}
+		    }
+		}
+	    }
+	    mtext("ripke @ chgr mgh harvard edu",4,cex=.3)
+	    
+	    col1="black"
+	    
+	    points (x=asnp[asnp[,2]==chr,3],y=-log10(asnp[asnp[,2]==chr,4]), col=col1, cex=0.5)
+	    xrange = trunc ((max(asnp[asnp[,2]==chr,3]) -  min(asnp[asnp[,2]==chr,3]))/1000);
+	    mtext(paste ("Position, ",xrange," KB",sep = ""),side=1,line=3, cex=0.5,adj=max(asnp[asnp[,2]==chr,3])/xmax*0.5)
+
+	    ## left axis
+	    axis(2,floor(min(-log10(asnp[,4]))):ceiling(ymax_chr), cex.axis=0.4) ## left axis
+	    axis(1, at= seq(min(asnp[asnp[,2]==chr,3]),max(asnp[asnp[,2]==chr,3]),length=BPAX), lab = trunc(seq(min(asnp[asnp[,2]==chr,3]),max(asnp[asnp[,2]==chr,3]),length=BPAX)/(10^3)), las=3, line = 0, cex.axis=0.5, lty=1)
+	    
+
+}
+
+
+
+    
+    par(mfrow = c(2, 1))
+    
+    xmax = max(asnp[,3]);
+#ymax = -log10(min(asnp[,4]))
+    
+    for (chr in 1:25){
+	
+	if (length(asnp[asnp[,2]==chr,3]) > 5){
+	    
+	    if (chr == 23) {
+		xmax=xmax*2
+	    }
+
+            if (chr %in% are[,1]) {
+         	    drawchrom(9)
+
+	            ymax_local = -log10(min(asnp[asnp[,2]==chr,4]))
+	            if (ymax_local > 9 ){
+	        	drawchrom(ymax_local)
+	            }
+            }
+
+	    if (chr == 12) {
+		par(mfrow = c(2, 2))
+		xmax=xmax/2;
+	    }
+	    
+	    if (chr == 22) {
+		par(mfrow = c(2, 1))
+                #    layout(matrix(c(1,2,3,4,5,5),3,2,byrow=T),heights=c(.33,.33,.33))
+	    }
+	    
+	}
+	
+    }
+dev.off();
+
+
+';
+
+
+## single chromosomes
+    my $R_templ_nouse='
+pdf("OUTNAME",6,7.8,title="GWA-Plot")
+par(mfrow = c(4, 1))
+
+read.table ("TICKNAME",header=F)-> pos 
+read.table ("INNAME",header=F)-> a
+
+
+plot ( 0,0, type="n",  ylim = c(-log10(max(asnp[,4])),-log10(min(asnp[,4]))), xlim = c(min(asnp[,6]),max(asnp[,6])), axes=F, xlab="", ylab="-log10(p_val)", main="TITLE", col=colors()[100], sub=paste("(n=",length(asnp[,4]),")",sep=""), cex.sub=0.4, cex.lab = 1.0)
+
+if (asnp[1,2]%%2==1){
+col1="black"
+col2=colors()[100]
+}else{
+col2="black"
+col1=colors()[100]
+}
+
+#points (x=asnp[asnp[,2]%%2==1,6],y=-log10(asnp[asnp[,2]%%2==1,4]), col=col1, cex=0.5)
+#points (x=asnp[asnp[,2]%%2==0,6],y=-log10(asnp[asnp[,2]%%2==0,4]), col=col2, cex=0.5)
+points (x=asnp[asnp[,2]%%2==1,6],y=(asnp[asnp[,2]%%2==1,4]), col=col1, cex=0.5)
+points (x=asnp[asnp[,2]%%2==0,6],y=(asnp[asnp[,2]%%2==0,4]), col=col2, cex=0.5)
+
+
+mtext("Chromosome/Position(KB)",1,3, cex=0.6)
+#mtext("ripke @ chgr mgh harvard edu",4,cex=.3)
+
+mtext("GENELIST",3,3, cex=0.3)
+abline (v=GENBEG,col=colors()[100])
+abline (v=GENEND,col=colors()[100])
+
+axis(2,floor(min(-log10(asnp[,4]))):ceiling(max(-log10(asnp[,4]))), cex.axis=0.4)
+
+axis(1, at= pos[,2], lab=F, lwd=3, cex.axis=1.2)
+axis(1, at= pos[-1,3], lab=pos[1:(length(pos[,1])-1),1], lwd=3, cex.axis=1.2, line=-.5, tick=F)
+axis(1, at= seq(min(asnp[,6]),max(asnp[,6]),length=BPAX), lab = trunc(seq(min(asnp[,6]),max(asnp[,6]),length=BPAX)/(10^3)), las=3, line = 2, cex.axis=1.2, lty=3)
+
+BESTSNPS
+
+
+par(mfrow = c(3, 1))
+
+for (chr in 1:22){
+
+plot ( 0,0, type="n",  ylim = c(-log10(max(asnp[,4])),-log10(min(asnp[,4]))), xlim = c(min(asnp[asnp[,2]==chr,6]),max(asnp[asnp[,2]==chr,6])), axes=F, xlab="", ylab="-log10(p_val)", main=paste ("TITLE, Chr",chr,sep=""), col=colors()[100], sub=paste("(n=",length(asnp[asnp[,2]==chr,4]),")",sep=""), cex.sub=0.4, cex.lab = 0.6)
+
+points (x=asnp[asnp[,2]==chr,6],y=-log10(asnp[asnp[,2]==chr,4]), col="black", cex=0.5)
+
+mtext("Chromosome/Position(KB)",1,3, cex=0.6)
+#mtext("ripke @ chgr mgh harvard edu",4,cex=.3)
+
+#mtext("GENELIST",3,3, cex=0.3)
+#abline (v=GENBEG,col=colors()[100])
+#abline (v=GENEND,col=colors()[100])
+
+axis(2,floor(min(-log10(asnp[,4]))):ceiling(max(-log10(asnp[,4]))), cex.axis=0.4)
+
+axis(1, at= pos[,2], lab=F, lwd=3, cex.axis=0.4)
+#axis(1, at= pos[-1,3], lab=pos[1:(length(pos[,1])-1),1], lwd=3, cex.axis=0.4, line=-.5, tick=F)
+#axis(1, at= seq(min(asnp[chr,6]),max(asnp[chr,6]),length=BPAX), lab = trunc(seq(min(asnp[chr,6]),max(asnp[chr,6]),length=BPAX)/(10^3)), las=3, line = 2, cex.axis=0.4, lty=3)
+
+#BESTSNPS
+}
+
+
+
+
+
+dev.off()
+';
+
+
+
+my $best_num_str='
+asnp[order(asnp[,4]),][1:BESTNUM,] -> best_snps
+text (x=best_snps[,6],y=-log10(best_snps[,4]),best_snps[,1], pos=4 , cex=0.6)
+points (x=best_snps[,6],y=-log10(best_snps[,4]), pch=19, col=colors()[497], cex=0.6)" 
+';
+
+
+
+
+###################################
+##    preparate template
+###################################
+
+$R_templ_cp =~ s/AREANAME/$areafile/g ;
+$R_templ =~ s/CHRPLOT/$R_templ_cp/g if ($areafile ne "");
+$R_templ =~ s/CHRPLOT//g if ($areafile eq "");
+
+$R_templ =~ s/NUMBERSNPS/$nsnps/g;
+$R_templ =~ s/PTHRESH/$pth/g;
+$R_templ =~ s/OUTNAME/$pdfout/g;
+$R_templ =~ s/TICKNAME/$outdir\/ticks.txt_tmp/g;
+$R_templ =~ s/INNAME/$outdir\/Best_processed.txt_tmp/g;
+$R_templ =~ s/TITLE/$title/g;
+$R_templ =~ s/BPAX/2/g unless $chr;
+if ($chr){
+    $R_templ =~ s/BPAX/6/g unless $regstr;
+    $R_templ =~ s/BPAX/4/g if $regstr;
+}
+$R_templ =~ s/PLOTSHAPE/6,6/g if $regstr;
+$R_templ =~ s/PLOTSHAPE/8.7,6/g unless $regstr;
+if ($ntop){
+    $best_num_str =~ s/BESTNUM/$ntop/g;
+    $R_templ =~ s/BESTSNPS/$best_num_str/g;
+}
+else {
+    $R_templ =~ s/BESTSNPS//g;
+}
+
+$R_templ =~ s/GENELIST/$gene_list_str/g;
+$R_templ =~ s/GENBEG/$genbeg/g;
+$R_templ =~ s/GENEND/$genend/g;
+$R_templ =~ s/SIGGWA/1/g if ($sig_sw);
+
+$R_templ =~ s/SIGGWA/0/g unless ($sig_sw);
+$R_templ =~ s/LOG/1/g unless ($nolog);
+$R_templ =~ s/LOG/0/g if ($nolog);
+$R_templ =~ s/LAMBDA/$lambda/g;
+
+$R_templ =~ s/MAXY/$maxy/g;
+
+
+
+
+#print "$genbeg\n";
+#print "$genend\n";
+
+&a2file ( "$outdir/R_GWAplot.in_tmp" , $R_templ);
+
+
+
+
+#######################################
+##     start R
+#######################################
+
+
+
+#my $systemGWA="source /broad/software/scripts/useuse; use R-2.14; R < $outdir/R_GWAplot.in_tmp --vanilla\n";
+my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --save --no-restore > $outdir/R_GWA_log.txt\n";
+&mysystem ($systemGWA);
+
+&mysystem ("shrinkpdf $pdfout");
+
+&mysystem ("cp $pdfout $rootdir");
+&mysystem ("cp $outdir/prekno_new $rootdir/$pdfout.prekno_new");
+&mysystem ("cp $pdfout.prekno.gc $rootdir/$pdfout.prekno_new.gc");
+
+&mysystem ("tar -cvzf $pdfout.tar.gz $outdir/R_GWAplot.in_tmp $outdir/ticks.txt_tmp $outdir/Best_processed.txt_tmp");
+&mysystem ("cp $pdfout.tar.gz $rootdir");
+&mysystem ("rm -rf  $workdir");
+
+print "$pdfout\n\n";
+
+
+
+#here plot for snps per chromosome
+
+#> plot(h,main=paste ("SNPs per Chromosome (sum=", length(a[,2]),")",sep=""),xlab="Chr",ylab="SNP counts",axes=F)
+#> axis(1,at=1:22)
+#> axis(2)
+#> text(x=h$counts,adj=c(1.5,0.5),labels=h$counts,cex=0.7,srt=90)
+#> h<-hist(a[,2],breaks=(0:22)+0.5,plot=F)
+
+
+
+# much better
+#trip<-table(a[,2])
+#> rip<-barplot (trip,col=rainbow(22),cex.names=.8,xlab="Chr",main=paste ("SNPs per Chromosome (sum=", length(a[,2]),")",sep=""))
+#> text(x=rip,y=0,as.data.frame(trip)[,2],srt=90,adj=c(-0.5,0.5))
+
+
+
+#read.table("mdd_stard_eur_QC3.fam")->fam
+#barplot(table (fam[,5:6]))

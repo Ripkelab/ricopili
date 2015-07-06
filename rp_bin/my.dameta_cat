@@ -1,0 +1,36 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my @opt = @ARGV;
+my $workdir = shift(@opt);
+my $outname = shift(@opt);
+
+if (@ARGV < 2) {
+    print "error: at least two ARGV\n";
+    exit;
+}
+
+chdir ($workdir);
+my $sc =system ("gunzip -c $opt[0] | head -1 | gzip -c > $outname.tmp");
+if ($sc != 0){
+    print "systemcode: $sc\n";
+    exit;
+}
+
+$sc =system ("gunzip -c @opt | grep -v SNP | gzip -c >> $outname.tmp");
+if ($sc != 0){
+    print "systemcode: $sc\n";
+    exit;
+}
+
+$sc =system ("mv $outname.tmp $outname");
+
+
+print "success2\n";
+
+
+
+
+

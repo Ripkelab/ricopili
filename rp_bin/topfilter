@@ -1,0 +1,140 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.0.0";
+my $progname = $0;
+
+
+###################################################
+## creates a subfile with filter on column (usually p)
+######################################################
+
+my $coln = 10;
+my $th = 3;
+
+
+##### help message
+my $usage = "
+Usage : $progname [options] file
+
+version: $version
+
+  --help     print this help message and exit
+  --col INT  column to filter (first is 0), default = $coln
+  --th INT   value to be filter at (-log10), default = $th
+
+
+
+ works with gzipped files (default for daner-file)
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ 
+";
+
+
+my $out_file = "NOFILE";
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "col=i"=> \ $coln,
+    "th=i"=> \ $th,
+    "outfile=s"=> \ $out_file,
+    );
+
+die $usage if $help;
+die $usage if (@ARGV != 1);
+
+
+my $in_file = $ARGV[0];
+if ($out_file eq "NOFILE") {
+    $out_file = $in_file.".p$th.gz";
+}
+
+my $out_file_tmp = $out_file.".tmp";
+
+
+my $lth;
+if ($th == -1) {
+    $lth = 5e-08;
+}
+else {
+    $lth = 10 ** (-$th);
+}
+
+print "$in_file\n$out_file\t$lth\n";
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+use Compress::Zlib ;
+
+
+###############################
+# BEGIN
+#####################################
+
+my $inz = gzopen("$in_file", "rb")  or die "Cannot open $in_file\n" ;
+my $ouz = gzopen("$out_file_tmp", "wb")  or die "Cannot open $out_file_tmp\n" ;
+
+$inz->gzreadline(my $head);
+$ouz->gzwrite($head) ;
+
+my $nin = 0;
+my $nout = 0;
+
+my $line;
+while ($inz->gzreadline($line)){
+    my @cells = @{&split_line_ref(\$line)};
+    $nin++;
+#    print "$cells[$coln]\n";
+    if ($cells[$coln] < $lth) {
+	if ($cells[$coln] ne "NA") {
+	    $ouz->gzwrite($line) ;
+	    $nout++;
+	}
+    }
+}
+$ouz -> gzclose();
+$inz -> gzclose();
+
+unless (-e "$in_file.n") {
+    die $! unless open FILE, "> $in_file.n";
+    print FILE "$nin\n";
+    close FILE;
+}
+unless (-e "$out_file.n") {
+    die $! unless open FILE, "> $out_file.n";
+    print FILE "$nout\n";
+    close FILE;
+}
+
+print "nin: $nin\n";
+print "nout: $nout\n";
+
+&mysystem ("mv $out_file_tmp $out_file");
+
+print "done\n";

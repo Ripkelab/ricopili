@@ -1,0 +1,1393 @@
+#!/usr/bin/perl
+use strict;
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $rloc = &trans("rloc");
+#my $r3loc = &trans("r3loc");
+
+
+#############################
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+##### help message
+my $usage = "
+Usage : $progname [options] mds_file
+
+   --help            display this text and exi
+   --mds STRING      mdsfile
+   --out STRING      outfile-prefix
+   --covall          take all covariates
+   --nref INT        number of reference files
+   --trio            trio, no mds
+
+   --quan            quantitative pt
+
+  mdsfile and out is mandatory
+
+version: $version
+
+ performs analysis of result-files coming from danscoring 
+ created by Stephan Ripke 2010 at MGH, Boston, MA
+";
+
+my $nref = 288;
+#### evaluate options
+use Getopt::Long;
+GetOptions(     
+  "help" => \my $help,
+  "mds=s" => \my $mdsfile,
+  "trio" => \my $trio,
+  "covall" => \my $covall,
+  "out=s" => \my $out,
+  "quan" => \my $quan,
+  "nref=i" => \$nref,
+);
+
+
+die "$usage" if ($help);
+die "$usage" unless ($out);
+
+
+
+
+
+
+#####################################
+# append array to file with newline
+####################################
+
+sub a2filenew_app {
+    my ($file, @lines)=@_;
+    die "$!: $file" unless open FILE, ">> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file_new {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE "$_";
+    }
+    close FILE;
+}
+
+
+##########################################
+# split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+##############################################
+##############################################
+#############  BEGIN
+##############################################
+##############################################
+
+
+
+
+
+
+
+
+my @tatra_collection;
+my @p_th;
+my @dosfiles;
+my $famfile;
+
+#####################################
+# read mds-file
+#####################################
+
+
+
+my %amds = ();
+my %apt = ();
+
+if ($mdsfile) {
+    print "before\n";
+    unless ($trio) {
+	die "$mdsfile: ".$! unless open MDI, "< $mdsfile";
+	
+	while (my $line = <MDI>) {
+	    chomp($line);
+	    my @cells = &split_line ($line);
+	    foreach (2..$#cells) {
+		$amds{"$cells[0]\t$cells[1]"} .= "\t".$cells[$_];
+	    }
+	}
+	close MDI;
+	print "after: ".keys (%amds)."\n";
+    }
+}
+#print "sleep\n";
+#sleep(5);
+#exit;
+
+
+my @outfile_coll ;
+
+
+##############################
+## read dir
+################################
+opendir(DIR, ".") || die "can't opendir .: $!";
+my @files = readdir(DIR);
+
+
+#my $cov_str;
+#my $cov_str_a;
+
+my @out_coll;
+foreach my $st (1..10) {
+
+    my %profiles = ();
+    my %prof_count = ();
+    my @profiles_st = grep {/.*$st\.profile$/} @files;
+
+    my $infile = "$out.$st.target.S$st.sumprofile";
+    my $outfile = "summary.$out.$st";
+    push @outfile_coll, $outfile;
+    my $infile_cov = $infile."_cov";
+    my $cov_str = "";
+    my $cov_str_a = "";
+    print "create range $st\n";
+    unless (-e $infile_cov) {
+#	print "create $infile_cov\n";
+	foreach my $profile_loc (@profiles_st) {
+#	    print "read $profile_loc\n";
+	    die "$profile_loc: ".$! unless open PRO, "< $profile_loc";
+	    
+	    my $line = <PRO>;
+	    my $cc=0;
+	    while ($line = <PRO>) {
+		chomp($line);
+		$line =~ s/^[\s]+//g;
+		my @cells =  split /\s+/, $line;
+		unless ($quan) {
+		    unless ($cells[2] == 1 || $cells[2] == 2) {#
+			next;
+		    }
+		}
+		else {
+		    if ($cells[2] == -9) {#
+			next;
+		    }
+		}
+#		print "pt: $cells[2]\n";
+#		die "$cells[0]\t$cells[1]\tnot existing in MDS" unless (exists $amds{"$cells[0]\t$cells[1]"});
+		$profiles{"$cells[0]\t$cells[1]"} += $cells[3];
+		$prof_count{"$cells[0]\t$cells[1]"}++;
+		$apt{"$cells[0]\t$cells[1]"} = $cells[2] unless (exists $apt{"$cells[0]\t$cells[1]"});
+		die "PT error" if ($apt{"$cells[0]\t$cells[1]"} ne $cells[2]);
+	    }
+	    close PRO;
+#	    exit;
+	}
+
+
+	die $! unless open FILE, "> $infile";
+	print FILE "FID\tIID\tCOUNT\tPHENO\tSCORE";
+	unless ($trio){
+	    print FILE $amds{"FID\tIID"};
+	}
+	print FILE "\n";
+	foreach my $id (keys %profiles){
+#	    my @cells_loc = &split_line($_);
+	    if ($mdsfile){
+		if (exists $amds{$id}) {
+		    print FILE "$id";
+		    print FILE "\t$prof_count{$id}";
+		    print FILE "\t$apt{$id}";
+		    print FILE "\t$profiles{$id}";
+		    print FILE $amds{$id};
+		    print FILE "\n";
+		    if ($prof_count{$id} - $nref < -2|| $prof_count{$id} - $nref > 2){
+			print "coutn problem $id: $prof_count{$id}, soll $nref\n";
+#			exit;
+		    }
+		}
+		else {
+		    print "no mds-score for $id\n"; 
+		}
+	    }
+	    if ($trio) {
+		print FILE "$id";
+		print FILE "\t$prof_count{$id}";
+		print FILE "\t$apt{$id}";
+		print FILE "\t$profiles{$id}";
+		print FILE "\n";
+		if ($prof_count{$id} - $nref < -2|| $prof_count{$id} - $nref > 2){
+		    print "warning: trio coutn problem $id: $prof_count{$id}, soll $nref\n";
+#		    exit;
+		}
+	    }
+	}
+	close FILE;
+	&mysystem ("mds2cov $infile");
+
+    }
+    if ($trio) {
+	&mysystem ("cp $infile $infile_cov");
+    }
+#    print "$outfile\n";
+#    print "debug\n";
+#    sleep(10);
+
+    unless (-e "$infile_cov.pdf") {
+
+
+	die "$infile_cov: ".$! unless open FILE, "< $infile_cov";
+	my $header = <FILE>;
+	close FILE;
+	my @cells = &split_line($header);
+	$cov_str = "";
+	foreach my $i (2..$#cells) {
+#	    my $coln = $i + 1;
+	    print $cells[$i]."\n";
+	    if ($cells[$i] =~ /[cC][0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
+		$cov_str .= " + $cells[$i]" ;
+	    }
+	}
+#	print "$cov_str\n";
+
+	$cov_str_a = $cov_str;
+	$cov_str_a =~ s/^ + //;
+	
+	if ($trio) {
+	    $cov_str_a = "NSCORE";
+	    $cov_str = "";
+	}
+	
+	print "$cov_str\n";
+
+
+#	print "debug\n";
+#	sleep(10);
+
+    }
+
+
+    push @out_coll, "$infile_cov.pdf";
+
+}
+
+
+	my $R_rido = '
+
+###########
+#PGC_GPRSincORse.R
+#Genomic Profile Risk Score analysis
+#Considering covariates
+#Hong Lee & Naomi Wray December 2013 updated January 2014
+###########
+###functions
+h2l_R2 <- function(k, r2, p) {
+  # K baseline disease risk
+  # r2 from a linear regression model attributable to genomic profile risk score
+  # P proportion of sample that are cases
+  # calculates proportion of variance explained on the liability scale
+  #from ABC at http://www.complextraitgenomics.com/software/
+  #Lee SH, Goddard ME, Wray NR, Visscher PM. (2012) A better coefficient of determination for genetic profile analysis. Genet Epidemiol. 2012 Apr;36(3):214-24.
+  x= qnorm(1-K)
+  z= dnorm(x)
+  i=z/K
+  C= k*(1-k)*k*(1-k)/(z^2*p*(1-p))
+  theta= i*((p-k)/(1-k))*(i*((p-k)/(1-k))-x)
+  h2l_R2 = C*r2 / (1 + C*theta*r2)
+}
+
+se_h2l_R2 <- function(k,h2,se, p) {
+  # K baseline disease risk
+  # r2 from a linear regression model attributable to genomic profile risk score
+  # P proportion of sample that are cases
+  # calculates proportion of variance explained on the liability scale
+  #from ABC at http://www.complextraitgenomics.com/software/
+  #Lee SH, Goddard ME, Wray NR, Visscher PM. (2012) A better coefficient of determination for genetic profile analysis. Genet Epidemiol. 2012 Apr;36(3):214-24.
+
+  #SE on the liability (From a Taylor series expansion)
+  #var(h2l_r2) = [d(h2l_r2)/d(R2v)]^2*var(R2v) with d being calculus differentiation
+  x= qnorm(1-K)
+  z= dnorm(x)
+  i=z/K
+  C= k*(1-k)*k*(1-k)/(z^2*p*(1-p))
+  theta= i*((p-k)/(1-k))*(i*((p-k)/(1-k))-x)
+  se_h2l_R2 = C*(1-h2*theta)*se
+}
+
+
+h2l_R2N <- function(k, r2n, p) {
+  # k baseline disease risk
+  # r2n Nagelkerkes attributable to genomic profile risk score
+  # proportion of sample that are cases
+  # calculates proportion of variance explained on the liability scale
+  #from ABC at http://www.complextraitgenomics.com/software/
+  #Lee SH, Goddard ME, Wray NR, Visscher PM. (2012) A better coefficient of determination for genetic profile analysis. Genet Epidemiol. 2012 Apr;36(3):214-24.
+  x <- qnorm(1 - k)
+  z <- dnorm(x)
+  i <- z / k
+  cc <- k * (1 - k) * k * (1 - k) / (z^2 * p * (1 - p))
+  theta <- i * ((p - k)/(1 - k)) * (i * ((p - k) / ( 1 - k)) - x)
+  e <- 1 - p^(2 * p) * (1 - p)^(2 * (1 - p))
+  h2l_R2N <- cc * e * r2n / (1 + cc * e * theta * r2n)
+}
+h2l_AUC <-  function(k,auc) {
+  # k baseline disease risk
+  # auc attributable to genomic profile risk score
+  # calculates proportion of variance explained on the liability scale
+  #from genroc at http://www.complextraitgenomics.com/software/
+  #Wray NR, Yang J, Goddard ME, Visscher PM (2010) The Genetic Interpretation of Area under the ROC Curve in Genomic Profiling. PLoS Genet 6(2): e1000864
+  T0 <- qnorm(1 - k)
+  z  <- dnorm(T0)
+  i  <- z / k
+  v  <- -i * (k / (1-k))
+  q <- qnorm(auc)
+  h2l_AUC <- 2 * q^2 / ((v - i)^2 + q^2 * i * (i - T0) + v * (v - T0)) # eq 4
+}
+h2l_CS <-  function(k,cs,p) {
+  # k baseline disease risk
+  # cs Cox Snell R2 attributable to genomic profile risk score
+  # calculates proportion of variance explained on the liability scale
+  #from ABC at http://www.complextraitgenomics.com/software/
+  #Lee SH, Goddard ME, Wray NR, Visscher PM. (2012) A better coefficient of determination for genetic profile analysis. Genet Epidemiol. 2012 Apr;36(3):214-24.
+  T0 <- qnorm(1 - k)
+  z  <- dnorm(T0)
+  cc <- k * (1 - k) * k * (1 - k) / (z^2 * p * (1 - p))
+  h2l_CS <- cs*cc
+}
+
+
+
+#main program
+library(rms)
+library(pROC)
+library(MBESS)
+library(MASS)
+
+### light edits of s.ripke
+
+
+Pd=c("0.00000005","0.000001","0.0001","0.001","0.01","0.05","0.1","0.2","0.5","1")
+
+
+# setwd("/psych/genetics_data/ripke/scz/1KG/freeze_0413b_ref_aug12/shapeit2/incl_trio/danscore_PGC_SCZ49.sh2_mds10_poly_nomgs2_mgs2/dsc_sum")
+name="mgs2"
+FILE="INTEMPL."
+nj=10  # number of files
+
+#This output file gives a range of measures including those we con
+O=data.frame("name","Pd","file","N","Propcase","NKr2","NKr2_wrong","pval","h2l_r2","h2l_r2n","h2l_auc","h2l_cs","h2l_r2n_wrong","h2l_auc_wrong","auc","aucvF","aucvR","aucv","auc_wrong",
+    "ORD","ORDL","ORDH","ORDchk","ORDchkL","ORDchkH")
+write.table(O,"PGRS_chk.csv",row.names=F,col.names=F,sep=",")
+
+#This output file gives the measures that should be used
+O=data.frame("name","Pd","N","Propcase","NKr2","pval","PopRisk","h2l_r2n","se_h2l_r2","AUC","OR10decile","ORL95","ORH95","Ncase","Ncontrol","Coeff_with_cov")
+write.table(O,"INTEMPL.poly.out.txt",row.names=F,col.names=F,sep=" ")
+
+
+
+
+for (j in (1:nj)){
+file=paste(FILE,j,".target.S",j,".sumprofile_cov",sep="")
+
+read.table(file,head=T)->ri
+
+K=0.01 # baseline disorder risk for schizophrenia
+
+
+### normalize the score
+(ri$SCORE-mean(ri$SCORE))/sd(ri$SCORE)->ri$NSCORE
+ri$PHENO1=ri$PHENO-1
+
+vars = var(ri$SCORE)
+print (vars)
+
+P=sum(ri$PHENO1)/length(ri$PHENO1) # proportion of target sample that are cases
+
+    if (vars > 0) {
+
+
+
+
+###Stephans code included for comparison
+## here statistics with covariates:
+#library(rms)
+lrm(PHENO ~ SCOCOV , data = ri )-> go
+## here for only covariates
+lrm(PHENO ~  COVSTR1 , data = ri )-> go_cov
+
+str=summary(lm(NSCORE~ PHENOCOV , data = ri ))
+
+ricase=ri[ri$PHENO1==1,]
+ricont=ri[ri$PHENO1==0,]
+
+    strcase=summary(lm(NSCORE~ COVSTR1 , data = ricase ))
+    strcont=summary(lm(NSCORE~ COVSTR1 , data = ricont ))
+
+
+### here the stats values:
+go$stats -> go_s
+go_cov$stats -> go_cov_s
+
+## Stephan: here I substract the "C" values of go_cov_s from the "C" value of go_s (so the same way I do for the R2-values.
+C_diff = go_s["C"] - go_cov_s["C"]  #AUC = C_diff+0.5
+r2_diff = go_s["R2"] - go_cov_s["R2"]
+
+###new code = RIGHT
+###logistic models
+tstF = glm(PHENO1 ~ SCOCOV, data = ri,family = binomial(logit)) # logit model
+tstS = glm(PHENO1 ~ NSCORE  , data = ri,family = binomial(logit)) # logit model
+tstR = glm(PHENO1 ~ COVSTR1, data = ri,family = binomial(logit)) # logit model
+tst0 = glm(PHENO1 ~ 1 , data = ri,family = binomial(logit)) # logit model
+
+
+coeff_w_cov = tstF$coefficients["NSCORE"]
+
+#library(pROC)
+aucvF = auc(ri$PHENO1,tstF$linear.predictors)
+aucvR = auc(ri$PHENO1,tstR$linear.predictors)
+aucvS = auc(ri$PHENO1,tstS$linear.predictors)
+
+auc_wrong=aucvF-aucvR +0.5  #auc for score incorrect
+aucv=pnorm(qnorm(aucvF)-qnorm(aucvR))  #this is not correct either
+#aucvS may be approximately close to correct value (but without covariate)
+
+#Cox&Snell R2
+N=length(ri$PHENO1)
+NCA=sum(ri$PHENO1==1)
+NCO=sum(ri$PHENO1==0)
+LLF=logLik(tstF)
+LLR=logLik(tstR)
+LL0=logLik(tst0)
+
+CSv=1-exp((2/N)*(LLR[1]-LLF[1]))
+CS=1-exp((2/N)*(LL0[1]-LLF[1]))
+
+#Nagelkerkes R2
+NK0<-CS/(1-exp((2/N)*LL0[1]))
+NKv<-CSv/(1-exp((2/N)*LLR[1]))
+
+#pvalue
+devdiff=tstR$deviance-tstF$deviance
+df=tstR$df.residual-tstF$df.residual
+pval=pchisq(devdiff,df,lower.tail=F)
+
+#linear model R2 *********************************************
+std_y=ri$PHENO1
+ri$std_y=(std_y-mean(std_y))/sd(std_y)
+
+lmf=lm(std_y ~ SCOCOV , data = ri)
+lmr=lm(std_y ~  COVSTR1 , data = ri)
+lm0=lm(std_y~1)
+
+R2v=1-exp((2/N)*(logLik(lmr)[1]-logLik(lmf)[1]))
+R2=1-exp((2/N)*(logLik(lm0)[1]-logLik(lmf)[1]))
+
+#standard error of R2v
+#from Olkin and Finn (Psychological Bulletin, 1995, Vol. 118, No. 1, 155-164)
+np=1    #number of paramters
+vr=4/length(std_y)*R2v*(1-R2v)^2*(1-(2*np+3)/length(std_y))
+
+#confirm with a R package
+#library(MBESS)
+#vr2=Variance.R2(R2v,length(std_y),1) # this agrees with vr but is slower
+
+
+# calculate liability R2
+h2l_r2 = h2l_R2(K,R2v,P) # linear model
+#SE on the liability (From a Taylor series expansion)
+#var(h2l_r2) = [d(h2l_r2)/d(R2v)]^2*var(R2v) with d: calculus differentiation
+se_h2l_r2=se_h2l_R2(K,h2l_r2,vr^.5,P)
+
+h2l_r2n = h2l_R2N(K,NKv,P) #nagelkerkes
+h2l_auc = h2l_AUC(K,aucvS[1])  # auc
+h2l_cs = h2l_CS(K,CSv,P)   # Cox & Snell
+h2l_r2n_wrong=h2l_R2N(K,r2_diff,P)
+h2l_auc_wrong=h2l_AUC(K,C_diff+0.5)
+
+#make deciles
+oNSCORE=ri$NSCORE[order(ri$NSCORE)]
+oPHENO1=ri$PHENO1[order(ri$NSCORE)]
+rio=ri[order(ri$NSCORE),]
+N10=round(N/10)
+
+
+
+
+
+##N101=N10+1
+##rio1=rio[(1:N10),]
+##rio10=rio[(N-N10+1):(N),]
+##rio10v1=rbind(rio1,rio10)
+##rio10v1$d10=0
+##N10v1=length(rio10v1$d10)
+##rio10v1$d10[(N10+1):N10v1]=1
+### !! tstF = glm(PHENO1 ~ D10COV , data = rio10v1,family = binomial(logit)) # logit model
+########< tstF = glm(PHENO1 ~ d10  + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C9 + C15 + C18 , data = rio10v1,family = binomial(logit)) # logit model
+### !! tstR = glm(PHENO1 ~ COVSTR1 , data = rio10v1,family = binomial(logit)) # logit model
+#######< tstR = glm(PHENO1 ~ C1 + C2 + C3 + C4 + C5 + C6 + C7 + C9 + C15 + C18 , data = rio10v1,family = binomial(logit)) # logit model
+
+
+##tst0 = glm(PHENO1 ~ 1 , data = rio10v1,family = binomial(logit)) # logit model
+##tstchk = glm(PHENO1 ~ d10 , data = rio10v1,family = binomial(logit)) # logit model
+
+
+ dumv=matrix(0,length(oNSCORE),9) #dummy varaible
+ for (zi in 1:9) {
+   fst=length(oNSCORE)-zi*N10+1
+   lst=length(oNSCORE)-zi*N10+N10
+   dumv[fst:lst,zi]=1
+ }
+
+ tstF = glm(PHENO1 ~ dumv + COVSTR1 , data = rio,family = binomial(logit)) # logit model
+ tstR = glm(PHENO1 ~ COVSTR1 , data = rio,family = binomial(logit)) # logit model
+ tst0 = glm(PHENO1 ~ 1 , data = rio,family = binomial(logit)) # logit model
+ tstchk = glm(PHENO1 ~ dumv , data = rio,family = binomial(logit)) # logit model
+
+
+
+ORD=exp(tstF$coefficients[2])
+ORDL=exp(tstF$coefficients[2]-1.96*summary(tstF)$coefficients[2,2])
+ORDH=exp(tstF$coefficients[2]+1.96*summary(tstF)$coefficients[2,2])
+ORDchk=exp(tstchk$coefficients[2])
+ORDchkL=exp(tstchk$coefficients[2]-1.96*summary(tstchk)$coefficients[2,2])
+ORDchkH=exp(tstchk$coefficients[2]+1.96*summary(tstchk)$coefficients[2,2])
+
+
+#O=data.frame(FILE,Pd[j],file,N,P,NKv,r2_diff,pval,h2l_r2,h2l_r2n,h2l_auc,h2l_cs,h2l_r2n_wrong,h2l_auc_wrong,aucvS,aucvF,aucvR,aucv,auc_wrong,ORD,ORDL,ORDH,ORDchk,ORDchkL,ORDchkH)
+#write.table(O,"INTEMPL.chk.out.txt",row.names=F,col.names=F,sep=",",append=T)
+
+#output
+#name = name of cohort
+#Pd = p-value cutoff for discovery cohort
+#file = input filename
+#N = total sample size
+#P = proportion of sample that are cases
+#NKv Nagelkerkes R2
+#pval - pvalue of the R2
+#CWC - coefficients with covariates (for direction of effect)
+#K population risk of disease used in converting NKv to liability scale
+#h2l_r2n - proportion of variance explained by the score on the liability scale calculated from NKv
+#aucvS - what we think is the most appropriate estimate of AUC attributed to the score
+#ORD - the odds ratio when comparing top to bottom decile
+#ORDL - lower CI of the ORD
+#ORDH - upper CI of the ORD
+
+O=data.frame("INTEMPL",Pd[j],N,P,NKv,pval,K,h2l_r2n,se_h2l_r2,aucvS,ORD,ORDL,ORDH,NCA,NCO,coeff_w_cov)
+write.table(O,"INTEMPL.poly.out.txt",row.names=F,col.names=F,sep=" ",append=T)
+} else {
+
+N=length(ri$PHENO1)
+
+## if variance of score is zero then write differnt values
+O=data.frame("INTEMPL",Pd[j],N,P,0.0,1.0,K,0,0,0.5,1,0,0,0,0,0)
+write.table(O,"INTEMPL.poly.out.txt",row.names=F,col.names=F,sep=" ",append=T)
+
+
+#"name" "Pd" "N" "Propcase" "NKr2" "pval" "PopRisk" "h2l_r2n" "se_h2l_r2" "AUC" "OR10decile" "ORL95" "ORH95"
+#"PGC_SCZ49.sh2_mds10_poly_nomgs2_mgs2" "0.00000005" 5120 0.515234375 0.0262591054481514 9.85086885717681e-24 0.01 0.0110338841031824 0.0021442267191595 0.581168950178969 3.03227366098336 2.33434192167739 3.938876078825
+
+}
+}
+
+
+
+
+
+
+
+
+';
+
+
+### create covariate variables:
+
+my $cov_str;
+my $cov_str_a;
+
+	die "$out.1.target.S1.sumprofile_cov: ".$! unless open FILE, "< $out.1.target.S1.sumprofile_cov";
+	my $header = <FILE>;
+	close FILE;
+	my @cells = &split_line($header);
+	$cov_str = "";
+	foreach my $i (2..$#cells) {
+	    print $cells[$i]."\n";
+	    if ($cells[$i] =~ /[cC][0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
+                if ($cov_str eq "") {
+		  $cov_str = "$cells[$i]" ;
+                }
+                else {
+		  $cov_str .= " + $cells[$i]" ;
+                }
+	    }
+	}
+
+	
+#	if ($trio) {
+#	    $cov_str_a = "NSCORE";
+#	    $cov_str = "";
+#	}
+	
+
+
+        my $infile_cov_templ = "$out";
+	$R_rido =~ s/INTEMPL/$out/g;
+
+#        my $groupname = "$st";
+#	$R_rido =~ s/PTH/$st/g;
+#	$R_rido =~ s/GROUPNAME/$groupname/g;
+#	$R_rido =~ s/INTEAME/$infile_cov/g;
+#	$R_rido =~ s/OUTNAME/$outfile/g;
+
+
+        my $score_cov = "NSCORE + $cov_str";
+        my $pheno_cov = "$cov_str + PHENO1";
+        my $d10_cov = "d10 + $cov_str";
+
+
+if ($trio){
+
+        $score_cov = "NSCORE ";
+	$R_rido =~ s/COVSTR1/1/g;
+        $pheno_cov = "PHENO1";
+        $d10_cov = "d10";
+
+} else {
+	$R_rido =~ s/COVSTR1/$cov_str/g;
+
+}
+
+
+
+	$R_rido =~ s/SCOCOV/$score_cov/g;
+	$R_rido =~ s/PHENOCOV/$pheno_cov/g;
+
+
+	$R_rido =~ s/D10COV/$d10_cov/g;
+
+
+#	$R_rido =~ s/COVSTR2/$cov_str_a/g;
+
+my $trio_sw = 0;
+$trio_sw = 1 if ($trio);
+
+	$R_rido =~ s/TRIO/$trio_sw/g;
+
+#print "$cov_str\n";
+#print "$cov_str_a\n";
+#exit;
+	
+	my $R_file = "R.$out.hl_nw.Rin";
+	&a2file_new($R_file, $R_rido);
+	
+#print "debug\n";
+#print "$cov_str\n";
+
+#print "$R_file\n";
+#exit;
+
+        unless ($quan) {
+	   &mysystem("$r_sys < $R_file --vanilla");
+#	   &mysystem("source /broad/software/scripts/useuse; use R-2.14; R < $R_file --vanilla");
+
+        }
+#        else {
+#           &mysystem("touch $infile_cov.pdf");
+#        }
+
+	   &mysystem("touch $out.poly.success");
+
+print "end of danscore_result_3\n";
+
+
+
+
+#######################################################################
+### ENDE
+############################################################
+
+
+
+
+exit;
+
+
+
+
+
+if (0) {
+my @out_coll;
+foreach my $st (1..10) {
+
+    my %profiles = ();
+    my %prof_count = ();
+    my @profiles_st = grep {/.*$st\.profile$/} @files;
+
+    my $infile = "$out.$st.target.S$st.sumprofile";
+
+    my $outfile = "summary.$out.$st";
+    push @outfile_coll, $outfile;
+    my $infile_cov = $infile."_cov";
+    my $cov_str = "";
+    my $cov_str_a = "";
+    print "create range $st\n";
+    unless (-e $infile_cov) {
+#	print "create $infile_cov\n";
+	foreach my $profile_loc (@profiles_st) {
+#	    print "read $profile_loc\n";
+	    die "$profile_loc: ".$! unless open PRO, "< $profile_loc";
+	    
+	    my $line = <PRO>;
+	    my $cc=0;
+	    while ($line = <PRO>) {
+		chomp($line);
+		$line =~ s/^[\s]+//g;
+		my @cells =  split /\s+/, $line;
+		unless ($quan) {
+		    unless ($cells[2] == 1 || $cells[2] == 2) {#
+			next;
+		    }
+		}
+		else {
+		    if ($cells[2] == -9) {#
+			next;
+		    }
+		}
+#		print "pt: $cells[2]\n";
+#		die "$cells[0]\t$cells[1]\tnot existing in MDS" unless (exists $amds{"$cells[0]\t$cells[1]"});
+		$profiles{"$cells[0]\t$cells[1]"} += $cells[3];
+		$prof_count{"$cells[0]\t$cells[1]"}++;
+		$apt{"$cells[0]\t$cells[1]"} = $cells[2] unless (exists $apt{"$cells[0]\t$cells[1]"});
+		die "PT error" if ($apt{"$cells[0]\t$cells[1]"} ne $cells[2]);
+	    }
+	    close PRO;
+#	    exit;
+	}
+
+
+	die $! unless open FILE, "> $infile";
+	print FILE "FID\tIID\tCOUNT\tPHENO\tSCORE";
+	unless ($trio){
+	    print FILE $amds{"FID\tIID"};
+	}
+	print FILE "\n";
+	foreach my $id (keys %profiles){
+#	    my @cells_loc = &split_line($_);
+	    if ($mdsfile){
+		if (exists $amds{$id}) {
+		    print FILE "$id";
+		    print FILE "\t$prof_count{$id}";
+		    print FILE "\t$apt{$id}";
+		    print FILE "\t$profiles{$id}";
+		    print FILE $amds{$id};
+		    print FILE "\n";
+		    if ($prof_count{$id} - $nref < -2|| $prof_count{$id} - $nref > 2){
+			print "coutn problem $id: $prof_count{$id}, soll $nref\n";
+#			exit;
+		    }
+		}
+		else {
+		    print "no mds-score for $id\n"; 
+		}
+	    }
+	    if ($trio) {
+		print FILE "$id";
+		print FILE "\t$prof_count{$id}";
+		print FILE "\t$apt{$id}";
+		print FILE "\t$profiles{$id}";
+		print FILE "\n";
+		if ($prof_count{$id} - $nref < -2|| $prof_count{$id} - $nref > 2){
+		    print "warning: trio coutn problem $id: $prof_count{$id}, soll $nref\n";
+#		    exit;
+		}
+	    }
+	}
+	close FILE;
+	&mysystem ("mds2cov $infile");
+
+    }
+    if ($trio) {
+	&mysystem ("cp $infile $infile_cov");
+    }
+#    print "$outfile\n";
+#    print "debug\n";
+#    sleep(10);
+
+    unless (-e "$infile_cov.pdf") {
+
+
+	die "$infile_cov: ".$! unless open FILE, "< $infile_cov";
+	my $header = <FILE>;
+	close FILE;
+	my @cells = &split_line($header);
+	$cov_str = "";
+	foreach my $i (2..$#cells) {
+#	    my $coln = $i + 1;
+	    print $cells[$i]."\n";
+	    if ($cells[$i] =~ /[cC][0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
+		$cov_str .= " + $cells[$i]" ;
+	    }
+	}
+#	print "$cov_str\n";
+
+	$cov_str_a = $cov_str;
+	$cov_str_a =~ s/^ + //;
+	
+	if ($trio) {
+	    $cov_str_a = "NSCORE";
+	    $cov_str = "";
+	}
+	
+	print "$cov_str\n";
+
+
+#	print "debug\n";
+#	sleep(10);
+
+	my $R_rido = '
+read.table("INNAME",head=T)->ri
+library(Design)
+ r = matrix (ncol=9,nrow=1)
+
+
+if (var (ri$SCORE) > 0 ) {
+(ri$SCORE-mean(ri$SCORE))/sd(ri$SCORE)->ri$NSCORE
+    lrm(PHENO ~ NSCORE COVSTR1 , data = ri )-> go
+    lrm(PHENO ~ COVSTR2 , data = ri )-> go_cov
+#lrm(PHENO ~ NSCORE , data = ri[1:21106,] )-> go_nocov
+    lrm(PHENO ~ NSCORE , data = ri )-> go_nocov
+
+    summary(glm(as.factor(PHENO) ~ NSCORE COVSTR1 , data=ri, family="binomial"))$coefficients["NSCORE",4]-> p_score_cov
+
+    summary(glm(as.factor(PHENO) ~ COVSTR2 , data=ri, family="binomial"))$coefficients[2,4]-> p_cov
+
+    summary(glm(as.factor(PHENO) ~ NSCORE , data=ri, family="binomial"))$coefficients["NSCORE",4]-> p_score_nocov
+
+    print (p_score_cov)
+    print (p_cov)
+    print (p_score_nocov)
+
+
+#quit()
+
+    go$stats -> go_s
+    go_cov$stats -> go_cov_s
+    go_nocov$stats -> go_nocov_s
+
+    go$coefficients -> go_c
+
+
+    r2_diff = go_s["R2"] - go_cov_s["R2"]  
+
+    if (TRIO == 1) {
+	r2_diff = go_s["R2"]
+}
+
+
+C_diff = go_s["C"] - go_cov_s["C"]
+    r2_nocov = go_nocov_s["R2"]
+
+    if (go_c["NSCORE"] < 0) {
+	r2_diff = -r2_diff
+	    C_diff = -C_diff
+	    r2_nocov = -r2_nocov
+}
+
+# print (c(signif(go_s["P"],3),C_diff,r2_diff,go_cov_s["R2"]))
+# print (c(signif(go_s["P"],3),r2_diff,go_cov_s["R2"],C_diff))
+#cor (ri[,3],ri[,4]) ^ 2 -> r2
+
+
+pdf("INNAME.pdf")
+    par(mfcol=c(2,1))
+
+# boxplot (ri[,"SCORE"]~ri[,"PHENO"], main="INNAME", sub = paste("r2 = ",signif(r2_nocov,3), ", p = ", signif(go_nocov_s["P"],3)), las=1)
+
+    maxx = max(ri[, "NSCORE"],na.rm = T)
+    minx = min(ri[, "NSCORE"],na.rm = T)
+    maxxo = signif(max(ri[, "SCORE"],na.rm = T),3)
+    minxo = signif(min(ri[, "SCORE"],na.rm = T),3)
+
+
+    bb = seq (minx,maxx,length=23)
+
+    hist (ri[ri["PHENO"] == 1 , "NSCORE"],col="grey",main = "Scores controls",xlim = c(minx,maxx), breaks=bb, sub = "INNAME", cex.sub = .6)
+    hist (ri[ri["PHENO"] == 2 , "NSCORE"],col="grey",main = "Scores cases",xlim = c(minx,maxx), breaks=bb, sub = paste ("original score-range",minxo,";",maxxo), cex.sub = .6)
+
+    dev.off()
+
+
+
+    cc = 1
+    r[1,cc] = "GROUPNAME";
+cc = cc + 1;
+r[1,cc] = PTH;
+cc = cc + 1;
+r[1,cc] = dim(ri)[1];
+cc = cc + 1;
+r[1,cc] = signif(p_score_cov,4);
+#    r[1,cc] = signif(go_s["P"],4);
+cc = cc + 1;
+r[1,cc] = signif(p_score_nocov,4);
+#    r[1,cc] = signif(go_nocov_s["P"],4);
+
+cc = cc + 1;
+r[1,cc] = signif(r2_diff,4);
+cc = cc + 1;
+r[1,cc] = signif(go_s["R2"],4);
+#    r[1,cc] = signif(go_cov_s["R2"],4);
+cc = cc + 1;
+r[1,cc] = signif(r2_nocov,4);
+cc = cc + 1;
+r[1,cc] = signif(C_diff,4);
+#cc = cc + 1;
+#    r[1,cc] = signif(p_cov,4);
+
+
+#row.names(r) = c("P-nocov", "R2-diff", "R2-cov", "R2-nocov", "C-diff");
+
+write.table (r, file = "OUTNAME", quote = F, row.names = F, col.names= F)
+# write.table (c(go_nocov_s["P"],r2_diff,go_cov_s["R2"],r2_nocov,C_diff), file = "OUTNAME", quote = F, row.names = F, col.names= F)
+
+    print(go_s)
+    print(go_cov_s)
+    print(go_nocov_s)
+
+
+} else {
+ cc = 1
+    r[1,cc] = "GROUPNAME";
+cc = cc + 1;
+    r[1,cc] = PTH;
+cc = cc + 1;
+    r[1,cc] = dim(ri)[1];
+cc = cc + 1;
+    r[1,cc] = 1.0;
+cc = cc + 1;
+    r[1,cc] = 1.0;
+cc = cc + 1;
+    r[1,cc] = 0;
+cc = cc + 1;
+    r[1,cc] = 0;
+cc = cc + 1;
+    r[1,cc] = 0;
+cc = cc + 1;
+    r[1,cc] = 0;
+
+
+ write.table (r, file = "OUTNAME", quote = F, row.names = F, col.names= F)
+pdf("INNAME.pdf")
+plot(0,0,main="no scores for this p-threshold")
+dev.off()
+}
+';
+
+my $infile_cov_templ = "$out";
+	$R_rido =~ s/INTEMPL/$out/g;
+
+
+        my $groupname = "$st";
+	$R_rido =~ s/PTH/$st/g;
+	$R_rido =~ s/GROUPNAME/$groupname/g;
+
+	$R_rido =~ s/OUTNAME/$outfile/g;
+	$R_rido =~ s/COVSTR1/$cov_str/g;
+	$R_rido =~ s/COVSTR2/$cov_str_a/g;
+
+my $trio_sw = 0;
+$trio_sw = 1 if ($trio);
+
+	$R_rido =~ s/TRIO/$trio_sw/g;
+
+#print "$cov_str\n";
+#print "$cov_str_a\n";
+#exit;
+	
+	my $R_file = "R.$out.S$st.Rin";
+	&a2file_new($R_file, $R_rido);
+	
+        unless ($quan) {
+#	   &mysystem("source /broad/software/scripts/useuse; use R-2.14; R < $R_file --vanilla");
+	   &mysystem("$r_sys < $R_file --vanilla");
+        }
+        else {
+           &mysystem("touch $infile_cov.pdf");
+        }
+
+}
+
+
+     push @out_coll, "$infile_cov.pdf";
+
+}
+
+
+
+}
+
+########## write out first column with row-names
+my $sys_join = "pdfjoin --rotateoversize false --outfile single.collect.$out.pdf @out_coll";
+&mysystem ($sys_join);
+
+#my $sys = "danscore_plot  --out plot.$out --nids $nids_file @sumfiles";
+my $sys = "danscore_plot2  --out plot.$out @outfile_coll";
+print "$sys\n";
+#exit;
+&mysystem ($sys);
+&mysystem ("echo $sys >> startit.sh");
+#&mysystem ("danscore_plot  --out plot.$out --nids $nids_file @sumfiles");
+
+
+print "single.collect.$out.pdf\n";
+
+die $! unless open FILE, "> summary.aaa.row.names";
+
+print FILE "Group";
+print FILE " PTH";
+print FILE " NIDS";
+print FILE " P-nocov";
+print FILE " R2-diff";
+print FILE " R2-cov";
+print FILE " R2-nocov";
+print FILE " C-diff\n";
+
+close FILE;
+
+
+exit;
+
+
+
+
+
+
+
+
+
+
+exit;
+
+#print "dkjfgj\n";
+###########################################################
+### logistic regression
+#####################################################
+
+#my %nids_st_train_ca;
+my %nids_st_target_co;
+my %nids_st_train_co;
+my %nids_st_target_ca;
+my %nids_st_train_ca;
+my %ids_train;
+my $nids_file = "$out.nidfile";
+
+my @sumfiles = ();
+
+#print "dsfhvhhlkasjdh\n";
+
+#foreach my $st (keys %studies) {
+foreach my $ttc (@tatra_collection) {
+
+
+    my ($st,$mds_train,$mds_target) = &split_line($ttc);
+    my $pthc = 0;
+    foreach my $pt (@p_th) {
+	$pthc++;
+	
+	my $sum_file = "$out.$st.S$pthc.out.sum";
+
+	push @sumfiles, $sum_file;
+
+	next if (-e $sum_file);
+
+	my $infile = "$out.$st.target.S$pthc.sumprofile";
+	print "$infile\n";
+	unless (-e $infile) {
+	    
+	    my %profiles = ();
+	    #### sum profile files 
+	    foreach (@dosfiles){
+		my $dosfile = $_;
+		my $profile_loc = "$out.$st.$dosfile.target.S$pthc.profile";
+#		print "$profile_loc\n";
+		die "$profile_loc: ".$! unless open PRO, "< $profile_loc";
+		
+		my $line = <PRO>;
+		my $cc=0;
+		while ($line = <PRO>) {
+		    chomp($line);
+		    my @cells = &split_line($line);
+		    $profiles{"$cells[0]\t$cells[1]\t$cells[2]"} += $cells[3];
+		}
+		close PRO;
+	    }
+
+	    print "$infile\n";
+	    die $! unless open FILE, "> $infile";
+	    print FILE "FID\tIID\tPHENO\tSCORE";
+	    print FILE $amds{"FID\tIID"};
+	    print FILE "\n";
+#	    my $nids = 0;
+	    foreach (keys %profiles){
+		my @cells_loc = &split_line($_);
+		die "no mds-score for $cells_loc[0]\t$cells_loc[1]" unless (exists $amds{"$cells_loc[0]\t$cells_loc[1]"});
+#		$nids++;
+		print FILE "$_\t$profiles{$_}";
+		print FILE $amds{"$cells_loc[0]\t$cells_loc[1]"};
+		print FILE "\n";
+	    }
+	    close FILE;
+	    &mysystem ("mds2cov $infile");
+#	    exit;
+	}
+
+	my $infile = $infile."_cov";
+	die "$infile: ".$! unless open FILE, "< $infile";
+	my $header = <FILE>;
+	close FILE;
+	my @cells = &split_line($header);
+	my $cov_str = "";
+	foreach my $i (4..$#cells) {
+#	    my $coln = $i + 1;
+#	    print $cells[$i]."\n";
+	    if ($cells[$i] =~ /C[0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
+		$cov_str .= " + $cells[$i]" ;
+	    }
+	}
+#	print "$cov_str\n";
+
+	my $cov_str_a = $cov_str;
+	$cov_str_a =~ s/^ + //;
+
+
+
+#	exit;
+
+	my $R_rido = '
+read.table("INNAME",head=T)->ri
+library(Design)
+
+(ri$SCORE-mean(ri$SCORE))/sd(ri$SCORE)->ri$NSCORE
+lrm(PHENO ~ NSCORE + COVSTR1 , data = ri )-> go
+lrm(PHENO ~ COVSTR2 , data = ri )-> go_cov
+lrm(PHENO ~ NSCORE , data = ri )-> go_nocov
+go$stats -> go_s
+go$coefficients -> go_c
+go_cov$stats -> go_cov_s
+go_nocov$stats -> go_nocov_s
+
+r2_diff = 0 - go_cov_s["R2"] + go_s["R2"] 
+C_diff = 0 - go_cov_s["C"] + go_s["C"] 
+r2_nocov = go_nocov_s["R2"]
+
+    if (go_c["NSCORE"] < 0) {
+      r2_diff = -r2_diff
+      C_diff = -C_diff
+      r2_nocov = -r2_nocov
+    }
+
+# print (c(signif(go_s["P"],3),C_diff,r2_diff,go_cov_s["R2"]))
+# print (c(signif(go_s["P"],3),r2_diff,go_cov_s["R2"],C_diff))
+# cor (ri[,3],ri[,4]) ^ 2 -> r2
+
+pdf("INNAME.pdf")
+# boxplot (ri[,"SCORE"]~ri[,"PHENO"], main="INNAME", sub = paste("r2 = ",signif(r2,3), ", p = ", signif(go[4],3)), las=1)
+dev.off()
+ print (c(go_nocov_s["P"],r2_diff,go_cov_s["R2"],r2_nocov,C_diff))
+';
+
+	$R_rido =~ s/INNAME/$infile/g;
+	$R_rido =~ s/COVSTR1/$cov_str/g;
+	$R_rido =~ s/COVSTR2/$cov_str_a/g;
+
+	
+	my $R_file = "$out.$st.S$pthc.Rin";
+	&a2file_new($R_file, $R_rido);
+	
+#exit;	
+#	&mysystem("R < $R_file --vanilla");
+
+#exit;
+	my @outp = split "\n", `R < $R_file --vanilla`;
+#	print "-----------\n";
+#	print "@outp\n";
+	print "3:@outp[$#outp-3]\n";#
+	print "2:@outp[$#outp-2]\n";
+	print "1:@outp[$#outp-1]\n";
+	print "0:@outp[$#outp-0]\n";
+#	print "$R_file\n";
+	print "$infile\n";
+#	exit;
+
+	my @cells = &split_line($outp[$#outp-2]);
+	my $sum_out = "$st";
+#    $sum_out .= "\t$study_arr[$tcount].studin";
+#    $sum_out .= "\t$pth";
+	$sum_out .= "\t".$pt;
+
+
+
+	my $rido_n = &count_lines($infile);
+	$sum_out .= "\t".$rido_n;
+	$sum_out .= "\t".$cells[0];
+	$sum_out .= "\t".$cells[1];
+	$sum_out .= "\t".$cells[2];
+	$sum_out .= "\t".$cells[3];
+	$sum_out .= "\t".$cells[4];
+
+	print $sum_out."\n";
+#	exit;
+	&a2file_new($sum_file, $sum_out);
+#	exit;
+    }
+
+
+
+#########  IDs target
+    my $infile = "$out.$st.target.S1.sumprofile";
+    die "$infile: ".$! unless open IN, "< $infile";
+    
+    my $line = <IN>;
+    my $nca=0;
+    my $nco=0;
+    while ($line = <IN>) {
+	chomp($line);
+	my @cells = &split_line($line);
+	$nca++ if ($cells[2] == 2);
+	$nco++ if ($cells[2] == 1);
+    }
+    close IN;
+
+    $nids_st_target_ca{$st} = $nca;
+    $nids_st_target_co{$st} = $nco;
+
+
+############# IDs training
+%ids_train = ();
+    die "$mdsfile: ".$! unless open IN, "< $mdsfile";
+    while ($line = <IN>) {
+	chomp($line);
+	my @cells = &split_line($line);
+        $ids_train{"$cells[0]\t$cells[1]"}++ ;
+    }
+    close IN;
+
+
+   die "$mds_train: ".$! unless open IN, "< $mds_train";
+    while ($line = <IN>) {
+	chomp($line);
+	my @cells = &split_line($line);
+        $ids_train{"$cells[0]\t$cells[1]"}++ ;
+    }
+    close IN;
+
+
+    $nca=0;
+    $nco=0;
+    die "$famfile: ".$! unless open IN, "< $famfile";
+        while ($line = <IN>) {
+	chomp($line);
+	my @cells = &split_line($line);
+        if ($ids_train{"$cells[0]\t$cells[1]"} == 2){
+            $nca++ if ($cells[5] == 2);
+            $nco++ if ($cells[5] == 1);
+        }
+    }
+    close IN;
+
+    $nids_st_train_ca{$st} = $nca;
+    $nids_st_train_co{$st} = $nco;
+
+#print "$nca\t$nco\n";
+
+#    exit;
+}
+
+
+&mysystem ("rm -f *.profile");
+
+die $! unless open FILE, "> $nids_file";
+print FILE "study\tnca_train\tnco_train\tnca_target\tnco_target\n";
+foreach my $st (sort keys %nids_st_target_ca){
+    print FILE "$st\t$nids_st_train_ca{$st}";
+    print FILE "\t$nids_st_train_co{$st}";
+   print FILE "\t$nids_st_target_ca{$st}";
+   print FILE "\t$nids_st_target_co{$st}\n";
+}
+close FILE;
+#exit;
+
+
+print "danscore_plot  --out plot.$out --nids $nids_file @sumfiles\n";
+&mysystem ("danscore_plot  --out plot.$out --nids $nids_file @sumfiles");
+

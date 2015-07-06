@@ -1,0 +1,147 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+#my $t = 1;
+#my $tt = sprintf "%04d",$t;
+#print "$t\t$tt\n";
+#exit;
+
+use Getopt::Long;
+GetOptions( 
+	    "help"=> \my $help,
+	    "force_special"=> \my $force,
+    );
+
+use File::Basename;
+
+if ($help){
+    print "usage: $progname FILES
+
+version: $version
+
+      options:
+
+        --help          print this message then quit
+        --force_special force other name if existing
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+#my $origin_file = "origin.linksub";
+#while (-e $origin_file) {
+#    $origin_file .= ".o";
+#}
+
+
+#die $! unless open OF, "> $origin_file";
+
+my @filenames = @ARGV;
+foreach my $file (@filenames) {
+
+
+#    if (-d $file) {
+#	print "directory: $file\n";
+ #   }
+  #  else {
+#	print "$file\n";
+ #   }
+  #  next;
+
+    my ($name,$path,$suffix) = fileparse($file);
+    if (-e $name) {
+	unless ($force) {
+	    print "error: $name, exists already\n";
+	    next;
+	}
+	else {
+	    print "path $path\n";
+	    my $path_loc = $path;
+	    $path_loc =~ s/..\/dasuqc1.*scz_//;
+	    $path_loc =~ s/_eur.*//;
+	    print "$name exists already and gets $path_loc addition\n";
+
+	    $name =$name.".$path_loc";
+	    if (-e $name) {
+		print "error: $name, exists already\n";
+		next;
+	    }
+
+	}
+    }
+#    exit;
+
+    if (-l $file) {
+#	print "name: $name";
+#	print ", path: $path";
+	my $origin = `readlink -f $file`;
+	my $locdir = `pwd`;
+	chomp($origin);
+	chomp($locdir);
+	my ($oname,$opath,$osuffix) = fileparse($origin);
+	
+#	print ", $file is a link to $origin\n";
+#	print "opath: $opath\n";
+#	print "local dir: $locdir\n";
+
+	if (-e $name) {
+	    print "error: $name exists already\n";
+	    next;
+	}
+
+#	exit;
+
+	system ("ln -s $origin ./$name");
+	next;
+
+
+	if (0) {
+	    #### here very special move of the original
+	    ## move origin here
+	    system ("mv $origin ./$name");
+	    
+	    ## link origin to here
+	    system ("cd $opath ; ln -s $locdir/$name ./$oname");
+	    
+#	    print OF "$name\t$file\t$origin\n";
+	}
+
+    }
+    if (-e $file) {
+	system ("ln -s $file ./$name");
+    }
+
+    else {
+	print "$file is not existing\n";
+    }
+
+}
+
+#close OF;
+
+exit;
+
+#my $cmd = 'scp '."@tarnames"." $target";
+#print "$cmd\n";
+#my $sc = system ('scp '."@tarnames"." $target");
+
+
+#print "systemcode: $sc\n";
+#if ($sc == 0){
+#    system ("echo $target > $tarname.scp.target");
+#    system ("touch $tarname.scp.fini");
+#    print "success\n";
+#}
+
+
+
+
+

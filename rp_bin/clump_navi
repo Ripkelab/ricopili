@@ -1,0 +1,772 @@
+#!/usr/bin/perl
+use strict;
+#use warnings;
+
+srand(0);
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    next unless (@cells >= 2);
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("ploc");
+my $qloc = &trans("queue");
+my $hmloc = &trans("hmloc");
+
+#######################################
+
+
+
+
+###################################
+# variables
+####################################
+
+my $cp1 = 0.0001;
+my $cp2 = 0.0001;
+my $cr2 = 0.25;
+my $hq_freq = .02;
+my $hq_info = .90;
+my $cwindow = 500;
+
+my $detformat = 1;
+
+my $gene_range = 100;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+my $rootdir = "";
+my $info_txt = "";
+my $homedir = $ENV{"HOME"};
+
+my $out ="";
+my $pfile ="";
+my $walltime = 4;
+
+
+use Getopt::Long;
+GetOptions( "out=s"=> \$out,
+	    "help"=> \my $help,
+	    "clu_p1=f"=> \$cp1,
+	    "clu_p2=f"=> \$cp2,
+	    "clu_r2=f"=> \$cr2,
+	    "hq_f=f"=> \$hq_freq,
+	    "hq_i=f"=> \$hq_info,
+	    "pfile=s"=> \$pfile,
+
+	    
+	    "clu_window=i"=> \$cwindow,
+	    "grange=i"=> \$gene_range,
+	    "refdir=s"=> \my $refdir,
+	    "reinvo=s"=> \my $reinvo_file,
+	    "prekno=s"=> \my $prekno_file,
+
+	    "det=i"=> \$detformat,
+    );
+
+
+
+if ($help || $out eq ""){
+    print "usage: $progname 
+
+version: $version
+
+      options:
+
+        --refdir       reference dir, only one bed/bim/fam per chromosome in there, please 
+
+        --out  STRING   outname
+        --help          print this message then quit
+        --clu_p1 FLOAT  p1 for clumping, default $cp1
+        --clu_p2 FLOAT  p2 for clumping, default $cp2
+        --clu_r2 FLOAT  r2 for clumping, default $cr2
+        --clu_window INT window size, default $cwindow
+
+        --det INT       detail format, default = $detformat
+                          2: with R2 and genes
+
+        --hq_f FLOAT    frequency cutoff, default $hq_freq
+        --hq_i FLOAT    info cutoff, default $hq_info
+        --pfile STRING   pfile, containing SNP and P column header
+
+        --prekno STRING  prekno_file
+
+
+        --reinvo STRING reinvoke script
+
+        --grange INT    for clumping in kb
+
+ --out is mandatory
+
+
+example of prekno: 
+SNP        Chr    start   end     Pmeta     meta
+rs6426833   1     19.93   20.18   3.93e-35  anderson
+rs11209026  1     67.30   67.54   5.12e-28  anderson
+rs1801274   1     159.54  159.91  2.16e-20  anderson
+
+
+
+ created by Stephan Ripke 2011 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+die "please specify refdir" unless ($refdir);
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file_new {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_."\n";
+    }
+    close FILE;
+}
+
+##########################################
+# split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+#####################################
+# append array to file with newline
+####################################
+
+sub a2filenew_app {
+    my ($file, @lines)=@_;
+    die "$!: $file" unless open FILE, ">> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+
+#####################################
+# subroutine to re-invoke this script
+#####################################
+
+sub reinvo_b {
+    my ($message, $wt_file)=@_;
+    my $now = localtime time;
+    my $old_cmd = `tail -2 $homedir/clumper_info | head -1`;
+
+    my $message_part = $info_txt."\t$message";
+    $message = $info_txt."\t$message\t$now";
+
+    &a2filenew_app("$homedir/clumper_info",$message);
+    die "2 times already" if ($old_cmd =~ /$message_part/);
+    die "done" if ($message eq "everything-is-fine");
+    chdir "$rootdir" or die "something strange";
+    if ($qloc eq "bsub") {
+	$wt_file =~ s/.*blueprint_joblist_file-//;;
+    }
+    &mysystem ("blueprint -b \"$command_line\" --wa 1 --di -j --fwt $wt_file --na _clumper_$out");
+    exit;
+
+}
+
+
+#####################################
+# BEGIN
+#####################################
+
+
+
+use File::Copy;
+use File::Path;
+use Cwd;
+
+
+
+
+$rootdir = &Cwd::cwd();
+$info_txt = "command:\t\"$command_line\"\tdir:\t$rootdir";
+
+
+my $chr_subdir = "chr_subdir";
+my @created = mkpath(   ## $created ?
+			"$chr_subdir",
+			{verbose => 0, mode => 0750},
+    );
+
+#####################################
+# split pfile
+#####################################
+
+if ($pfile =~ /.gz$/){
+    my $pfile_tmp = $pfile;
+    $pfile_tmp =~ s/.gz$//;
+    print "$pfile_tmp\n";
+    &mysystem("gunzip -c $pfile > $pfile_tmp") unless (-e $pfile_tmp);
+    $pfile =~ s/.gz$//;
+}
+
+
+my %ccount ;
+#@fd = (*STDIN, *STDOUT, *STDERR); 
+my @filehandles;
+push @filehandles, "nichts";
+foreach my $chr (1..22) {
+    my $out_loc = "$chr_subdir/$out.$pfile.chr$chr";
+    if (-e "$out_loc"){
+	$ccount{$chr} = `cat $out_loc | wc -l`;
+	chomp($ccount{$chr});
+	next ;
+    }
+    local *FILE;
+    open(FILE, "> $out_loc") || die "$out_loc not to open";
+    push(@filehandles, *FILE);
+}
+
+my $pvcol = 10;
+my $chrcol = 0;
+my $snpcol = 1;
+my $a1col = 3;
+my $orcol = 8;
+my $fcol = 6;
+my $icol = 7;
+
+
+if (@filehandles > 1) {
+    die $! unless open PFI, "< $pfile";
+    my $line = <PFI>;
+    my @cells = @{&split_line_ref(\$line)};
+    my $pchr = $cells[$chrcol];
+    my $pp = $cells[$pvcol];
+    my $ps = $cells[$snpcol];
+    my $a1 = $cells[$a1col];
+    my $or = $cells[$orcol];
+    foreach my $chr (1..22) {
+	my $file_loc = $filehandles[$chr];
+	print $file_loc "$ps\t$a1\t$or\t$pp\n";
+    }
+    
+    while (my $line = <PFI>){
+	my @cells = @{&split_line_ref(\$line)};
+	my $pchr = $cells[$chrcol];
+	my $freq = $cells[$fcol];
+	my $info = $cells[$icol];
+
+	next if ($pchr > 22 || $pchr < 1);
+	next if ($freq < $hq_freq || $freq > 1 - $hq_freq);
+	next if ($info < $hq_info);
+	
+	my $pp = $cells[$pvcol];
+	my $ps = $cells[$snpcol];
+	my $a1 = $cells[$a1col];
+	my $or = $cells[$orcol];
+	my $file_loc = $filehandles[$pchr];
+	print $file_loc "$ps\t$a1\t$or\t$pp\n";
+
+	$ccount{$pchr}++ ;
+
+#	print $file_loc "$ps\t$pp\n";
+#	print "$pchr\n";
+    }
+    
+    foreach my $chr (1..22) {
+	my $file_loc = $filehandles[$chr];
+	close $file_loc;
+    }
+}
+
+
+#print "$cr2\n";
+#print "debug\n";
+#exit;
+
+
+my $gene_list_0610_plink ;
+if ($detformat == 2) {
+    $gene_list_0610_plink = "$refdir/plink.refGene_0111_hg19.txt";
+    unless (-e $gene_list_0610_plink){
+	$gene_list_0610_plink = "$refdir/plink.refGene_0610.txt";
+    }
+    die "no $gene_list_0610_plink" unless (-e $gene_list_0610_plink);
+}
+
+
+#####################################
+# clump all single chromosomes
+#####################################
+
+
+
+my @job_arr = ();
+my @clump_files;
+foreach my $chr (1..22) {
+    
+    print "count.$chr: ".$ccount{$chr}."\n";
+    next if ($ccount{$chr} <= 1);
+
+    my $bfile_sc = `ls $refdir/*chr$chr.*bed`;
+    if ($bfile_sc eq "") {
+	my $chr_part = "$chr"."_";
+	$bfile_sc = `ls $refdir/*chr$chr_part*bed`;
+    }
+    if ($bfile_sc eq "") {
+	die "no plink binary for this chromosome";
+    }
+    chomp($bfile_sc);
+    $bfile_sc =~ s/.bed$//;
+
+
+    my $in_loc = "$chr_subdir/$out.$pfile.chr$chr";
+    my $outname_loc = "$chr_subdir/$out.chr$chr";
+
+
+
+#awk '{if (($8>.9 && $7 > .02 && $7 < .98) || NR == 1) 
+    
+    my $cmd;
+
+    $cmd = "$ploc/plink --bfile $bfile_sc --extract $in_loc --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
+
+    if ($detformat == 2) {
+
+	$cmd = "$ploc/plink --bfile $bfile_sc --clump-range $gene_list_0610_plink --clump-verbose --clump-range-border $gene_range --extract $in_loc --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
+    }
+
+
+
+
+    my $out_loc = "$outname_loc.clumped";
+    my $log_loc = "$outname_loc.log";
+
+    my $log_loc_out = `tail -2 $log_loc | head -1`;
+    my $rerun = 0;
+    if ($log_loc_out =~ "^Analysis finished") {
+#	print "$out_loc is fine\n";
+    }
+    else {
+	$rerun = 1;
+#	print "$out_loc need a rerun\n";
+    }
+#    print "$cmd\n";
+#    print "$chr\t$cr2\t$out_loc\n";
+    push @job_arr, $cmd if ($rerun == 1);
+    push @clump_files, $out_loc
+#    print "$cmd\n";
+}
+
+#exit;
+
+if (@job_arr > 0 ) {
+    &a2file_new ("joblist_pliclu",@job_arr);
+    my $njobs = @job_arr;
+#    exit;
+    
+
+    &mysystem ("cat joblist_pliclu | blueprint -b \"prefix\" --mem 5000 --wa $walltime -i 8,4 -j --na pliclu_$out");
+    &reinvo_b ("pliclu-$njobs","blueprint_joblist_file-pliclu_$out");
+}
+
+
+
+#####################################
+# read out the original file 
+#####################################
+
+if (0) {
+
+foreach my $chr (1..22) {
+
+    unless (-e "$out.$pfile.chr$chr.clumped"){
+#	print "create $out.$pfile.chr$chr.clumped ";
+#	print "out of $out.chr$chr.clumped and  $pfile.chr$chr \n";
+	print "read $out.chr$chr.clumped\n";
+	my %snp_coll = ();
+	die $! unless open LDI, "< $out.chr$chr.clumped";
+	while (my $line = <LDI>){
+	    chomp($line);
+	    my @cells = @{&split_line_ref(\$line)};
+	    my $snp_loc = $cells[2];
+	    $snp_coll{$snp_loc} = 1;
+	}
+	close LDI;
+
+
+	print "change $pfile\n";
+	die $! unless open LDI, "< $pfile";
+#	die $! unless open LDI, "< $pfile.chr$chr";
+	die $! unless open LDO, "> $out.$pfile.chr$chr.clumped";
+	while (my $line = <LDI>){
+	    chomp($line);
+	    my @cells = @{&split_line_ref(\$line)};
+	    my $snp_loc = $cells[1];
+	    if (exists $snp_coll{$snp_loc}){
+		print LDO "$line\n";
+	    }
+	}
+	close LDI;
+	close LDO;
+    }
+
+    exit;
+}
+
+}
+
+
+
+
+
+
+#####################################
+# sum up the clumps
+#####################################
+
+unless (-e "$out.sum.clumped"){
+    &mysystem ("cat $clump_files[0] | head -1 > $out.sum.clumped") ;
+    &mysystem ("cat @clump_files >> $out.sum.clumped") ;
+}
+
+
+#exit;
+
+
+
+#####################################
+# read out the original file 
+#####################################
+
+if ($detformat == 1) { 
+    unless (-e "$out.$pfile.clumped"){
+#	print "create $out.$pfile.chr$chr.clumped ";
+#	print "out of $out.chr$chr.clumped and  $pfile.chr$chr \n";
+	print "read $out.sum.clumped\n";
+	my %snp_coll = ();
+	die $! unless open LDI, "< $out.sum.clumped";
+	while (my $line = <LDI>){
+	    chomp($line);
+	    my @cells = @{&split_line_ref(\$line)};
+	    next if ($cells[0] eq "CHR");
+	    my $snp_loc = $cells[2];
+	    $snp_coll{$snp_loc} = 1;
+	}
+	close LDI;
+	
+	
+	print "change $pfile\n";
+	die $! unless open LDI, "< $pfile";
+#	die $! unless open LDI, "< $pfile.chr$chr";
+	die $! unless open LDO, "> $out.$pfile.clumped";
+	my $header = <LDI>;
+	print LDO $header;
+	while (my $line = <LDI>){
+	    chomp($line);
+	    my @cells = @{&split_line_ref(\$line)};
+	    my $snp_loc = $cells[1];
+	    if (exists $snp_coll{$snp_loc}){
+		print LDO "$line\n";
+	    }
+	}
+	close LDI;
+	close LDO;
+    }
+}
+
+elsif ($detformat == 2) { 
+    unless (-e "$out.$pfile.clumped"){
+	print "read $out.sum.clumped\n";
+	my %ind_coll = ();
+	my %ind_genes = ();
+	$ind_coll{"SNP"} = "LD_friends";
+	$ind_genes{"SNP"} = "genes_in_friends_$gene_range"."kb";
+	my $index = "";
+	my %loc_hash;
+	die $! unless open LDI, "< $out.sum.clumped";
+	while (my $line = <LDI>){
+
+	    if ($line =~ /-----/) {
+		if ($index ne "") {
+		    print "non empty index\n";
+		    die ;
+		}
+	    }
+
+#	    if ($index eq "rs2974312") {
+#		print "rs2974312: $line\n";
+#	    }
+
+	    my @cells = @{&split_line_ref(\$line)};
+	    next if ($cells[0] eq "CHR");
+	    $cells[0] = "" if (@cells == 0);
+
+#	    if ($cells[2] eq "rs7015630") {
+#		print "found $cells[2]!!!! <$index>\n";
+#	    }
+
+	    if ($index eq "") {
+#		next unless ($cells[0] eq "(INDEX)");
+		next unless (@cells == 11);
+		$index = $cells [2];
+		%loc_hash = ();
+		$ind_coll{$index} = "";
+	    }
+	    else {
+
+		### get all LD friends in
+		if (@cells == 6) {
+		    $loc_hash{$cells[0]} = $cells[2];
+#		    $ind_coll{$index} .= ",$cells[0]($cells[2])";
+		}
+
+
+		if ($cells[0] eq "GENES:"){
+
+		    $ind_genes{$index} .= "$cells[1]";
+		    my $stop = 0;
+		    while ($stop == 0) {
+			my $line_loc = <LDI>;
+			if ($line_loc =~ /-----/) {
+			    $stop = 1;
+			}
+			else {
+			    my @cells = @{&split_line_ref(\$line_loc)};
+			    $ind_genes{$index} .= ",$cells[0]" if (@cells > 0);
+			}
+		    }
+
+
+
+
+		    ###############################################
+		    ####  sort a hash by value!!!!
+		    ################################################
+		    my @sorted = sort { $loc_hash{$b} <=> $loc_hash{$a} } keys %loc_hash; 
+
+		    foreach my $friend (@sorted) {
+
+			$ind_coll{$index} .= ",$friend($loc_hash{$friend})";
+#			print "$index\t$loc_hash{$index}\n";
+		    }
+		    $ind_coll{$index} =~ s/^,//;
+		    if ($ind_coll{$index} eq "") {
+			$ind_coll{$index} = "no_friends";
+		    }
+		    if ($ind_genes{$index} eq "") {
+			$ind_genes{$index} = "no_genes";
+		    }
+
+		    $index = "";
+		}
+	    }
+
+	}
+	close LDI;
+
+
+#	if (0) {	
+	print "change $pfile\n";
+	die $! unless open LDI, "< $pfile";
+#	die $! unless open LDI, "< $pfile.chr$chr";
+	die $! unless open LDO, "> $out.$pfile.clumped";
+	while (my $line = <LDI>){
+	    chomp($line);
+	    my @cells = @{&split_line_ref(\$line)};
+	    my $snp_loc = $cells[1];
+	    if (exists $ind_coll{$snp_loc}){
+		die "strange" unless (exists $ind_genes{$snp_loc});
+		print LDO "$line\t$ind_coll{$snp_loc}\t$ind_genes{$snp_loc}\n";
+	    }
+	}
+	close LDI;
+	close LDO;
+
+
+	die $! unless open RE, "> $out.$pfile.clumped.readme";
+	print RE "p1\t".$cp1."\n";
+	print RE "p2\t".$cp2."\n";
+	print RE "r2\t".$cr2."\n";
+	print RE "clu_window\t".$cwindow."\n";
+	print RE "freq_filter\t".$hq_freq."\n";
+	print RE "info_filter\t".$hq_info."\n";
+	print RE "gene_range\t".$gene_range."\n";
+	print RE "format\t".$detformat."\n";
+	close RE;
+
+#	}
+    }
+    else {
+	print "$out.$pfile.clumped already existing\n";
+    }
+
+}
+else {
+    print "print detformat not supported\n";
+    exit;
+}
+
+
+
+
+#####################################
+# clean MHC
+#####################################
+
+unless (-e "$out.$pfile.clumped.xmhc"){
+    print "clean for MHC\n";
+    die $! unless open LDI, "< $out.$pfile.clumped";
+    die $! unless open LDO, "> $out.$pfile.clumped.xmhc";
+    my $best_mhc = 1;
+    my $mhc_row ;
+    
+    while (my $line = <LDI>){
+	chomp($line);
+	my @cells = @{&split_line_ref(\$line)};
+	if ($cells[0] == 6 && $cells[2] > 25000000 && $cells[2] < 35000000) {
+	    if ($cells[10] < $best_mhc){
+		$best_mhc = $cells[10];
+		$mhc_row = $line;
+	    }
+	}
+	else {
+	    print LDO "$line\n";
+	}
+    }
+    print LDO "$mhc_row\n";
+    
+    close LDI;
+    close LDO;
+
+}
+
+
+#####################################
+# prekno
+#####################################
+die $! unless open PRES, "> $out.$pfile.clumped.xmhc.start.prekno";
+print PRES "prekno_clump --clump $out.$pfile.clumped.xmhc --refdir $refdir  --prekno PREKNOFILE\n";
+print PRES "txt2xls --txt $out.$pfile.clumped.xmhc.prekno --xls $out.mhc.prekno.xls --pcol 10,16,20,22 --cogr 5,12,17,19,23,28,33\n";
+close PRES;
+
+
+
+if ($prekno_file){
+    print "prekno_clump\n";
+    my $cmd = "prekno_clump --clump $out.$pfile.clumped.xmhc  --prekno $prekno_file --refdir $refdir";
+    unless (-e "$out.$pfile.clumped.xmhc.prekno") {
+	print "$cmd\n";
+	&mysystem ($cmd);
+    }
+    unless (-e "$out.xmhc.prekno.xls") {
+	my $cmd = "txt2xls --txt $out.$pfile.clumped.xmhc.prekno --xls $out.mhc.prekno.xls --pcol 10,16 --cogr 5,8,12,17,18,19";
+	&mysystem ($cmd);
+    }
+
+}
+
+
+#####################################
+# create excel
+#####################################
+
+
+unless (-e "$out.xmhc.xls"){
+
+    my $cmd = "txt2xls --txt $out.$pfile.clumped.xmhc --xls $out.mhc.xls --pcol 10,16 --cogr 5,8,12,17,18";
+    &mysystem ($cmd);
+
+}
+
+
+&mysystem ("gzip -c $out.$pfile.clumped.xmhc > $out.$pfile.clumped.xmhc.gz");
+
+if ($reinvo_file) {
+    die "$reinvo_file: ".$! unless open FILE, "< $reinvo_file";
+    my $redir = <FILE>;
+    chomp($redir);
+    my $recom = <FILE>;
+    chomp($recom);
+    close FILE;
+    
+    chdir ($redir);
+    &mysystem ($recom);
+    
+}
+
+
+
+
+
+#####################################
+# zip it up
+#####################################
+
+

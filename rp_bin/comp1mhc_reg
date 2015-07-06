@@ -1,0 +1,389 @@
+#!/usr/bin/perl
+use strict;
+
+
+##########################################################################################
+#
+#         counts independent regions of areator file
+##
+#
+#
+#  comp1mhc_reg --repl --pth 5.0e-08 --r6 --out test --kbwin 500 remeta7_repl_PGC_SCZ52_0513a.icenoice.0513a.rep.txt
+#  /psych/genetics_data/ripke/scz/1KG/freeze_0413b_ref_aug12/shapeit2/incl_trio/incl_asian_0513a/distribution/PGC_SCZ52_0513a/replic/test2
+#
+#
+#
+##########################################################################################
+
+#use lib '/home/unix/sripke/perl_modules//Win32-OLE-0.1709/lib';
+#use lib '/home/unix/sripke/perl_modules//Win32-Word-Writer-0.03/lib';
+
+#use lib '/home/unix/sripke/perl_modules//Win32-Word-Writer-0.03/lib/Win32/Word/';
+
+#Win32-Word-Writer-0.03/lib/Win32/Word/Writer
+#    use Win32::OLE;
+#    use Win32::Word::Writer;
+#my $txt_name = "no_input";
+my $out_name = "no_output";
+my $incol = 0; # index column 
+my $ldcol = 12; # ld friend column
+my $pvcol = 3; # ld friend column
+my $chrcol = 1; # ld friend column
+my $poscol = 2; # ld friend column
+my $leftcol = 13; # ld friend column
+my $rightcol = 14; # ld friend column
+#my $leftcol = 17; # ld friend column
+#my $rightcol = 18; # ld friend column
+my $gtcol = 6; # ld friend column
+my $frcol = 8; # ld friend column
+
+my $pth = 5.0e-08;
+my $r2th = .4;
+my $kbwin = 0; ## window in kb for defining a region 
+my $r6 = 0;
+
+use Getopt::Long;
+GetOptions( 
+#   "txt=s"=> \$txt_name,
+   "help"=> \my $help,
+   "meta"=> \my $meta,
+   "m2eta"=> \my $meta2,
+   "repl"=> \my $repl,
+   "incol=i"=> \$incol,
+   "ldcol=i"=> \$ldcol,
+   "pth=f"=> \$pth,
+   "r2th=f"=> \$r2th,
+   "kbwin=i"=> \$kbwin,
+   "out=s"=> \$out_name,
+   "r6"=> \my $r6,
+ );
+
+#if ($help || $txt_name eq "no_input"){
+if ($help){
+    print "usage: $0 OPTIONS 1mhc-files
+
+      options:
+
+	--help          print this message and exit
+#        --txt STRING    name of txt-file, white space delimited
+        --out STRING    name of out file, white space delimited
+
+        --incol STR     column (starting with 0) with index snp
+        --ldcol STR     column (starting with 0) with ld friends
+
+        --pth FLOAT     pval threshhold
+        --r2th FLOAT    rth threshhold
+        --kbwin INT     window in kb (overwrites r2)
+
+        --meta          do the same with meta-file (different columns)
+        --meta2          do the same with meta-file (different columns)
+        --repl          do the same with meta-file (different columns): remeta*rep.txt
+           --r6         take r2 = 0.6 (works only for repl)
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ Psychiatric Genomics Consortium
+\n";
+    exit 2;
+}
+
+if ($meta) {
+    $incol = 1; # index column 
+
+    $pvcol = 10; # ld friend column
+    $chrcol = 0; # ld friend column
+    $poscol = 2; # ld friend column
+
+    $frcol = 6; # ld friend column
+
+}
+
+if ($meta2) {
+    $incol = 1; # index column 
+
+    $pvcol = 7; # ld friend column
+    $chrcol = 0; # ld friend column
+    $poscol = 2; # ld friend column
+
+    $frcol = 6; # ld friend column
+
+}
+
+
+if ($repl) {
+    $incol = 0; # index column 
+
+    $pvcol = 18; # ld friend column
+    $chrcol = 1; # ld friend column
+
+
+    $leftcol = 29; # ld friend column
+    $rightcol = 30; # ld friend column
+
+    if ($r6) {
+	$leftcol = 31; # ld friend column
+	$rightcol = 32; # ld friend column
+
+    }
+
+
+    $poscol = 2; # ld friend column
+
+#    $frcol = 6; # ld friend column
+
+}
+
+
+
+
+if ($out_name eq "no_output"){
+#    $out_name = $txt_name.".repl";
+    $out_name = "stdout";
+}
+#$out_name .= ".txt";
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+
+
+#####################################
+### BEGIN
+#####################################
+
+
+
+
+#################################################
+## go through infile
+##########################################
+
+
+my $txt_name = $ARGV[0];
+my $txt_name_sorted = $txt_name.".locsorted";
+
+my $pvcols = $pvcol + 1;
+my $chrcols = $chrcol + 1;
+my $leftcols = $leftcol + 1;
+
+#unless (-e $txt_name_sorted) {
+my $sortsys = "sort -k$chrcols,$chrcols"."n  -k$leftcols,$leftcols"."n $txt_name > $txt_name_sorted";
+#print "$sortsys\n";
+system($sortsys);
+#}
+#exit;
+my @chr_arr;
+my @pv_arr;
+my @pos_arr;
+my @left_arr;
+my @right_arr;
+my @index_arr;
+my @for_snp_arr;
+my @for_chr_arr;
+my @for_pos_arr;
+
+#my $new_count = 0;
+my $bwin = $kbwin *1000;
+
+my %new_count;
+my %ind_count;
+my @pth_arr = qw/5.0e-08 1.0e-06 1.0e-05 1.0e-04 1.0/;
+foreach (@pth_arr) {
+    $new_count{$_} = 0;
+    $ind_count{$_} = 0;
+}
+
+###########  go through txt-file
+my $lc = 1;
+my $alc = 1;
+
+
+my $old_pvloc = 0;
+my $old_right = 0;
+my $old_left = 0;
+my $old_chr = 0;
+my $old_index = "rsx";
+my $topold_index = "rsx";
+my $cc = 0;
+die $!."($txt_name_sorted)" unless open IN, "< $txt_name_sorted";
+die $!."($txt_name_sorted.reg.tmp)" unless open OUT, "> $txt_name_sorted.regplot.tmp";
+die $! unless open POU, "> $txt_name_sorted.purregplot.tmp";
+die $!."($txt_name_sorted.forplot)" unless open FOR, "> $txt_name_sorted.forplot";
+
+my $line = <IN>;
+my $pv_loc;
+
+while (my $line = <IN>){
+    my @cells = @{&split_line_ref(\$line)};
+
+    $pv_loc = $cells[$pvcol];
+    $pv_loc *= 1;
+
+
+#    print "$pv_loc\n";
+#    next if ($cells[$pvcol] eq "NA");
+
+#    next if ($cells[$pvcol]*1 = 0);
+
+    next if ($pv_loc == 0);
+
+
+
+    next if ($pv_loc > $pth);
+#    next if ($cells[$pvcol] > 1.0e-06);
+
+
+    my $pos_loc = 1 * $cells[$poscol];
+    my $chr_loc = 1 * $cells[$chrcol];
+    my $snp_loc = $cells[$incol];
+
+#    my $left_loc = 1 * $cells[$leftcol] ;
+#    my $right_loc = 1 * $cells[$rightcol] ;
+    my $left_loc = 1 * $cells[$leftcol] - 50000;
+    my $right_loc = 1 * $cells[$rightcol] + 50000;
+
+    if ($bwin != 0) {
+	$left_loc = $pos_loc - $bwin;
+	$right_loc = $pos_loc + $bwin;
+    }
+
+
+
+
+#    if ($snp_loc eq "rs9607782" || $snp_loc eq "rs6002655" || $snp_loc eq "rs12691307") {
+    if (0) {
+	print "$snp_loc";
+	print "\t$chr_loc";
+#	print "\t$pos_loc";
+	print "\t$pv_loc";
+	print "\t$left_loc";
+	print "\t$right_loc";
+
+	print "\n";
+	
+#	sleep(1);
+    }
+
+
+
+    my $overlap = 0;
+#    if ($chr_loc != $old_chr || $left_loc > $old_right) {
+    if ($chr_loc == $old_chr && $left_loc < $old_right) {
+	$overlap = 1;
+
+    }
+
+    if ($overlap == 1){
+	if ($pv_loc < 1.0e-06) {
+	    if ($old_index eq "") {
+		$old_index = $snp_loc ;
+
+	    }
+	    else {
+		$old_index .= ",".$snp_loc;
+	    }
+	}
+	if ($right_loc > $old_right) {
+	    $old_right = $right_loc;
+	}
+	if ($pv_loc < $old_pvloc) {
+	    $old_pvloc = $pv_loc;
+	    $topold_index = $snp_loc ;
+	}
+#	print "old: $old_index, $old_left, $old_right\n";
+    }
+    else {
+#	print "old: $old_left\n";
+#	print "old: $old_right\n";
+#	print "old: $old_left, $old_right\n";
+	if ($old_index ne "rsx") {
+	    if ($old_pvloc <= $pth) { 
+		my $pos_out = sprintf "%d",$old_left/1000000;
+
+		print OUT "$old_pvloc --title $out_name.$cc.chr$old_chr --out $out_name.$cc.chr$old_chr.$pos_out"."mb --snp $old_index --area $old_chr,$old_left,$old_right\n";
+		print POU "$old_pvloc $topold_index $old_chr $old_left $old_right $old_index\n";
+		$cc++;
+
+	    }
+	}
+	$old_index = "";
+	$topold_index = "";
+	$old_chr = $chr_loc;
+
+	$old_pvloc = $pv_loc;
+	$topold_index = $snp_loc;
+	$old_right = $right_loc;
+	$old_left = $left_loc;
+#	if ($pv_loc < 1.0e-06) {
+	if ($pv_loc < $pth) {
+	    $old_index = $snp_loc;
+
+	}
+
+    }
+    if ($pv_loc <= $pth) {
+	print FOR "--chr $chr_loc --pos $pos_loc  --snp $snp_loc --out $out_name.$cc.$snp_loc\n"; 
+    }
+#    if ($chr_loc != $old_chr) {
+#	$old_chr = $chr_loc;
+#	$old_right = 0;
+ #   }
+#    $cc++;
+
+    next;
+
+
+}
+
+close IN;
+
+if ($old_pvloc <= $pth) { 
+    my $pos_out = sprintf "%d",$old_left/1000000;
+    print OUT "$old_pvloc --title $out_name.$cc.chr$old_chr --out $out_name.$cc.chr$old_chr.$pos_out"."mb --snp $old_index --area $old_chr,$old_left,$old_right\n";
+    print POU "$old_pvloc $topold_index $old_chr $old_left $old_right $old_index\n";
+}
+
+
+close OUT;
+close POU;
+close FOR;
+
+
+
+&mysystem ("sort -k1,1g $txt_name_sorted.regplot.tmp > $txt_name_sorted.regplot");
+&mysystem ("sort -k1,1g $txt_name_sorted.purregplot.tmp > $txt_name_sorted.purregplot");
+&mysystem ("sort -k6,6 $txt_name_sorted.forplot > $txt_name_sorted.sorted.forplot");
+#&mysystem ("mv $txt_name_sorted.regplot.tmp $txt_name_sorted.regplot");
+
+#print "old: $old_index, $old_left, $old_right\n";
+exit;
+
+
+
+
+exit;
+

@@ -1,0 +1,723 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "2.3.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+my $title = "";
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $rloc = &trans("rloc");
+my $sloc = &trans("sloc");
+my $home = &trans("home");
+
+
+
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+else {
+    unless (-e "$rloc/R" ){
+	print "\n***** Error: couldn't find the following:\n";
+	print "$rloc/R\n";
+	exit;
+    }
+}
+
+
+########################
+## read study names
+
+my %stuna ;
+print "study.names not found in homedir\n" unless open FILE, "< $home/study.names";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $stuna{$cells[0]} = $cells[1];
+}
+close FILE;
+
+########################
+
+
+
+##### help message
+my $usage = "
+Usage : $progname pvalue-file (or STDIN)
+
+version: $version
+
+pvalue-file   contains p-values
+
+
+
+options:
+
+  -title STRING       title of plot, title of plot, default= infilename, if \"notitle\", then leftout
+  -ceiling            ceiling, at which pvalues stop to increase
+  -anonym NUM         cut of plot at NUM value
+  -help               prints help message
+  -pcol               column number containing pvalues, if empty print header
+  -out                outname of pdf-file
+  -la1000 ca,co      additional lambda1000 with nca an nco
+  -lafa1000 fam-file  additional lambda1000 nca an nco according to fam-file
+  --yesco             with corrected values
+  --cacohead          read ncases and ncontrols out of header
+
+  --exhla INT,INT     exclude hla region and print as red, columns of CHR and POS
+ 
+  --maf FLOAT         threshold of 
+  --info FLOAT        threshold of 
+
+  --ac INT            allele-count of max. INT (cases and controls together)
+
+  --frcol INT         changing frequency columne (default 7, starting with 1)
+
+
+here for lambda1000:
+http://www.nature.com/ng/journal/v36/n4/full/ng1333.html
+
+
+!! argument pcol is mandatory !!
+!! header is mandatory !!
+
+ make QQ-Plot with pvalue-file and reports on the QC2 - Step for GWAS - Data, while using plink, R, latex
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+use File::Path;
+use Cwd;
+
+my $rootdir = &Cwd::cwd();
+
+my $ceiling=1000000;
+my $pcol=0;
+my $frcol=7;
+my $facol=6;
+my $fucol=7;
+my $infocol=8;
+my $outname="";
+
+#print "home: ".$ENV{HOME}."\n";
+#print "pl: ".$ENV{projectLocation}."\n";
+
+#my $liblink = "$libloc/Statistics-Distributions-1.02/blib/lib";
+#print $liblink."\n";
+#exit;
+#print "perl_pack: ".$ENV{rp_perlpackages}."\n";
+use lib $ENV{rp_perlpackages}.'/Statistics-Distributions-1.02/blib/lib';
+
+#use lib '/home/sripke/ricopili/perl_packages/Statistics-Distributions-1.02/blib/lib';
+#use lib '/home/gwas/bin/Statistics-Distributions-1.02/blib/lib';
+#use lib $liblink;
+#use lib '/fg/wgas/wgas2/bneale/AMD/080616/imputation/for_Stephan/Statistics-Distributions-1.02/blib/lib';
+
+
+use Statistics::Distributions;
+
+
+my $anon = 0;
+my $maf_th = 1.00;
+my $info_th = 3.00;
+my $af_th = 0;
+
+use Getopt::Long;
+GetOptions( 
+#    "header"=> \my $header,   # header present, skip first line
+    "ceiling=f"=> \$ceiling, # lowers ceiling (fo very low pvalues
+    "maf=f"=> \$maf_th, # maf-th
+    "frcol=i"=> \$frcol, # frequency column
+    "info=f"=> \$info_th, # info-th
+    "ac=i"=> \$af_th, # maf-th
+    "help"=> \my $help, # prints help message
+    "yesco"=> \my $yesco, # no corrected values
+    "pcol=i"=> \$pcol, # prints help message
+    "anonym=i"=> \$anon, # prints help message
+    "out=s"=> \$outname, # outname of pdf-file
+    "la1000=s"=> \my $la1000, # outname of pdf-file
+    "lafa1000=s"=> \my $famfile, # outname of pdf-file
+    "cacohead"=> \my $cacohead, # read ncases and ncontrols out of header
+    "exhla=s"=> \my $exhla_str, # read ncases and ncontrols out of header
+    "title=s"=> \$title, # title of plot
+    );
+
+
+die "$usage\n" if $help;
+#die "please try $progname --help\n" if @ARGV ne 1;
+
+
+
+
+
+foreach my $sn (keys %stuna) {
+    $title = $stuna{$sn} if ($title =~ /$sn/);
+}
+
+
+my $workdir = "$sloc/qq_$outname";
+
+while (-e $workdir) {
+    $workdir .= ".q";
+}
+
+my @created = mkpath(   ## $created ?
+			"$workdir",
+			{verbose => 0, mode => 0750},
+    );
+
+
+chdir ($workdir);
+
+my $pfile = $ARGV[0];
+
+print "copy files\n";
+&mysystem ("cp $rootdir/$pfile .");
+&mysystem ("cp $rootdir/$famfile .") if ($famfile);
+
+print "unzip files\n";
+if ($pfile =~ /.gz$/){
+    &mysystem ("gunzip -f $pfile");
+    $pfile =~ s/.gz$//;
+}
+
+
+
+#print $outname."----".$pfile."\n";
+
+$pfile = "NoName" if ($pfile eq "");
+$outname = "$pfile.qq_sm" if $outname eq "";
+
+my $lapaname = $outname;
+$outname .= "-qq.pdf";
+$lapaname .= "-lapa.pdf";
+
+
+#my $pcol = $ARGV[1];
+my $exp_ceiling = 10.0 ** (-$ceiling);
+
+my $nca=0;
+my $nco=0;
+
+if ($la1000){
+    ($nca,$nco) = split ',', $la1000;
+}
+#print "$nca\t$nco\n";
+
+if ($famfile){
+    die "$! ($famfile)" unless open FILE, "< $famfile";
+    while (<FILE>){
+	my @cells = &split_line($_);
+	$nca++ if ($cells[5] == 2);
+	$nco++ if ($cells[5] == 1);
+    }
+    close FILE;
+}
+#print "$nca, $nco\n";
+#exit;
+#print STDERR "hier : $outname\t $pfile\n";
+#exit 2;
+
+
+
+#exit;
+
+## subroutine for sorting
+sub by_number { $a <=> $b}
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+##########################################
+# subroutine extract ncases and ncontrols
+##########################################
+
+sub excaco {
+    my ($line)=@_;
+    my ($nca,$nco);
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    foreach (@cols){
+	if ($_ =~ /^FRQ_A_/){
+	    $nca = $_;
+	    $nca =~ s/FRQ_A_//;
+	}
+	if ($_ =~ /^FRQ_U_/){
+	    $nco = $_;
+	    $nco =~ s/FRQ_U_//;
+	}
+    }
+    ($nca,$nco);
+}
+
+print "walk through p-file\n";
+
+##########################
+### BEGIN
+###############################
+die "$pfile: ".$! unless open FILE, "< $pfile";
+
+#### read p_vals while applying ceiling
+my @pvals=();
+
+#die "$! ($pfile)" unless open FILE, "< $pfile";
+my $lc=0;
+my $line = <FILE>;
+if ($pcol==0){
+    my @cells = &split_line($line);
+    my $cc=1;
+    foreach my $cellx(@cells){
+	print "$cc\t$cellx\n";
+	$cc++;
+    }
+    die "please chose now\n";
+}
+
+if ($cacohead) {
+    ($nca,$nco) = &excaco($line);
+    $la1000;
+}
+
+
+
+my $opfile = $pfile."o";
+die "$! ($opfile)" unless open OFILE, "> $opfile";
+while (<FILE>){
+    my $line = $_;
+    $line =~ s/^[\s]+//g;
+    my @cells = split /\s+/, $line;
+#    my @cells = &split_line($_);
+#    print "$cells[$pcol-1]\n";
+    my $single_pval = $cells[$pcol-1];
+    $single_pval = $exp_ceiling if ($single_pval < $exp_ceiling);
+    next if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0);
+
+    if ($maf_th < 1.00) {
+	next if $cells[$frcol-1] < $maf_th;
+	next if $cells[$frcol-1] > 1-$maf_th;
+    }
+    if ($info_th < 3.00) {
+	next if $cells[$infocol-1] < $info_th;
+    }
+    if ($af_th > 0) {
+	my $fa = $cells[$facol-1];
+	my $fu = $cells[$fucol-1];
+	if ($fu > 0.5) {
+	    $fa = 1-$fa;
+	    $fu = 1-$fu;
+	}
+	my $ac_loc = 0;
+	$ac_loc += $fa *  $nca;
+	$ac_loc += $fu *  $nco;
+
+	if (2*$ac_loc < $af_th) {
+#	    print "@cells\n";#
+#	    print "snp:".$cells[1]."\n";#
+#	    print "ca-f:".$cells[$facol-1]."\n";
+#	    print "co-f:".$cells[$fucol-1]."\n";
+#	    print "ac_loc:".$ac_loc."\n";
+#	    sleep(1);
+	    next;
+	}
+
+    }
+
+
+    print OFILE $single_pval."\n";
+#    push @pvals, $single_pval;
+    $lc++;
+    print $lc." lines read\n" if ($lc % 1000000 == 0);
+}
+close FILE;
+close OFILE;
+#exit;
+
+
+
+die "no p_values left" if ($lc == 0);
+#exit;
+
+my $Np=$lc;  ## keep number of p_vals
+
+### sort pvals
+print "sort pvals\n";
+my @spvals ;
+#my @spvals = sort by_number @pvals;
+
+&mysystem("sort -k1,1g $opfile > $opfile.sorted");
+$lc=0;
+die "$! ($opfile.sorted)" unless open FILE, "< $opfile.sorted";
+while (<FILE>){
+    my $line = $_;
+    chomp($line);
+    push @spvals, $line;
+    $lc++;
+    print $lc." lines read\n" if ($lc % 1000000 == 0);
+}
+close FILE;
+
+
+
+
+print "empty pvals\n";
+@pvals = ();
+
+
+
+#####
+## lambda calc
+my $chis_ref=Statistics::Distributions::chisqrdistr (1,.5);
+my $halfway = $spvals[@spvals/2];
+my $chisq_temp = Statistics::Distributions::chisqrdistr(1,$halfway);
+my $la = sprintf "%.3f",$chisq_temp/$chis_ref;
+my $latou = 0;
+if ($nca!=0 && $nco!=0){
+    my $nquot = (1/$nca + 1/$nco) / (1/1000 + 1/1000);
+    $latou = 1+ ($la-1) * $nquot;
+    $latou = sprintf "%.3f", $latou;
+}
+#print "$nca\t$nco\t$la\t$latou\n";
+#exit;
+###############################
+##### lambda stair
+#################################
+
+if (1) {
+
+my $nlasteps = 100;
+my $lastep = 1/$nlasteps;
+my $lapart = 0;
+if (0){
+    foreach (0..($nlasteps-1)) {
+	
+	my $pref = 0.5 * (1.0 + $lapart);
+	
+	my $pdat = $spvals [(.5 * $lc * ( 1+ $lapart)) + .5];
+	
+	my $cref =  Statistics::Distributions::chisqrdistr(1,$pref);
+	my $cdat =  Statistics::Distributions::chisqrdistr(1,$pdat);
+	my $la =  $cdat / $cref;
+	
+	my $n_lapa = $lc - $lc * $lapart;
+	printf "%.3f\t%.3f\t$pref\t%.3f\t%d\n", $lapart, $la, $pdat, ($n_lapa + .5);
+	$lapart += $lastep;
+	last if ($lapart > .8);
+    }
+}
+
+
+
+my $datloc=0;
+my @lapa_out = ();
+push @lapa_out, "p-thresshold\tLambda\tN\n";
+foreach (0..($nlasteps-1)) {
+
+
+    print "$_\t";
+
+    while  ($spvals[$datloc] < $lapart) {
+	$datloc++;
+	last if ($datloc > @spvals);
+    };
+    last if ($datloc > @spvals);
+
+    my $pref = 0.5 * (1.0 + $lapart);
+    my $pdat = $spvals [($lc + $datloc) * .5];
+    my $n_lapa = $lc - $lc * $lapart;
+
+#    printf "%.3f\t%.5f\t%d\t%d\n", $pref, $pdat, ($n_lapa + .5),($lc + $datloc) * .5 ;
+
+    my $cref =  Statistics::Distributions::chisqrdistr(1,$pref);
+    my $cdat =  Statistics::Distributions::chisqrdistr(1,$pdat);
+    my $la =  $cdat / $cref;
+
+
+
+#    push @lapa_out, sprintf "%.3f\t%.3f\t$pref\t%.3f\t%d\n", $lapart, $la, $pdat, ($n_lapa + .5);
+    push @lapa_out, sprintf "%.3f\t%.5f\t%d\n", $lapart, $la, ($n_lapa + .5);
+    $lapart += $lastep;
+    last if ($lapart > .8);
+
+}
+
+print "\n";
+
+&a2file ("$outname.lapa",@lapa_out);
+
+
+my $R_templ='
+read.delim ("LAPA",header=T) -> lapa
+pdf("OUTNAME",6,6)
+
+barplot(lapa[,3], ylab="N", cex.lab=.6, cex.axis=.6);
+
+
+par(new=T)
+ylim1 = floor (min(lapa[,2],na.rm=T)*100)/100
+ylim2 = ceiling(max(lapa[,2],na.rm=T)*100)/100
+xlim1 = min(lapa[,1],na.rm=T)
+xlim2 = max(lapa[,1],na.rm=T)
+plot(lapa[,1],lapa[,2],col=colors()[100], type="b",ylim=c(ylim1,ylim2),yaxt="n", xlab=colnames(lapa)[1], ylab="", 
+      main = paste ("PHEAD - 2D Lambda Plot - ",colnames(lapa)[1] ,sep=""), xlim = c(xlim1, xlim2),
+      cex.sub=.6, cex.main=.8, cex.lab =.6, cex.axis=.6); axis(4, cex.axis=.6,col=colors()[100], col.axis=colors()[100])
+abline (h=1.0, col =colors()[100] )
+mtext("Lambda", cex=.6, side = 4, line =2,col=colors()[100])
+
+dev.off()
+';
+$R_templ =~ s/LAPA/$outname.lapa/g;
+
+$R_templ =~ s/OUTNAME/$lapaname/g;
+
+
+
+
+&a2file ( "$pfile.lapa.Rwork_tmp" , $R_templ);
+
+#&mysystem ("source /broad/software/scripts/useuse; use R-2.14; R < $pfile.lapa.Rwork_tmp --slave --vanilla \n");
+&mysystem ("$r_sys < $pfile.lapa.Rwork_tmp --slave --vanilla \n");
+
+
+
+#sexit;
+
+
+}
+#printf "HEAD: %s\tLambda:\t%.4f\tp-val:\t%.3f\tChisq:\t%.3f\tSize:\t%d\n",$phead,$la,$halfway,$chisq_temp,$size_temp;
+
+
+
+
+
+## write out pvals
+my $fac=100;  # the highest 50 ones for sure, rest randomly
+$lc=1;
+die "$! ($pfile.forQQ_tmp)" unless open OUT, "> $pfile.forQQ_tmp";
+foreach (@spvals){
+    my $p = $_;
+#    my $chi = Statistics::Distributions::chisqrdistr(1,$p);
+#    $chi /= $la;
+#    $p =  Statistics::Distributions::chisqrprob(1,$chi);
+#    print OUT "$_\t$lc\t$p\n" if (rand() < $fac/$lc);
+    print OUT "$_\t$lc\t$p\n" if (rand() < $fac/$lc);
+#    print "$_\t$lc\t$p\t$chi\t$la\n" if ($p < 1e-10);
+    $lc++;
+}
+close OUT;
+
+########### Rwork-Text (some of the variables will be substituted later)
+
+my $R_text= '
+read.table ("name_of_pfile",header=F)-> p_log
+pdf("name_of_outfile",title="QQ-Plot")
+
+#maxp = 10^(ceiling(max(-log10(p_log[,1]))))
+#print (maxp)
+#clist = c(p_log[,2],maxp)
+clist = c(p_log[,2])
+#print (clist)
+
+expect  <- (p_log[,2]-0.5)/number_of_pvals
+cexpect  <- (clist-0.5)/number_of_pvals
+
+biggest <- ceiling(max(-log10(p_log[,1]),-log10(cexpect)))
+
+#### confidence interval
+
+alpha <- 0.05
+#lower   <- qbeta(alpha/2,p_log[,2],number_of_pvals+1-p_log[,2])
+lower   <- qbeta(alpha/2,clist,number_of_pvals+1-clist)
+#upper   <- qbeta((1-alpha/2),p_log[,2],number_of_pvals+1-p_log[,2])
+upper   <- qbeta((1-alpha/2),clist,number_of_pvals+1-clist)
+
+cexpect = -log10(cexpect)
+cupper = -log10(upper)
+clower = -log10(lower)
+
+
+
+#lines(cexpect,clower,col="blue")
+#lines(cexpect,cupper,col="blue")
+
+
+#### datapoints
+
+if (ANON != 0){
+biggest = ANON
+}
+
+title = "MAIN"
+if (title == "notitle") {
+ title = ""
+}
+
+p_log[,3] = 1 - pchisq(qchisq(1-p_log[,1],1)/LAMBDA,1)
+
+plot (0,0,type="n", xlim=c(0,biggest), ylim=c(0,biggest), xlab="Expected -log10 (P)", 
+      main = title, 
+#      main = "", 
+#      main = "QQ-Plot - MAIN", 
+      cex.lab =1.0, cex.axis=1.4,
+      ylab = "Observed -log10 (P)", las=1 )
+
+
+polygon(c(cexpect,rev(cexpect)),c(cupper,rev(clower)), col="gray90", border = "red")
+#maxxp = max(-log10(p_log[,1]))
+maxxp = max(-log10(expect))
+lines(c(0,maxxp), c(0,maxxp), col = "blue")
+#lines(0,(max(-log10(p_log[,1]))), 0,(max(-log10(p_log[,1]))), col = "blue")
+
+xp = -log10(expect);
+
+#print (xp)
+#print (maxxp)
+
+
+points (x=xp,y=-log10(p_log[,1]),pch=18, cex = 1.5*(xp/maxxp) + .5)
+ 
+
+
+if (NOCO == 0) {
+points (x=-log10(expect),y=-log10(p_log[,3]),cex=.4,col=colors()[100])
+}
+
+xtext = biggest/2
+ytext = biggest/4
+
+#if (LA1000 != 0) {
+if (title != ""){
+  text(xtext,ytext,"lambda= LAMBDA; N (pvals) = NOBS",pos=4,cex=.8)
+}
+#}
+
+xtext = biggest/4
+ytext = biggest/8
+
+if (LA1000 != 0 & title != ""){
+text(xtext,ytext,"lambda1000= LA1000 (NCASE cases, NCON controls)",pos=4, cex = .8)
+}
+
+if (NOCO ==0){
+mtext("ripke @ chgr mgh harvard edu",4,cex=.3)
+}
+
+
+
+if (NOCO == 0){
+abline (v= -log10(HALFW),col="grey")
+text (x= -log10(HALFW), y = biggest/2 , labels = paste ("median:",round (-log10(HALFW),3),"equal to p-val:",HALFW) ,col="grey", cex = .7,srt=90,pos=2)
+}
+
+dev.off();
+' ;
+
+## substute Rwork
+$R_text =~ s /number_of_pvals/$Np/g;
+$R_text =~ s /ANON/$anon/g;
+$R_text =~ s /NOCO/0/g if ($yesco);
+$R_text =~ s /NOCO/1/g unless ($yesco);
+$R_text =~ s /name_of_pfile/$pfile.forQQ_tmp/g;
+$title = $pfile if ($title eq "");
+#my $main = $pfile;
+#$main =~ s!.*/!!;
+#$R_text =~ s /MAIN/$main/g;
+$R_text =~ s /MAIN/$title/g;
+$R_text =~ s /name_of_outfile/$outname/g;
+my $nobs=@spvals;
+$R_text =~ s /NOBS/$nobs/g;
+$R_text =~ s /LAMBDA/$la/g;
+$R_text =~ s /LA1000/$latou/g;
+$R_text =~ s /NCASE/$nca/g;
+$R_text =~ s /NCON/$nco/g;
+$R_text =~ s /HALFW/$halfway/g;
+
+## print Rwork in temporary file
+die "$! ($pfile.qq.Rwork_tmp)" unless open OUT, "> $pfile.qq.Rwork_tmp";
+print OUT "$R_text";
+close OUT;
+
+## print lambda in temporary file
+die "$! ($pfile.qq.la)" unless open OUT, "> $pfile.qq.la";
+print OUT "$la\t$latou\n";
+print OUT "n_obervations: $nobs\n";
+close OUT;
+
+
+
+## system call
+my $system=" $r_sys --vanilla --slave < $pfile.qq.Rwork_tmp ";
+#my $system="source /broad/software/scripts/useuse; use R-2.14; R --vanilla --slave < $pfile.qq.Rwork_tmp ";
+
+&mysystem ($system);
+
+&mysystem ("cp $outname $rootdir");
+&mysystem ("cp $lapaname $rootdir");
+&mysystem ("cp $pfile.qq.la $rootdir");
+
+
+print "$pfile.forQQ_tmp\n";
+#exit;
+
+
+print "tar -cvzf $outname.tar.gz $pfile.qq.Rwork_tmp $pfile.forQQ_tmp\n";
+&mysystem ("tar -cvzf $outname.tar.gz $pfile.qq.Rwork_tmp $pfile.forQQ_tmp");
+&mysystem ("cp  $outname.tar.gz $rootdir");
+
+print "$outname\n";
+
+chdir ($rootdir);
+&mysystem ("rm -rf  $workdir");

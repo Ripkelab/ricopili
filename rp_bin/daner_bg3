@@ -1,0 +1,826 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+
+##sripke@tin.broadinstitute.org:/psych/genetics_data/ripke/pgc/scz/wave2/single_datasets/WTCCC2_PE/clean_pheno/imp_small/danerjobdir$ daner_bg --indir /psych/genetics_data/ripke/pgc/scz/wave2/single_datasets/WTCCC2_PE/clean_pheno/imp_small/dasu_scz_pews_eur-qc.ch.fl  --outdir /psych/genetics_data/ripke/pgc/scz/wave2/single_datasets/WTCCC2_PE/clean_pheno/imp_small/test_bg scz_pews_eur-qc.ch.fl.chr6_171_174
+
+
+###################################################################################
+###################################################################################
+##
+## qc1: INFO > info_th && MAF > freq_th
+## bg: miss < 0.02 (call with P > .8)
+## bgs: miss < 0.01 && MAF > 5%
+
+## since version 3: SNP passes filtering if found in pre-imp files
+##
+###################################################################################
+###################################################################################
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    chomp($line);
+    my @cells = split /\s+/, $line;
+#    print "line: <$line>\n";
+    next if ($line eq "");
+    next if ($line =~ /^#/);
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("ploc");
+my $sloc = &trans("sloc");
+my $qloc = &trans("queue");
+
+
+###########################################################################################################
+#
+#
+#    daner_bg - dosage best guess
+#
+#          created by Stephan Ripke, Broadinstitute, sripke@broadinstitute.org
+#
+#                                  12/17/12
+#
+#
+#
+#    creates best guess genotypes
+#
+#
+#
+#
+##########################################################################################################
+
+
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+
+use File::Path;
+use File::Copy;
+use Cwd;
+
+
+my $rootdir = &Cwd::cwd();
+
+my $outdir = "$rootdir";
+my $info_th = 0.1;
+my $freq_th = 0.005;
+my $bg_th = 0.8;
+
+##### help message
+my $usage = "
+Usage : $progname [options] batch_identifier
+
+version: $version
+
+  --ploc STRING    location (absolute path) of plink, if other than in the path
+  --help           print this message and exit
+  --outdir STRING  outdir
+  --indir STRING   indir, where the data is 
+  --info_th FLOAT  threshold for infoscore, default = $info_th
+  --freq_th FLOAT  threshold for frequence (cases and controls), default = $freq_th
+  --bg_th FLOAT  threshold for frequence (cases and controls), default = $bg_th
+
+  --direct         batch_identifier without dos and out.dosage
+
+ batch_identifier: files matching this should all have no double id-entries
+
+ expects a running plink and beagle version somewhere in the path, 
+ otherwise specify a location with --ploc or --beoc (e.g. /home/user/plink/plink)
+ beagle at least in version 3.1
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ 
+";
+
+
+#### evaluate options
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "ploc=s"=> \$ploc,
+    "outdir=s"=> \$outdir,
+    "indir=s"=> \my $indir,
+    "info_th=f"=> \$info_th,
+    "freq_th=f"=> \$freq_th,
+    "bg_th=f"=> \$bg_th,
+    "direct"=> \my $direct,
+
+    );
+
+
+die "$usage\n" if ($help);
+die "too many arguments\n$usage\n" if (@ARGV > 1);
+
+my $outdir_in = "$outdir/qc1";
+my $outdir_info = "$outdir/info";
+my $outdir_qcf = "$outdir/qc1f";
+my $outdir_bg = "$outdir/bg";
+my $outdir_bgs = "$outdir/bgs";
+my $outdir_bgn = "$outdir/bgn";
+
+
+my @created = mkpath(   ## $created ?
+			$outdir,
+			{verbose => 0, mode => 0750},
+    );
+
+@created = mkpath(   ## $created ?
+			$outdir_in,
+			{verbose => 0, mode => 0750},
+    );
+
+@created = mkpath(   ## $created ?
+			$outdir_info,
+			{verbose => 0, mode => 0750},
+    );
+
+@created = mkpath(   ## $created ?
+			$outdir_qcf,
+			{verbose => 0, mode => 0750},
+    );
+
+@created = mkpath(   ## $created ?
+			$outdir_bg,
+			{verbose => 0, mode => 0750},
+    );
+
+@created = mkpath(   ## $created ?
+			$outdir_bgs,
+			{verbose => 0, mode => 0750},
+    );
+
+@created = mkpath(   ## $created ?
+			$outdir_bgn,
+			{verbose => 0, mode => 0750},
+    );
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+my @cmd_collect;
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+    push @cmd_collect, $systemstr;
+
+}
+
+
+
+###################################################
+###  copy a list of files to the working directory
+###################################################
+
+
+sub get_files(){
+    foreach (@_) {
+	print "$_\n";
+	copy ($_,".") or die $!."($_)";
+    }
+}
+
+
+
+########################################
+# test plink and beagle
+###################################
+
+
+unless (-e "$ploc/plink" ){
+    print "\n***** Error: couldn't find the following:\n";
+    print "$ploc/plink\n";
+    exit;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+#################################################
+#################################################
+#  BEGIN
+#################################################
+#################################################
+
+my $bind;
+
+$bind = $ARGV[0];
+
+
+my $workname = "$bind";
+
+my $scratchdir = $sloc;
+my $workdir="$scratchdir/dabg_$workname";
+
+
+if (1) {
+    while (-e $workdir) {
+	$workdir .= ".d";
+    }
+}
+
+my $t1 = "dos_";
+my $t2 = ".out.dosage";
+if ($direct){
+    $t1 = "";
+    $t2 = "";
+}
+
+my $famfile = "$t1$bind$t2.fam";
+my $mapfile = "$t1$bind$t2.map";
+my $dosfile = "$t1$bind$t2.gz";
+my $emptyfile = "$indir/$t1$bind$t2.gz.empty";
+my $dosfile_nogz = "$t1$bind$t2";
+my $ngtfile = "$t1$bind$t2.ngt";
+my $infofile = "$t1$bind$t2.info";
+
+
+unless  (-e "$indir/$famfile") {
+    print "famfile not found: $indir/$famfile\n";
+    print "$bind\n";
+    exit;
+}
+
+
+#print "$emptyfile\n";
+if (-e $emptyfile) {
+
+
+    &mysystem("touch $outdir/qc1/$dosfile.fini");
+    &mysystem("touch $outdir/qc1/$dosfile.empty");
+
+    print "emptyfie exists\n";
+    exit;
+}
+
+
+print "workdir: $workdir\n";
+
+my @created_work = mkpath(   ## $created ?
+			"$workdir",
+			{verbose => 0, mode => 0750},
+    );
+
+
+
+#################################################
+#  copy to scratch
+#################################################
+chdir($workdir);
+
+print "copying files.....";
+
+&mysystem("cp $indir/$dosfile .") unless (-e $dosfile);
+&mysystem("cp $indir/$mapfile .") unless (-e $mapfile);
+&mysystem("cp $indir/$famfile .") unless (-e $famfile);
+&mysystem("cp $indir/$ngtfile .") unless (-e $ngtfile);
+
+print "finished\n";
+#sleep (10);
+#################################################
+#  analyze famfile, no_pt problem in dosages
+#################################################
+my $nopt = 0;
+
+my $famfile_new = "$famfile.new";
+die "$famfile: ".$! unless open IFILE, "< $famfile";
+die "$famfile: ".$! unless open OFILE, "> $famfile_new";
+while (my $line = <IFILE>){
+    my @cells = @{&split_line_ref(\$line)};
+    if ($cells[5] != 1 && $cells[5] != 2) {
+	$nopt++;
+	$cells[5] = 1;
+    }
+#    else {
+	print OFILE "@cells\n";
+#    }
+}
+close IFILE;
+close OFILE;
+
+
+if ($nopt > 0) {
+    print "pt_problem\n";
+    &mysystem("cp $famfile $famfile.sich");
+    &mysystem("cp $famfile_new $famfile");
+
+}
+
+
+
+
+
+#################################################
+#  read NGT
+#################################################
+
+print "reading ngt file......\n";
+
+my %ngt=();
+my %mapinfo=();
+die "$ngtfile: ".$! unless open FILE, "< $ngtfile";
+while (my $line = <FILE>){
+    my @cells = @{&split_line_ref(\$line)};
+    $ngt{$cells[1]} = $cells[4];
+    $mapinfo{$cells[1]} = $cells[0];
+    $mapinfo{$cells[1]} .= " ".$cells[1];
+    $mapinfo{$cells[1]} .= " ".$cells[2];
+    $mapinfo{$cells[1]} .= " ".$cells[3];
+}
+close FILE;
+
+print "...finished\n";
+print "now perform best guess.....\n";
+
+#exit;
+
+################################
+## sub for calculating variance
+###############################
+
+sub calc_variance_qs {
+    my ($p_arr, $pmean) = @_;
+    my $var = 0;
+    my $n = @{$p_arr};
+    foreach (0..($n-1)){
+	my $diff = ($p_arr->[$_] - $pmean);
+	$var += $diff * $diff;
+    }
+    $var/$n;
+}
+
+
+
+&mysystem("gunzip -c $dosfile > $dosfile_nogz");
+
+###########################################
+### here write new dosage file
+############################################
+
+my $dosfile_clean = "$dosfile_nogz.qc1";
+my $dosfile_dirty = "$dosfile_nogz.qc1f";
+my $dosfile_tped = "$dosfile_nogz.qc1.tped";
+my $dosfile_tped_strict = "$dosfile_nogz.qc2.tped";
+my $dosfile_tped_noqc = "$dosfile_nogz.noqc.tped";
+
+die "$dosfile_clean: ".$! unless open DO, "> $dosfile_clean";
+die "$dosfile_dirty: ".$! unless open DOX, "> $dosfile_dirty";
+die "$dosfile_tped: ".$! unless open TP, "> $dosfile_tped";
+die "$dosfile_tped_noqc: ".$! unless open TPN, "> $dosfile_tped_noqc";
+die "$dosfile_tped_strict: ".$! unless open TPS, "> $dosfile_tped_strict";
+die "$dosfile_nogz: ".$! unless open DI, "< $dosfile_nogz";
+my $line = <DI>;
+print DO $line;
+print DOX $line;
+
+my %qc_in ;
+my %snp_info ;
+my %snp_frq ;
+my %snp_a1 ;
+my %snp_a2 ;
+
+
+
+my $ntp = 0;
+my $ntps = 0;
+my $ntpn = 0;
+
+while ($line = <DI>){
+    my @cells = @{&split_line_ref(\$line)};
+    my $sname = shift (@cells);
+    my $a1 = shift (@cells);
+    my $a2 = shift (@cells);
+    my $odd = 0;
+    my @dos_arr = ();
+    my @bg_arr = ();
+    my $dos = 0;
+    my $dossum = 0; # sum of doasge
+    my $psum = 0; # sum of probabilities (for pBB)
+    my @gt_count ;
+    $gt_count [0] = 0;
+    $gt_count [1] = 0;
+    $gt_count [2] = 0;
+    $gt_count [3] = 0;
+#    my $miss = 0; # missing
+#    my $gt1 = 0; # 
+
+
+    my $gt_loc = 0;
+    foreach my $p (@cells) {
+	if ($odd == 0) {
+	    $dos = $p * 2;
+	    $odd = 1;
+	    ## bg
+	    if ($p >= $bg_th) {
+		$gt_loc = 1;
+	    }
+	    $psum = $p;
+	}
+	else {
+	    $dos += $p;
+	    $dos /= 2;
+	    push @dos_arr, $dos;
+	    $dossum += $dos;
+
+	    ## bg
+	    if ($p >= $bg_th) {
+		$gt_loc = 2;
+	    }
+	    $psum += $p;
+	    if (1-$psum >= $bg_th) {
+		$gt_loc = 3;
+	    }
+	    push @bg_arr, $gt_loc;
+
+	    $gt_count [$gt_loc] ++;
+#	    if ($gt_loc == 0) {
+#		$miss++;
+#	    }
+
+	    $odd = 0;
+	    $gt_loc = 0;
+	}
+    }
+
+    my $nc = @dos_arr;
+    my $miss_rate = $gt_count[0] / $nc; # missing
+
+#    my %info = 0;
+
+    ## check info and freq and write out dosages
+    my $frq = $dossum / $nc;
+    my $in = 0;
+    my $info = 0;
+    if ($frq <= (1.0 - $freq_th) && $frq >= $freq_th) {
+	my $var = &calc_variance_qs(\@dos_arr, $frq);
+
+	if ($frq != 0 && (1-$frq) != 0) {
+	    $info = 2* $var / ((1-$frq)*$frq) ;
+	}
+
+	if ($info >= $info_th) {
+	    $in = 1;
+	}
+    }
+    if ($ngt{$sname} == 1) {
+	$in = 1;
+    }
+
+    $snp_info{$sname} = sprintf("%.4g",$info);
+    $snp_frq{$sname} = sprintf("%.4g",$frq);
+    $snp_a1{$sname} = $a1;
+    $snp_a2{$sname} = $a2;
+
+
+    ### create tped row
+    unless (exists $mapinfo{$sname}) {
+	print "no mapinfo for <$sname>\n";
+	next;
+    }
+    my $tped_out = $mapinfo{$sname};
+    foreach my $gt_loc (@bg_arr) {
+	if ($gt_loc == 0) {
+	    $tped_out .= " 0 0";
+	}
+	elsif ($gt_loc == 1) {
+	    $tped_out .= " $a1 $a1";
+	} 
+	elsif ($gt_loc == 2) {
+	    $tped_out .= " $a1 $a2";
+	} 
+	elsif ($gt_loc == 3) {
+	    $tped_out .= " $a2 $a2";
+	} 
+    }
+
+    # write out lines (dosage and bg)
+    if ($in ==1) {
+	print DO "$sname $a1 $a2 @cells\n";
+	if ($miss_rate < 0.02) {
+	    if ($gt_count [1] != ($nc-$gt_count[0]) && $gt_count [3] != ($nc-$gt_count[0])){
+		print TP "$tped_out\n";
+		$ntp++;
+	    }
+	}
+	if ($miss_rate < 0.01) {
+	    if ($frq < 0.95 && $frq > 0.05) {
+		print TPS "$tped_out\n";
+		$ntps++;
+	    }
+	}
+#	if ($miss_rate < 0.01) {
+#	    if ($frq < 0.95 && $frq > 0.05) {
+	print TPN "$tped_out\n";
+	$ntpn++;
+#	    }
+#	}
+
+
+
+	$qc_in{$sname} = 1;
+    }
+    else {
+	print DOX "$sname $a1 $a2 @cells\n";
+    }
+
+
+
+#    my $debug_snp = "rs1984153";
+#    if ($sname eq $debug_snp) {
+#	print DO "$sname $a1 $a2 @cells\n";
+#	print "freq of $debug_snp: ".$frq."\n";
+#	print "variance of $debug_snp: ".$var."\n";
+#	print "info of $debug_snp: ".$info."\n";
+#    }
+}
+
+close DI;
+close DO;
+close DOX;
+close TP;
+close TPS;
+close TPN;
+
+&mysystem("gzip -f $dosfile_clean");
+&mysystem("gzip -f $dosfile_dirty");
+
+#&mysystem("gzip -f $dosfile_tped");
+#&mysystem("gzip -f $dosfile_tped_strict");
+
+
+
+
+my $map_in = "$mapfile.qc1";
+my $map_out = "$mapfile.qc1f";
+my $info_out = "$mapfile.info";
+
+
+#exit;
+
+###########################################
+# mapfile
+##########################################
+die "$map_out: ".$! unless open MOX, "> $map_out";
+die "$map_in: ".$! unless open MO, "> $map_in";
+die "$mapfile: ".$! unless open MI, "< $mapfile";
+while ($line = <MI>){
+    my @cells = @{&split_line_ref(\$line)};
+    if (exists $qc_in{$cells[1]}) {
+	print MO "@cells\n";
+    }
+    else {
+	print MOX "@cells\n";
+    }
+}
+close MI;
+close MO;
+close MOX;
+
+
+
+
+
+# 6 6_171002458 0 171002458 0
+my $ngt_in = "$ngtfile.qc1";
+my $ngt_out = "$ngtfile.qc1f";
+###########################################
+# ngtfile
+##########################################
+die "$ngt_out: ".$! unless open NOX, "> $ngt_out";
+die "$ngt_in: ".$! unless open NO, "> $ngt_in";
+die "$ngtfile: ".$! unless open NI, "< $ngtfile";
+while ($line = <NI>){
+    my @cells = @{&split_line_ref(\$line)};
+    if (exists $qc_in{$cells[1]}) {
+	print NO "@cells\n";
+    }
+    else {
+	print NOX "@cells\n";
+    }
+}
+close NI;
+close NO;
+close NOX;
+
+
+
+###########################################
+# infofile
+##########################################
+die "$info_out: ".$! unless open IOX, "> $info_out";
+die "$ngtfile: ".$! unless open MI, "< $ngtfile";
+print IOX "CHR\tSNP\tPOS\tgenotyped\tinfo\tfreq\ta1\ta2\tpass\n";
+
+#22 rs8137346 0 48000467 1
+
+while ($line = <MI>){
+    my @cells = @{&split_line_ref(\$line)};
+    print IOX "$cells[0]\t$cells[1]\t$cells[3]\t$cells[4]\t$snp_info{$cells[1]}\t$snp_frq{$cells[1]}\t$snp_a1{$cells[1]}\t$snp_a2{$cells[1]}";
+
+    if (exists $qc_in{$cells[1]}) {
+	print IOX "\t1\n";
+    }
+    else {
+	print IOX "\t0\n";
+    }
+}
+close MI;
+close IOX;
+
+
+
+
+
+#####################################
+## create bfile
+################################
+
+if ($ntp > 0) {
+    my $sys = "$ploc/plink --tped $dosfile_tped --tfam $famfile --make-bed --out $dosfile.qc1";
+    &mysystem($sys);
+    &mysystem("cp $dosfile.qc1.bed $outdir/bg/");
+    &mysystem("cp $dosfile.qc1.bim $outdir/bg/");
+    &mysystem("cp $dosfile.qc1.fam $outdir/bg/");
+    
+}
+if ($ntps > 0){
+    my $sys = "$ploc/plink --tped $dosfile_tped_strict --tfam $famfile --make-bed --out $dosfile.qc2";
+    &mysystem($sys);
+    &mysystem("cp $dosfile.qc2.bed $outdir/bgs/");
+    &mysystem("cp $dosfile.qc2.bim $outdir/bgs/");
+    &mysystem("cp $dosfile.qc2.fam $outdir/bgs/");
+}
+if ($ntpn > 0){
+    my $sys = "$ploc/plink --tped $dosfile_tped_noqc --tfam $famfile --make-bed --out $dosfile.noqc";
+    &mysystem($sys);
+    &mysystem("cp $dosfile.noqc.bed $outdir/bgn/");
+    &mysystem("cp $dosfile.noqc.bim $outdir/bgn/");
+    &mysystem("cp $dosfile.noqc.fam $outdir/bgn/");
+}
+
+
+&mysystem("cp $info_out $outdir/info/$infofile");
+
+
+&mysystem("cp $dosfile_dirty.gz $outdir/qc1f/$dosfile");
+&mysystem("cp $ngt_out $outdir/qc1f/$ngtfile");
+&mysystem("cp $map_out $outdir/qc1f/$mapfile");
+&mysystem("cp $famfile $outdir/qc1f/$famfile");
+
+#&mysystem("cp $famfile $outdir/qc1f/$famfile");
+
+
+if (keys (%qc_in) == 0 ){
+    print "no SNP made it\n";
+    &mysystem("touch $outdir/qc1/$dosfile.empty");
+    &mysystem("touch $outdir/qc1/$dosfile.fini");
+    exit;
+}
+
+&mysystem("cp $dosfile_clean.gz $outdir/qc1/$dosfile");
+&mysystem("cp $ngt_in $outdir/qc1/$ngtfile");
+&mysystem("cp $map_in $outdir/qc1/$mapfile");
+&mysystem("cp $famfile $outdir/qc1/$famfile");
+&mysystem("touch $outdir/qc1/$dosfile.fini");
+
+
+
+
+die $!."$outdir/info/$infofile.bg.cmd" unless open BC, "> $outdir/info/$infofile.bg.cmd";
+foreach (@cmd_collect) {
+    print BC "$_\n";
+}
+close BC;
+
+
+
+&mysystem("rm -fr $workdir");
+
+exit;
+
+
+# CHR         SNP          BP  A1  A2   FRQ_A   FRQ_U    INFO      OR      SE       P
+#   6 6_171002458   171002458  I2   D  0.9975  0.9966  0.2803  3.1266  2.8358  0.6877
+    
+###########################################
+### here run for INFO and Freq
+############################################
+my $sys = "$ploc/plink --dosage $dosfile_clean.gz format=2 Zin --fam $famfile --allow-no-sex --out $workname --map $mapfile ";
+#my $sys = "$ploc/plink --dosage $dosfile format=2 Zin --fam $famfile --allow-no-sex --out $workname --map $mapfile ";
+# $sys = "$ploc/plink --dosage $dosfile format=2 Zin --fam $famfile.pt --allow-no-sex --logistic --out $workname --map $mapfile $cov_str $idex_str $idin_str";
+
+
+&mysystem($sys);
+
+exit;
+
+my $assoc_file = "$workname.assoc.dosage";
+my $mapout = "$mapfile.extract";
+
+#################################################
+#  read all SNPs with filters
+#################################################
+
+
+my %snpin;
+#die "$mapout: ".$! unless open OF, "> $mapout";
+die "$assoc_file: ".$! unless open IF, "< $assoc_file";
+$line = <IF>;
+while ($line = <IF>){
+    my @cells = @{&split_line_ref(\$line)};
+    if ($cells[7] >= $info_th) {
+	if (($cells[5] >= $freq_th && $cells[5] <= 1-$freq_th) || ($cells[6] >= $freq_th && $cells[6] <= 1-$freq_th)) {
+	    $snpin {$cells[1]} = 1;
+	}
+    }
+}
+close IF;
+
+die "$mapout: ".$! unless open MO, "> $mapout";
+die "$mapfile: ".$! unless open MI, "< $mapfile";
+while ($line = <MI>){
+    my @cells = @{&split_line_ref(\$line)};
+    if (exists $snpin{$cells[1]}) {
+	print MO "@cells\n";
+    }
+}
+close MI;
+close MO;
+
+
+
+
+
+
+###########################################
+### here write new dosage file
+############################################
+$sys = "$ploc/plink --dosage $dosfile format=2 Zin --fam $famfile --allow-no-sex --out $workname --map $mapout --write-dosage ";
+
+
+&mysystem($sys);
+
+
+###########################################
+### test result
+############################################
+
+$sys = "$ploc/plink --dosage  $workname.out.dosage format=2 --fam $famfile --allow-no-sex --out double --map $mapout ";
+
+
+&mysystem($sys);
+
+#&mysystem("mv dan_$workname.assoc.dosage.ngt.gz $outdir/dan_$workname.assoc.dosage.ngt.gz.tmp");
+
+
+#&mysystem("mv $famfile.pt.ex $outdir") unless (-e "$outdir/$famfile.pt.ex");
+#&mysystem("mv $workname.log $outdir/dan_$workname.assoc.log");
+
+#chdir ($outdir);
+#&mysystem("mv dan_$workname.assoc.dosage.ngt.gz.tmp dan_$workname.assoc.dosage.ngt.gz");
+#&mysystem("rm $outdir/dan_$workname.assoc.dosage.plink_started");
+
+
+#exit;
+
+
+

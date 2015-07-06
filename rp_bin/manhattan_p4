@@ -1,0 +1,1367 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $rloc = &trans("rloc");
+my $sloc = &trans("sloc");
+
+########################
+
+
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+else {
+
+    unless (-e "$rloc/R" ){
+	print "\n***** Error: couldn't find the following:\n";
+	print "$rloc/R\n";
+	exit;
+    }
+
+
+}
+
+# manhattan_plot --cols 2,11,1,3 --sig-gwa --areat SCZ17f.p3.2.areator.txt --out test_disc --pth 0.05 --title "SCZ17 - ManhattanPlot" daner_SCZ17f.verysmall.gz
+# manhattan_plot --cols 2,11,1,3 --sig-gwa --areat remeta_scz_repl_0610t.remeta --title "SCZ17 - ReplicationPlot" --out test_o --pth 0.05 --remeta daner_SCZ17f.verysmall.gz
+
+# gwas@lisa.sara.nl:~/pgc-samples/mdd/QC1B/imputation_MDD9/clean/0611/report_MDD9_BothSex_0611/manh_repl$ manhattan_plot  --pgene 0.00001 --title Manhattan-Plot --sig-gwa --cols 2,11,1,3 -areator MDD9_BothSex_0611.p4.2.areator.txt --out manhattan_bs_rep --remeta remeta5_PGC_MDD_bs_1011b.comb.meta daner_MDD9_BothSex_0611.gz
+
+# sripke@tin.broadinstitute.org:/humgen/atgu1/fs02/wip/stephan_sandbox/ibd/0611/imputation/report_IBD15_CD7_0711a$ manhattan_plot --pgene 0.00001 --title Manhattan-Plot --sig-gwa --cols 2,11,1,3 -areator IBD15_CD7_0711a.p4.2.areator.txt --out IBD15_CD7_0711a.rep.ceil.test2 --ceiling 8 --remeta remeta6_IBD_CD_1011f.comb.meta daner_IBD15_CD7_0711a.rand.gz 
+
+
+my $version = "3.0.1";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+my $pcol=4;
+my $poscol=3;
+my $chrcol=1;
+my $snpcol=2;
+my $pth=1.0e-04; ## from here thin them down
+my $last_th = 0.05;
+my $pth_gene=1e-06; ## from here show gene-names
+my $ceiling=10e-200; # log-ceiling
+
+my $title="";
+my $out="manhattan_out";
+my $ndots=5000;
+
+my $expar=10000;
+
+##### help message
+my $usage = "
+Usage : $progname [options] p-file
+
+version: $version
+
+  --title STRING title of plot, default= infilename, if \"notitle\", then leftout
+  --out STRING   name of outfile, default= $out
+  --top INT      number of top-values to mark
+  --chr INT      plot one chromosome
+  --cp STRING    plot all chromosomes that appear in arafile STRING
+  --reg INT.INT  region (beginning and end, separated by commma)
+  --check        check columns with sample output
+  --cols STRING  combined column-string, separated by commas, overwrites other options
+                     SNPCOL,PCOL,CHRCOL,POSCOL
+  --areas STRING area surrounding a SNP
+  --expar INT    expanding area of SNP (in KB), default=$expar
+  --ceiling INT  ceiling for 10e-(INT)
+  --maxy    INT  yaxis exactly here
+  --sig-gwa      add gwa-singificance level 5x 10e-8
+  --genef STR    name of file containing gene-reference
+  --nolog        print p-vlues as they stand there
+
+  --pth FLOAT    threshold, from where thinning down, default $pth
+  --lastp FLOAT  threshold, from where no p-values any more
+  --pgene FLOAT  threshold, from where how genes
+  --help         print this message and exit  
+
+  --areator STRING  areator-file with best areas
+  --remeta       remeta-columns 
+
+  --cacohead          read ncases and ncontrols out of header
+
+
+ for daner result file:
+ --cols 2,11,1,3 d
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ 
+ pfile will be sorted for pvalue if nercessary, iv you do it in advance you save time and money
+
+";
+use File::Path;
+use Cwd;
+
+my $rootdir = &Cwd::cwd();
+
+
+#### evaluate options
+my $areafile = "";
+
+use Getopt::Long;
+GetOptions( 
+    "title=s"=> \$title,
+    "out=s"=> \$out,
+    "top=i"=> \my $ntop,
+    "chr=i"=> \my $chr,
+    "cp=s"=> \$areafile,
+
+    "bp"=> \my $bpaxis,
+    "check"=> \my $check,
+    "cols=s"=> \my $colstr,
+    "reg=s"=> \my $regstr,
+    "areas=s"=> \my $areas,
+    "genef=s"=> \my $gene_file,
+    "expar=i"=> \$expar,
+    "pth=f"=> \$pth,
+    "lastp=f"=> \$last_th,
+    "pgene=f"=> \$pth_gene,
+
+    "ceiling=i"=> \my $ceiling_sw,
+    "maxy=i"=> \my $maxy_sw,
+    "sig-gwa"=> \my $sig_sw,
+    "nolog"=> \my $nolog,
+    "help"=> \my $help,
+    "areator=s"=> \my $areator,
+    "remeta=s"=> \my $remeta,
+    "cacohead"=> \my $cacohead, # read ncases and ncontrols out of header
+    );
+
+
+die "$usage,\ngive p-values\n" if @ARGV ne 1 || $help;
+$ceiling = 10**(-$ceiling_sw) if ($ceiling_sw);
+my $maxy = 0;
+$maxy = 10**(-$maxy_sw) if ($maxy_sw);
+
+my $pfile=$ARGV[0];
+
+
+my $workdir = "$sloc/manh_$out";
+
+while (-e $workdir) {
+    $workdir .= ".m";
+}
+
+print "pth: $pth\n";
+print "lastp: $last_th\n";
+#sleep(5);
+print "create $workdir\n";
+my @created = mkpath(   ## $created ?
+			"$workdir",
+			{verbose => 0, mode => 0750},
+    );
+
+
+chdir ($workdir);
+
+if ($pfile =~ /.gz$/){
+    print "unzip file $rootdir/$pfile\n";
+    my $pfile_nogz = $pfile;
+    $pfile_nogz =~ s/.gz$//;
+    &mysystem ("gunzip -c $rootdir/$pfile > $pfile_nogz") unless (-e $pfile);
+    $pfile = $pfile_nogz;
+    print "done unzipping\n";
+}
+else {
+    &mysystem ("cp $rootdir/$pfile .") unless (-e $pfile);
+}
+&mysystem ("cp $rootdir/$areator .") if ($areator);
+&mysystem ("cp $rootdir/$remeta .") if ($remeta);
+
+#print $ceiling."\n";
+#exit;
+
+($snpcol,$pcol,$chrcol,$poscol)= split ',', $colstr if ($colstr);
+
+(my $regbeg,my $regend)= split ',', $regstr if $regstr;
+
+my $genbeg=-1000;
+my $genend=-1000;
+
+unless ($chr){
+    die "please specify chromosome" if ($regstr);
+}
+
+$regbeg *= 1000;
+$regend *= 1000;
+#print "$regbeg\t$regend\n";
+#exit;
+
+
+
+
+
+my $outdir=$pfile."_tmp_gwa_plot";
+my $top5Kfile=$pfile.".top5K";
+my $positionfile=$pfile.".pos";
+my $refgene_file="refGene_processed.txt";
+
+$out = $pfile if ($out eq "");
+my $pdfout = "manhattan.".$out.".pdf" ;
+$title = $pfile."_GWA" if ($title eq "Manhattan-Plot") ; 
+#$title = $pfile."_GWA" ; 
+
+use File::Path;
+my @created = mkpath(   ## $created ?
+    "$outdir",
+    {verbose => 0, mode => 0750},
+    );
+
+
+#####################################
+# grep analog
+####################################
+
+sub greppi {
+    my ($expr, $file)=@_;
+    my @lc=();
+    die $! unless open FILE, "< $file";
+    while (<FILE>){
+	push @lc, $_ if ($_ =~ "$expr");
+    }
+    close FILE;
+    @lc;
+}
+
+
+
+
+##########################################
+# subroutine extract ncases and ncontrols
+##########################################
+
+sub excaco {
+    my ($line)=@_;
+    my ($nca,$nco);
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    foreach (@cols){
+	if ($_ =~ /^FRQ_A_/){
+	    $nca = $_;
+	    $nca =~ s/FRQ_A_//;
+	}
+	if ($_ =~ /^FRQ_U_/){
+	    $nco = $_;
+	    $nco =~ s/FRQ_U_//;
+	}
+    }
+    ($nca,$nco);
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+#####################################
+# subroutine to count lines of a file
+#####################################
+
+sub count_lines {
+    my ($file)=@_;
+    my $lc=0;
+    die "$file: ".$! unless open FILE, "< $file";
+    while (<FILE>){
+	$lc++;
+    }
+    close FILE;
+    $lc;
+}
+
+
+
+
+###   here preparation of ucsc-file: 
+###   sed  -r '/chr[0-9XY]+_.*/d'  refGene.txt | sed 's/chrX/chr23/' | sed 's/chrY/chr24/' | sed 's/chr//' |cut -f3,5,6,13 | sort | uniq > refGene_processed.txt
+
+
+####################################
+################################
+#######BEGIN
+#################################
+###################################
+
+######################################
+##  if cols are not sure, check them
+######################################
+my $count_p=0;
+if ($check){
+    print "$usage\n";
+    print "SNPCOL\tPCOL\tCHRCOL\tPOSCOL\n";
+    die $! unless open PF , "< $pfile";
+    while ($count_p++ < 5){
+	last unless (my $line=<PF>);
+	my @cells = @{&split_line_ref(\$line)};
+	printf "%s\t%s\t%s\t%s\n",$cells[$snpcol-1],$cells[$pcol-1],$cells[$chrcol-1],$cells[$poscol-1];
+    }
+    close PF;
+    print "\n";
+    print "\nHeader of original File:\n";
+    die $! unless open PF , "< $pfile";
+    my $line=<PF>;
+
+    my @cells = @{&split_line_ref(\$line)};
+    $count_p=0;
+    foreach (@cells){
+	$count_p++;
+	printf "$count_p\t$_\n";
+    }
+    close PF;
+    exit 1;
+}
+
+
+print "begin\n";
+
+
+#############################
+##   check sorting
+#############################
+
+#print "checking sorting\n";
+my $systemcheck="sort -k$pcol,$pcol"."g"." -c $pfile 2> /dev/null";
+system ($systemcheck);
+my $status = ($? >> 8);
+if ($status != 0){
+#    print "pfile not sorted, will do it for you\n";
+    my $systemsort="head -1 $pfile > sorted_$pfile; tail -n +2 $pfile | sort -k$pcol,$pcol"."g"." >> sorted_$pfile";
+    &mysystem ($systemsort);
+    $pfile = "sorted_$pfile";
+}
+
+
+#############################
+## preferred genes
+###############################
+
+
+my @prefgenes;
+push @prefgenes, "MIR137";
+push @prefgenes, "BDNF";
+push @prefgenes, "MAD1L1";
+push @prefgenes, "NEURL";
+push @prefgenes, "NT5C2";
+push @prefgenes, "CACNA1C";
+push @prefgenes, "PSMA6";
+push @prefgenes, "BAZ1A";
+push @prefgenes, "ITIH3";
+push @prefgenes, "ANKRD36";
+push @prefgenes, "WNT1";
+push @prefgenes, "CALR";
+
+
+###############################
+##   read remeta 
+##############################
+
+my %reme;
+if ($remeta) {
+    my $rcol_s = 1;
+    my $rcol_p = 10;
+
+
+    my $rcol_ch = 0;
+    my $rcol_po = 2;
+
+#    my %mep =();
+    
+    die $! unless open RE , "< $remeta";
+    my $header= <RE>;
+    my @cells = @{&split_line_ref(\$header)};
+
+    if ($cells[$rcol_ch] ne "CHR") {
+	print "no CHR header in 2nd col";
+	exit;
+    }
+
+
+    if ($cells[$rcol_p] ne "P") {
+	print "no P header in 11th col";
+	exit;
+    }
+
+
+#    my $rcol_p = $#cells-1;
+#    while (1) {
+
+    while (my $line = <RE>){
+	my @cells = @{&split_line_ref(\$line)};
+#	print "$cells[$rcol_ch]\t$cells[$rcol_po]\n";
+
+	$cells[$rcol_p]=$ceiling if ($cells[$rcol_p] < $ceiling);
+	$reme{"$cells[$rcol_ch]\t$cells[$rcol_po]"} = $cells[$rcol_p];
+    }
+    close RE;
+}
+
+
+###############################
+##   read remeta
+##############################
+
+my $rcol_p = 5;
+my $rcol_s = 0;
+#my $acol_l = 12;
+my $rcol_g = 3;
+my $rcol_ch = 1;
+my $rcol_po = 2;
+ 
+
+
+###############################
+##   read areator-file
+##############################
+
+my $acol_pd = 3;
+my $acol_pr = 3;
+my $acol_s = 0;
+my $acol_l = 12;
+#my $acol_g = 13;
+#my $acol_g = 16;
+my $acol_g = 21;
+my $acol_ch = 1;
+my $acol_po = 2;
+
+
+
+if (0) {
+    $acol_pr = 42;
+    $acol_pd = 5;
+    $acol_s = 0;
+    $acol_l = 0;
+    $acol_g = 3;
+    $acol_ch = 1;
+    $acol_po = 2;
+}
+
+my %asnps = ();
+my %achr = ();
+my %aarea = ();
+my %gene_names = ();
+my $n_gene = 0;
+
+
+if ($areator) {
+    my $stopi = 0;
+    while ($n_gene < 5 && $stopi ==  0) {
+	die $! unless open AR , "< $areator";
+#die $! unless open AOUT , "> $areator.aaout";
+	my $area_mhc = 0;
+	$count_p=0;
+	my $header= <AR>;
+	
+	while (1){
+	    my $line;
+	    unless ($line=<AR>) {
+		$stopi = 1;
+		last ;
+	    }
+	    my @cells = @{&split_line_ref(\$line)};
+
+#	    print "test: $line\n";
+
+	    next if ($cells[$acol_pd] > $pth_gene && $cells[$acol_pr] > $pth_gene);
+#    print "$cells[$acol_ch]\t$cells[$acol_po]\n";
+	    ## safe all snps of this area
+	    $asnps{$cells[$acol_s]}=1;
+	    $achr{$cells[$acol_ch]}=1;
+	    my @rsnps= split ',', $cells[$acol_l];
+	    my$asnp_c = 0;
+	    foreach (@rsnps){
+		my $tmp = $_;
+		$tmp =~ s/\(.*\)//;
+#	print "$tmp\n";
+		$asnps{$tmp} = 1;
+		$asnp_c++;
+#		last if ($asnp_c > 10);
+		
+	    }
+	    ## safe area with gene info
+	    my @rgenes= split ',', $cells[$acol_g];
+	    my $cou = 0;
+	    my $show = $rgenes[0];
+	    foreach my $r (0..$#rgenes) {
+		foreach my $pg (@prefgenes) {
+		    if ($rgenes[$r] eq $pg){
+#my $tmp = 
+#		$rgenes[$cou+1] = $rgenes[$cou];#
+#		$rgenes[$cou] = $pg;
+#		$cou++;
+			$show = $pg;
+		    }
+		}
+	    }
+	    
+	    my $fgene = "$show";
+	    if ($fgene eq "-") {
+		$fgene = "no_gene";
+	    }
+	    
+	    if (@rgenes > 1) {
+		$fgene .= " (+".(@rgenes-1).")";
+	    }
+	    
+	    if (0) {
+#    print "1: <$fgene>\n";
+		#### search for gene-multi-annotation
+		if (exists $gene_names{"$rgenes[0]"}) {
+		    foreach (keys %aarea){
+			my @tcells = split '\t', $aarea {$_};
+			if ( $tcells[0] =~ /$rgenes[0]/) {
+			    next if ($tcells[0] =~ /$rgenes[0] (ms)/);
+			    print "1: <$rgenes[0]>\n";
+			    $tcells[0] =~ s/$rgenes[0]/$rgenes[0] (ms)/ ;
+			    print "2: <$rgenes[0]>\n";
+			    $aarea{$_} = "$tcells[0]\t$cells[$acol_po]\t$tcells[2]\t$tcells[3]";
+			    $fgene = s/$rgenes[0]//;
+			}
+		    }
+		}
+		
+		
+		if (@rgenes > 1) {
+		    $fgene .= ";$rgenes[1]";
+		    if (exists $gene_names{"$rgenes[1]"}) {
+			
+			foreach (keys %aarea){
+			    my @tcells = split '\t', $aarea {$_};
+			    if ( $tcells[0] =~ /$rgenes[1]/) {
+#		    print "$rgenes[1]\n";
+				next if ($tcells[0] =~ /$rgenes[1] (ms)/);
+				$tcells[0] =~ s/$rgenes[1]/$rgenes[1] (ms)/;
+				$aarea{$_} = "$tcells[0]\t$cells[$acol_po]\t$tcells[2]\t$tcells[3]";
+				$fgene = s/$rgenes[1]//;
+			    }
+			    
+			}
+		    }
+		}
+		$fgene .= " , a.o." if (@rgenes > 2);
+		
+	    }
+	    
+	    
+	    $gene_names{"$rgenes[0]"} = 1;  
+	    $gene_names{"$rgenes[1]"} = 1;  
+	    
+	    ## safe area with position for later processing
+	    
+#    print "2: $fgene\n";
+	    
+	    if ($cells[$acol_ch]==6 && $cells[$acol_po] > 25000000 && $cells[$acol_po] < 35000000) {
+		if ($area_mhc == 0){
+		    $fgene = "MHC (369)";
+		    $area_mhc = 1;
+		}
+		else {
+		    next;
+		}
+	    }
+	    
+	    my $skip = 0;
+	    
+	    foreach (%aarea) {
+		my @tcells = split '\t', $_;
+		my $bdist = $tcells[1] - $cells[$acol_po];
+		$bdist *= -1 if ($bdist < 0);
+		$skip =1 if ($tcells[0] eq $cells[$acol_ch] && $bdist < 300000);
+	    }
+	    next if ($skip == 1);
+	    
+	    my $p_rep = $cells[$acol_pr];
+	    if (exists $reme{"$cells[$acol_ch]\t$cells[$acol_po]"}) {
+	        $p_rep = $reme{"$cells[$acol_ch]\t$cells[$acol_po]"};
+	    }
+	    my $p_dis = $cells[$acol_pd];
+
+
+	    if ($p_dis < $ceiling){
+		$p_dis=$ceiling;
+	    }
+	    $aarea{"$cells[$acol_ch]\t$cells[$acol_po]"} = "$fgene\t$cells[$acol_po]\t$p_dis\t$p_rep";
+#	    print "landed\n";
+#	    sleep(2);
+#	    }
+	    
+	    $n_gene++;
+	    
+	}
+	close AR;
+#close AOUT;
+	if ($n_gene < 5) {
+#	    print "next step\n";
+
+#	    sleep(3);
+	    $pth_gene = $pth_gene * 10;
+	}
+    }
+}
+
+#print "$n_gene\n";
+#exit;
+
+#exit;
+
+
+
+
+#foreach my $key (keys %achr){
+#    print "$key\t".$achr{$key}."\n";
+#}
+#exit;
+
+
+
+
+my $nsnps = &count_lines ($pfile);
+
+
+################################
+##  prep Best-File
+###############################
+srand(0);
+#print "prep Best File\n";
+my $fac=3000;  # the highest 50 ones for sure, rest randomly
+#my $fac=7000;  # the highest 50 ones for sure, rest randomly
+
+my $lc=0;
+##################!!!!!!
+
+die $! unless open PF , "< $pfile";
+die $! unless open T5 , "> $outdir/$top5Kfile";
+$count_p=0;
+my $header= <PF>;
+
+my $nca;
+my $nco;
+if ($cacohead) {
+    ($nca,$nco) = &excaco($header);
+}
+
+#while ($count_p++ < $ndots){
+#my $last_th = 0.01;
+$last_th = $pth if ($pth > $last_th);
+my $rth=1;
+my $pc = 0;
+
+while (1){
+    last unless (my $line=<PF>);
+
+    $lc++; #########!!
+    $rth -= 1/$ndots;
+
+    my @cells = @{&split_line_ref(\$line)};
+
+
+    if (rand() > $fac/($lc) && $cells[$pcol-1] > $pth){ ###############!!
+#	    print "skipped!!!\n";
+	next ;
+    }
+
+
+    my $asnp_sw = 0 ; ## is snp part of an area ?
+    if (exists $asnps{$cells[$snpcol-1]}){
+	$asnp_sw = 1 ;
+    }
+#    else {
+#	if (rand() > $fac/($lc) && $cells[$pcol-1] > $pth){ ###############!!
+#	    print "skipped!!!\n";
+#	    next ;
+#	}
+ #   }
+
+#    next if (rand() > $rth+1 && $cells[$pcol-1] > $pth); ###############!!
+
+    if ($pc > 10) {
+	last if ( $cells[$pcol-1] > $last_th);
+    }
+    next if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0);
+#    print "$cells[$pcol-1]\n";
+    unless ($nolog) {
+	$cells[$pcol-1]=$ceiling if ($cells[$pcol-1] < $ceiling);
+    }
+    if ($chr){
+	unless ($cells[$chrcol-1] == $chr){
+	    $count_p--;
+	    next;
+	}
+	if ($regstr){
+	    unless ($cells[$poscol-1] > $regbeg && $cells[$poscol-1] < $regend){
+		$count_p--;
+		next;
+	    }
+	}
+    }
+    
+    printf T5 "%s\t%s\t%s\t%s\t$asnp_sw\n",$cells[$snpcol-1],$cells[$pcol-1],$cells[$chrcol-1],$cells[$poscol-1],$asnp_sw;
+
+    $pc++;
+
+
+
+#	print "$cells[0]\n";
+}
+close PF;
+close T5;
+
+if ($pc == 0) {
+
+   my $R_templ='
+pdf("OUTNAME",title="GWA-Plot",PLOTSHAPE)
+
+plot(0,0,main=paste("TITLE",", none meets threshold")) 
+
+dev.off()
+';
+    $R_templ =~ s/TITLE/$title/g;
+    $R_templ =~ s/OUTNAME/$pdfout/g;
+    $R_templ =~ s/PLOTSHAPE/6,6/g if $regstr;
+    $R_templ =~ s/PLOTSHAPE/11,7.5/g unless $regstr;
+    &a2file ( "$outdir/R_GWAplot.in_tmp" , $R_templ);
+    
+    
+    my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --vanilla > /dev/null\n";
+#    my $systemGWA="source /broad/software/scripts/useuse; use R-2.14; R < $outdir/R_GWAplot.in_tmp --vanilla > /dev/null\n";
+    
+    &mysystem ($systemGWA);
+
+    &mysystem ("cp $pdfout $rootdir");
+
+    &mysystem("touch $rootdir/$pdfout.empty");
+
+    die "no values left, created empty pdf" ;
+}
+
+
+#print "$pc\t$outdir/$top5Kfile\n";
+print "sorting,\t$outdir\t$top5Kfile\n";
+#exit;
+
+my $systempos="sort -k3,3n -k4,4n $outdir/$top5Kfile > $outdir/$positionfile";
+&mysystem ($systempos);
+
+#exit;
+
+
+
+
+###########################
+## create Best_processed
+########################
+#print "$outdir/$positionfile\n";
+
+#sleep(3);
+
+#my @keys_loc = keys %aarea;
+#print "$outdir/$positionfile\n";
+#print "aarea_n: ".@keys_loc."\n";
+#foreach (@keys_loc) {
+#    print $_."\n";
+#}
+
+
+
+die $! unless open IN , "< $outdir/$positionfile";
+my $old_chr=0;
+my $old_pos=0;
+my $new_pos=0;
+my $chrcol=2;
+my $poscol=3;
+my $asnpcol=4;
+my $snpcol=0;
+my $pcol=1;
+my @out_lines=();
+my @area_lines=();
+
+while (my $line = <IN>){
+    chomp;
+    my @cells = @{&split_line_ref(\$line)};
+    if ($cells[$chrcol] != $old_chr){
+	$old_chr = $cells[$chrcol];
+	$old_pos = $new_pos;
+    }
+    $new_pos = $old_pos + $cells[$poscol];	
+    my $linestr=$cells[$snpcol];
+    $linestr.="\t$cells[$chrcol]";
+    $linestr.="\t$cells[$poscol]";
+    $linestr.="\t$cells[$pcol]";
+    $linestr.="\t$cells[$chrcol]";
+    $linestr.="\t$new_pos";
+    $linestr.="\t$cells[$asnpcol]\n";
+    push @out_lines, $linestr;
+    
+
+#    my $repl_p = 1;
+#    print "new: $cells[$chrcol]\t$cells[$poscol]\n";
+#    print "hm: ".$aarea{"$cells[$chrcol]\t$cells[$poscol]"}."\n";
+    if (exists $aarea{"$cells[$chrcol]\t$cells[$poscol]"}){
+	my @tcells = split '\t', $aarea {"$cells[$chrcol]\t$cells[$poscol]"};
+#	print "chr: $tcells[0]\n";
+	next if ($tcells[0] eq "");
+	next if ($tcells[0] eq " , a.o.");
+
+
+
+#$repl_p = 
+	push @area_lines, "$tcells[0]\t$new_pos\t$tcells[2]\t$tcells[3]\t$cells[$chrcol]\n";
+#	push @area_lines, "$tcells[0]\t$new_pos\t$tcells[2]\t$cells[$chrcol]\t$repl_p\n";
+	delete ($aarea {"$cells[$chrcol]\t$cells[$poscol]"});
+    }
+
+
+
+
+
+}
+close IN;
+
+#sleep(3);
+
+my $aaout_size = @area_lines;
+if ($aaout_size < 1) {
+
+    print  "plot empty, please change thresholds\n";
+
+   my $R_templ='
+pdf("OUTNAME",title="GWA-Plot",PLOTSHAPE)
+
+plot(0,0,main=paste("TITLE",", none meets threshold")) 
+
+dev.off()
+';
+    $R_templ =~ s/TITLE/$title/g;
+    $R_templ =~ s/OUTNAME/$pdfout/g;
+    $R_templ =~ s/PLOTSHAPE/6,6/g if $regstr;
+    $R_templ =~ s/PLOTSHAPE/11,7.5/g unless $regstr;
+    &a2file ( "$outdir/R_GWAplot.in_tmp" , $R_templ);
+    
+    
+    my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --vanilla > /dev/null\n";
+#    my $systemGWA="source /broad/software/scripts/useuse; use R-2.14; R < $outdir/R_GWAplot.in_tmp --vanilla > /dev/null\n";
+    
+    &mysystem ($systemGWA);
+
+    &mysystem ("cp $pdfout $rootdir");
+
+    &mysystem("touch $rootdir/$pdfout.empty");
+    exit;
+#    sleep(3);
+}
+
+&a2file ( "$outdir/Best_processed.txt_tmp" , @out_lines);
+&a2file ( "$areator.aaout" , @area_lines);
+
+#print ("sleep\n");
+#sleep(5);
+
+#exit;
+
+
+
+##############################
+##    prep ticks file
+#############################
+
+@out_lines=();
+$old_chr=0;
+die $! unless open IN , "< $outdir/Best_processed.txt_tmp";
+my $mean_pos;
+my $lc=0;
+my @cells = ();
+my $linestr;
+while (my $line = <IN>){
+    chomp;
+
+    @cells = @{&split_line_ref(\$line)};
+    if ($lc++ == 0){
+	$old_pos=$cells[5];
+	$new_pos=$old_pos;
+    }
+    if ($cells[1] != $old_chr){
+	$new_pos=$cells[5];
+	$mean_pos=($old_pos+$new_pos)/2;
+	$old_chr=$cells[1];
+	$old_pos=$cells[5];
+	
+	$linestr=$cells[1];
+	$linestr.="\t$new_pos";
+	$linestr.="\t$mean_pos\n";
+	push @out_lines, $linestr;
+    }
+    
+}
+
+$linestr=$cells[1] + 1;
+$new_pos=$cells[5];
+$mean_pos=($old_pos+$new_pos)/2;
+$linestr.="\t$new_pos";
+$linestr.="\t$mean_pos\n";
+push @out_lines, $linestr;
+
+close IN;
+
+&a2file ( "$outdir/ticks.txt_tmp" , @out_lines);
+
+
+
+
+
+
+######################################################################
+##   R templates
+######################################################################
+
+    my $R_templ='
+pdf("OUTNAME",title="GWA-Plot",PLOTSHAPE)
+
+read.delim ("AAOUT",header=F)-> aout
+
+## png("OUTNAME.png",width = 11, height = 7.5, units="in",res=300)
+
+read.table ("TICKNAME",header=F)-> pos 
+read.table ("INNAME",header=F)-> a
+
+ymin = min(c(a[,4],aout[,4]))/10;
+
+if (MAXY != 0){
+  ymin = MAXY;
+}
+
+a[,8]=19
+a[a[,4]<PTHRESH,8]=21
+
+title = "TITLE CACON"
+if (title == "notitle") {
+ title = ""
+}
+
+if (LOG){
+
+
+#plot ( 0,0, type="n",  ylim = c(-log10(max(a[,4])),-log10(ymin)), xlim = c(min(a[,6]),max(a[,6])), axes=F, xlab="", ylab="-log10(p_val)", main="TITLE", col=colors()[100], sub=paste("(n=",length(a[,4])," out of NUMBERSNPS)",sep=""), cex.sub=.8, cex.lab = 1.2)
+##without sub
+plot ( 0,0, type="n",  ylim = c(-log10(max(a[,4])),ceiling(-log10(ymin))), xlim = c(min(a[,6]),max(a[,6])), axes=F, xlab="", ylab="-log10 (p)", main=title, col=colors()[100], cex.sub=.8, cex.lab = 1.2)
+abline (h=-log10(PTHRESH),col="grey",lwd=.5)
+} else {
+plot ( 0,0, type="n",  ylim = c(min(a[,4]),max(a[,4])), xlim = c(min(a[,6]),max(a[,6])), axes=F, xlab="", ylab="-log10(p_val)", main=title, col=colors()[100], sub=paste("(n=",length(a[,4]),")",sep=""), cex.sub=.8, cex.lab = 1.2)
+abline (h=PTHRESH,col="grey",lwd=.5)
+}
+
+my.col1 = "darkgrey"
+my.col2 = "lightgrey"
+
+my.col1 = "gray30"
+my.col2 = "gray60"
+
+
+if (a[1,2]%%2==1){
+col1=my.col1
+col2=my.col2
+}else{
+col2=my.col1
+col1=my.col2
+}
+
+
+areasnps = a[a[,7] == 1,]
+areasnps_eve = a[a[,7] == 1 & a[,2]%%2==1,]
+areasnps_odd = a[a[,7] == 1 & a[,2]%%2==0,]
+noareasnps_eve = a[a[,7] == 0 & a[,2]%%2==1,]
+noareasnps_odd = a[a[,7] == 0 & a[,2]%%2==0,]
+
+
+if (LOG){
+
+# points (x=a[a[,2]%%2==1,6],y=-log10(a[a[,2]%%2==1,4]), col=col1, cex=0.5, pch=a[a[,2]%%2==1,8])
+
+# points (x=a[a[,2]%%2==0,6],y=-log10(a[a[,2]%%2==0,4]), col=col2, cex=0.5, pch=a[a[,2]%%2==0,8])
+# points (x=a[a[,7]==1,6],y=-log10(a[a[,7]==1,4]), col=colors()[100], cex=0.6, pch=19)
+# points (x=a[a[,7]==1,6],y=-log10(a[a[,7]==1,4]), col="black", cex=0.9, pch=19)
+# points (x=a[a[,7]==1,6],y=-log10(a[a[,7]==1,4]), col="red", cex=0.5, pch=19)
+# points (x=a[a[,2]%%2==1,6],y=-log10(a[a[,2]%%2==1,4]), col=col1, cex=0.5, pch=19)
+# points (x=a[a[,2]%%2==0,6],y=-log10(a[a[,2]%%2==0,4]), col=col2, cex=0.5, pch=19)
+
+
+
+
+ points (x=noareasnps_eve[,6],y=-log10(noareasnps_eve[,4]), col=col1, cex=0.5, pch=19)
+ points (x=noareasnps_odd[,6],y=-log10(noareasnps_odd[,4]), col=col2, cex=0.5, pch=19)
+
+# points (x=areasnps[,6],y=-log10(areasnps[,4]), col="black", cex=0.9, pch=19)
+ points (x=areasnps_eve[,6],y=-log10(areasnps_eve[,4]), col="red", cex=0.4, pch=19)
+ points (x=areasnps_odd[,6],y=-log10(areasnps_odd[,4]), col="orange", cex=0.4, pch=19)
+
+
+ points (x=a[a[,4]==MAXY,6],y=-log10(a[a[,4]==MAXY,4]), col="green", cex=0.8)
+} else {
+ points (x=a[a[,2]%%2==1,6],y=a[a[,2]%%2==1,4], col=col1, cex=0.5)
+ points (x=a[a[,2]%%2==0,6],y=a[a[,2]%%2==0,4], col=col2, cex=0.5)
+# points (x=a[a[,7]==1,6],y=a[a[,7]==1,4], col="green", cex=0.7)
+}
+
+
+
+
+
+mtext("Chromosome",1,3,cex=1.0)
+#mtext("Chr / Position(KB)",1,3, cex=1.2)
+#mtext("ripke @ chgr mgh harvard edu",4,cex=.3)
+
+mtext("GENELIST",3,3, cex=0.3)
+
+if (GENBEG != -1000){
+abline (v=GENBEG,col=colors()[100])
+abline (v=GENEND,col=colors()[100])
+}
+
+if (SIGGWA == 1){
+abline (h=7.30103,col=colors()[100])
+
+
+}
+
+if (LOG) {
+# ticks = round(seq.int(from = floor(min(-log10(a[,4]))), to = ceiling(-log10(ymin)), length.out =8))
+
+#   axis(2,floor(min(-log10(a[,4]))):ceiling(-log10(ymin)), cex.axis=0.4, las=1, labels=ticks)
+
+ byst = 1
+ ylogmin = -log10(max(a[,4]))
+ ylogmax = -log10(ymin)
+ yrange = ylogmax - ylogmin
+ if (yrange > 15) {
+  byst = 3
+ }
+ if (yrange > 50) {
+  byst = 10
+ }
+
+   ticks = round(seq.int(from = floor(min(-log10(a[,4]))), to = ceiling(-log10(ymin)) , by =byst))
+   axis(2, cex.axis=1.2, las=1, at= ticks,
+   ,labels = ticks, lty= "solid")
+
+} else {
+axis(2,floor(min(a[,4])):ceiling(max(a[,4])), cex.axis=1.2, las =1)
+}
+
+
+axis(1, at= pos[,2], lab=F, cex.axis=1.0)
+#axis(1, at= pos[,2], lab=F, lwd=3, cex.axis=1.0)
+
+posc = pos[-1,]
+axis(1, at= posc[,3], lab=posc[,1]-1, lwd=3, cex.axis=.6, las=2, tick=F)
+
+### hier versetzte x-achse
+#axis(1, at= posc[posc[,1]%%2==0,3], lab=posc[posc[,1]%%2==0,1]-1, lwd=3, cex.axis=1.2, line=0, tick=F)
+#axis(1, at= posc[posc[,1]%%2==1,3], lab=posc[posc[,1]%%2==1,1]-1, lwd=3, cex.axis=1.2, line=1, tick=F)
+
+
+
+#axis(1, at= pos[-1,3], lab=pos[1:(length(pos[,1])-1),1], lwd=3, cex.axis=1.0, line=-.5, tick=F)
+
+# this her for kb
+#axis(1, at= seq(min(a[,6]),max(a[,6]),length=BPAX), lab = trunc(seq(min(a[,6]),max(a[,6]),length=BPAX)/(10^3)), las=1, line = 2, cex.axis=1.2, lty=3)
+
+
+
+##########################
+#### area-annotation
+############################
+
+aout[,1] = gsub(";","\n",aout[,1])
+
+ngenes = dim(aout)[1]
+
+#print (ngenes)
+
+nrow = 15
+ncol = 8
+ncol = 11
+colstart = 2 
+rowstart = nrow + .5
+rowend = 10
+#rowend = 14
+
+xmin = min(a[,6])
+xmax = max(a[,6])
+xrange = xmax - xmin
+xstep = xrange / ncol
+
+
+ystep = yrange / nrow
+
+
+rr = rep(rowstart,ncol)
+
+
+for (x in 1:ngenes) {
+
+  cc = floor((aout[x,2] / xrange ) * ncol) +1 ;
+
+  xpos = (cc - .5) * xstep + xmin
+  ypos = rr[cc] * ystep + ylogmin 
+
+
+  rr[cc] = rr[cc] - 1
+
+  xhit = aout [x,2]
+  yhit = -log10(aout [x,4])
+  yorg = -log10(aout [x,3])
+  hitcol = 6
+  hitsize = 2.5
+  yhigh = yhit
+
+  xstart = xpos
+  ystart = ypos - 0.5 *ystep
+  ysnp = ystart + 0.1*ystep
+  segments(xstart,ystart,xstart,ysnp, col="gray80")  
+  segments(xstart,ystart,xhit,ystart, col="gray80")  
+  segments(xhit, ystart, xhit, yhigh, col="gray80") 
+
+}
+
+rr = rep(rowstart,ncol)
+
+for (x in 1:ngenes) {
+#  print (cc)
+#  print (rr)
+
+  cc = floor((aout[x,2] / xrange ) * ncol) +1 ;
+
+  xpos = (cc - .5) * xstep + xmin
+  ypos = rr[cc] * ystep + ylogmin 
+
+
+  rr[cc] = rr[cc] - 1
+
+  xhit = aout [x,2]
+  yhit = -log10(aout [x,4])
+  yorg = -log10(aout [x,3])
+  hitcol = 6
+  hitsize = 2.5
+  yhigh = yhit
+
+  if (yhit < yorg) {
+    hitcol = "blue"
+    yhigh = yorg
+  }
+  if (yhit == yorg) {
+    hitcol = colors()[100]
+#    hitcol = "red"
+    hitcol = "green"
+    hitsize = 1.2
+  }
+
+  recfac = .35
+
+  xstart = xpos
+  ystart = ypos - 0.5 *ystep
+  ysnp = ypos - recfac * ystep
+
+  segments(xhit, yorg, xhit, yhit, col=hitcol, lwd = 2.0) 
+
+  ########### orig
+#  points(xhit,yhit, col=colors()[100],cex=1.5,pch=18)  
+#  points(xhit,yorg, col=hitcol,cex=1.0,pch=20)  
+#  points(xhit,yorg, col=colors()[100],cex=.7,pch=20)  
+  ###################
+
+
+ if (yhit == yorg) {
+  points(xhit,yhit, col="black",cex=1.8,pch=18)  
+  points(xhit,yhit, col="red",cex=1.0,pch=18)  
+  points(xhit,yhit, col="green",cex=.5,pch=18)  
+ }
+
+  if (yhit < yorg) {
+     points(xhit,yhit, col="blue",cex=1.8,pch=18) 
+  }
+
+  if (yhit > yorg) {
+     points(xhit,yhit, col=6,cex=1.8,pch=18) 
+  }
+
+
+#  arrows(xhit, ystart, xhit, yhit, col="gray80", length=0.05) 
+
+#  text(x= xpos ,y = ypos, cex = .6, labels = paste (aout[x,1], "\n","(chr.",aout[x,5], ")", sep = ""), col="gray30", font=3)
+
+
+  xrect1 = xpos - recfac * xstep
+  xrect2 = xpos + recfac * xstep
+  yrect1 = ypos - recfac * ystep
+  yrect2 = ypos + recfac * ystep
+
+#  rect (xrect1,yrect1,xrect2,yrect2,col="grey90",border="grey80")
+
+if (aout[x,1] == "no_gene"){
+   aout[x,1] = "intergenic"
+}
+if (aout[x,1] == "DPYD (+1)"){
+   aout[x,1] = "DPYD, MIR137"
+}
+
+  text(x= xpos ,y = ypos, cex = .6, labels = aout[x,1], col="gray30", font=3)
+
+}
+
+
+
+
+
+
+# text(x=aout[,2],y=-log10(aout[,3]),aout[,1],pos=3,cex=.4, font=c(3,3),col="gray30")
+
+
+dev.off()
+
+';
+
+###################################
+##    preparate template
+###################################
+
+my $cacon = "(NCASE cases, NCON controls)";
+if ($cacohead) {
+    $cacon =~ s /NCASE/$nca/g;
+    $cacon =~ s /NCON/$nco/g;
+    $R_templ =~ s /CACON/$cacon/g;
+}
+else {
+    $R_templ =~ s /CACON//g;
+}
+
+
+$R_templ =~ s/AAOUT/$areator.aaout/g;
+$R_templ =~ s/NUMBERSNPS/$nsnps/g;
+$R_templ =~ s/PTHRESH/$pth/g;
+$R_templ =~ s/OUTNAME/$pdfout/g;
+$R_templ =~ s/TICKNAME/$outdir\/ticks.txt_tmp/g;
+$R_templ =~ s/INNAME/$outdir\/Best_processed.txt_tmp/g;
+$R_templ =~ s/TITLE/$title/g;
+$R_templ =~ s/BPAX/2/g unless $chr;
+if ($chr){
+    $R_templ =~ s/BPAX/6/g unless $regstr;
+    $R_templ =~ s/BPAX/4/g if $regstr;
+}
+$R_templ =~ s/PLOTSHAPE/6,6/g if $regstr;
+$R_templ =~ s/PLOTSHAPE/11,7.5/g unless $regstr;
+
+
+#$R_templ =~ s/GENELIST/$gene_list_str/g;
+$R_templ =~ s/GENELIST//g;
+$R_templ =~ s/GENBEG/$genbeg/g;
+$R_templ =~ s/GENEND/$genend/g;
+$R_templ =~ s/SIGGWA/1/g if ($sig_sw);
+
+$R_templ =~ s/SIGGWA/0/g unless ($sig_sw);
+$R_templ =~ s/LOG/1/g unless ($nolog);
+$R_templ =~ s/LOG/0/g if ($nolog);
+
+$R_templ =~ s/MAXY/$maxy/g;
+
+
+
+
+#print "$genbeg\n";
+#print "$genend\n";
+
+&a2file ( "$outdir/R_GWAplot.in_tmp" , $R_templ);
+
+
+#######################################
+##     start R
+#######################################
+
+my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --vanilla \n";
+#my $systemGWA="source /broad/software/scripts/useuse; use R-2.14; R < $outdir/R_GWAplot.in_tmp --vanilla > /dev/null\n";
+
+&mysystem ($systemGWA);
+
+
+&mysystem ("cp $pdfout $rootdir");
+
+&mysystem ("tar -cvzf $pdfout.tar.gz $areator.aaout $outdir/R_GWAplot.in_tmp $outdir/ticks.txt_tmp $outdir/Best_processed.txt_tmp");
+&mysystem ("cp $pdfout.tar.gz $rootdir");
+
+print "pdf: $pdfout\n";
+
+
+&mysystem ("rm -rf $workdir");

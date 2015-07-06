@@ -1,0 +1,260 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.3.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+
+#  sripke@tin.broadinstitute.org:/psych/genetics_data/ripke/clozuk/combine_0812/verystric_qc_CLOZUK_co1m_full.no_clzo/imputation/pi_sub/test_hap$ splithap_1 plink.CLOZUK_co1m_full-no_clzo-qc2.ch.fl.chr12_021_024.haps.h100 
+
+
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("ploc");
+
+
+###############################################
+
+my $nhaps_ch = 4000;
+
+##### help message
+my $usage = "
+Usage : $progname haps-file (out of shapeit)
+
+version: $version
+
+#  --outname STRING    outdir, mandatory
+  --nhaps INT         number of haplotypes to split
+  --help              print this message and exit
+
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "outname=s"=> \my $outname,
+    "nhaps=i"=> \my $nhaps_ch,
+
+    );
+
+die ($usage) if $help;
+
+die "$usage" if (@ARGV != 1);
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+############################################
+######### BEGIN
+########################################
+
+my $haps_file = $ARGV[0];
+my $sample_file = $haps_file;
+$sample_file =~ s/.haps$//;
+$sample_file .= ".sample";
+
+#print "$sample_file\n";
+#exit;
+
+
+
+
+
+my $out_file = $ARGV[0];
+
+
+
+
+
+
+
+
+
+#################################
+## here actual haplotypes
+################################
+
+
+die $!."($haps_file)" unless open HA, "< $haps_file";
+my $line = <HA>;
+my @cells = @{&split_line_ref(\$line)};
+my $ncells = @cells;
+my $nids = ($ncells-5)/2;
+my $nhaps = $ncells-5;
+my $nsp = (sprintf "%d",$nhaps / $nhaps_ch ) + 1;
+print "number of cells: ".$ncells.";coming from nhaps: ".$nhaps.", splits ".$nsp.", nids: $nids\n";
+close HA;
+
+
+
+
+
+
+#exit;
+my @outfiles;
+my @outfiles_n;
+
+foreach my $sp (1..$nsp) {
+    print "split: $sp\n";
+    die $!."($haps_file)" unless open HA, "< $haps_file";
+
+    my $outfile = "$haps_file.spli$sp";
+    push @outfiles, $outfile;
+    die $!."($outfile)" unless open OUT, "> $outfile";
+
+
+
+    while (my $line = <HA>){
+	my @cells = @{&split_line_ref(\$line)};
+	
+	my $begstr = shift(@cells); 
+	
+	$begstr .= " ".shift(@cells); 
+	$begstr .= " ".shift(@cells); 
+	$begstr .= " ".shift(@cells); 
+	$begstr .= " ".shift(@cells); 
+	
+	print OUT $begstr;
+	
+	my $cend = ($sp * $nhaps_ch) - 1 ;
+	if ($cend > @cells - 1) {
+	    $cend = @cells -1;
+	}
+	my $cbeg = ($sp-1) * $nhaps_ch;
+
+	my $cdiff = $cend - $cbeg;
+#	print "cdiff: $cdiff\n";	
+
+	foreach my $spl ($cbeg .. $cend) {
+	    print OUT " ".$cells[$spl];
+	}
+	
+	print OUT "\n";
+    }
+    close OUT;
+    close HA;
+}
+
+close HA;
+
+
+#exit;
+
+
+
+##################################
+## sample file (only used for chrX)
+################################
+
+die $!."($sample_file)" unless open SA, "< $sample_file";
+my $sample_header1 = <SA>;
+my $sample_header2 = <SA>;
+chomp($sample_header1);
+chomp($sample_header2);
+my @sample_arr;
+while (my $line = <SA>){
+    chomp($line);
+    push @sample_arr, $line;
+#    my @cells = @{&split_line_ref(\$line)};
+}
+close SA;
+
+my $nsample = @sample_arr;
+print "number of samples: ".$nsample."\n";
+
+my $end = 0;
+foreach my $sp (1..$nsp) {
+    print "split: $sp\n";
+
+    my $outfile = "$haps_file.spli$sp.sample";
+    die $!."($outfile)" unless open OUT, "> $outfile";
+
+    print OUT $sample_header1."\n";
+    print OUT $sample_header2."\n";
+    my $idc = 0;
+
+    while ($end==0) {
+	my $row_loc = shift(@sample_arr);
+	print OUT "$row_loc\n";
+	$idc++;
+	if (@sample_arr == 0){
+	    $end = 1 ;
+	    last;
+	}
+	my $haps_idc = $idc * 2;
+	last if ($haps_idc == $nhaps_ch);
+    }
+    close OUT;
+}
+
+
+
+
+
+
+print "done\n";
+
+die $!."($haps_file.split.done.tmp)" unless open OUT, "> $haps_file.split.done.tmp";
+foreach (@outfiles){
+    print OUT"$_\n";
+}
+close OUT;
+&mysystem("mv $haps_file.split.done.tmp $haps_file.split.done"); 

@@ -1,0 +1,145 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $i2loc = &trans("i2loc");
+
+###########################################
+##### help message
+my $usage = "
+Usage : my.imp2 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
+
+ --out STRING      name of out file
+ --in STRING       name of haps file 
+ --gema STRING     gema-file
+ --reffile STRING  name of ref file
+ --refstart INT    Mb of start
+ --refend INT      Mb of end
+ --chrX STRING     for X chromosome, noting sample-file
+
+";
+
+my $outname = "";
+my $inname = "";
+my $gemafile = "";
+my $reffile = "";
+my $refstart = "";
+my $refend = "";
+
+use Getopt::Long;
+GetOptions( 
+
+    "out=s"=> \ $outname,
+    "in=s"=> \ $inname,
+    "gema=s"=> \ $gemafile,
+    "reffile=s"=> \ $reffile,
+    "refstart=s"=> \ $refstart,
+    "refend=s"=> \ $refend,
+    "chrX=s"=> \my $chrx,
+    );
+
+if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $reffile eq "" || $refstart eq ""|| $refend eq ""){
+    print "$usage\n";
+    print "$outname\n";
+    print "$inname\n";
+    print "$gemafile\n";
+    print "$reffile\n";
+    print "$refstart\n";
+    print "$refend\n";
+
+    die;
+}
+
+
+unless (-e "$inname") {
+    print "error: no $inname\n";
+    exit;
+}
+
+my $xtxt = "";
+if ($chrx) {
+    $xtxt = "-chrX -sample_known_haps_g $chrx";
+}
+
+my $imp2_bin = "impute2";
+
+system ("touch $outname.hour");
+if (-e "$outname.fini") {
+    system ("rm $outname.fini");
+}
+
+######################
+# BEGIN
+##############################
+
+my $allow_str = "";
+my $start_loc = $refstart *1.0e06;
+my $end_loc =  $refend *1.0e06;
+
+
+#print "$start_loc\n";
+#print "$end_loc\n";
+#exit;
+
+#if ($phas == 15) {
+if (0) {
+    $start_loc = 25 *1.0e06; 
+    $end_loc = 35 *1.0e06; 
+    $allow_str = "-allow_large_regions";
+}
+
+if ($refend - $refstart > 6) {
+    $allow_str = "-allow_large_regions";
+}
+
+
+my $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer 1000 -o $outname $allow_str";
+
+## for now without best guess
+#my $sys_loc = "$i2loc/$imp2_bin -phase -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer 1000 -o $outname $allow_str";
+
+## add -phase for phased best buess!!!!!!!!!!!!!!
+
+
+#print "$sys_loc\n";
+#sleep(2);
+
+die $!."$outname.imp2.cmd" unless open BC, "> $outname.imp2.cmd";
+print BC "$sys_loc\n";
+close BC;
+
+
+
+my  $sc = system ($sys_loc) ;
+
+if ($sc == 0 ) { 
+    system ("touch $outname.fini");
+}
+else {
+    print "job finished with error\n";
+}
+
+

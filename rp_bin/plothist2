@@ -1,0 +1,304 @@
+#!/usr/bin/perl
+use strict;
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+my $ploc = "";
+my $rloc = "";
+
+
+if (-e "$conf_file") {
+    die $!."($conf_file)" unless open FILE, "< $conf_file";
+    while (my $line = <FILE>){
+	my @cells = split /\s+/, $line;
+	$conf{$cells[0]} = $cells[1];
+    }
+    close FILE;
+    
+    sub trans {
+	my ($expr)=@_;
+	unless (exists $conf{$expr}) {
+	    die "config file without entry: $expr\n";
+	}
+	$conf{$expr};
+    }
+    
+
+    $rloc = &trans("rloc");
+}
+else {
+    print "----------------------------------------------------------------------------------------------------\n";
+    print "$conf_file is not existing, you will need to specify the location of binaries for plink, R, pdflatex\n\n";
+#    sleep(2);
+}
+
+
+###############################################
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+my $pcol=3;
+my $breaks=100;
+my $thresh="0,0";
+my $xlim="0";
+my $out="outname";
+
+
+##### help message
+my $usage = "
+Usage : $progname [options] [p-file] 
+
+version: $version
+
+  --pcol INT    column containing pvals (starts with 1), default = $pcol
+  --breaks INT   max width, default $breaks
+
+  --thresh     plot two vertical lines in addition to 4 SEs. format: VAL,VAL
+
+  --help        print this message and exit
+
+  --var         print mean, variance, sd
+
+  --out STRING  for outfile
+
+
+
+  ############ for standalone users #####################
+   
+  --rloc STRING    directory containing R binary (default: $rloc)
+                      download here: http://cran.r-project.org/
+
+
+ --out is mandatory
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ 
+";
+
+
+use Getopt::Long;
+GetOptions( 
+    "pcol=i"=> \$pcol,
+    "breaks=i"=> \$breaks,
+    "help"=> \my $help,
+    "var"=> \my $var_sw,
+    "thresh=s"=> \$thresh,
+    "xlim=s"=> \$xlim,
+    "out=s"=> \$out,
+    "rloc=s"=> \$rloc,
+
+    );
+
+die "$usage\n" if $help;
+die "$usage\n" if $out eq "outname";
+
+
+
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+else {
+    unless (-x "$rloc/R") {
+	print "Error: R binary not found in assigned plink directory(--rloc)\n";
+	exit;
+    }
+    else {
+	print "R binary found\n";
+    }
+}
+
+
+
+my ($t1,$t2)=  split /,/, $thresh;
+
+my $x1;
+my $x2;
+my $x_sw = 0;
+if ($xlim ne "0" ) {
+    ($x1,$x2)=  split /,/, $xlim;
+    $x_sw = 1;
+}
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+
+my $file = $ARGV[0];
+die "file not existing" unless (-e $file);
+
+
+my $lc = 0;
+my $mind;
+my $maxd;
+die "$file: ".$! unless open FILE, "< $file";
+die "$file.hisplo: ".$! unless open HP, "> $file.hisplo";
+while (my $line = <FILE>){
+    my @cells = @{&split_line_ref(\$line)};
+    my $this=$cells[$pcol-1];
+    print HP "$this\n";
+
+    unless ($lc == 0) {
+	$mind = $this if ($this < $mind);
+	$mind = $this unless ($mind);
+	$maxd = $this unless ($maxd);
+	$maxd = $this if ($this > $maxd);
+    }
+#    if ($x_sw == 1) {
+#	if ($this < $x1 || $this > $x2) {
+#	    next;
+#	}
+#    }
+
+
+    $lc++;
+}
+close FILE;
+close HP;
+
+print "$lc values\n";
+
+
+
+## template with IMISS and PDFNAME to be changed
+my $R_hist_templ='read.table("INNAME", header=T)-> dat
+pdf("OUTNAME.pdf",7.8,6)
+
+var(dat[,1]) ->variance
+sqrt(variance) -> se
+mean(dat[,1]) ->mean
+
+
+round(mean,4) ->mean_pr
+round(median(dat[,1]),4) ->median
+round(variance,4) ->variance_pr
+round(se,4) -> se_pr
+
+
+breaks_n = BREAKS
+
+min (dat[,1],na.rm=T) -> mind
+max (dat[,1],na.rm=T) -> maxd
+
+range = maxd-mind
+range_plot = XLIM2 - XLIM1
+
+breaks_n = breaks_n * (range / range_plot);
+
+#print (mind)
+#print (maxd)
+#print (range)
+#print (range_plot)
+#print (breaks_n)
+
+hist(dat[,1], main="TITLE", xlab=colnames(dat)[1], cex.sub =.6, ylab ="counts", col = "red", breaks = breaks_n,
+ sub = paste ("mean =",mean_pr,", median =",median,", var =",variance_pr,", se =",se_pr),xlim = c(XLIM1,XLIM2) )
+
+
+#abline (v=5000)
+
+#if (SE_ON == 1) {
+abline (v=mean-se,col="grey80")
+abline (v=mean-2*se,col="grey60")
+abline (v=mean-3*se,col="grey40")
+abline (v=mean-4*se,col="grey20")
+abline (v=mean+se,col="grey80")
+abline (v=mean+2*se,col="grey60")
+abline (v=mean+3*se,col="grey40")
+abline (v=mean+4*se,col="grey20")
+abline (v=THRESH1,col="red")
+abline (v=THRESH2,col="red")
+#}
+
+
+
+#abline (v=FIGENO, col=colors()[100])
+#abline (v=PREGENO, col="green")
+
+
+dev.off()
+' ;
+
+### breaks = seq (XLIM1,XLIM2,length=10)
+
+if ($x_sw == 1) {
+    $mind = $x1;
+    $maxd = $x2;
+}
+
+## rework template
+my $R_hist_in = $R_hist_templ;
+$R_hist_in=~ s/OUTNAME/$out/g;
+$R_hist_in=~ s/INNAME/$file.hisplo/g;
+$R_hist_in=~ s/THRESH1/$t1/g;
+$R_hist_in=~ s/THRESH2/$t2/g;
+$R_hist_in=~ s/XLIM1/$mind/g;
+$R_hist_in=~ s/XLIM2/$maxd/g;
+$R_hist_in=~ s/BREAKS/$breaks/g;
+$R_hist_in=~ s/TITLE/$file/g;
+
+
+&a2file ("$file.hisplo.Rin", $R_hist_in);
+
+my $system="$r_sys --vanilla < $file.hisplo.Rin";
+#my $system="source /broad/software/scripts/useuse; use R-2.14; R --vanilla < $file.hisplo.Rin";
+&mysystem($system);
+
+
+print "success: $out.pdf\n";
+
+
+#exit;
+
+
+
+
