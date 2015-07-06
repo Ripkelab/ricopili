@@ -1,0 +1,534 @@
+#!/usr/bin/perl
+use strict;
+my $out ="";
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("p2loc");
+my $eloc = &trans("eloc");
+my $sloc = &trans("sloc");
+my $queue = &trans("queue");
+
+######################################################
+
+
+my $ns_max = 20000;
+my $ni_max = 400;
+
+my $sigma = 4;
+my $npcas = 20;
+my $outliter = 0;
+
+my $ref_bfile = "";
+
+use Getopt::Long;
+GetOptions( "out=s"=> \$out,
+   "help!"=> \my $help,
+   "hm_out"=> \my $hm_out,
+   "nohm"=> \my $no_hm,
+   "sigma=i"=> \$sigma,
+   "nsmax=i"=> \$ns_max,
+   "ref=s"=> \$ref_bfile,
+   "data=s"=> \my $dat_bfile,
+   "keep=s"=> \my $keep,
+   "npcas=i"=> \ $npcas,
+   "ex_outl=i"=> \ $outliter,
+   "returnref"=> \my $returnref,
+
+    );
+
+
+if ($help || @ARGV > 0){
+    print "usage: $0 --ref bprefix --data bprefix (or .bim)
+
+      options:
+
+        --nsmax INT     maximum number of SNPs, default = $ns_max
+        --sigma INT     sigma threshhold, default $sigma
+        --out STRING    outname
+        --help          print this text and exit
+        --hm_out        with hm IDs in outfile
+        --nohm          no merging with HM
+        --ref STRING    set with the reference PCAs
+        --data STRING   set with PCAs to project
+        --keep STRING   keep IDs in STRING (like keep in plink)
+        --keep INT      number of pcas
+        --ex_outl INT      number of outlier iterations, default = $outliter
+
+
+
+ --ref and --data are mandatory !!
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+#############################
+# test, if running on server
+#############################
+use Sys::Hostname;
+my $host = hostname();
+#my $lisa=0;
+#$lisa=1 if ($host =~ m/sara/) ;
+#my $broad = 1 if ($ENV{"DOMAINNAME"} =~ /broadinstitute/);
+
+
+
+#my $lisamodule= "";
+#$lisamodule= "module load fortran/intel; module load eigensoft; " if $lisa;
+#my $lisamodule_pl= "";
+#$lisamodule_pl= "module load plink; " if $lisa;
+
+
+
+#my $ploc = "/fg/debakkerscratch/ripke/plink";
+#my $eloc = "/home/radon01/sripke/eigensoft/bin";
+#my $ploc_lisa = "/home/gwas/plink";
+#my $eloc_lisa = "/home/gwas/plink";
+
+unless (-e "$ploc/plink" ){
+    print "\n***** Error: couldn't find the following:\n";
+    print "$ploc/plink\n";
+    exit;
+}
+
+unless (-e "$eloc/smartpca" ){
+    print "\n***** Error: couldn't find the following:\n";
+    print "$eloc/smartpca\n";
+    exit;
+}
+
+
+#unless ($lisa){
+#    unless ($broad){#
+#	print "local running\n" ;
+#	$ns_max = 200;
+#	$ni_max = 5;
+ #   }
+#}
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+
+######################################
+#####   BEGIN
+######################################
+
+use File::Copy;
+use Cwd;
+
+my $rootdir = &Cwd::cwd();
+
+my $long = "" ;
+$long = $keep if ($keep);
+
+my $subdir_eigen="$sloc/eigen_pca.$dat_bfile.$ref_bfile.".$long;
+print "workdir: $subdir_eigen\n";
+
+use File::Path;
+
+&mysystem ("rm -rf $subdir_eigen");
+
+my @created = mkpath(
+    "$subdir_eigen",
+    {verbose => 0, mode => 0750},
+    );
+
+
+chdir "$subdir_eigen" or die $!;
+
+
+#my $bfile=$ARGV[0];
+#$bfile =~ s/.bim//;
+
+my $merge_name = "merge_$dat_bfile.$ref_bfile";
+$merge_name .= ".$keep" if ($keep);
+
+if ($ref_bfile ne "") {
+    copy ("$rootdir/$ref_bfile.fam",".") or die "$!: $rootdir/$ref_bfile.fam";
+    copy ("$rootdir/$ref_bfile.bim",".") or die $!;
+    copy ("$rootdir/$ref_bfile.bed",".") or die $!;
+}
+
+copy ("$rootdir/$dat_bfile.fam",".") or die $!;
+copy ("$rootdir/$dat_bfile.bim",".") or die $!;
+copy ("$rootdir/$dat_bfile.bed",".") or die $!;
+
+if ($keep){
+    copy ("$rootdir/$keep",".") or die $!;
+#    unless (-e "$dat_bfile.bed"){
+	&mysystem("$ploc/plink --memory 2000 --bfile $dat_bfile --keep $keep --make-bed --out temp") ;
+	move ("temp.fam","$dat_bfile.fam") or die $!;
+	move ("temp.bim","$dat_bfile.bim") or die $!;
+	move ("temp.bed","$dat_bfile.bed") or die $!;
+#    }
+    }
+#copy ("$hm_ref_dir/HM3-founder.bed",".") or die $!;
+#copy ("$hm_ref_dir/HM3-founder.bim",".") or die $!;
+#copy ("$hm_ref_dir/HM3-founder.fam",".") or die $!;
+
+##################################################
+## shorten ID-names and remember their location
+##################################################
+
+my %id_prefix = (); # not the reference
+my %id_translate = (); ## thes are all
+
+sub shorten_fam (){
+    my ($bfile,$ref_sw) = @_;
+
+    move ("$bfile.fam","$bfile.fam.long") or die $!;
+    
+    my $refpre = "ref";
+    $refpre = "dat" if ($ref_sw == 0);
+    
+## shorten ID-names and remember their prefix
+    print "processing ",$bfile,".fam.long\n";
+
+    open INFILE, "< $bfile.fam.long" or die $!;
+    open SHORT, "> $bfile.fam" or die $!;
+    my $lc = 0;
+    while (<INFILE>) {
+	chomp;
+	my $id_name = "$refpre$lc";
+	print SHORT "$id_name\t1\t0\t0\t1\t1\n";
+
+	my @cells = &split_line($_);
+
+
+	$id_prefix {$id_name} = "$cells[0]\t$cells[1]" if ($ref_sw == 0);
+	$id_translate {$id_name} = "$cells[0]\t$cells[1]" ;
+
+
+	$lc++;
+    }
+    close (INFILE);
+    close (SHORT);
+
+
+if (0){    
+    open INFILE, "< $bfile.fam.long" or die $!;
+    open SHORT, "> $bfile.fam" or die $!;
+    my $lc = 0;
+    while (<INFILE>) {
+	chomp;
+	my @cells = split /\*/, $_;
+	my @cells2 = ();
+	my $prefix = "";
+	if (@cells == 2){
+	    @cells2 = &split_line($cells[1]);
+	    $prefix = $cells[0]."*";
+	}
+	if (@cells == 3){
+	    @cells2 = &split_line($cells[2]);
+	    $prefix = $cells[0]."*".$cells[1]."*";
+	}
+	
+	print SHORT "ref" if ($ref_sw == 1);
+	print SHORT "$cells2[0]\t";
+	print SHORT "$cells2[1]\t";
+	print SHORT "$cells2[2]\t";
+	print SHORT "$cells2[3]\t";
+	print SHORT "$cells2[4]\t";
+	print SHORT "$cells2[5]\n";
+	my $id_name = $cells2[0]."\t".$cells2[1];
+#	if ($returnref) {
+#	    print "$prefix\n";
+#	    $id_prefix {$id_name} = $prefix;
+#	}
+#	else {
+	    $id_prefix {$id_name} = $prefix if ($ref_sw == 0);
+#	}
+	$lc++;
+    }
+    close (INFILE);
+    close (SHORT);
+}
+
+}
+
+
+
+if ($ref_bfile ne "") {
+    &shorten_fam($ref_bfile,1);
+}
+&shorten_fam($dat_bfile,0);
+
+#exit;
+
+################################################
+### merge these datasets
+#######################################
+#if ($no_hm) {
+#    move ("$bfile.bim","$merge_name.bim");
+#    move ("$bfile.bed","$merge_name.bed");
+#    move ("$bfile.fam","$merge_name.fam");
+#}
+if (0) {
+#    &mysystem ("merge_multi_bfiles_su --out $merge_name $bfile.bim HM3-founder.bim");
+    unless (-e "$merge_name.bed") {
+	my $sys = "bcomb_1 --out $merge_name $ref_bfile $dat_bfile" ;
+	print "$sys\n";
+#    exit;
+	&mysystem ($sys);
+    }
+}
+else {
+
+    if ($ref_bfile ne "") {
+	unless (-e "$dat_bfile.ped") {
+	    my $sys = "$ploc/plink --memory 2000  --bfile $dat_bfile --recode --out $dat_bfile" ;
+	    print "$sys\n";
+	    &mysystem ($sys);
+	}
+	unless (-e "$ref_bfile.ped") {
+	    my $sys = "$ploc/plink --memory 2000  --bfile $ref_bfile --recode --out $ref_bfile" ;
+	    print "$sys\n";
+	    &mysystem ($sys);
+	}
+	&mysystem ("diff -q $dat_bfile.map $ref_bfile.map");
+	&mysystem ("cp $dat_bfile.map $merge_name.map");
+
+
+#	print "combine to new ped\n";
+#	&mysystem ("cat $dat_bfile.ped $ref_bfile.ped > $merge_name.ped");
+
+
+	print "combine to new ped\n";
+	&mysystem ("cat $dat_bfile.ped $ref_bfile.ped > $merge_name.ped");
+
+	my $sys = "$ploc/plink --memory 2000  --file $merge_name --make-bed --out $merge_name" ;
+	print "$sys\n";
+	&mysystem ($sys);
+    }
+    else {
+	move ("$dat_bfile.fam", "$merge_name.fam") or die $!;
+	move ("$dat_bfile.bed", "$merge_name.bed") or die $!;
+	move ("$dat_bfile.bim", "$merge_name.bim") or die $!;
+    }
+}
+
+
+
+print "comb done\n";
+#exit;
+#######################################
+### overwork merged_fam, create pedind
+######################################
+
+open INFAM, "< $merge_name.fam" or die $!;
+open OUT, "> $merge_name.pedind" or die $!;
+while (<INFAM>) {
+    my @cells2 = &split_line($_);
+    my $id_name = $cells2[0];
+
+    print OUT "$cells2[0]\t";
+    print OUT "$cells2[1]\t";
+    print OUT "$cells2[2]\t";
+    print OUT "$cells2[3]\t";
+    print OUT "$cells2[4]\t";
+    print OUT "DATA\n" if (exists $id_prefix{$id_name});
+    print OUT "REF\n" unless (exists $id_prefix{$id_name});
+
+}
+close INFAM;
+close OUT;
+
+print "pedind done\n";
+
+## set genetic distance to 0
+open INBIM, "< $merge_name.bim" or die $!;
+open OUTBIM, "> $merge_name.ow.bim" or die $!;
+while (<INBIM>) {
+    my @cells2 = &split_line($_);
+    $cells2[2] = 0;
+    print OUTBIM "$cells2[0]\t";
+    print OUTBIM "$cells2[1]\t";
+    print OUTBIM "$cells2[2]\t";
+    print OUTBIM "$cells2[3]\t";
+    print OUTBIM "$cells2[4]\t";
+    print OUTBIM "$cells2[5]\n";
+}
+close INBIM;
+close OUTBIM;
+
+print "rewrite bim ($merge_name.ow.bim) done\n";
+#exit;
+########################################
+###   start eigensoft
+#####################################
+
+my $par_file = "$merge_name.par";
+
+my $pop_list_txt = "poplistname:     POPlist";
+$pop_list_txt = "" if ($no_hm);
+$pop_list_txt = "" if ($ref_bfile eq "");
+
+my $par_stuff ="
+genotypename:     $merge_name.bed
+snpname:          $merge_name.ow.bim
+indivname:        $merge_name.pedind
+evecoutname:      $merge_name.evec
+
+fastmode:        YES
+altnormstyle:    NO
+numoutevec:      $npcas
+numoutlieriter:  $outliter
+$pop_list_txt
+";
+
+
+&a2file("$merge_name.par",$par_stuff);
+&a2file("POPlist","REF");
+
+my $sys = "$eloc/smartpca -p $merge_name.par\n";
+if ($queue eq "slurm") {
+    $sys = "source /com/extra/lapack/3.5.0/load.sh; $eloc/smartpca -p $merge_name.par\n";
+}
+print "$sys\n";
+#exit;
+&mysystem ("$sys");
+
+
+#######################################
+### translate back
+######################################
+
+open INFAM, "< $merge_name.evec" or die $!;
+open OUT, "> $dat_bfile.emds" or die $!;
+open OUTF, "> $dat_bfile.full.emds" or die $!;
+while (my $line = <INFAM>) {
+    chomp($line);
+    my @cells = &split_line($line);
+    my @firstc = split /[:]/, $cells[0];
+#    my $id_name = $firstc[0]."\t".$firstc[1];
+    my $id_name = $firstc[0];
+
+
+    if ($returnref) {
+	if (exists $id_translate{$id_name}) {
+	    print OUT "$id_translate{$id_name}";
+	    foreach (1..$#cells) {
+		last if ($cells[$_] eq "DATA");
+		last if ($cells[$_] eq "REF");
+		print OUT "\t$cells[$_]";
+	    }
+	    print OUT"\n";
+	}
+    }
+    else {
+
+	if (exists $id_translate{$id_name}) {
+	    print OUTF "$id_translate{$id_name}";
+	    foreach (1..$#cells) {
+		last if ($cells[$_] eq "REF");
+		last if ($cells[$_] eq "DATA");
+		print OUTF "\t$cells[$_]";
+	    }
+	    print OUTF "\n";
+	}
+
+	if (exists $id_prefix{$id_name}) {
+	    print OUT "$id_prefix{$id_name}";
+	    foreach (1..$#cells) {
+		last if ($cells[$_] eq "DATA");
+		print OUT "\t$cells[$_]";
+	    }
+	    print OUT"\n";
+	}
+	else {
+	    if ($hm_out){
+		print OUT "HM_fam\t$id_name";
+		foreach (1..$#cells) {
+		    last if ($cells[$_] eq "REF");
+		    print OUT "\t$cells[$_]";
+		}
+		print OUT"\n";
+	    }
+	}
+    }
+
+}
+close INFAM;
+close OUT;
+close OUTF;
+
+my $out_file = "$dat_bfile.emds";
+$out_file = "$dat_bfile.$keep.emds" if ($keep);
+
+my $outf_file = "$dat_bfile.full.emds";
+$outf_file = "$dat_bfile.$keep.full.emds" if ($keep);
+
+
+copy ("$dat_bfile.emds","$rootdir/$out_file") or print "no emds\n";
+copy ("$dat_bfile.full.emds","$rootdir/$outf_file") or print "no full_emds\n";
+copy ("$merge_name.eval","$rootdir/") or print "no eval\n";
+
+exit;
+#&mysystem("rm -rf $subdir_eigen");

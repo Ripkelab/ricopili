@@ -1,0 +1,211 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $nn = "notag";
+
+
+my $command_line = "$progname @ARGV";
+
+my $past_file = $ENV{HOME}."/idtager_info";
+my $pwd_loc = $ENV{PWD};
+
+die $! unless open FILE, ">> $past_file";
+print FILE "$pwd_loc\t$command_line\n";
+close FILE;
+
+
+my $usage = "
+Usage : $progname --nn STRING fam
+
+
+options : 
+
+  -nn STRING    new name grp-name study-name ancstry platform, if not named, remove it.
+  --fn          new name based on file name
+  -help         display this message and exit
+  -trio         name trio-datasets (no case-control)
+  --create      create new fam_file
+
+  --cn STRING   change name of bim/fam/bed into nn-string
+
+ex. : --nn aut_agp1_eur_I1M
+ --create  --nn scz_four_eur_nan --cn scz_four_eur
+
+
+version: $version
+
+
+ renames IDs in typcial PGC format
+
+ writes this command into $past_file
+
+ created by Stephan Ripke 2008 at MGH Boston
+
+";
+
+
+use Getopt::Long;
+GetOptions( 
+    "nn=s"=> \$nn,  
+    "cn=s"=> \my $cn,  
+    "fn"=> \$nn,  
+    "trio"=> \my $trio,  
+    "create"=> \my $create,  
+    "help"=> \my $help, # prints help message
+    );
+
+
+
+die $usage if ( $help);
+
+
+
+use Cwd;
+use File::Path;
+
+
+my $famname = $ARGV[0];
+my $famname_out = $famname.".new";
+
+
+my $qc_dir= "qc";
+
+my @created = mkpath(   ## $created ?
+			$qc_dir,
+			{verbose => 0, mode => 0750},
+    );
+	
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem (){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+###################################################
+###  BEGIN
+###################################################
+
+#if ($fn) {
+#    $nn = $famname;
+#    my @cl = split '_', $famname; 
+#$nn = $cl[]
+#}
+
+
+die $! unless open FAMI, "< $famname";
+die $! unless open FAMO, "> $famname_out";
+#my @cc_name = qw /nocc control case fam/;
+my @cc_name = qw /mis con cas fam/;
+
+
+while (my $line = <FAMI>){
+    my @cells = &split_line($line);
+    my $cc = $cells[5];
+    $cc = 0 if ($cc < 0 || $cc > 2);
+    my $fam_txt = $cells[0];
+
+    my $newtag = "";
+    $newtag = "$nn*" if ($nn ne "notag");
+
+    $fam_txt =~ s/.*\*//;
+    $fam_txt = $nn."*".$fam_txt if ($nn ne "notag");
+
+    unless ($trio) {
+	$fam_txt = $cc_name[$cc]."_$fam_txt" if ($nn ne "notag");
+    }
+    else {
+	$fam_txt = $cc_name[3]."_$fam_txt" if ($nn ne "notag");
+    }
+
+
+    foreach (1..5){
+	$fam_txt .= "\t$cells[$_]";
+    }
+    $fam_txt .= "\n";
+#    print $fam_txt;
+    print FAMO $fam_txt;
+}
+
+close FAMI;
+close FAMO;
+
+
+chdir ($qc_dir);
+
+my $bfile = $famname;
+$bfile =~ s/.fam$//;
+
+
+
+if ($create) {
+
+    unless ($cn) {
+	&mysystem ("mv ../$famname_out $famname");
+	&mysystem ("ln -s ../$bfile.bim .") unless (-e "$bfile.bim");
+	&mysystem ("ln -s ../$bfile.bed .") unless (-e "$bfile.bed");;
+    }
+    else {
+	&mysystem ("mv ../$famname_out $cn.fam");
+	&mysystem ("ln -s ../$bfile.bim ./$cn.bim") unless (-e "$cn.bim");;
+	&mysystem ("ln -s ../$bfile.bed ./$cn.bed") unless (-e "$cn.bed");;
+    }
+
+}
+else {
+    exit;
+}
+
+
+exit;
+
+
+
+
+if ($cn) {
+
+    print "$bfile\t$famname\n";
+
+    print "$bfile\n";
+    print "$cn\n";
+    if ($bfile eq $cn) {
+	print "no file-renaming\n";
+	exit;
+    }
+
+#    exit;
+    &mysystem ("mv $bfile.fam $cn.fam");
+    &mysystem ("mv $bfile.bim $cn.bim");
+    &mysystem ("mv $bfile.bed $cn.bed");
+
+    die $! unless open LOG, "> $cn.idtager.log";
+    print LOG "$cn $bfile\n";
+    close LOG;
+}
+

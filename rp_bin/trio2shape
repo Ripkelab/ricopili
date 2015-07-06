@@ -1,0 +1,117 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+###########################################################################################################
+#
+#
+#    trio2shape
+#
+#          created by Stephan Ripke, Broadinstitute, sripke@broadinstitute.org
+#
+#                                  12/01/10
+#
+#
+#
+#    converts triofams for shapeit usage
+#
+#
+#
+#
+##########################################################################################################
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+
+##### help message
+my $usage = "
+Usage : $progname [options] famfile
+
+version: $version
+
+
+  --help           print this message and exit
+
+
+ prepares a famfile from trios for usage in shapeit (meaning: bringing the FID into IID)
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ 
+";
+
+#### evaluate options
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    );
+
+
+die "$usage\n" if ($help);
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+#################################################
+#  BEGIN
+#################################################
+
+
+
+my $ffile = $ARGV[0];
+
+
+my $in_name = $ffile;
+my $out_name = $ffile.".shape";
+
+die $!."($in_name)" unless open IFILE, "< $in_name";
+die $!."($out_name)" unless open OFILE, "> $out_name";
+
+while (my $line = <IFILE>){
+    my @cells = @{&split_line_ref(\$line)};
+    my $fid = $cells[0];
+    $fid =~ s/.*\*//;
+    $cells[1] = "$fid...$cells[1]";
+    if ($cells[2] ne "0") {
+	$cells[2] = "$fid...$cells[2]";
+    }
+    if ($cells[3] ne "0") {
+	$cells[3] = "$fid...$cells[3]";
+    }
+
+    print OFILE "@cells\n";
+}
+
+close IFILE;
+close OFILE;
+
+
+
+

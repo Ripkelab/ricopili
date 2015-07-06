@@ -1,0 +1,112 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+###########################################################################################################
+#
+#
+#    shrink pdf with scatterplots of many datapoints
+#      1) create png with imagemagick
+#      2) create pdf from single pages
+##########################################################################################################
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+#my $workdir = "./scratch";
+my $outstr = "";
+
+my $usage = "
+Usage : $progname [options] pdf-file
+
+version: $version
+
+  --out STRING   name of outdir, must end with .pdf
+
+  --help              print this message and exit
+
+ created by Stephan Ripke 2010: sripke\@broadinstitute.org
+
+";
+
+use Getopt::Long;
+GetOptions( 
+    "out=s"=> \my $outstr,
+    "help"=> \my $help,
+    );
+
+use Cwd;
+use File::Path;
+my $rootdir = &Cwd::cwd();
+my $infile = $ARGV[0];
+
+die "$usage\n" if ($help);
+if ($outstr eq "") {
+    $outstr = $infile;
+    $outstr =~ s/\.pdf$/.shrink.pdf/;
+}
+die "$usage\n" unless ($outstr =~ /.pdf$/);
+
+
+
+my $workdir = "./shrink_$outstr.subdir/";
+
+my @created = mkpath(
+    "$workdir",
+    {verbose => 0, mode => 0750},
+    );
+
+chdir ($workdir);
+
+print "$workdir\n";
+
+&mysystem ("cp $rootdir/$infile .");
+print "convert into PNGs\n";
+my $sc1 = system ("convert -density 300x300 $infile $infile-%03d.png 2> convert1");
+my $ec = -s "convert1";
+if ($ec > 0){
+    print "something went wrong during conversion into PNGs\n";
+    exit;
+}
+#print "first out: $sc1\n";
+
+print "back-convert into PDF\n";
+my $sc2 = system ("convert $infile*.png $outstr 2> convert2");
+#print "second out: $sc2\n";
+my $ec = -s "convert2";
+if ($ec > 0){
+    print "something went wrong during back conversion into PDF\n";
+    exit;
+}
+
+#exit;
+&mysystem ("cp $outstr $rootdir");
+
+chdir ($rootdir);
+
+my $ins = -s $infile;
+my $outs = -s $outstr;
+
+print "infile: $ins\n";
+print "outfile: $outs\n";
+
+
+if ($ins > $outs*5) {
+
+    print "considerable shrinking, rename files\n";
+    &mysystem ("mv $infile orig.$infile");
+    &mysystem ("mv $outstr $infile");
+}

@@ -1,0 +1,73 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("p2loc");
+
+###########################################
+
+
+
+my $outname = $ARGV[0];
+my $bfile = $ARGV[1];
+my $mlist = $ARGV[2];
+
+unless (-e "$mlist") {
+    print "error: no $mlist\n";
+    exit;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+######################
+# BEGIN
+##############################
+my $sys = "$ploc/plink --memory 2000  --allow-no-sex --bfile $bfile --out $outname --merge-list $mlist --make-bed";
+
+
+my $sc = system ($sys);
+if ($sc == 0) {
+    &mysystem ("touch $outname.fini");
+}
+
+
+print "success2\n";
+
+
+
+
+

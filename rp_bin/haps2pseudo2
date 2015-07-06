@@ -1,0 +1,387 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+###########################################################################################################
+#
+#
+#    haps2pseudo
+#
+#          created by Stephan Ripke, Broadinstitute, sripke@broadinstitute.org
+#
+#                                  12/01/10
+#
+#
+#
+#    converts haps/sample (out of shapeit family phasing) into pseudo-case/control
+#
+#
+#
+#
+##########################################################################################################
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+my $outname = "pseudo_out";
+
+##### help message
+my $usage = "
+Usage : $progname [options] haps sample
+
+version: $version
+
+
+  --help           print this message and exit
+  --chrX           chrX is phased without relatedness so needs extra attention
+  --out            outname (haps/sample)
+
+
+ converts haps/sample (out of shapeit family phasing) into pseudo-case/control
+
+  must been created with --children
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ 
+";
+
+#### evaluate options
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "chrX"=> \my $chrx,
+    "out=s"=> \$outname,
+    );
+
+
+die "$usage\n" if ($help);
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+#################################################
+#  BEGIN
+#################################################
+
+
+
+my $hfile = $ARGV[0];
+my $sfile = $ARGV[1];
+
+my $outhaps = $outname.".haps";
+my $outsample = $outname.".sample";
+my $outfam = $outname.".fam";
+
+my @haps_arr;
+my @name_arr;
+
+
+
+
+## read sample file into hash
+#################################################
+
+my %case_loc;
+my %parent1_hash;
+my %parent2_hash;
+my %sex_hash;
+my %id_loc;
+my %case_fam;
+my %id_content;
+
+print "$sfile\n";
+print "$outsample\n";
+print "$outfam\n";
+
+die $!."($sfile)" unless open IFILE, "< $sfile";
+my $line = <IFILE>;
+print OFILE "$line";
+my $line = <IFILE>;
+print OFILE "$line";
+
+my $tc =0;
+while (my $line = <IFILE>){
+    $tc++;
+    my @cells = @{&split_line_ref(\$line)};
+    $id_loc{"$cells[1]"} = $tc;
+#    print "$cells[1], $tc\n";
+    if ($cells[6] == 2) {
+	if ($cells[3] eq "0" || $cells[4] eq "0") {
+	    print "warning: case $cells[1] as founder\n";
+#	    exit;
+	}
+	else {
+	    $case_loc{"$cells[1]"} = $tc;
+	    $case_fam{"$cells[1]"} = $cells[0];
+	    $parent1_hash{"$cells[1]"} = $cells[3];
+	    $parent2_hash{"$cells[1]"} = $cells[4];
+	    $sex_hash{"$cells[1]"} = $cells[5];
+	}
+    }
+#    last if ($tc > 6);
+}
+close IFILE;
+
+my @out_arr = keys %case_loc;
+
+die $!."($outsample)" unless open OFILE, "> $outsample";
+die $!."($outfam)" unless open OFILE2, "> $outfam";
+
+print OFILE "ID_1 ID_2 missing father mother sex plink_pheno\n";
+print OFILE "0 0 0 D D D B\n";
+foreach my $cl (@out_arr) {
+    my $i_loc = $id_loc{$cl};
+    my $p1_loc = $id_loc{$parent1_hash{$cl}};
+    my $p2_loc = $id_loc{$parent2_hash{$cl}};
+    my $sex_loc = $sex_hash{$cl};
+    unless ($i_loc > 0) {
+	print "case itself $cl does not exist\n";
+	exit;
+    }
+    unless ($p1_loc > 0) {
+	print "parent1 of $cl does not exist\n";
+	exit;
+    }
+    unless ($p2_loc > 0) {
+	print "parent2 of $cl does not exist\n";
+	exit;
+    }
+
+
+    my $id = $cl."_pca";
+    print OFILE $id;
+    print OFILE " ".$id;
+    print OFILE " 0";
+    print OFILE " ".$parent1_hash{$cl};
+    print OFILE " ".$parent2_hash{$cl};
+    print OFILE " ".$sex_loc;
+    print OFILE " 2\n";
+#    print OFILE " 0\n";
+    my $id = $cl."_pco";
+    print OFILE $id;
+    print OFILE " ".$id;
+    print OFILE " 0";
+    print OFILE " ".$parent1_hash{$cl};
+    print OFILE " ".$parent2_hash{$cl};
+    print OFILE " ".$sex_loc;
+    print OFILE " 1\n";
+#    print OFILE " 0\n";
+
+
+    my $id_name = $cl;
+    my @id_arr = split '\.\.\.' ,$id_name;
+    print OFILE2 $id_arr[0]."_pca";
+    print OFILE2 " ".$id_arr[1];
+    print OFILE2 " 0";
+    print OFILE2 " 0";
+    print OFILE2 " ".$sex_loc;
+    print OFILE2 " 2\n";
+    print OFILE2 $id_arr[0]."_pco";
+    print OFILE2 " ".$id_arr[1];
+    print OFILE2 " 0";
+    print OFILE2 " 0";
+    print OFILE2 " ".$sex_loc;
+    print OFILE2 " 1\n";
+
+#    print "case: $cl, $i_loc\n";
+#    print "parent1: $parent1_hash{$cl}, $p1_loc\n";
+#    print "parent1: $parent2_hash{$cl}, $p2_loc\n";
+}
+
+
+close OFILE;
+close OFILE2;
+
+#exit;
+
+
+
+
+
+
+### create pseudo-control and pseudo-control
+#################################################
+print "diff\n";
+
+die $!."($outhaps)" unless open OFILE, "> $outhaps";
+die $!."($hfile)" unless open IFILE, "< $hfile";
+my $sc = 0;
+my $pt = 0;
+
+#foreach my $line (@inlines){
+while (my $line = <IFILE>){
+
+    my @cells = @{&split_line_ref(\$line)};
+    my $snp_info_loc = shift(@cells);
+    foreach(1..4) {
+	$snp_info_loc .= " ".shift(@cells);
+    }
+
+    print OFILE $snp_info_loc;
+
+
+
+
+    foreach my $cl (@out_arr) {
+	my $i_loc = $id_loc{$cl};
+	my $p1_loc = $id_loc{$parent1_hash{$cl}};
+	my $p2_loc = $id_loc{$parent2_hash{$cl}};
+
+
+
+	unless ($chrx) {
+	    my $nt1_loc = ($p1_loc * 2); # non-transmitted two alleles per ID (see shift up there), then arrays starts with 0
+	    my $tr1_loc = $nt1_loc - 1;
+	    my $nt2_loc = ($p2_loc * 2);
+	    my $tr2_loc = $nt2_loc -1;
+	    
+	    print OFILE " ".$cells[$tr1_loc - 1]." ".$cells[$tr2_loc - 1];
+	    print OFILE " ".$cells[$nt1_loc - 1]." ".$cells[$nt2_loc - 1];
+	    
+	}
+	else {
+
+	    my $i2_loc = $i_loc * 2;
+	    my $i1_loc = $i2_loc - 1;
+
+
+	    my $fa2_loc = ($p1_loc * 2); 
+	    my $fa1_loc = $fa2_loc - 1; 
+	    my $mo2_loc = ($p2_loc * 2); 
+	    my $mo1_loc = $mo2_loc - 1; 
+
+	    if ($cells[$fa1_loc - 1]  ne $cells[$fa2_loc - 1]) {
+		print "Warning: father not homozygote on chrX: $cl, $parent1_hash{$cl}\n";
+#		die;
+	    }
+
+	    my $homo_mother = 0;
+	    if ($cells[$mo1_loc - 1]  eq $cells[$mo2_loc - 1]) {
+		$homo_mother = 1;
+	    }
+
+	    #### homo mother
+	    if ($homo_mother ==1 ) {
+		######## male offspring
+		if ($sex_hash{$cl} == 1) {
+		    print OFILE " ".$cells[$mo1_loc - 1]." ".$cells[$mo2_loc - 1];
+		    print OFILE " ".$cells[$mo1_loc - 1]." ".$cells[$mo2_loc - 1];
+		}
+		#### female offspring
+		else {
+		    print OFILE " ".$cells[$mo1_loc - 1]." ".$cells[$fa1_loc - 1];
+		    print OFILE " ".$cells[$mo1_loc - 1]." ".$cells[$fa1_loc - 1];
+		}
+	    }
+
+	    ### hetero mother
+	    else {
+		######## male offspring
+		if ($sex_hash{$cl} == 1) {
+		    if ($cells[$i1_loc - 1] eq $cells[$mo1_loc - 1]) {
+			print OFILE " ".$cells[$mo1_loc - 1]." ".$cells[$mo1_loc - 1];
+			print OFILE " ".$cells[$mo2_loc - 1]." ".$cells[$mo2_loc - 1];
+		    }
+		    else {
+			print OFILE " ".$cells[$mo2_loc - 1]." ".$cells[$mo2_loc - 1];
+			print OFILE " ".$cells[$mo1_loc - 1]." ".$cells[$mo1_loc - 1];
+		    }
+
+		}
+
+		#### female offspring
+		else {
+		    if ($cells[$i1_loc - 1] eq $cells[$i2_loc - 1]) {
+			print OFILE " ".$cells[$fa1_loc - 1]." ".$cells[$fa2_loc - 1];
+			if ($cells[$mo1_loc - 1] eq $cells[$fa1_loc - 1]) {
+			    print OFILE " ".$cells[$mo2_loc - 1]." ".$cells[$fa1_loc - 1]; ### !!! which order?
+			}
+			else {
+			    print OFILE " ".$cells[$mo1_loc - 1]." ".$cells[$fa1_loc - 1]; ### !!! which order?
+			}
+		    }
+		    else {
+			if ($cells[$mo1_loc - 1] eq $cells[$fa1_loc - 1]) {
+			    print OFILE " ".$cells[$mo2_loc - 1]." ".$cells[$fa1_loc - 1]; ### !!! which order?
+			}
+			else {
+			    print OFILE " ".$cells[$mo1_loc - 1]." ".$cells[$fa1_loc - 1]; ### !!! which order?
+			}
+			print OFILE " ".$cells[$fa1_loc - 1]." ".$cells[$fa2_loc - 1];
+		    }
+		}
+	    }
+	    
+	    
+	 }   
+	    
+	    
+	    
+#	print "$tr1_loc\n";
+#	print "$tr2_loc\n";
+#	print "$nt1_loc\n";
+#	print "$nt2_loc\n";
+	    
+#	exit;
+    }
+    print OFILE "\n";
+
+
+
+
+
+}
+
+close OFILE;
+close IFILE;
+
+
+
+&mysystem ("touch $outhaps.fini");
+#print ("touch $outhaps.fini)";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+print "success: $outhaps\n";
+
+
+

@@ -1,0 +1,189 @@
+#!/usr/bin/perl
+use strict;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+#my $ploc = &trans("ploc");
+my $p2loc = &trans("p2loc");
+my $sloc = &trans("sloc");
+
+
+
+
+##############################################
+#### plink2 works now with this here
+###########################################################################################################
+
+
+my $version = "2.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+my $usage = "
+Usage : $progname --out OUTNAME DIR
+
+version: $version
+
+  --out STRING        outname, mandatory
+  --help              print help massage and exits
+
+ created by Stephan Ripke 2014 at MGH, Boston, MA
+ 
+combined all bfiles from specified directory
+
+";
+
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+my @cmd_collect;
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+    push @cmd_collect, $systemstr;
+
+}
+
+
+
+
+
+use Getopt::Long;
+GetOptions( "out=s"=> \my $out,
+	    "help"=> \my $help );
+
+
+die "$usage" if $help;
+die "$usage" unless $out;
+
+
+my @bfile_list= ();
+my $rootdir = &Cwd::cwd();
+my $workdir = @ARGV[0];
+unless (-d $workdir) {
+    print "workdir (argument1, $workdir) is not existing, please specify\n";
+    exit;
+}
+
+chdir ($workdir);
+
+
+opendir(DIR, ".") || die "can't opendir .: $!";
+my @files = readdir(DIR);
+closedir DIR;
+@bfile_list = grep {/.bim$/} @files;
+print "take every bim file in this directory ($workdir)\n";
+
+
+
+foreach (0..$#bfile_list){
+    $bfile_list[$_]=~ s/.bim//;
+}
+
+
+use File::Path;
+use Cwd;
+
+
+my $merge_list_name="MERGE-LIST-$out";
+print "write $merge_list_name\n";
+
+open MERGE, ">", "$merge_list_name" or die $!;
+my $bfile_count=0;
+foreach my $bele (@bfile_list) {
+    if ($bele eq $out) {
+	print "skipping $out\n";
+	next;
+    }
+    elsif ($bele =~ /bgs-merge/){
+
+	print "skipping $bele\n";
+	next;
+    }
+    unless ($bfile_count == 0){
+	print MERGE "$bele.bed $bele.bim $bele.fam\n" if $bfile_count++ > 0 ;
+    }
+    $bfile_count++;
+}
+close (MERGE);
+
+
+#print "debug\n";
+#exit;
+
+print "merge ".@bfile_list." chunks in the directory\n";
+
+my $system="$p2loc/plink --memory 4000  --allow-no-sex --bfile $bfile_list[0] --merge-list $merge_list_name --out $out --make-bed" ;
+#print "$system\n";
+#exit;
+&mysystem ("$system");
+
+chdir ($rootdir);
+&mysystem ("mv $workdir/$out.bed .");
+&mysystem ("mv $workdir/$out.bim .");
+&mysystem ("mv $workdir/$out.fam .");
+&mysystem ("mv $workdir/$out.log .");
+&mysystem ("mv $workdir/MERGE-LIST-$out .");
+
+
+
+die $!."$out.wbg.cmd" unless open BC, "> $out.wbg.cmd";
+foreach (@cmd_collect) {
+    print BC "$_\n";
+}
+close BC;
+
+
+
+&mysystem ("touch $out.fini");
+
+
+
+
+#########################################
+exit
+########################################
+
+
+

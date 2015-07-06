@@ -1,0 +1,1111 @@
+#!/usr/bin/perl
+use strict;
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $rloc = &trans("rloc");
+my $sloc = &trans("sloc");
+
+########################
+
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+else {
+    
+    unless (-e "$rloc/R" ){
+	print "\n***** Error: couldn't find the following:\n";
+	print "$rloc/R\n";
+	exit;
+    }
+
+}
+
+
+
+
+
+my $h_col = 7;
+my $nsnps = "-no data-";
+
+my $pla = "nolambda";
+
+my $outname = "";
+
+use Getopt::Long;
+GetOptions( 
+    "out=s"=> \$outname,
+    "hcol=i"=> \$h_col,
+    "diff=s"=> \my $diffc,
+    "spec"=> \my $spec,
+    "nsnps=i"=> \$nsnps,
+   "help!"=> \my $help,
+   "bfile=s"=> \my $bfile,
+   "pla=s"=> \$pla,
+   "fam=s"=> \my $famfile );
+
+
+if ($help || @ARGV < 1){
+    print "usage: $0 mds_file
+
+      options:
+        --pla STRING    pca-lambda-file
+        
+        --fam           if not tagged before
+        --out           outname
+	--help          print this message and exit
+	--bfile STRING  perform association testing of covariates with dataset....
+	--hcol INT      set to 5 for eigenvec, set to 7 for plink, default $h_col
+        --diff STRING   file with IDs of different color
+
+        --spec          special switch (for publication)
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+#############################
+# test, if running on server
+#############################
+use Sys::Hostname;
+my $host = hostname();
+#my $lisa=0;
+#$lisa=1 if ($host =~ m/sara/) ;
+#my $broad = 1 if ($ENV{"DOMAINNAME"} =~ /broadinstitute/);
+
+#my $rloc = "/home/radon01/sripke/bakker_ripke/R-base";
+#my $rloc_lisa = "/home/gwas/bin/R-base";
+
+
+#####################################
+# BEGIN
+#####################################
+
+
+
+
+use File::Copy;
+use File::Path;
+use Cwd;
+
+
+#my $subdir_mds="tmp_mds_".$mds_file;
+
+
+#use File::Path;
+
+#my @created = mkpath(
+#    "$subdir_mds",
+#    {verbose => 0, mode => 0750},
+#    );
+
+my $mds_file=@ARGV[0];
+
+
+
+my $pdf_name="$mds_file";
+
+if ($outname ne ""){
+    $pdf_name="$outname";
+}
+
+my $pdf_name_shrink="$pdf_name.shrink.pdf";
+my $pdf_name_single="$pdf_name.single.pdf";
+my $pdf_name_single_shrink="$pdf_name.single.shrink.pdf";
+my $pdf_name_sum="$pdf_name.sum.pdf";
+
+my $mds_ow_file=$pdf_name.".overworked";
+my $R_in = "$pdf_name.R_pca_plot.in";
+
+
+my $pdf_name_1d = $pdf_name.".1d.pdf";
+my $pdf_name_2d = $pdf_name.".2d.pdf";
+my $pdf_name_2ds = $pdf_name.".2ds.pdf";
+$pdf_name .= ".pdf";
+
+my $rootdir = &Cwd::cwd();
+
+my %fam_hash;
+if ($famfile) {
+    die $! unless open IN, "< $famfile";
+    while (my $line = <IN>) {
+#    print "$line\n";
+	my @cells = &split_line($line);
+	my $id_loc = $cells[0]."\t".$cells[1];
+	if ($cells[5] == 1) {
+	    $fam_hash{$id_loc} = "con";
+	}
+	if ($cells[5] == 2) {
+	    $fam_hash{$id_loc} = "cas";
+	}
+    }
+    close IN;
+}
+
+my $mds_file_presor=$mds_file."_presorted";
+my $mds_file_sor=$mds_file."_sorted";
+my $mds_ow_file=$mds_file.".overworked";
+
+#my $subdir_mds="$sloc/mdsplot.@ARGV[0]";
+my $subdir_mds="./mdsplot.@ARGV[0]";
+
+
+#while (-e $subdir_mds) {
+#    $subdir_mds .= ".s";
+#}
+
+
+#my $subdir_mds="/scratch/mdsplot.@ARGV[0]";
+#$subdir_mds = "/broad/shptmp/sripke/mdsplot.@ARGV[0]" if ($broad);
+
+
+#&mysystem("rm -rf $subdir_mds");
+print "create $subdir_mds\n";
+my @created = mkpath(
+    "$subdir_mds",
+    {verbose => 0, mode => 0750},
+    );
+
+chdir "$subdir_mds" or die $!;
+
+
+
+copy ("$rootdir/$mds_file",".") or die $!;
+copy ("$rootdir/$pla",".") unless ($pla eq "nolambda");
+copy ("$rootdir/$diffc",".") if ($diffc);
+
+########
+### count 
+##########
+
+my %diffc_hash = {};
+if ($diffc){
+    die $! unless open IN, "< $diffc";
+    while (my $line = <IN>) {
+#    print "$line\n";
+	my @cells = &split_line($line);
+	$cells[0] =~ s/.*\*//;
+	$diffc_hash{"$cells[0]\t$cells[1]"} = 1;
+#	print "$cells[0]\t$cells[1]\n";
+    }
+    close IN;
+}
+#exit;
+
+my %n_st = (); ## number per dataset
+
+die $! unless open IN, "< $mds_file";
+while (my $line = <IN>) {
+#    print "$line\n";
+    my @cells = &split_line($line);
+
+    $cells[0] =~ s/^[0-9]+_//;
+    $cells[0] =~ s/_/ /;
+    $cells[0] =~ s/\*/ /;
+    my @cells = &split_line($cells[0]);
+#    print $cells[1]."\n";
+    unless ($famfile) {
+	$n_st {$cells[1]} ++;
+    }
+    else {
+	$n_st {$mds_file} ++;
+    }
+}
+#close IN;
+#exit;
+$n_st{"pop_euro_eur_SEQ"} = 90000000000;
+$n_st{"pop_tsi_eur_SEQ"} = 89000000000;
+$n_st{"pop_fin_eur_SEQ"} = 87000000000;
+$n_st{"pop_gbr_eur_SEQ"} = 85000000000;
+$n_st{"pop_ceu_eur_SEQ"} = 83000000000;
+$n_st{"pop_ibs_eur_SEQ"} = 81000000000;
+$n_st{"pop_asia_asn_SEQ"} = 80000000000;
+$n_st{"pop_afri_afr_SEQ"} = 70000000000;
+$n_st{"pop_amer_amr_SEQ"} = 60000000000;
+
+
+
+
+#   228 mis_pop_afri
+ #   173 mis_pop_amer
+  #  277 mis_pop_asia
+   # 378 mis_pop_euro
+
+die $! unless open IN, "< $mds_file";
+die $! unless open OUT, "> $mds_file_presor";
+my $lc=0;
+while (my $line = <IN>) {
+#    print "$line\n";
+    $line =~ s/^[ ]+//;
+    $line =~ s/^[0-9]+_//;
+#    print "$line\n";
+
+    my @cells = &split_line($line);
+
+    my $cc_loc = $fam_hash{$cells[0]."\t".$cells[1]};
+
+    $cells[0] =~ s/_/ /;
+    $cells[0] =~ s/\*/ /;
+    my @cells = &split_line($cells[0]);
+
+#    print "$cells[1]\n";
+
+    my $pre_txt = "";
+    if ($famfile) {
+	$pre_txt = $n_st{$mds_file}."_".$cc_loc."_dis_study_anc_NA*";
+    }
+    
+    print OUT "99999999999_".$line if ($lc==0);
+    unless ($famfile) {
+	## adding the number of IDs per dataset to the first column
+	print OUT $n_st {$cells[1]}."_".$line unless ($lc==0);
+    }
+    else {
+	print OUT $pre_txt.$line unless ($lc==0);
+    }
+    $lc++;
+}
+close IN;
+close OUT;
+
+
+
+
+##############
+#### sort mds_file
+
+&mysystem("sort -k1,1nr -k4,4 -k2,2r -t \"_\" $mds_file_presor > $mds_file_sor");
+
+#print "debug\n";
+#exit;
+#exit;
+
+
+
+
+############################
+##  overwork mds file
+#####
+
+die $! unless open IN, "< $mds_file_sor";
+die $! unless open OUT, "> $mds_ow_file";
+#    print "$mds_file_sor\n";
+
+my %leg1=();
+my %leg2=();
+my %nleg1=();
+my %nleg2=();
+
+my $header = <IN>;
+$header =~ s/^[\s]+//g;
+$header =~ s/\s+/ /g;
+
+my @cells = &split_line($header);
+my @Carr = ();
+foreach (@cells){
+    push @Carr, $_ if ($_ =~ /^C/);
+}
+
+#print "@Carr\n";
+#exit;
+
+
+
+print OUT "TYPE STC CC ST $header\n";
+my $study_ind = 0;
+my $old_study = "name with spaces is not possible";
+while (my $line = <IN>) {
+#    print "$line\n";
+    my @cells = &split_line($line);
+
+#    print $cells[0]."\t".$cells[1]."\n";
+    my $fid = $cells[0];
+    $fid =~ s/.*\*//;
+    my $iid = $cells[1];
+#    print $fid."\t".$iid."\n";
+#    $cells[0] = "0_".$cells[0] if ($cells[0] =~ m/^[^0-9]/);
+    $cells[0] =~ s/^[0-9]+_//;
+
+#    $cells[0] =~ s/_/ /;
+
+    $cells[0] =~ s/_/ /;
+    $cells[0] =~ s/\*/ /;
+#    $cells[0] =~ s/_NOXLS//;
+    my $type ;
+
+
+#    print $cells[0]."\n";
+
+
+
+    if ( $cells[0] =~ /cas/){
+	$type = 1;
+    }
+    elsif ($cells[0] =~ /con/) {
+	$type = 3;
+    }
+    elsif ($cells[0] =~ /mis/) {
+	$type = 2;
+    }
+    else {
+	$type = 2;
+#	$cells[0] = "nocc $cells[0]";
+    }
+
+    if (exists $diffc_hash{"$fid\t$iid"}) {
+	$type = 2;
+    }
+#    else {
+#	print "$fid\t$iid\n";
+#    }
+    $cells[0] = "$type $cells[0]";
+
+
+#    print "@cells\n";
+
+
+    my @fs =  split / /, $cells[0];
+
+
+
+    if ("$fs[1].$fs[2]" ne $old_study){
+	$study_ind ++;
+	$old_study = "$fs[1].$fs[2]";
+    }
+    $cells[0] = "$study_ind $cells[0]";
+
+    if (exists $diffc_hash{"$fid\t$iid"}) {
+	$fs[1] = "xcol";
+    }
+
+
+ 
+    $leg1{$fs[1]} = $fs[0];
+    $nleg1{$fs[1]} ++;
+
+
+
+    my $leg_st = "$fs[1].$fs[2]";
+ #   print "$leg_st\n";
+    if ($leg_st eq "mis.pop_euro_eur_SEQ") {
+	$leg_st = "1kg_pop_euro";
+    }
+    if ($leg_st eq "mis.pop_asia_asn_SEQ") {
+	$leg_st = "1kg_pop_asia";
+    }
+    if ($leg_st eq "mis.pop_afri_afr_SEQ") {
+	$leg_st = "1kg_pop_afri";
+    }
+    if ($leg_st eq "mis.pop_amer_amr_SEQ") {
+	$leg_st = "1kg_pop_amer";
+    }
+
+    $leg2{$leg_st} = $study_ind;
+    $nleg2{$leg_st} ++;
+
+
+
+
+
+#    print "@fs\n";
+#    exit;
+
+
+#    print OUT "$fs[0]\t$fs[1]";
+#    print "$cells[0]\n";
+#    print "@cells\n";
+    print OUT "@cells\n";
+
+
+#    print "@cells\n";
+#    exit;
+
+}
+#    print "$mds_file_sor\n";
+close IN;
+close OUT;
+
+#exit;
+
+die $! unless open L1, "> $mds_file.legend1";
+foreach (keys (%leg1)){
+    print L1 "$leg1{$_}\t$_ (n = $nleg1{$_})\n";
+}
+close L1;
+
+
+die $! unless open L2, "> $mds_file.legend2";
+my $cc = 1;
+foreach (sort keys (%leg2)){
+    my @temp_cell = split /_/, $_;
+    unless ($spec) {
+	print L2 "$leg2{$_}\t$_ (n = $nleg2{$_})\t$nleg2{$_}\t$temp_cell[0]_$temp_cell[1]_$temp_cell[2]\n";
+    }
+    else {
+	print L2 "$leg2{$_}\t$_ (n = $nleg2{$_})\t$nleg2{$_}\t$cc\n";
+    }
+    $cc++;
+}
+close L2;
+&mysystem("sort -k1,1n $mds_file.legend2 > $mds_file.legend2_tmp");
+&mysystem("mv  $mds_file.legend2_tmp $mds_file.legend2");
+#exit;
+
+
+
+my $R_templ = '
+
+read.table ("MDSFILE",header=T)->pca
+read.table ("LEGENDFILE1",header=F,sep ="\t")->le1
+read.table ("LEGENDFILE2",header=F,sep ="\t")->le2
+
+#print (le1)
+#exit
+
+nc = dim(le2)[1]
+
+#print (nc)
+#exit;
+
+if (nc ==1 ) {
+pca[,1] = pca[,2]
+#nc = 2
+}
+
+
+myraincolors = rainbow(dim(le2)[1], end = 4/6)
+
+myraincolors <- (colors()[c(24,552,131,323,654,100,71,373,467,51,75,43,463,477,494,558,451,289,455,151,312,106,84,420,90,143,503,612,616,24,552,131,323,654,100,71,373,467,51,75,43,463,477,494,558,451,289,455,151,312)[1:le2[nc,1]]])
+
+#myraincolors <- c("orange","lightpink1","purple","grey","red","dodgerblue","green","maroon","gold",rainbow(70)[1:le2[nc,1]])
+myraincolors <- rep(c("orange","lightpink1","purple","grey","red","dodgerblue","green","maroon"),30)[1:le2[nc,1]]
+
+
+
+#emptycol
+
+header_col = HCOL
+
+#print ("debug1");
+
+if (1) {
+ if ("PLAMBDA" != "nolambda"){
+    read.table ("PLAMBDA",header=T,sep ="\t")->pla
+ }
+
+ pdf("PDFSUM",7.8,6)
+
+pca_nomiss <- pca[pca[,"CC"] != "mis",]
+#print ("debug2");
+#print (levels(pca[,"CC"]));
+#print (levels(pca_nomiss[,"CC"]));
+#print (pca_nomiss[,"CC"])
+
+################################
+## calculate p_assoc of PCA
+################################
+p_assoc <- rep(0,length(pca) - header_col)
+
+print ("debug2b");
+#print (pca[,"ST"]);
+print (unique(pca_nomiss[,"ST"]));
+
+#print (p_assoc)
+if (length(unique(pca_nomiss[,"ST"])) == 1) {
+# print ("debug2c");
+ for (y in (header_col+1):length(pca)) {
+#   print (y);
+   p_assoc[y-header_col] = summary(glm( CC ~ pca_nomiss[,y] , data=pca_nomiss, family="binomial"))$coeff[2,4]
+ }
+} else {
+ for (y in (header_col+1):length(pca)) {
+#   print (y);
+#   print (length(pca));
+   p_assoc[y-header_col] = summary(glm( CC ~ pca_nomiss[,y] + as.factor(ST), data=pca_nomiss, family="binomial"))$coeff[2,4]
+ }
+}
+
+#print ("debug3");
+
+par (mar=c(8, 4, 4, 4)+0.1)
+
+plot (p_assoc, type="b",cex.lab=.8,
+      cex.axis=.6,cex.main=.8, xlab= "PCA", 
+      main = "summary of single PCAs", ylim = c(-0.01,.2),
+      ,xaxp = c(1,length(p_assoc),length(p_assoc)-1)
+      )
+
+col_p = seq (1,length(p_assoc),1)
+col_p [p_assoc <= .05] = 2
+col_p [p_assoc > .05] = 1
+col_p
+text(x=1:length(p_assoc),y=-0.01,labels=signif(p_assoc,3),cex=.4,col=col_p)
+
+abline (h=.05, col = "green")
+
+#print ("debug4");
+
+## bring lambdas in same plot
+##############################
+
+if ("PLAMBDA" != "nolambda"){
+
+   par (new=T)
+
+
+   ymax = max (pla[,2],na.rm=T)
+   ymin = min (pla[,2],na.rm=T)
+   ymax = ymax + (ymax-ymin) *.1
+   ymin = ymin - (ymax-ymin) *.1
+   plot (pla[,2],type="b",axes = F, xlab="", ylab="", col="red", ylim = c(ymin,ymax))
+   axis (4, cex.axis=.6, col="red");
+   mtext ("Lambda of PCAs on pruned genome-wide SNPs", side =4, col="red", cex=.8, line =2);
+   text(x=1:dim(pla)[1],y=pla[,2],labels=round(pla[,2],2),pos=3,cex=.6, col ="red")
+
+}
+
+#print ("debug5");
+######## headerpage
+
+plot (0,0,type="n", xaxt="n", yaxt="n", xlab="",ylab="", main = "FILE Population Plots", sub = "NUMBERSNPS LD pruned SNPs")
+
+
+if (dim(le2)[1] ==1 ) {
+  myraincolors <- c(2,3,4)
+  legend ("left",legend=le1[,2], pch=le1[,1], cex=.8, col = myraincolors[le1[,1]])
+
+} else {
+  legend ("left",legend=le1[,2], pch=le1[,1], cex=.8)
+  legend ("right",legend=le2[,2], fill=myraincolors[le2[,1]], cex=.6)
+}
+
+#print ("debug6");
+
+
+if (1){
+
+#######################################################
+## calculate p_assoc of single study with single PCA
+########################################################
+
+p_assoc_si <- rep(1,length(pca) - header_col)
+p_assoc_min <- rep(1,length(pca) - header_col)
+
+plot (p_assoc_si, type="b",cex.lab=.8,
+      cex.axis=.6,cex.main=.8, xlab= "PCA", 
+      main = paste ( "summary of single PCAs") , ylim = c(-0.01,.2),
+      ,xaxp = c(1,length(p_assoc_si),length(p_assoc_si)-1)
+      )
+
+#print (length(pca));
+#print (unique(pca[,"ST"]));
+#exit;
+
+
+for (st in unique (pca[,"ST"])) {
+  p_assoc_si <- rep(0,length(pca) - header_col)
+#  rm (pca_tar)
+  pca_tar <- pca[pca[,"ST"] == st ,]
+
+
+#print (st);
+#print (dim(pca_tar));
+#print (pca_tar[,"CC"]);
+#print (levels(pca_tar[,"CC"]));
+#print (unique(pca_tar[,"CC"]));
+#print (length(unique(pca_tar[,"CC"])));
+#print ("hm");
+
+  for (y in (header_col+1):length(pca)) {
+#print (y);
+#print (levels(pca_tar[,"CC"]));
+#print (length(levels(pca_tar[,"CC"])));
+    if (length(unique(pca_tar[,"CC"])) == 2) {
+#print ("ja");
+       p_assoc_si[y-header_col] = summary(glm( CC ~ pca_tar[,y] , data=pca_tar, family="binomial"))$coeff[2,4]
+    } else {
+#print ("nein");
+       p_assoc_si[y-header_col] = 1.0
+    }
+  }
+
+#print (st);
+
+  par (mar=c(8, 4, 4, 4)+0.1)
+  par (new=T)
+
+  plot (p_assoc_si, type="b",axes=F,
+      main = "" , ylab="",xlab=""
+      , ylim = c(-0.01,.2), col= myraincolors[pca_tar[1,1]]
+      )
+
+  for (pc in 1: length(p_assoc_si)) {
+    if (p_assoc_si[pc] < p_assoc_min[pc]) {
+      p_assoc_min[pc] = p_assoc_si[pc]
+    }
+  }
+
+}
+
+ col_p = seq (1,length(p_assoc_si),1)
+ col_p [p_assoc_min <= .05] = 2
+ col_p [p_assoc_min > .05] = 1
+ text(x=1:length(p_assoc_min),y=-0.01,labels=signif(p_assoc_min,3),cex=.4,col=col_p)
+
+
+ abline (h=.05, col = "green")
+
+
+
+dev.off()
+
+}
+#quit()
+#########################################################################################
+
+
+
+#####################################
+## scatterplot of significant PCAs
+######################################
+
+ddplot <- function (c1,c2,st = ""){
+  main_txt = paste ("PCA", c1, "/PCA", c2, sep = "")
+  xlab_txt = paste ("PCA", c1, sep = "")
+  ylab_txt = paste ("PCA", c2, sep = "")
+  minc1 = round (min (pca[,c1+header_col] - 0.005),2)
+  minc2 = round (min (pca[,c2+header_col] - 0.005),2)
+  maxc1 = max (pca[,c1+header_col])
+  maxc2 = max (pca[,c2+header_col])
+  plot (0,0, xlim =c(minc1,maxc1+(maxc1-minc1)*.2), ylim = c(minc2, maxc2), 
+        type= "n", main = main_txt, ylab = ylab_txt, xlab = xlab_txt,
+        cex.axis = .6, cex.lab =.8)
+
+  seqc1 = seq(minc1,maxc1, by = 0.01)
+  seqc2 = seq(minc2,maxc2, by = 0.01)
+  abline (v=seqc1, col="lightgray");
+  abline (h=seqc2, col="lightgray");
+
+  points (pca[,c1+header_col], pca [,c2+header_col],col=myraincolors[pca[,1]], cex=.4,  pch = pca[,2])
+
+  pca_hm3 <- pca [grep("_hm3_",pca[,4]),]
+  points (pca_hm3[,c1+header_col], pca_hm3 [,c2+header_col],col=myraincolors[pca_hm3[,1]], cex=.6,  pch = pca_hm3[,2])
+
+
+  if (nc ==1) {
+    legend ("right",legend=le1[,2], pch=le1[,1], col = myraincolors[le1[,1]],cex=.6)
+  } else {
+     if (1) {
+      legend ("right",legend=le2[,4], fill=myraincolors[le2[,1]], cex=.6, ncol=2)
+     } else {
+      legend ("right",legend=le2[,4], fill=myraincolors[le2[,1]], cex=.6, ncol=1)
+     }
+  }
+
+}
+
+if (1){
+pdf("PDFNAME2D",7.8,6)
+
+ if ("PLAMBDA" != "nolambda"){
+ seq (1,length(pla[,2]),1) -> xa
+ xa[pla[,2] > 5] -> x1
+ xa[p_assoc < .05] -> x2
+ c(1,2,3,4,5,6) -> x3
+ unique (union (x3,union(x1,x2))) -> pca_u
+} else {
+
+  pca_u <- (header_col+1):length(pca)
+ pca_u
+# pca -> pca_u
+
+}
+
+  if (length (pca_u) > 1) {
+   for (x in 2 :length(pca_u)){
+    for (y in 1 :(x-1)){
+     ddplot(pca_u[x],pca_u[y])
+    }
+   }
+  }
+
+dev.off()
+}
+
+pdf("PDFNAME2sD",7.8,6)
+
+#PC1 - PC2
+#PC1 - PC3
+#PC2 - PC3
+#PC2 - PC4
+#PC3 - PC4
+
+ ddplot(1,2)
+ ddplot(1,3)
+ ddplot(2,3)
+ ddplot(2,4)
+ ddplot(3,4)
+ ddplot(5,6)
+
+dev.off()
+
+
+########################################
+######### here the single PCAs as index
+pdf("PDFNAME1D",7.8,6)
+cc=0;
+
+for (x in (header_col+1):length(pca)) {
+  main_txt = paste ("PCA", x-header_col, sep = "")
+  ylab_txt = paste ("PCA", x-header_col, sep = "")
+
+
+  minc1 = round (min (pca[,x] - 0.005),2) 
+  maxc1 = max (pca[,x])
+
+ par(mar=c(5,4,4,2))
+
+#  if ( 1 ) {
+ if ( p_assoc[x-header_col] < 0.05 || x-header_col <= 6) {
+
+
+ # p_cc = summary(glm( CC ~ pca[,x] + as.factor(ST),data=pca, family="binomial"))$coeff[2,4]
+  sub_txt = paste ("p_assoc to PT ", signif(p_assoc[x-header_col],3),sep="");
+  cc=cc+1;
+    if ("PLAMBDA" != "nolambda"){
+       sub_txt = paste (sub_txt, " and Lambda of ", signif(pla[cc,2],3),sep="");
+    }
+
+
+  plot (pca[,x],main = main_txt, ylab = ylab_txt, type = "n",
+    , xlim = c(0,length(pca[,x]))
+     , axes =F
+     , xlab = ""
+     , cex.lab = .8)
+
+  mtext (sub_txt,3)
+
+  seqc1 = seq(minc1,maxc1, by = 0.01)
+  abline (h=seqc1, col="lightgray");
+
+
+  points (pca[,x],col=myraincolors[pca[,1]], cex=.6, pch = pca[,2])
+
+
+   le2[,3]-> nst
+
+
+#### X axis
+if (length(nst) > 1) {
+  for (x in 2:length(nst)) {nst[x]=nst[x]+ nst[x-1]}
+  for (x in length(nst):2) {nst[x]=nst[x-1]+0.5*(nst[x]-nst[x-1])}
+  nst[1]=nst[1]/2
+
+  axis (1,at=nst, labels=le2[,4],las=3, cex.axis=.4, tick=F)
+}
+axis (2,cex.axis=.6)
+
+
+#text (nst, minc1+(maxc1-minc1)/7, le2[,2], cex = .4, pos =4, srt=90, col = myraincolors[le2[,1]])
+
+#  text (table (pca[,4]) ,minc1+(maxc1-minc1)/3 , le2[,2])
+}
+
+}
+
+
+dev.off();
+
+}
+
+##################################################
+## single separate PCA plots on first two PCAs
+####################################################
+  Lab.palette <- colorRampPalette(c("blue", "orange", "red"), space = "Lab")
+
+ddplot_sgrey <- function (st,c1=1,c2=2){
+  main_txt = st
+#  main_txt = paste ("PCA ", c2, "/", c1, " for ", st, " (colored) with complete set", sep = "")
+#  main_txt = sub ("_NOXLS","",main_txt)
+#  main_txt = sub ("scz_ab_eur_A5.0","ISC - Aberdeen",main_txt)
+#  main_txt = sub ("scz_bon_eur_I550K","SGENE - Bonn",main_txt)
+#  main_txt = sub ("scz_bulg_eur_A6.0","ISC - Cardiff",main_txt)
+#  main_txt = sub ("scz_carwtc_eur_A500K","Cardiff UK",main_txt)
+#  main_txt = sub ("scz_cat2_eur_A500KP160","CATIE",main_txt)
+#  main_txt = sub ("scz_dk_eur_I650","SGENE - Copenhagen",main_txt)
+#  main_txt = sub ("scz_dub_eur_A6.0","ISC - Dublin",main_txt)
+#  main_txt = sub ("scz_edi_eur_A6.0","ISC - Edinburgh",main_txt)
+#  main_txt = sub ("scz_mgs2_eur_A6.0","MGS",main_txt)
+#  main_txt = sub ("scz_muc_eur_I317","SGENE - Munich",main_txt)
+#  main_txt = sub ("scz_port_eur_A5.0","ISC - Portugal",main_txt)
+#  main_txt = sub ("scz_sw2_eur_A5.0","ISC - SW1",main_txt)
+#  main_txt = sub ("scz_sw2_eur_A6.0","ISC - SW2",main_txt)
+#  main_txt = sub ("scz_top3_eur_A6.0","SGENE - TOP3",main_txt)
+#  main_txt = sub ("scz_ucl_eur_A5.0","ISC - London",main_txt)
+#  main_txt = sub ("scz_ucla_eur_I550K","SGENE - UCLA",main_txt)
+#  main_txt = sub ("scz_zhh_eur_A500K","Zucker Hillside",main_txt)
+
+
+
+  xlab_txt = paste ("PCA", c1, sep = "")
+  ylab_txt = paste ("PCA", c2, sep = "")
+  minc1 = round (min (pca[,c1+header_col] - 0.005),2)
+  minc2 = round (min (pca[,c2+header_col] - 0.005),2)
+  maxc1 = max (pca[,c1+header_col])
+  maxc2 = max (pca[,c2+header_col])
+
+
+
+#  plot (0,0, xlim =c(minc1,maxc1+(maxc1-minc1)*.2), ylim = c(minc2, maxc2), 
+#        type= "n", main = main_txt, ylab = ylab_txt, xlab = xlab_txt,
+#        cex.axis = .6, cex.lab =.8)
+
+
+
+  pca_tar = pca[pca[,"ST"] == st ,]
+#  pca_tarca = pca[pca[,"ST"] == st & pca[,"CC"] == "case",]
+  pca_tarca = pca[pca[,"ST"] == st & pca[,"CC"] == "cas",]
+#  pca_tarco = pca[pca[,"ST"] == st & pca[,"CC"] == "control",]
+  pca_tarco = pca[pca[,"ST"] == st & pca[,"CC"] == "con",]
+  pca_tarno = pca[pca[,"ST"] == st & pca[,"CC"] == "mis",]
+  pca_bak = pca[pca[,"ST"] != st,]
+
+  seqc1 = seq(minc1,maxc1, by = 0.01)
+  seqc2 = seq(minc2,maxc2, by = 0.01)
+
+
+  smoothScatter (pca[,c1+header_col], pca[,c2+header_col],nrpoints=0,
+#      colramp = Lab.palette, 
+      xlim =c(minc1,maxc1+(maxc1-minc1)*.2), ylim = c(minc2, maxc2), 
+      main = paste (main_txt, ", Cases", sep = ""), ylab = ylab_txt, xlab = xlab_txt, 
+      cex.axis = .6, cex.lab =.8)
+  abline (v=seqc1, col="lightgray");
+  abline (h=seqc2, col="lightgray");
+
+
+#  points (pca_bak[,c1+header_col], pca_bak [,c2+header_col],col="grey50", cex=.4,  pch = 19)
+  points (pca_tarca[,c1+header_col], pca_tarca [,c2+header_col],col="red", cex=.3,  pch = 19)
+
+  if (length(unique(pca_tar[,"CC"])) == 2) {
+    p_pca1 = signif (summary(glm( CC ~ pca_tar[,"C1"] , data=pca_tar, family="binomial"))$coeff[2,4], 3)
+    p_pca2 = signif (summary(glm( CC ~ pca_tar[,"C2"] , data=pca_tar, family="binomial"))$coeff[2,4], 3)
+  } else {
+    p_pca1 = 1.0
+    p_pca2 = 1.0
+  }
+
+
+
+  lep1 = paste ("p_PCA1 = ",p_pca1,sep="")
+  lep2 = paste ("p_PCA2 = ",p_pca2,sep="")
+
+  legend ("right",legend=c(lep1,lep2), cex=.6)
+
+
+
+#  plot (0,0, xlim =c(minc1,maxc1+(maxc1-minc1)*.2), ylim = c(minc2, maxc2), 
+#        type= "n", main = main_txt, ylab = ylab_txt, xlab = xlab_txt,
+#        cex.axis = .6, cex.lab =.8)
+
+  smoothScatter (pca[,c1+header_col], pca[,c2+header_col],nrpoints=0,
+#      colramp = Lab.palette, 
+      xlim =c(minc1,maxc1+(maxc1-minc1)*.2), ylim = c(minc2, maxc2), 
+      main = paste (main_txt, ", Controls", sep = ""), ylab = ylab_txt, xlab = xlab_txt, 
+      cex.axis = .6, cex.lab =.8)
+
+
+  abline (v=seqc1, col="lightgray");
+  abline (h=seqc2, col="lightgray");
+
+#  points (pca_bak[,c1+header_col], pca_bak [,c2+header_col],col="grey50", cex=.4,  pch = 19)
+  points (pca_tarno[,c1+header_col], pca_tarno [,c2+header_col],col="green", cex=.3,  pch = 19)
+  points (pca_tarco[,c1+header_col], pca_tarco [,c2+header_col],col="blue", cex=.3,  pch = 19)
+
+
+  leca = paste ("cases (n= ",dim(pca_tarca)[1],")",sep="")
+  leco = paste ("controls (n= ",dim(pca_tarco)[1],")",sep="")
+
+  legend ("right",legend=c(leca,leco), fill=c("red","blue"), cex=.6)
+
+
+}
+
+
+
+##############################
+## here plot single studies
+##############################
+
+pdf("PDFSINGLE",7.8,6)
+par(mfrow=c(2,2))
+
+
+  for (st in unique (pca[,"ST"])) {
+     ddplot_sgrey(st,1,2)
+#     ddplot_sgrey(st,3,4)
+  }
+
+
+
+##  single with density
+##  library(ggplot2)
+##  read.table("AUTADMABISC43.mds.overworked",head =T) -> m6
+##  ggplot(m6[1:30000,], aes(C1, C2)) + geom_point(size=1, colour="gray") + geom_density2d(colour="red", fill="blue",size=.2,linetype=identity) + facet_wrap(~ST, ncol=4) + xlab("PC1") + ylab("PC2") 
+
+
+#write.table(p_assoc,"MDSFILE.p_assoc");
+
+
+dev.off();
+';
+
+
+$R_templ =~ s/PDFNAME1D/$pdf_name_1d/;
+$R_templ =~ s/PDFNAME2D/$pdf_name_2d/;
+$R_templ =~ s/PDFNAME2sD/$pdf_name_2ds/;
+$R_templ =~ s/PDFSUM/$pdf_name_sum/;
+$R_templ =~ s/PDFSINGLE/$pdf_name_single/;
+$R_templ =~ s/PLAMBDA/$pla/g;
+$R_templ =~ s/HCOL/$h_col/;
+$R_templ =~ s/MDSFILE/$mds_ow_file/g;
+$R_templ =~ s/LEGENDFILE/$mds_file.legend/g;
+$R_templ =~ s/FILE/$mds_file/g;
+$R_templ =~ s/NUMBERSNPS/$nsnps/g;
+
+&a2file($R_in, $R_templ);
+
+#system("module load R");
+#print "debug\n";
+#exit;
+
+my $systemR = "$r_sys --vanilla < $R_in";
+#my $systemR = "source /broad/software/scripts/useuse; use R-2.14; R  --vanilla < $R_in";
+system ($systemR);
+
+
+
+
+if ($bfile) {
+    foreach my $Cn (@Carr){
+	my $system="plink --bfile $bfile --out $bfile.$Cn.assoc --assoc --pheno $mds_file --pheno-name $Cn" ;
+	&mysystem ($system);
+	&mysystem ("gwa_plot --cols 2,9,1,3  --title $Cn $bfile.$Cn.assoc.qassoc");
+    }
+    &mysystem ("pdfjoin --outfile $bfile.C_assoc.pdf *gwa.pdf");
+    &mysystem ("gzip $bfile.C_assoc.pdf");
+}
+
+
+#print "debug\n";
+#exit;
+
+unless ($spec) {
+  copy ("$pdf_name_1d","$rootdir/");
+  copy ("$pdf_name_2d","$rootdir/");
+  copy ("$pdf_name_single","$rootdir/");
+  copy ("$pdf_name_sum","$rootdir/");
+  copy ("$mds_ow_file","$rootdir/");
+}
+
+copy ("$pdf_name_2ds","$rootdir/");
+
+chdir ($rootdir);
+
+
+
+
+#&mysystem ("shrinkpdf --out $pdf_name_single_shrink $pdf_name_single");
+#&mysystem ("shrinkpdf --out $pdf_name_shrink $pdf_name");
+
+unless ($spec) {
+    &mysystem ("gzip -f $pdf_name_1d");
+    &mysystem ("gzip -f $pdf_name_2d");
+    &mysystem ("gzip -f $pdf_name_single");
+}
+
+&mysystem ("gzip -f $pdf_name_2ds");
+
+
+#&mysystem("rm -rf $subdir_mds");
+
+
+################################ name giver ###################################
+#  514  sort mds10.mds > sort_mds
+#  515  tr "*" " " < qc2report_cd_cdcon_eur_QC1B_0.02_0.02_0.02.fam | sort -k2,2 | cut -f1,2 -d " " > sort_fam
+#  526  join -1 2 -v 2 sort_fam sort_mds > cd_mds10.mds
+#  527  join -1 2 sort_fam sort_mds | awk '{$1=$2"*"$1; $2="";print $0}'  >> cd_mds10.mds 
+
+
+
+
+#use File::Copy;
+
+#copy($pdf_name, $pdf_goal)
+#  or die "Copy failed: $!";
+
+

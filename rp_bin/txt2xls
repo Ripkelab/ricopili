@@ -1,0 +1,273 @@
+#!/usr/bin/perl
+use strict;
+
+
+##########################################################################################
+#
+#         converts txtfiles into excel spreadsheets
+##
+#
+#
+#
+#
+#
+#
+##########################################################################################
+
+my $txt_name = "no_input";
+my $xls_name = "no_output";
+
+use Getopt::Long;
+GetOptions( 
+   "txt=s"=> \$txt_name,
+   "help"=> \my $help,
+   "pcol=s"=> \my $pcol_str,
+   "cogr=s"=> \my $cogr_str,
+   "check"=> \my $check,
+   "xls=s"=> \$xls_name,
+ );
+
+if ($help || $txt_name eq "no_input"){
+    print "usage: $0 --txt INFILE ....
+
+      options:
+
+	--help          print this message and exit
+        --txt STRING    name of txt-file, white space delimited
+        --xls STRING    name of Excel file, white space delimited
+
+        --pcol STR      columns (starting with 0) with p-values, separated with commas
+        --cogr STR      changing column header color in these groups
+
+        --check         header with numbers
+
+
+
+
+ --pcol 10,16 for daner with het-pval.
+
+ created by Stephan Ripke 2011 at MGH, Boston, MA
+ Psychiatric GWAS Consortium
+\n";
+    exit 2;
+}
+
+if ($xls_name eq "no_output"){
+    $xls_name = $txt_name.".xls";
+}
+print "xls_name: $xls_name\n";
+
+my @pcol_arr;
+if ($pcol_str) {
+    @pcol_arr = split ',',$pcol_str
+}
+
+my @cogr_arr;
+if ($cogr_str) {
+    @cogr_arr = split ',',$cogr_str
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+
+
+#####################################
+### BEGIN
+#####################################
+
+
+
+
+#################################################
+## write excel file
+##########################################
+
+
+
+#use lib '/home/gwas/bin/Spreadsheet-WriteExcel-2.25/blib/lib';
+use lib $ENV{rp_perlpackages}.'/Spreadsheet-WriteExcel-2.40/blib/lib';
+#use lib '/home/unix/sripke/perl_modules/Spreadsheet-WriteExcel-2.37/blib/lib';
+
+#use lib '/home/sripke/ricopili/perl_packages/Spreadsheet-WriteExcel-2.37/blib/lib';
+#use lib '/Users/stephan/perl_modules/Spreadsheet-WriteExcel-2.37/blib/lib';
+
+
+use Spreadsheet::WriteExcel;                             # Step 0
+
+my $workbook = Spreadsheet::WriteExcel->new("$xls_name.tmp");   # Step 1
+$workbook->compatibility_mode(); 
+
+my $format_red = $workbook->add_format(color => 'red');
+my $format_orange = $workbook->add_format(color => 'orange');
+my $format_blue = $workbook->add_format(color => 'blue');
+my $format_green = $workbook->add_format(color => 'green');
+my $format_brown = $workbook->add_format(color => 'brown');
+
+my @col_arr = ($format_red,$format_blue,$format_orange,$format_green,$format_brown);
+@col_arr = (@col_arr,@col_arr,@col_arr);
+
+my $format_gws = $workbook->add_format(
+    color => 'red',
+    bold => 1,
+    underline => 1,
+    );
+my $format_head = $workbook->add_format(
+    bold => 1,
+    align => 'center',
+    );
+
+
+
+
+die "Problems creating new Excel file: $!" unless defined $workbook;
+my $txt_name_loc = substr($txt_name,0,30);
+my $worksheet_main = $workbook->add_worksheet($txt_name_loc);  
+$worksheet_main->freeze_panes(1, $cogr_arr[0]);   #### row, then column
+
+#$worksheet_main->set_column(0, 100,  12, );
+
+######################### determine width of columns
+{
+    my @length_arr;
+    die $!."($txt_name)" unless open FILE, "< $txt_name";
+    my $lc = 0;
+    while (my $line = <FILE>){
+	my @cells = @{&split_line_ref(\$line)};
+	#### with check only header and exit
+	if ($check) {
+	    my $cc= 0;
+	    foreach(@cells) {
+		print $cc."\t".$_."\n";
+		$cc++;
+	    }
+	    exit;
+	}
+	my $cc = 0;
+	foreach my $cell (@cells) {
+	    $length_arr[$cc] = length($cell) if (length($cell) > $length_arr[$cc]);
+	    $cc++;
+	}
+	last if ($lc > 100);   ## based on first 100 rows
+	$lc++;
+    }
+    close FILE;
+
+    {
+	my $cc=0;
+	foreach my $length (@length_arr) {
+	    my $length_loc = $length;
+	    $length_loc = $length_loc + 2;
+	    $length_loc = 20 if ($length_loc > 20);
+	    $worksheet_main->set_column($cc, $cc,  $length_loc, );
+	    $cc++;
+	}
+    }
+}
+
+#exit;
+
+###########  go through txt-file
+my $lc = 0;
+die $!."($txt_name)" unless open FILE, "< $txt_name";
+
+while (my $line = <FILE>){
+    my @cells = @{&split_line_ref(\$line)};
+    if ($lc ==0){
+	my $cc_start = 0;
+	my $cogr_count = 0;
+	my $cells_n = @cells;
+	foreach my $cogr (@cogr_arr,$cells_n) {
+	    foreach my $cc ($cc_start..$cogr) {
+		$worksheet_main->write(0, $cc, $cells[$cc], $col_arr[$cogr_count]);
+	    }
+	    $cogr_count++;
+	    $cc_start = $cogr;
+	}
+    }
+    else {
+	$worksheet_main->write_row($lc, 0, \@cells);
+    }
+    if ($pcol_str) {
+	if ($lc != 0){
+	    foreach my $pcol (@pcol_arr) {
+		if ($cells[$pcol] < 5.0e-8){
+		    $worksheet_main->write($lc, $pcol, $cells[$pcol], $format_gws);
+		}
+		elsif ($cells[$pcol] < 0.05){
+		    $worksheet_main->write($lc, $pcol, $cells[$pcol], $format_red);
+		}
+	    }
+	}
+    }
+    $lc++;
+    last if ($lc > 10000);
+}
+close FILE;
+
+$workbook->close();
+
+&mysystem("mv $xls_name.tmp $xls_name");
+print "$xls_name\n";
+
+exit;
+
+
+
+
+#my $formatred = $workbook->add_format(color => 'red');
+#my $formatorange = $workbook->add_format(color => 'orange');
+#my $formatblue = $workbook->add_format(color => 'blue');
+#my $formatgreen = $workbook->add_format(color => 'green');
+#my $formatbrown = $workbook->add_format(color => 'brown');
+#my $formats = $workbook->add_format(align => 'center');
+
+#my $format_gwsign = $workbook->add_format(
+#    color => 'red',
+#    bold => 1,
+#    underline => 1,
+#    );
+
+#$worksheet_single->freeze_panes(1, 1);
+
+### set colum nwidth
+#$worksheet_single->set_column(3, 3,  4, $formats);
+#$worksheet_single->set_column(1, 1,  4, );
+
+##$ write headers the clumsy way
+#my $tmp_str = "$out_head";
+#my @cells = &split_line($tmp_str);
+#my $cc = 0;
+#foreach (@cells) {
+#    $worksheet_single->write($lc, $cc, $_, $formatred);
+#    $cc++;
+#}
+
+
+

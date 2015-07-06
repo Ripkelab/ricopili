@@ -1,0 +1,103 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("p2loc");
+
+###########################################
+##### help message
+my $usage = "
+Usage : my.chuck --out BFILE --in BFILE --sfile SNPFILE
+
+ --out STRING      name of out-bfile
+ --in STRING       name of in-bfile
+ --sfile STRING    file containing SNPs to exptract
+ --empty STRING    name of empty-file
+ --mendel          clean for mendel errors
+
+
+";
+
+my $outname = "";
+my $emptyname = "";
+my $inname = "";
+my $sfile = "";
+
+use Getopt::Long;
+GetOptions( 
+
+    "out=s"=> \ $outname,
+    "empty=s"=> \ $emptyname,
+    "in=s"=> \ $inname,
+    "sfile=s"=> \ $sfile,
+    "mendel"=> \my $mendel_sw,
+    );
+
+# $ploc/plink --bfile $bprefix --out $plink_ch_out.tmp --chr $chrind --make-bed --extract $snps_extract $mendel_clean";
+if ($outname eq "" || $emptyname eq ""|| $inname eq ""  || $sfile eq "" ){
+    print "$usage\n";
+    die;
+}
+
+
+unless (-e "$inname.bim") {
+    print "error: no $inname.bim\n";
+    exit;
+}
+
+my $mendel_clean = "";
+if ($mendel_sw) {
+    $mendel_clean = "--set-me-missing --me 1 1";
+}
+
+if (-e "$outname.fini") {
+    system ("rm $outname.fini");
+}
+######################
+# BEGIN
+##############################
+my $sys = "$ploc/plink --memory 2000 --bfile $inname --out $outname --make-bed --extract $sfile $mendel_clean";
+my $sc = system ($sys);
+
+if ($sc == 0 ) {
+    system ("touch $outname.fini");
+}
+else {
+    my $last_line = `tail -n 3 $outname.log`;
+
+    if ($last_line =~ /Error: No variants remaining after --extract/){
+
+	system ("touch $emptyname.empty");
+	system ("touch $outname.fini");
+	print "empty dataset detected\n";
+    }
+}
+
+
+
+
+
+

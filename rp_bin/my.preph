@@ -1,0 +1,177 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $shloc = &trans("shloc");
+my $p2loc = &trans("p2loc");
+
+###########################################
+##### help message
+my $usage = "
+Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi INT
+
+ --out STRING      name of out-bfile
+ --in STRING       name of in-bfile (will create haps and legend)
+ --gema STRING     gema-file
+ --fam STRING      separate famfile with short ID names
+ --multi INT       multithreading
+ --chrX            for X chromosome
+ --spliha INT      for splitter
+
+";
+
+my $outname = "";
+my $inname = "";
+my $gemafile = "";
+my $famfile = "";
+my $multi = 0;
+my $spliha = 0;
+
+use Getopt::Long;
+GetOptions( 
+
+    "out=s"=> \ $outname,
+    "in=s"=> \ $inname,
+    "gema=s"=> \ $gemafile,
+    "fam=s"=> \ $famfile,
+    "multi=i"=> \ $multi,
+    "spliha=i"=> \ $spliha,
+    "chrX"=> \my $chrx,
+    );
+
+if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $famfile eq "" || $spliha == 0){
+    print "$usage\n";
+    die;
+}
+
+
+unless (-e "$inname.bim") {
+    print "error: no $inname.bim\n";
+    exit;
+}
+
+my $shapeit_bin = "shapeit.v2.r644.linux.x86_64";
+
+my $xtxt = "";
+if ($chrx) {
+    $xtxt = "--chrX";
+}
+
+my $multi_txt = "";
+if ($multi > 0 ) {
+    $multi_txt = "--thread $multi";
+}
+
+
+system ("touch $outname.multi.$multi");
+if (-e "$outname.fini") {
+    system ("rm $outname.fini");
+}
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+######################
+# BEGIN
+##############################
+
+die $!."$outname.shapeit.cmd" unless open BC, "> $outname.shapeit.cmd";
+
+
+my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $inname.bim $famfile --output-max $outname.haps $outname.sample --output-log $outname.shape.log --input-map $gemafile $multi_txt";
+
+my $sc = 0;
+unless (-e "$outname.first.fini"){
+    $sc = system ($sys_loc) ;
+    print BC "$sys_loc\n";
+}
+
+close BC;
+### right now I don't check why it fails
+if (0) {
+    if ($sc != 0) {
+	print "something went seriously wrong\n";
+	my $sys_loc = "$p2loc/plink --memory 2000  --bfile $inname --out $inname.miss --missing";
+	$sc = system ($sys_loc) ;
+
+
+	die $!."($inname.miss.imiss)" unless open FILE, "< $inname.miss.imiss";
+	my $line = <FILE>;
+	while (my $line = <FILE>){
+	    my @cells = @{&split_line_ref(\$line)};
+	    if ($cells[5] > .8) {
+		print "-------------------------------------------------------------\n";
+		print "Error: found ID with high missing rate (th = 0.8): $cells[5] @cells\n";
+		system ("touch $outname.first.error");
+	    }
+	}
+	close FILE;
+
+
+	exit;
+    }
+}
+
+
+if ($sc == 0 ) { 
+    system ("touch $outname.first.fini");
+    my $sys_loc2 = "splithap_1 --nhaps $spliha $outname.haps";
+
+
+    
+    die $!."$outname.split.cmd" unless open BC, "> $outname.split.cmd";
+    print BC "$sys_loc2\n";
+    close BC;
+
+
+    
+    print "$sys_loc2\n";
+#    exit;
+    my $sc2 = system ($sys_loc2);
+    if ($sc2 == 0 ) { 
+	system ("touch $outname.fini");
+    }
+    
+}
+else {
+    print "job finished with error\n";
+}
+
+
+
+
+
+

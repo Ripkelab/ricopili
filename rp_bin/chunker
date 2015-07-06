@@ -1,0 +1,345 @@
+#!/usr/bin/perl
+use strict;
+
+srand(0);
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+#my $ploc = &trans("ploc");
+my $qloc = &trans("queue");
+#my $hmloc = &trans("hmloc");
+
+#######################################
+
+
+
+
+###################################
+# variables
+####################################
+
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+#my $pfile ="";
+my $cwindow = 10;
+
+
+use Getopt::Long;
+GetOptions( 
+	    "help"=> \my $help,
+#	    "pfile=s"=> \$pfile,
+	    "chunk_window=i"=> \$cwindow,
+	    "workdir=s"=> \my $workdir,
+	    "Xchr"=> \my $Xchr,
+    );
+
+
+
+if ($help){
+    print "usage: $progname 
+
+version: $version
+
+      options:
+
+        --help              print this message then quit
+        --chunk_window INT  in Mb
+        --workdir STRING    if directory to work in is different 
+        --Xchr              one chromosome
+
+
+ created by Stephan Ripke 2011 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+##########################################
+# split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+
+#####################################
+# BEGIN
+#####################################
+
+if ($workdir) {
+    chdir ($workdir);
+}
+
+#####################################
+# split pfile
+#####################################
+
+my $pfile = $ARGV[0];
+
+if ($pfile =~ /.gz$/) {
+    my $pfile_nogz = $pfile;
+    $pfile_nogz =~ s/.gz$//;
+
+    unless (-e $pfile_nogz) {
+	print "unzip file: $pfile\n";
+	&mysystem("gunzip -c $pfile > $pfile_nogz.tmp");
+	&mysystem("mv $pfile_nogz.tmp $pfile_nogz");
+    }
+
+    $pfile = $pfile_nogz;
+#    print "no zipped file\n";
+#    exit;
+}
+
+
+##################
+# define columns
+##################
+my $chrcol = 1;
+my $poscol = 3;
+
+
+my $chr_start = 1;
+my $chr_end = 22;
+if ($Xchr){
+    $chr_start = 23;
+    $chr_end = 23;
+}
+
+
+#########################
+## split into chromosomes
+###########################
+my $pfile_chr = $pfile.".chromed";
+unless (-e $pfile_chr) {
+    print "split into chromosomes\n";
+    my %ccount ;
+    my @filehandles;
+    push @filehandles, "nichts";
+    if ($Xchr) {
+	foreach my $chr (1..22) {
+	    push(@filehandles, $chr);
+	}
+    }
+    foreach my $chr ($chr_start..$chr_end) {
+	my $out_loc = "$pfile.chr$chr";
+
+	local *FILE;
+	open(FILE, "> $out_loc") || die "$out_loc not to open";
+	push(@filehandles, *FILE);
+    }
+
+    die $! unless open PFI, "< $pfile";
+    my $line = <PFI>;
+    my @cells = @{&split_line_ref(\$line)};
+    foreach my $chr ($chr_start..$chr_end) {
+	my $file_loc = $filehandles[$chr];
+	print $file_loc "@cells\n";
+    }
+    
+    while (my $line = <PFI>){
+	my @cells = @{&split_line_ref(\$line)};
+	my $pchr = $cells[$chrcol-1];	
+	my $ppos = $cells[$poscol-1];
+
+	my $ppos_int = $ppos *1 ;
+	next if ($ppos_int ne $ppos);
+	unless ($Xchr) {
+	    next if ($pchr > 22 || $pchr < 1);
+	}
+	else {
+	    next unless ($pchr == 23);
+	}
+
+	my $file_loc = $filehandles[$pchr];
+	print $file_loc "@cells\n";
+#	print "$pchr\n";
+	$ccount{$pchr}++ ;
+    }
+    
+#    print "haeh"."\n";
+    foreach my $chr ($chr_start..$chr_end) {
+	my $file_loc = $filehandles[$chr];
+	close $file_loc;
+	print "size of $pfile.chr$chr: $ccount{$chr}"."\n";
+    }
+
+    &mysystem("touch $pfile_chr");
+}
+#exit;
+
+
+
+########################
+## sort all 22 files
+##########################
+
+my $pfile_sorted = $pfile.".sorted";
+unless (-e $pfile_sorted){
+
+    foreach my $chr ($chr_start..$chr_end) {
+	print "sort $pfile.chr$chr\n";
+	&mysystem("sort -k$poscol,$poscol"."n $pfile.chr$chr > $pfile.chr$chr.sorted");
+    }
+#    &mysystem("sort -k$chrcol,$chrcol"."n -k$poscol,$poscol"."n $pfile > $pfile_sorted.tmp");
+    &mysystem("touch $pfile_sorted");
+}
+
+#exit;
+
+########################
+## chunk all 22 files
+##########################
+
+my $pfile_chunked = $pfile.".chunked";
+unless (-e $pfile_chunked){
+
+    my %scount;
+    my %cname;
+
+    foreach my $chr ($chr_start..$chr_end) {
+	print "chunk Chr. $chr\n";
+#    my $old_mpos = 0;
+	my $lowpos = 0;
+	my $highpos = 0;
+	
+	die "$pfile.chr$chr.sorted".$! unless open PFI, "< $pfile.chr$chr.sorted";
+	my $header = <PFI>;
+	my $cc = 0;
+	my $out_file = "NOFILE";
+	my $refind = "NOIND";
+	while (my $line = <PFI>){
+	    
+	    my @cells = @{&split_line_ref(\$line)};
+	    my $pos = $cells[$poscol-1];
+	    
+
+	    my $mpos = sprintf "%d",($pos / 1000000) ;
+
+	    if ($cc == 0){
+		while ($lowpos <= $mpos) {
+		    $lowpos += $cwindow;
+		}
+		$highpos = $lowpos;
+		$lowpos -= $cwindow;
+
+		my $low_str = sprintf "%03d",$lowpos;
+		my $high_str = sprintf "%03d",$highpos;
+		$refind = "chr$chr"."_".$low_str."_".$high_str;
+		$out_file = "dan_$pfile.".$refind.".txt";
+		open(OUT, "> $out_file") || die;
+		print OUT $header;
+
+	    }
+
+
+	    if ($mpos >= $highpos) {
+		$cname{$refind} = $out_file;
+		close OUT ;
+		&mysystem("gzip -f $out_file\n");
+
+		while ($lowpos <= $mpos) {
+		    $lowpos += $cwindow;
+		}
+
+		$highpos = $lowpos;
+		$lowpos -= $cwindow;
+		
+		my $low_str = sprintf "%03d",$lowpos;
+		my $high_str = sprintf "%03d",$highpos;
+		$refind = "chr$chr"."_".$low_str."_".$high_str;
+		$out_file = "dan_$pfile.".$refind.".txt";
+		open(OUT, "> $out_file") || die;
+		print OUT $header;
+
+	    }
+
+	    print OUT "$line";
+	    $scount {$refind}++;
+	    $cc++;
+	}
+	$cname{$refind} = $out_file;
+	close OUT;
+	if ($cc > 0) {
+	    &mysystem("gzip -f $out_file\n");
+	}
+	close PFI;
+    }
+
+    my $pfile_count = $pfile.".count";
+    open(CL, "> $pfile_count") || die;
+    foreach my $ri (sort keys %scount) {
+	exit unless (-e $cname{$ri}.".gz");
+	print CL $ri."\t".$cname{$ri}."\t".$scount{$ri}."\n";
+    }
+    close CL;
+
+
+    &mysystem("touch $pfile_chunked");
+}
+
+
+
+&mysystem("touch chunker_done");
+
+

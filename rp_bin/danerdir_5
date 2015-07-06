@@ -1,0 +1,1081 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    chomp($line);
+    my @cells = split /\s+/, $line;
+#    print "line: <$line>\n";
+    next if ($line eq "");
+    next if ($line =~ /^#/);
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $p2loc = &trans("p2loc");
+my $sloc = &trans("sloc");
+my $qloc = &trans("queue");
+
+
+###########################################################################################################
+#
+#
+#    daner - dosage analyzer
+#
+#          created by Stephan Ripke, Broadinstitute, sripke@broadinstitute.org
+#
+#                                  01/17/10
+#
+#
+#
+#    analyzes batches coming out of puter
+#
+#
+#
+#  version 4: --addcov
+#
+##########################################################################################################
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+
+
+my $niter=10;
+
+
+use File::Path;
+use File::Copy;
+use Cwd;
+
+my $permut = 0;
+
+my $rootdir = &Cwd::cwd();
+
+my $outdir = "$rootdir";
+
+##### help message
+my $usage = "
+Usage : $progname [options] batch_identifier
+
+version: $version
+
+  --ploc STRING    location (absolute path) of plink, if other than in the path
+  --help           print this message and exit
+  --outdir STRING  outdir
+  --indir STRING   indir, where the data is 
+  --mds STRING     mds-file
+  --idex STRING     idex-file
+  --idin STRING     idin-file
+  --addcov STRING     addcov-file
+  --coco STRING    columns in mds-file for covariates
+  --coname STRING  name of covariate-string instead of coco
+
+  --dosout         give out one dosage-file, no analysis
+  --onedos STRING  one dosage file and coresponding files
+
+  --addind STRING  additional identifier (like study-nanme)
+  --nosi           no studyindicator from mds file
+
+  --pheno STRING   alternative pheno-file in 3rd column
+
+  --all            take all SNPs (no mega_ind)
+
+  --perm INT       do INT permutations, default $permut
+
+  --score STRING   do a scoring instead of association with this file, containing SNP,OR,P
+  --range STRING   range-file
+
+  --famf STRING    famfile direct, without indir and batchidentifier
+  --mapf STRING    mapfile direct, without indir and batchidentifier
+  --dosf STRING    dosfile direct, without indir and batchidentifier
+  --ngtf STRING    ngtfile direct, without indir and batchidentifier
+
+  --sout STRING    out, similar to addind, mandatory when dosf
+
+  --males          only use males, famfile needs to be right
+  --females        only use females, famfile needs to be right
+
+
+ batch_identifier: files matching this should all have no double id-entries
+
+ expects a running plink and beagle version somewhere in the path, 
+ otherwise specify a location with --ploc or --beoc (e.g. /home/user/plink/plink)
+ beagle at least in version 3.1
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ 
+";
+
+my $range_file = "NORANGEFILE";
+my $sout = "";
+
+#### evaluate options
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "ploc=s"=> \$p2loc,
+    "outdir=s"=> \$outdir,
+    "indir=s"=> \my $indir,
+    "onedos=s"=> \my $onedos,
+    "mds=s"=> \my $mds_name,
+    "idex=s"=> \my $idex_name,
+    "idin=s"=> \my $idin_name,
+    "addcov=s"=> \my $addcov_name,
+    "addind=s"=> \my $addind,
+    "nosi"=> \my $nosi,
+    "dosout"=> \my $dosout,
+    "pheno=s"=> \my $pheno,
+    "coco=s"=> \my $mds_cols,
+    "coname=s"=> \my $covarname,
+    "all"=> \my $allsnps,
+    "males"=> \my $males,
+    "females"=> \my $females,
+    "perm=i"=> \$permut,
+    "score=s"=> \my $danscore_file,
+    "dosf=s"=> \my $dosf_file,
+    "famf=s"=> \my $famf_file,
+    "mapf=s"=> \my $mapf_file,
+    "ngtf=s"=> \my $ngtf_file,
+    "sout=s"=> \$sout,
+    "range=s"=> \$range_file,
+    );
+
+
+die "$usage\n" if ($help);
+die "too many arguments\n$usage\n" if (@ARGV > 1);
+
+
+my @mcols=  split ',', $mds_cols if ($mds_cols);
+
+
+
+my @created = mkpath(   ## $created ?
+			$outdir,
+			{verbose => 0, mode => 0750},
+    );
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+#####################################
+# subroutine to count lines of a file
+#####################################
+
+sub count_lines {
+    my ($file)=@_;
+    my $lc=0;
+    die "$file: ".$! unless open FILE, "< $file";
+    while (<FILE>){
+	$lc++;
+    }
+    close FILE;
+    $lc;
+}
+
+###################################################
+###  copy a list of files to the working directory
+###################################################
+
+
+sub get_files(){
+    foreach (@_) {
+	print "$_\n";
+	copy ($_,".") or die $!."($_)";
+    }
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+########################################
+# test plink and beagle
+###################################
+
+
+unless (-e "$p2loc/plink" ){
+    print "\n***** Error: couldn't find the following:\n";
+    print "$p2loc/plink\n";
+    exit;
+}
+
+
+#################################################
+#################################################
+#  BEGIN
+#################################################
+#################################################
+
+my $bind;
+
+unless ($dosf_file) {
+    die "$usage" if (@ARGV <1);
+    $bind = $ARGV[0];
+}
+else {
+    die "$usage" if ($sout eq "");
+    $bind = $sout;
+}
+
+
+my $workname = "$bind";
+$workname = "$addind.$bind" if ($addind);
+
+
+my $scratchdir = $sloc;
+my $workdir="$scratchdir/dan_$workname";
+
+
+if (1) {
+    while (-e $workdir) {
+	$workdir .= ".d";
+    }
+}
+
+print "workdir: $workdir\n";
+
+my @created_work = mkpath(   ## $created ?
+			"$workdir",
+			{verbose => 0, mode => 0750},
+    );
+
+
+
+#################################################
+#  copy to scratch
+#################################################
+chdir($workdir);
+
+
+
+my $famfile = "dos_$bind.out.dosage.fam";
+my $mapfile = "dos_$bind.out.dosage.map";
+my $dosfile = "dos_$bind.out.dosage.gz";
+my $emptyfile = "dos_$bind.out.dosage.gz.empty";
+my $ngtfile = "dos_$bind.out.dosage.ngt";
+
+
+#my @infiles = `ls $indir/*$bind.*`;
+#print "@infiles\n";
+#print @infiles."=N\n";
+#sleep(5);
+
+#unless (-e "$indir/$dosfile") {
+#    print "no dosfile $indir/$dosfile\n";
+#    if (-e "$indir/$emptyfile") {
+#	print "but emptyfile exists\n";
+ #   }
+  #  exit;
+#}
+
+unless ($dosf_file) {
+#    &mysystem("cp $indir/*$bind.* .") unless (-e $famfile);
+
+    &mysystem("cp $indir/$dosfile .") unless (-e $dosfile);
+    &mysystem("cp $indir/$mapfile .") unless (-e $mapfile);
+    &mysystem("cp $indir/$famfile .") unless (-e $famfile);
+    &mysystem("cp $indir/$ngtfile .") unless (-e $ngtfile);
+
+
+}
+else {
+    &mysystem("cp $rootdir/$dosf_file .") unless (-e $dosf_file);
+    &mysystem("cp $rootdir/$mapf_file .") unless (-e $mapf_file);
+    &mysystem("cp $rootdir/$famf_file .") unless (-e $famf_file);
+    &mysystem("cp $rootdir/$ngtf_file .") unless (-e $ngtf_file);
+    $famfile = $famf_file;
+    $mapfile = $mapf_file;
+    $dosfile = $dosf_file;
+    $ngtfile = $ngtf_file;
+}
+
+#exit;
+
+
+
+
+&mysystem("cp $rootdir/$pheno .") if ($pheno);
+&mysystem("cp $rootdir/$idex_name .") if ($idex_name);
+&mysystem("cp $rootdir/$idin_name .") if ($idin_name);
+&mysystem("cp $rootdir/$addcov_name .") if ($addcov_name);
+
+my $danscore_nogz = $danscore_file;
+if ($danscore_file) {
+    $danscore_nogz =~ s/.gz$//;
+}
+my $score_p_file = "score.p.file";
+my $score_w_file = "score.w.file";
+
+my $counts = 0;
+if ($danscore_file) {
+
+    unless (-e $danscore_nogz) { 
+	&mysystem("cp $rootdir/$danscore_file .") ;
+	if ($danscore_file =~ /gz$/) {
+	    &mysystem("zcat $danscore_file > $danscore_nogz"); 
+	}
+    }
+#    &mysystem("cp $rootdir/$danscore_file .") unless (-e $danscore_file); 
+    &mysystem("cp $rootdir/$range_file .") unless (-e $range_file);
+ 
+
+    ####  write score and weight file.
+   
+    unless (-e $score_p_file) {
+	my $beta = 0;
+	print "read map\n";
+	my %snp_coll ;
+	die ":".$! unless open IFILE, "< $mapfile";
+	while (my $line = <IFILE>){
+	    my @cells = &split_line($line);
+	    my $snpname = $cells[1];
+	    $snp_coll{$snpname} = 1;
+	}
+	close IFILE;
+
+	print "write score files\n";
+	die ":".$! unless open IFILE, "< $danscore_nogz";
+	die ":".$! unless open PFILE, "> $score_p_file";
+	die ":".$! unless open WFILE, "> $score_w_file";
+	my $head = <IFILE>;
+	my @cells = &split_line($head);
+	my $cc=0;
+	my %col_hash;
+	foreach my $cel (@cells){
+	    $col_hash{$cel} = $cc;
+	    $cc++;
+	}
+	unless (exists $col_hash{"SNP"}) {
+	    print "no SNP column\n";
+	    exit;
+	}
+	unless (exists $col_hash{"OR"}) {
+	    if (exists $col_hash{"BETA"}) {
+		$beta = 1;
+		print "found BETA column\n";
+	    }
+	    else {
+		print "no OR column\n";
+		exit;
+	    }
+	}
+	unless (exists $col_hash{"A1"}) {
+	    print "no A1 column\n";
+	    exit;
+	}
+	unless (exists $col_hash{"P"}) {
+	    print "no P column\n";
+	    exit;
+	}
+	my $scol = $col_hash{"SNP"};
+	my $ocol = $col_hash{"OR"};
+	if ($beta == 1) {
+	    $ocol = $col_hash{"BETA"};
+	}
+	my $acol = $col_hash{"A1"};
+	my $pcol = $col_hash{"P"};
+
+	while (my $line = <IFILE>){
+	    my @cells = &split_line($line);
+#	    CHR     SNP     BP      A1      A2      FRQ_A_4450      FRQ_U_11169     INFO    OR      SE      P
+
+	    my $snpname = $cells[$scol];
+	    next unless (exists $snp_coll{$snpname});
+	    $counts++;
+	    my $or = $cells[$ocol];
+#	    print "$or\n";
+	    if ($beta) {
+		$or = exp($or);
+	    }
+#	    print "$or\n";
+#	    sleep(10);
+	    my $a1 = $cells[$acol];
+	    my $pv = $cells[$pcol];
+	    if ($or > 0) {
+		print PFILE $snpname;
+		print PFILE "\t".$pv;
+		print PFILE "\n";
+		
+		print WFILE $snpname;
+		print WFILE "\t".$a1;
+		print WFILE "\t".log($or);
+		print WFILE "\n";
+	    }
+	    
+	}
+
+	close IFILE;
+	close PFILE;
+	close WFILE;
+    }
+    if ($counts ==0) {
+	print "no SNPs for polyscore left for this chunk\n";
+	&mysystem("echo chunk empty > $outdir/dan_$workname.profile.log");
+	
+	exit;
+    }
+
+#    exit;
+
+}
+
+
+print "copy done\n";
+#exit;
+
+#dos_chr1_1.out.dosage.ngt
+
+
+#my %mds_ids ;
+
+
+
+
+#################################################
+#  prepare addcov
+#################################################
+
+my %addcov = ();
+#my $addcov_names;
+my $coco_str = "";
+
+if ($mds_name){
+
+    &mysystem ("cp $rootdir/$mds_name .");
+
+}
+
+if ($addcov_name){
+    
+    die "$addcov_name:".$! unless open IFILE, "< $addcov_name";
+    my $head = <IFILE>;
+
+    my @cells = &split_line($head);
+    my $id = $cells[0]."\t".$cells[1] ;
+
+    foreach (2..$#cells) {
+	$coco_str .= ",".$cells[$_];
+	$addcov{$id} .= "\t".$cells[$_];
+    }
+
+    while (my $line = <IFILE>){
+	my @cells = &split_line($line);
+	my $id = $cells[0]."\t".$cells[1] ;
+	foreach (2..$#cells) {
+	    $addcov{$id} .= "\t".$cells[$_];
+	}
+
+#	print $id.$addcov{$id}."\n";
+    }
+    close IFILE;
+
+
+
+    die "$mds_name:".$! unless open IFILE, "< $mds_name";
+    die "$mds_name.addcov:".$! unless open OFILE, "> $mds_name.addcov";
+    die "$mds_name.addcov.ex:".$! unless open EFILE, "> $mds_name.addcov.ex";
+
+    while (my $line = <IFILE>){
+	chomp($line);
+	my @cells = &split_line($line);
+	my $id = $cells[0]."\t".$cells[1] ;
+
+	if (exists $addcov{$id}) {
+	    print OFILE $line.$addcov{$id}."\n";
+	}
+	else {
+	    print EFILE $line."\n";
+	}
+    }
+    close IFILE;
+    close OFILE;
+    close EFILE;
+
+}
+
+#exit;
+
+
+my $cov_str = "";
+
+if ($mds_name){
+
+ 
+
+    foreach (@mcols) {
+	$coco_str .= ",C$_";
+    }
+
+    unless ($nosi){
+	die "$mds_name: ".$! unless open FILE, "< $mds_name";
+	my $head = <FILE>;
+	my @cells = &split_line($head);
+	foreach (@cells) {
+	    $coco_str .= ",$_" if ($_ =~ /^st/);
+	}
+	close FILE;
+    }
+
+
+
+#    die "$mds_name: ".$! unless open FILE, "< $mds_name";
+#    my $head = <FILE>;
+#    while (my $line = <FILE>){#
+#	my @cells = &split_line($head);#
+#	$mds_ids{$cells[0]."\t".$cells[1]} = 1;
+#    }
+#    close FILE;
+
+    if ($addcov_name) {
+	$mds_name = "$mds_name.addcov";
+    }
+
+
+    $coco_str =~ s/^,//;
+    $cov_str = "--covar $mds_name --covar-name $coco_str";
+    if ($covarname){
+	$cov_str = "--covar $mds_name --covar-name $covarname";
+    }
+
+    $cov_str = "--covar $mds_name" if ($mds_cols eq "ALL");
+
+}
+
+
+
+
+#print "coco_str:\t$coco_str\n";
+#exit;
+
+#################################################
+#  association testing
+#################################################
+
+
+my %ncaco=();
+$ncaco{1} = 0;
+$ncaco{2} = 0;
+my $Nall;
+my %alphe=();
+my $star = -1;
+my %mdsin = ();
+my %idex = ();
+my %idin = ();
+#my %addcov = ();
+my %males_hash = ();
+my %females_hash = ();
+
+my $keep_file = "keep_file.sex.idin";
+
+if ($males){
+    
+    die "$famfile:".$! unless open IFILE, "< $famfile";
+    die "$idin_name:".$! unless open OFILE, ">> $keep_file";
+    while (my $line = <IFILE>){
+	my @cells = &split_line($line);
+	if ($cells[4] == 1) {
+	    $males_hash{$cells[0]."\t".$cells[1]} = 1;
+	    print OFILE $cells[0]."\t".$cells[1]."\n";
+	}
+    }
+    close IFILE;
+    close OFILE;
+}
+
+
+if ($females){
+    
+    die "$famfile:".$! unless open IFILE, "< $famfile";
+    die "$idin_name:".$! unless open OFILE, ">> $keep_file";
+    while (my $line = <IFILE>){
+	my @cells = &split_line($line);
+	if ($cells[4] == 2) {
+	    $females_hash{$cells[0]."\t".$cells[1]} = 1;
+	    print OFILE $cells[0]."\t".$cells[1]."\n";
+	}
+    }
+    close IFILE;
+    close OFILE;
+}
+
+
+
+
+
+if ($idin_name){
+    
+    die "$idin_name:".$! unless open IFILE, "< $idin_name";
+    die "$idin_name:".$! unless open OFILE, ">> $keep_file";
+    while (my $line = <IFILE>){
+	my @cells = &split_line($line);
+	$idin{$cells[0]."\t".$cells[1]} = 1;
+	print OFILE $cells[0]."\t".$cells[1]."\n";
+    }
+    close IFILE;
+    close OFILE;
+}
+
+
+
+
+
+if ($idex_name){
+    
+    die "$idex_name:".$! unless open IFILE, "< $idex_name";
+    while (my $line = <IFILE>){
+	my @cells = &split_line($line);
+	$idex{$cells[0]."\t".$cells[1]} = 1;
+    }
+    close IFILE;
+}
+
+if ($pheno){
+    $star = 0;
+    die "$pheno:".$! unless open IFILE, "< $pheno";
+    while (my $line = <IFILE>){
+	my @cells = &split_line($line);
+	$alphe{$cells[0]."\t".$cells[1]} = $cells[2];
+	$star = 1 if ($cells[0] =~ /\*/);
+#	print "$cells[0]\t$cells[1]\n";
+	next;
+    }
+    close IFILE;
+}
+
+#print "star: $star\n";
+#sleep(10);
+
+if ($mds_name){
+    die "$mds_name: ".$! unless open FILE, "< $mds_name";
+    while (<FILE>){
+	my @cells = &split_line($_);
+	$mdsin{"$cells[0]\t$cells[1]"} = 1;
+    }
+    close FILE;
+}
+
+
+#################################################
+#  read NGT
+#################################################
+#print "hier ist noch alles in ordnung\n";
+unless (-e $ngtfile) {
+    
+    die "$workname.assoc.dosage.ngt:".$! unless open OFILE, "> dan_$workname.assoc.dosage.ngt";
+    print OFILE " CHR         SNP          BP  A1  A2   FRQ_A_000   FRQ_U_000    INFO      OR      SE       P   ngt\n";
+    close OFILE;
+    
+    &mysystem("gzip -f dan_$workname.assoc.dosage.ngt");
+    &mysystem("cp dan_$workname.assoc.dosage.ngt.gz $outdir");
+    
+    if ($danscore_file) {
+        &mysystem("touch $outdir/dan_$workname.profile.log");
+    }
+
+    chdir ($outdir);
+    &mysystem("rm -fr $workdir");
+
+    exit;
+}
+#print "und hier nicht mehr\n";
+
+my %ngt=();
+die "$ngtfile: ".$! unless open FILE, "< $ngtfile";
+while (<FILE>){
+    my @cells = &split_line($_);
+    $ngt{$cells[1]} = $cells[4];
+#    print "$cells[1]\t$cells[4]\n";
+}
+close FILE;
+
+
+
+
+
+
+srand(0);
+
+
+
+
+
+die "$famfile:".$! unless open IFILE, "< $famfile";
+die "$famfile.pt:".$! unless open OFILE, "> $famfile.pt";
+die "$famfile.pt:".$! unless open EFILE, "> $famfile.pt.ex";
+while (my $line = <IFILE>){
+    my @cells = &split_line($line);
+#    print "$line\n";
+
+    if ($mds_name){
+#	print "$cells[0]\t$cells[1]\n";
+	unless (exists $mdsin{"$cells[0]\t$cells[1]"}){
+#	    print "$cells[0]\t$cells[1] not in mds-file\n";
+	    print EFILE "$cells[0]\t$cells[1]\n";
+	    delete ($alphe{"$cells[0]\t$cells[1]"});
+	    next;
+	}
+	delete ($mdsin{"$cells[0]\t$cells[1]"});
+#	next unless (exists $mdsin{"$cells[0]\t$cells[1]"});
+    }
+
+    my $del = 0; 
+    
+    if ($pheno){
+	
+	my $c0 = $cells[0];
+#	    print "hier: ".$c0."\t".$cells[1]."\t".$alphe{$c0."\t".$cells[1]}."\n";
+	if ($star == 0) {
+	    $c0 =~ s/.*\*//;
+	}
+	if (exists $alphe{$c0."\t".$cells[1]}){
+#	    print $c0."\t".$cells[1]."\n";
+	    $cells [5] = $alphe{$c0."\t".$cells[1]} 
+	}
+	else {
+	    $cells [5] = -9;
+	    $del = 1;
+	}
+	delete ($alphe{"$cells[0]\t$cells[1]"});
+#	if ($cells[5] == 2) {
+#	    print "$cells[0]\t$cells[1]\n";
+#	}
+    }
+
+ #   print "new: $cells[0]";    
+ #   print " $cells[1]";    
+ #   print " $cells[2]";    
+ #   print " $cells[3]";    
+ #   print " $cells[4]";    
+ #   print " $cells[5]\n";    
+ #   sleep(1);
+
+    
+    print OFILE "$cells[0]";
+    print OFILE "\t$cells[1]";
+    print OFILE "\t$cells[2]";
+    print OFILE "\t$cells[3]";
+    print OFILE "\t$cells[4]";
+    print OFILE "\t$cells[5]";
+    print OFILE "\n";
+    
+    
+    next if (exists $idex{$cells[0]."\t".$cells[1]});
+    if ($idin_name) {
+	next unless (exists $idin{$cells[0]."\t".$cells[1]});
+    }
+
+    if ($males) {
+	next unless (exists $males_hash{$cells[0]."\t".$cells[1]});
+    }
+
+    if ($females) {
+	next unless (exists $females_hash{$cells[0]."\t".$cells[1]});
+    }
+
+#    print "phenotype: $cells[5]\n";
+    $ncaco{$cells[5]} ++;
+    $Nall++ if ($del == 0);
+    
+}
+close IFILE;
+close OFILE;
+close EFILE;
+
+print "Nall: $Nall\n";
+#sleep (5);
+
+print "star: $star\n";
+print "cases: $ncaco{2}\n";
+print "controls: $ncaco{1}\n";
+if (0) {
+if ($ncaco{1} ==0){
+    print "no controls left\n";
+    exit;
+}
+if ($ncaco{2} ==0){
+    print "no cases left\n";
+    exit;
+}
+}
+#sleep(10);
+
+#print "debug sleep\n";
+#sleep(10);
+    
+die "$mds_name.ex: ".$! unless open FILE, "> $mds_name.ex";
+foreach (keys %mdsin){
+    print FILE "$_\n";
+}
+close FILE;
+&mysystem("cp $mds_name.ex $outdir") unless (-e "$outdir/$mds_name.ex");
+
+if ($pheno) {
+    die "$pheno.ex: ".$! unless open FILE, "> $pheno.ex";
+    foreach (keys %alphe){
+	print FILE "$_\n";
+    }
+    close FILE;
+    &mysystem("cp $pheno.ex $outdir") unless (-e "$outdir/$pheno.ex");
+}
+
+#    exit;
+    
+
+    
+###########################################
+### here actual logistic regression
+############################################
+my $idex_str = "";
+if ($idex_name) {
+    $idex_str = "--remove $idex_name";
+}    
+
+my $idin_str = "";
+if ($idin_name || $males || $females) {
+    $idin_str = "--keep $keep_file";
+}    
+
+
+
+
+my $sys;
+unless ($danscore_file) {
+    $sys = "$p2loc/plink --dosage $dosfile format=2 frq2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
+
+}
+else {
+    $sys = "$p2loc/plink --dosage $dosfile format=2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $idex_str --q-score-range $range_file --q-score-file $score_p_file --score $score_w_file";
+}
+
+print "$sys\n";
+
+
+#sleep(10);
+
+&mysystem("touch $outdir/dan_$workname.assoc.dosage.plink_started");
+&mysystem($sys);
+
+
+if ($danscore_file) {
+
+    opendir(DIR, ".") || die "can't opendir .: $!";
+    my @files = readdir(DIR);
+    closedir DIR;
+
+    my @profilefiles = grep {/^$workname.S/} @files;
+
+
+#    my $wc_soll = `wc -l $famfile.pt`;
+    my $loggrep = `grep Among $workname.log | grep remaining | tail -1`;
+    my @loggrep_arr = &split_line($loggrep);
+
+
+    my $wc_soll = $loggrep_arr[3] + $loggrep_arr[7];
+
+    $wc_soll = $wc_soll * 1;
+
+    if ($wc_soll < 1) {
+	print "Error: less than 1 ID left\n";
+	exit;
+    }
+
+
+
+    foreach(@profilefiles) {
+	my $wc_str = `wc -l $_`;
+	my @wc_arr = &split_line($wc_str);
+
+	my $wc = $wc_arr[0] * 1;
+#	print "$_ : $wc lines, $wc_soll\n";
+
+	if ($wc < $wc_soll) {
+	    print "$_ has $wc lines, should have at least $wc_soll\n";
+	    exit;
+	}
+    }
+#    sleep(10);
+#    print "first file is fine\n";
+#    sleep(100);
+
+    &mysystem("cp $workname.S* $outdir/");
+    
+    &mysystem("mv $famfile.pt.ex $outdir") unless (-e "$outdir/$famfile.pt.ex");
+    &mysystem("mv $workname.log $outdir/dan_$workname.assoc.log.tmp");
+    
+    chdir ($outdir);
+    &mysystem("mv dan_$workname.assoc.log.tmp dan_$workname.profile.log");
+    &mysystem("rm -fr $workdir");
+    exit;
+
+}
+
+
+#exit;
+
+
+    
+###########################################
+### here permutation
+############################################
+
+
+foreach my $iperm (1..$permut) {    
+
+    unless (-e "$outdir/perm_$workname.perm$iperm"){
+
+	die "$famfile.pt:".$! unless open IFILE, "< $famfile.pt";
+	die "$famfile.pt.perm:".$! unless open PFILE, "> $famfile.pt.perm";
+	while (my $line = <IFILE>){
+	    my @cells = &split_line($line);
+	    $cells[5] = int(rand(2)) + 1;
+	    print PFILE "$cells[0]";
+	    print PFILE "\t$cells[1]";
+	    print PFILE "\t$cells[2]";
+	    print PFILE "\t$cells[3]";
+	    print PFILE "\t$cells[4]";
+	    print PFILE "\t$cells[5]";
+	    print PFILE "\n";
+	    
+	}
+	close IFILE;
+	close PFILE;
+	
+	my $sys = "$p2loc/plink --dosage $dosfile format=2 --fam $famfile.pt.perm --allow-no-sex --out $workname.perm --map $mapfile $cov_str";
+	print "$sys\n";
+	
+	&mysystem($sys);
+	
+	die "$workname.perm.assoc.dosage:".$! unless open IFILE, "< $workname.perm.assoc.dosage";
+	die "perm_$workname.perm$iperm:".$! unless open OFILE, "> perm_$workname.perm$iperm";
+	my $head = <IFILE>;
+	while (my $line = <IFILE>){
+	    chomp ($line);
+	    my @cells = &split_line($line);
+	    printf OFILE "%s\n",$line if ($cells[10] < 0.001 && $cells[10] ne "NA");
+	}
+	close IFILE;
+	close OFILE;
+	
+	&mysystem("cp perm_$workname.perm$iperm $outdir") ;
+	&mysystem("rm $workname.perm.assoc.dosage") ;
+	
+	
+	unless (-e "$outdir/permfam.perm$iperm") {
+	    
+	    die "$famfile.pt.perm:".$! unless open IFILE, "< $famfile.pt.perm";
+	    die "permfam.perm$iperm:".$! unless open PFILE, "> permfam.perm$iperm";
+	    while (my $line = <IFILE>){
+		my @cells = &split_line($line);
+		
+		print PFILE "$cells[0]";
+		print PFILE "\t$cells[1]";
+		print PFILE "\t$cells[5]";
+		print PFILE "\n";
+		
+	    }
+	    close IFILE;
+	    close PFILE;
+	    
+	    &mysystem("cp permfam.perm$iperm $outdir") ;
+	    
+	}
+    }
+ 
+#    exit;
+   
+}
+
+
+### end of permutation loop
+
+
+
+
+
+#################################################
+#  add NGT information
+#################################################
+
+    
+die "$workname.assoc.dosage:".$! unless open IFILE, "< $workname.assoc.dosage";
+die "$workname.assoc.dosage.ngt:".$! unless open OFILE, "> dan_$workname.assoc.dosage.ngt";
+my $head = <IFILE>;
+chomp ($head);
+$head =~ s/FRQ_A/FRQ_A_$ncaco{2}/;
+if ($ncaco{1}>0){
+#    print "ncaco_1: $ncaco{1}\n";
+#    sleep(5);
+    $head =~ s/FRQ_U/FRQ_U_$ncaco{1}/;
+}
+else {
+    $head =~ s/FRQ_U/FRQ_U_$Nall/;
+}
+print OFILE "$head   ngt\n";
+while (my $line = <IFILE>){
+    chomp ($line);
+    my @cells = &split_line($line);
+    $ngt{$cells[1]} = 0 unless (exists $ngt{$cells[1]});
+    printf OFILE "%s %4s\n",$line,$ngt{$cells[1]};
+}
+close IFILE;
+close OFILE;
+
+&mysystem("gzip -f dan_$workname.assoc.dosage.ngt");
+&mysystem("mv dan_$workname.assoc.dosage.ngt.gz $outdir/dan_$workname.assoc.dosage.ngt.gz.tmp");
+
+
+&mysystem("mv $famfile.pt.ex $outdir") unless (-e "$outdir/$famfile.pt.ex");
+&mysystem("mv $workname.log $outdir/dan_$workname.assoc.log");
+
+chdir ($outdir);
+&mysystem("mv dan_$workname.assoc.dosage.ngt.gz.tmp dan_$workname.assoc.dosage.ngt.gz");
+&mysystem("rm $outdir/dan_$workname.assoc.dosage.plink_started");
+
+
+#exit;
+&mysystem("rm -fr $workdir");
+
+

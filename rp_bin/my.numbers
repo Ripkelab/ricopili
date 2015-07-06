@@ -1,0 +1,151 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+
+## not working on gold
+# use lib '/home/unix/sripke/perl_modules//Compress-Raw-Zlib-2.065/blib/lib';
+# use lib '/home/unix/sripke/perl_modules//IO-Compress-2.064/blib/lib';
+
+ use Compress::Zlib ;
+
+my @opt = @ARGV;
+#my $workdir = shift(@opt);
+my $outname = shift(@opt);
+my $daner_sum = shift(@opt);
+
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+if (@ARGV < 1) {
+    print "error: at least one ARGV\n";
+    exit;
+}
+
+die "$outname.num: ".$! unless open NUM, "> $outname.num";
+print NUM "Dataset\tN_cases\tN_controls\tLAMBDA-GC\tN-SNPs\tN_eff_half\n";
+
+my $nca_sum = 0;
+my $nco_sum = 0;
+my $neff_sum = 0;
+
+foreach my $fi (@opt) {
+
+    my $fila = $fi;
+    $fila =~ s/.gz$//;
+    $fila .= ".qq.la";
+
+    my $lam = 0.0;
+    my $nsnps = 0.0;
+    if (-e $fila ) {
+	die "$fila: ".$! unless open FILA, "< $fila";
+	my $line = <FILA>;
+	my @cells = &split_line($line);
+	$lam = $cells[0];
+	$line = <FILA>;
+	@cells = &split_line($line);
+	$nsnps = $cells[1];
+
+	close FILA;
+
+    }
+#    print "$fila\n";
+
+
+    #### not working on gold
+     my $df = gzopen("$fi", "rb")  or die "Cannot open $fi: $gzerrno\n" ;
+     $df->gzreadline(my $line);
+
+    # my $line = `gunzip -c $fi | head -1`;
+
+    my @cells = &split_line($line);
+    my $nca_loc;
+    my $nco_loc;
+    foreach (@cells) {
+
+	if ($_ =~ /FRQ_Cases_/) {
+	    $nca_loc = $_;
+	    $nca_loc =~ s/FRQ_Cases_//;
+
+	}
+	if ($_ =~ /FRQ_Controls_/) {
+	    $nco_loc = $_;
+	    $nco_loc =~ s/FRQ_Controls_//;
+
+	}
+
+	if ($_ =~ /FRQ_A_/) {
+	    $nca_loc = $_;
+	    $nca_loc =~ s/FRQ_A_//;
+
+	}
+	if ($_ =~ /FRQ_U_/) {
+	    $nco_loc = $_;
+	    $nco_loc =~ s/FRQ_U_//;
+
+	}
+
+    }
+
+    $nca_sum += $nca_loc;
+    $nco_sum += $nco_loc;
+    my $fi_out = $fi;
+    $fi_out =~ s/^daner_//;
+    $fi_out =~ s/.ch.fl.gz$//;
+    
+    my $neff = (4*$nca_loc*$nco_loc/($nca_loc+$nco_loc))/2;
+
+    $neff_sum += $neff;
+    $neff = sprintf "%i", $neff;
+    print NUM "$fi_out\t$nca_loc\t$nco_loc\t$lam\t$nsnps\t$neff\n";
+#    next;
+#    my $sc =system ($scr_loc);
+#    if ($sc != 0){#
+#	print "systemcode: $sc\n";
+#	exit;
+ #   }
+}
+
+$daner_sum =~ s/.gz$//;
+my $fila = "$daner_sum.qq.la";
+my $lam = 0.0;
+my $nsnps = 0.0;
+if (-e $fila ) {
+    die "$fila: ".$! unless open FILA, "< $fila";
+    my $line = <FILA>;
+    my @cells = &split_line($line);
+    $lam = $cells[0];
+    $line = <FILA>;
+    @cells = &split_line($line);
+    $nsnps = $cells[1];
+    
+    close FILA;
+    
+}
+
+
+$neff_sum = sprintf "%i", $neff_sum;
+print NUM "SUM\t$nca_sum\t$nco_sum\t$lam\t$nsnps\t$neff_sum\n";
+close NUM;
+
+system("txt2xls --txt $outname.num --xls $outname.num.xls --cogr 1");
+
+print "success2\n";
+
+
+
+
+

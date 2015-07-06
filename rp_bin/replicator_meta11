@@ -1,0 +1,3476 @@
+#!/usr/bin/perl
+use strict;
+
+
+my $out_name = "repmeta";
+
+my $lam = 1.0;
+
+
+
+#############################
+# write log-file
+#############################
+
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+my $past_file = $ENV{HOME}."/replicator_info";
+my $pwd_loc = $ENV{PWD};
+
+die $! unless open FILE, ">> $past_file";
+print FILE "$pwd_loc\t$command_line\n";
+close FILE;
+
+
+
+
+
+#use lib '/home/gwas/bin/Statistics-Distributions-1.02/blib/lib';
+#use lib '/fg/wgas/wgas2/bneale/AMD/080616/imputation/for_Stephan/Statistics-Distributions-1.02/blib/lib';
+#use Statistics::Distributions;
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("ploc");
+my $rloc = &trans("rloc");
+my $sloc = &trans("sloc");
+
+my $r_sys = "$rloc/R";
+
+if ($rloc eq "broadinstitute") {
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+
+####################################################
+
+my $r2_min_th = .1;
+my $nogene = 1;
+
+use Getopt::Long;
+GetOptions( 
+   "out=s"=> \$out_name,
+   "disc=s"=> \my $disc_name_raw,
+   "prekno=s"=> \my $prekno_file1,
+   "prekn2=s"=> \my $prekno_file2,
+   "lambda=f"=> \$lam,
+   "help"=> \my $help,
+#   "nogene"=> \my $nogene,
+   "areator=s"=> \my $areator,
+   "clump"=> \my $clump_format,
+   "ar2"=> \my $area2_format,
+   "ar3"=> \my $area3_format,
+   "minr2=f"=> \$r2_min_th,
+   "maf" => \my $a1maf,
+   "1mhc" => \my $mhc1,
+   "nosingle" => \my $nosingle,
+   "excl=s"=> \my $excl_file,
+ );
+
+if ($help || $out_name eq "repmeta"){
+    print "usage: $0 repl_file1 repl_file2 ....
+
+      options:impu
+
+	--help          print this message and exit
+        --out STRING    outname
+        --disc STRING   discovery set
+        --exclude STRING  exclude SNPs from file STRING
+
+        --prekno STRING        preknofile
+        --prekn2 STRING        2nd preknofile
+
+        --lambda FLOAT  lambda to correct with
+        --maf           switch all alleles/diretions to maf
+
+##        --nogene        no gene names, much faster.
+        --areator       read gene-names out of areator file
+        --clump         area_clump format
+        --ar2           area2 format
+
+        --1mhc          only 1mhc SNP
+
+        --nosingle      do not make single_results worksheet (can be huge)
+
+
+
+        --minr2 FLOAT  minimum LD r2 for a proxy, default $r2_min_th
+
+ works with files coming out of replicator3
+
+ --out and --disc is mandatory
+
+
+example:
+replicator_meta5 --disc daner_MDD9.gz.sub --out MDD_0111a repl_test_genpod.repout.dir.daner
+
+~/pgc-samples/mdd/QC1B/imputation_MDD9/clean/distribution/MDD9/replicator3: replicator_meta5 --disc daner_MDD9.gz.sub --out MDD_0111b repl_test_genpod.repout.dir.daner repl_test2.repout.dir.daner
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+my $out_name = "remeta10_".$out_name;
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+#####################################
+# subroutine to count lines of a file
+#####################################
+
+sub count_lines {
+    my ($file)=@_;
+    my $lc=0;
+    die "$file: ".$! unless open FILE, "< $file";
+    while (<FILE>){
+	$lc++;
+    }
+    close FILE;
+    $lc;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+#sub split_line {
+#    my ($line)=@_;
+#    chomp($line);
+#    $line =~ s/^[\s]+//g;
+#    my @cols=  split /\s+/, $line;
+#}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+##########################################
+# subroutine to create a qq-plot
+##########################################
+
+sub qqplot {
+    my ($file, @parr)=@_;
+    die $! unless open FILE, "> $file";
+    print FILE "SNP P\n";
+    foreach (@parr){
+	print FILE $_."\n";
+    }
+    close FILE;
+    if (@parr == 0) {
+	print "no snps in $file\n";
+	exit;
+    }
+    my $sys_str = "qqplot_5 --out $file -p 2 $file";
+#    print $sys_str."\n";
+#    exit;
+    unless (-e "$file"."-qq.pdf"){
+	&mysystem($sys_str);
+    }
+
+}
+
+
+##########################################
+# subroutine to compare infos
+##########################################
+
+sub info_comp {
+    my ($file, @parr)=@_;
+    die $! unless open FILE, "> $file";
+    print FILE "SNP INFO.d INFO.r P.disc\n";
+    foreach (@parr){
+	print FILE $_."\n";
+    }
+    close FILE;
+    if (@parr == 0) {
+	print "no snps in $file\n";
+	exit;
+    }
+
+
+    my $R_templ = '
+        read.table("INFOFILE",header=T)->dat
+        pdf("INFOFILE.pdf",6,6)
+
+ntot = dim(dat)[1]
+disc_better = dim(dat[dat[,2]-dat[,3]>0.1,])[1]
+repl_better = dim(dat[dat[,3]-dat[,2]>0.1,])[1]
+gws = dat[dat[,4]<5.0e-08,]
+max.i = max(dat[,2],dat[,3]) + 0.1
+min.i = min(dat[,2],dat[,3]) - 0.1
+
+          plot (dat[,2],dat[,3],xlab="disc.info",ylab="repl.info",xlim=c(min.i,max.i),ylim=c(min.i,max.i),main="INFOFILE", sub = paste ("Ntot =",ntot))
+          points (gws[,2],gws[,3],pch=19,col="red")
+
+text(max.i - 0.1,min.i + 0.1,paste ("N =",disc_better))
+text(min.i+0.1,max.i - 0.1,paste ("N =",repl_better))
+
+          abline (0,1,col="blue")
+          abline (0.1,1,col="red")
+          abline (-0.1,1,col="red")
+        dev.off();
+            ';
+    $R_templ =~ s/INFOFILE/$file/g;
+    
+    &a2file ("$out_name.info.R",$R_templ);
+    my $r_script = "$r_sys < $out_name.info.R --vanilla ";
+#    my $r_script = "source /broad/software/scripts/useuse; use R-2.14; R < $out_name.info.R --vanilla ";
+#    print "$r_script\n";
+    &mysystem ($r_script);
+
+
+#    my $sys_str = "qqplot_4 --out $file -p 2 $file";
+#    print $sys_str."\n";
+#    exit;
+#    unless (-e "$file"."-qq.pdf"){
+#	&mysystem($sys_str);
+#    }
+
+}
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+########################
+## read exclusion list file
+########################
+
+my %excl = ();
+
+if ($excl_file) {
+    die "$!" unless open FILE, "< $excl_file";    
+    while (<FILE>){
+	chomp;
+
+	my @cells = @{&split_line_ref(\$_)};
+	$excl{$cells[0]} = 1;
+    }
+    close FILE;
+}
+
+
+
+#####################################
+### BEGIN
+#####################################
+
+my @forest_files=();
+
+
+
+#####################################
+### read gene_names of areator file 
+#####################################
+
+my %area_missing;
+my %area_missing_reg;
+my %area_chr;
+my %area_left;
+my %area_right;
+my %area_left2;
+my %area_right2;
+my %area_span;
+my %area_nhgri;
+my %area_ldf6;
+my %area_rico_link;
+my %area_rico_name;
+
+my %area_gwc;
+my %area_genes;
+my $genes_header = "genes_within_0.1_cm";
+
+
+if ($areator) {
+    my $snp_col = 0;
+    my $gene_col1 = 13;
+    my $gene_col2 = 14;
+    my $left = 13;
+    my $right = 14;
+   my $left2 = 13;
+    my $right2 = 14;
+   my $nhgri = 13;
+   my $ldf6 = 13;
+   my $chrom = 13;
+
+    my $span = 15;
+    my $gwc = 17;
+    if ($clump_format) {
+	$snp_col = 1;
+	$gene_col1 = 18;
+	$gene_col2 = 18;
+    }
+    if ($area2_format) {
+	$snp_col = 0;
+	$gene_col1 = 16;
+	$gene_col2 = 16;
+	print "###################################\n";
+	print "really old format?\n";
+	print "###################################\n";
+	sleep(5);
+    }
+    if ($area3_format) {
+	$snp_col = 0;
+	$gene_col1 = 21;
+	$gene_col2 = 21;
+	$left = 13;
+	$right = 14;
+	$left2 = 17;
+	$right2 = 18;
+	$nhgri = 20;
+	$gwc = 21;
+	$ldf6 = 16;
+	$chrom = 1;
+	$genes_header = "genes.6.50kb(dist2index)";
+    }
+    die $!."($areator)" unless open FILE, "< $areator";
+    while (my $line = <FILE>){
+	chomp($line);
+	$line =~ s/^[\s]+//g;
+	my @cells = split /\s+/, $line;
+	my $snp_loc = $cells[$snp_col];
+	$snp_loc =~ s/\*//g;
+	if ($cells[$gene_col1] ne "") {
+	    $area_genes{$snp_loc} = "$cells[$gene_col1]\t$cells[$gene_col2]";
+	    $area_left{$snp_loc} = "$cells[$left]";
+	    $area_right{$snp_loc} = "$cells[$right]";
+	    $area_left2{$snp_loc} = "$cells[$left2]";
+	    $area_right2{$snp_loc} = "$cells[$right2]";
+#	    $area_span{$snp_loc} = "$cells[$span]";
+	    $area_nhgri{$snp_loc} = "$cells[$nhgri]";
+	    $area_gwc{$snp_loc} = "$cells[$gwc]";
+	    $area_ldf6{$snp_loc} = "$cells[$ldf6]";
+	    $area_chr{$snp_loc} = "$cells[$chrom]";
+
+
+	    $area_missing{$snp_loc} = "$line";
+	    $area_missing_reg{$snp_loc} = "$line";
+
+
+	    my $hyperlink = 'http://www.broadinstitute.org/mpg/ricopili/index.php?chr=CHR&start=START&end=END&reference=REFERENCE';
+#	    my $ricolink = 'http://www.broadinstitute.org/mpg/ricopili/index.php?chr=CHR&start=START&end=END&reference=REFERENCE';
+	    my $start_loc = int($cells[$left]/1000)/1000-0.05;
+	    my $end_loc = int($cells[$right]/1000)/1000+0.05;
+	    $hyperlink =~ s/CHR/$cells[$chrom]/;
+	    $hyperlink =~ s/START/$start_loc/;
+	    $hyperlink =~ s/END/$end_loc/;
+	    $hyperlink =~ s/REFERENCE/PGC_SCZ52_may13/;
+#	    my $linkname = "$cells[$chrom]-$start_loc-$end_loc";
+	    my $linkname = "reg.r1";
+
+#	    print "$start_loc\n";
+#	    print "$end_loc\n";
+#	    print "$cells[$chrom]\n";
+#	    print "$hyperlink\n";
+#	    exit if ($cells[$chrom]== 18);
+#	    $area_rico{$snp_loc} = '=HYPERLINK("'.$hyperlink.'","click_for_ricopili")';
+	    $area_rico_link{$snp_loc} = "$hyperlink";
+	    $area_rico_name{$snp_loc} = "$linkname";
+#	    print "$area_rico{$snp_loc}\n";
+	}
+    }
+    close FILE;
+
+    &mysystem ("comp1mhc2 $areator > $areator.regions") ;
+
+}
+
+my $missing_header = $area_missing{"SNP"};
+
+#####################################
+### read prekno_file, if present
+#####################################
+
+my %prekno_snp;
+my %prekno_reg_chr;
+my %prekno_reg_beg;
+my %prekno_reg_end;
+if ($prekno_file1) {
+    my $row_count = 0;
+    
+    die $!."($prekno_file1)" unless open FILE, "< $prekno_file1";
+    while (my $line = <FILE>){
+	chomp($line);
+	$row_count++;
+	$line =~ s/^[\s]+//g;
+	my @cells = split /\s+/, $line;
+	my $snp_loc = $cells[0];
+	$snp_loc =~ s/\*//g;
+#	print "$cells[0]\t$snp_loc\n";
+	$prekno_snp{$snp_loc} = "$cells[5].$row_count($cells[4])";
+	$prekno_reg_beg{$snp_loc} = $cells[2] * 1000000;
+	$prekno_reg_end{$snp_loc} = $cells[3] * 1000000;
+	$prekno_reg_chr{$snp_loc} = $cells[1];
+    }
+    close FILE;
+}
+#sleep(5);
+
+#####################################
+### read prekno_file, if present
+#####################################
+
+my %prekno2_snp;
+my %prekno2_reg_chr;
+my %prekno2_reg_beg;
+my %prekno2_reg_end;
+if ($prekno_file2) {
+    
+    my $row_count = 0;
+    die $!."($prekno_file2)" unless open FILE, "< $prekno_file2";
+    while (my $line = <FILE>){
+	chomp($line);
+	$row_count++;
+	$line =~ s/^[\s]+//g;
+	my @cells = split /\s+/, $line;
+	my $snp_loc = $cells[0];
+	$snp_loc =~ s/\*//g;
+#	print "$cells[0]\t$snp_loc\n";
+	$prekno2_snp{$snp_loc} = "$cells[5].$row_count($cells[4])";
+	$prekno2_reg_beg{$snp_loc} = $cells[2] * 1000000;
+	$prekno2_reg_end{$snp_loc} = $cells[3] * 1000000;
+	$prekno2_reg_chr{$snp_loc} = $cells[1];
+    }
+    close FILE;
+}
+
+
+
+#####################################
+### clean daner-files for min_r2_th
+#####################################
+
+my @dfile_arr ;
+my %dfile_arr_cas ;
+my %dfile_arr_con ;
+foreach my $dfile (@ARGV){
+
+    die "$dfile: ".$! unless open FILE, "< $dfile";
+    die "$dfile.clean: ".$! unless open OUT, "> $dfile.clean";
+    my $line = <FILE>;
+    print OUT "$line";
+    while (my $line = <FILE>){
+	chomp($line);
+	my @cells = @{&split_line_ref(\$line)};
+
+	if ($cells[7] > $r2_min_th) {
+	    print OUT "$line\n";
+	}
+
+    }
+    close FILE;
+    close OUT;
+
+    if (-e "$dfile.ncaco"){
+	die "$dfile.ncaco: ".$! unless open FILE, "< $dfile.ncaco";
+	my $nca = <FILE>;
+	chomp ($nca);
+	my $nco = <FILE>;
+	chomp ($nco);
+	close FILE;
+#	print "$nca\t$nco\n";
+	$dfile_arr_cas{"$dfile.clean"}=$nca ;
+	$dfile_arr_con{"$dfile.clean"}=$nco ;
+    }
+
+    push @dfile_arr, "$dfile.clean";
+
+}
+
+#exit;
+#exit;
+
+
+
+
+#####################################
+### define SNPs 
+#####################################
+
+my $disc_name = "$disc_name_raw.metasub";
+
+my $sys = "cat  @dfile_arr | cut -f2 | sort | uniq > $out_name.snplist";
+print "$sys\n";
+&mysystem ($sys);
+
+
+
+##############################################
+## read snps into hash
+##############################################
+my %snp_hash ;
+my $lc=0;
+die "$out_name.snplist: ".$! unless open FILE, "< $out_name.snplist";
+while (my $line = <FILE>){
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cells = split /\s+/, $line;
+    $snp_hash{$cells[0]} = 1;
+#    if ($cells[0] eq "12_123742918" || $cells[0] eq "rs6846161"){
+#	print "found: $cells[0]\n";
+#	sleep(3);
+#    } 
+    $lc++;
+}
+close FILE;
+print "$lc SNPs read\n";
+
+
+
+
+##############################################
+## read discovery data into subfile
+##############################################
+my $lc=0;
+my $mhc_line = "";
+my $p_mhc = 1;
+
+die "$disc_name_raw: ".$! unless open FILE, "< $disc_name_raw";
+die "$disc_name: ".$! unless open OUT, "> $disc_name";
+while (my $line = <FILE>){
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+
+
+
+    my @cells = split /\s+/, $line;
+
+
+
+    if ($mhc1) {
+	if ($cells[0] == 6 && $cells[2] > 25000000 && $cells[2] < 35000000) {
+	    if ($cells[10] < $p_mhc) {
+		$mhc_line = $line;
+		$p_mhc = $cells[10];
+	    }
+	    next;
+#	    print "$line\n";
+#	    sleep(2);
+	}
+    }
+
+
+    if (exists $snp_hash{$cells[1]}) {
+	print OUT "$line\n";
+    }
+    $lc++;
+}
+if ($mhc_line ne "") {
+    print OUT "$mhc_line\n";
+}
+close FILE;
+close OUT;
+print "$lc read out, into $disc_name, out of $disc_name_raw\n";
+
+#exit;
+
+
+
+#sleep(5);
+
+if (0) {
+    my $sys = "grep -w -f $out_name.snplist $disc_name_raw > $disc_name";
+    print "create $disc_name out of $out_name.snplist and $disc_name_raw\n";
+    print "$sys\n";
+    sleep(5);
+    &mysystem ($sys);
+}
+
+
+
+#####################################
+### perform meta, so we see, which SNPs come out of it.
+#####################################
+
+my $tmp_sys = "metaber5 --nofilter --out $out_name.comb $disc_name @dfile_arr";
+print "$tmp_sys\n";
+#exit;
+#sleep(1);
+&mysystem ($tmp_sys);
+$tmp_sys = "metaber5 --nofilter --out $out_name.rep @dfile_arr";
+print "$tmp_sys\n";
+#sleep(3);
+&mysystem ($tmp_sys);
+#sleep(3);
+
+#&mysystem ("annot_pos_gene --cm --snp 3 --chr 1 --pos 2 $out_name.comb.meta") unless (-e "$out_name.comb.meta.gene");
+
+&mysystem ("gunzip -c $out_name.comb.metadaner.gz > $out_name.comb.meta") ;
+&mysystem ("gunzip -c $out_name.rep.metadaner.gz > $out_name.rep.meta") ;
+
+
+
+
+
+
+
+
+
+unless ($nogene) {
+    &mysystem ("annot_pos_gene --cm --snp 2 --chr 1 --pos 3 $out_name.comb.meta") unless (-e "$out_name.comb.meta.gene");
+}
+
+else {
+    die "$!" unless open META, "< $out_name.comb.meta"; 
+    die "$!" unless open GENE, "> $out_name.comb.meta.gene"; 
+    my $head = <META>;
+    chomp($head);
+    print GENE "$head\tGene\tGene_range(300Kb)\n";
+    while (my $line = <META>){
+	chomp($line);
+	$line =~ s/^[\s]+//g;
+	my @cells = split /\s+/, $line;
+	my $snp_loc = $cells[1];
+
+	if (exists $area_genes{$snp_loc}) {
+	    print GENE "$line\t$area_genes{$snp_loc}\n";
+	}
+	else {
+	    print GENE "$line\tno_lookup\tno_lookup\n";
+	}
+    }
+    close META;
+    close GENE;
+}
+
+#exit;
+
+&mysystem ("comp1mhc2 --meta $out_name.comb.meta.gene > $out_name.comb.meta.gene.regions") ;
+
+#####################################
+### read combined meta
+#####################################
+
+
+my %comb_snps= ();
+my %comb_p= ();
+my %comb_p_r= ();
+my %comb_o= ();
+my %comb_o_r= ();
+my %comb_q= ();
+my %comb_i= ();
+my %comb_se= ();
+my %comb_gene= ();
+
+#my %rico_links= ();
+#my %rico_links= ();
+
+my %rep_snps= ();
+my %rep_p= ();
+my %rep_p_r= ();
+my %rep_o= ();
+my %rep_o_r= ();
+my %rep_q= ();
+my %rep_r2= ();
+my %rep_proxy= ();
+my %rep_i= ();
+my %rep_se= ();
+my %rep_extra= ();
+
+my $head_tmp ='
+     1  CHR
+     2  SNP
+     3  BP
+     4  A1
+     5  A2
+     6  FRQ_A_9445
+     7  FRQ_U_9721
+     8  INFO
+     9  OR
+    10  SE
+    11  P
+    12  ngt
+    13  Direction
+    14  HetISqt
+    15  HetChiSq
+    16  HetDf
+    17  HetPVa
+    18  Gene
+    19  Gene_range(300Kb)
+
+     1   CHR          BP            SNP  A1  A2   N           P        P(R)      OR   OR(R)       Q       I
+';
+
+my $ccol = 0;
+my $poscol = 1;
+my $a1col = 3;
+my $a2col = 4;
+my $scol = 2;
+my $pcol = 6;
+my $prcol = 7;
+my $ocol = 8;
+my $orcol = 9;
+my $qcol = 10;
+my $r2col = 7;
+my $procol = 11;
+my $icol = 11;
+my $secol = 12;
+my $gcol = 13;
+
+
+### here for metaber5
+if (1) {
+
+    $ccol = 0;
+    $poscol = 2;
+    $a1col = 3;
+    $a2col = 4;
+    $scol = 1;
+    $pcol = 10;
+    $prcol = 10;
+    $ocol = 8;
+    $orcol = 8;
+    $qcol = 16;
+    $icol = 13;
+    $secol = 9;
+    $gcol = 17;
+
+}
+
+die "$!" unless open META, "< $out_name.comb.meta.gene"; 
+#die "$!" unless open DANER, "> $out_name.comb.meta.gene.metadaner"; 
+my $header = <META>;
+my $ngene_max;
+while (<META>){
+    chomp;
+
+    my @cells = @{&split_line_ref(\$_)};
+
+    my $snp_name = $cells[$scol];
+    
+    next if (exists $excl{$snp_name});
+
+    $comb_snps{$snp_name} = $_;
+    
+    delete($area_missing{$snp_name});
+
+    $comb_p{$snp_name} = $cells[$pcol];
+    $comb_p_r{$snp_name} = $cells[$prcol];
+    $comb_p_r{$snp_name} = "-";
+    $comb_o{$snp_name} = $cells[$ocol];
+    $comb_o_r{$snp_name} = $cells[$orcol];
+    $comb_o_r{$snp_name} = "-";
+    $comb_q{$snp_name} = $cells[$qcol];
+    $comb_i{$snp_name} = $cells[$icol];
+    $comb_se{$snp_name} = $cells[$secol];
+    $comb_gene{$snp_name} = $cells[$gcol];
+
+    my @gene_arr = split /,/, $cells[$gcol];
+    $ngene_max = @gene_arr if (@gene_arr > $ngene_max);
+    
+    if (0){   
+	print DANER $cells[$ccol];
+	print DANER "\t".$cells[$scol];
+	print DANER "\t".$cells[$poscol];
+	print DANER "\t".$cells[$a1col];
+	print DANER "\t".$cells[$a2col];
+	print DANER "\t-";
+	print DANER "\t-";
+	print DANER "\t-";
+	print DANER "\t".$cells[$ocol];
+	print DANER "\t".$cells[$secol];
+	print DANER "\t".$cells[$pcol];
+	print DANER "\t-";
+	print DANER "\n";
+    }
+
+    $rep_p{$snp_name} = "-";
+    $rep_p_r{$snp_name} = "-";
+    $rep_o{$snp_name} = "-";
+    $rep_o_r{$snp_name} = "-";
+    $rep_q{$snp_name} = "-";
+    $rep_i{$snp_name} = "-";
+    $rep_se{$snp_name} = "-";
+
+
+
+}
+close META;
+#close DANER;
+#&mysystem ("gzip -f $out_name.comb.meta.gene.metadaner");
+ push @forest_files, "$out_name.comb.metadaner.gz";
+#exit;
+
+
+
+
+die $! unless open NOREP, "> $out_name.missing.txt";
+print NOREP "REG ".$missing_header."\n";
+foreach my $snp_name (keys %area_missing) {
+
+    my $missing_region = 1;
+    if ($snp_name eq "rs139687289") {
+	print "rs139687289 $area_left{$snp_name}\n";
+	print "rs139687289 $area_right{$snp_name}\n";
+    }
+
+    foreach my $snp_name_in (keys %comb_snps) {
+	if ($area_chr{$snp_name} == $area_chr{$snp_name_in}) {
+	    if ($area_right{$snp_name_in} > $area_left{$snp_name} &&  $area_left{$snp_name_in} < $area_right{$snp_name}) {
+		$missing_region = 0;
+
+		if ($snp_name eq "rs139687289") {
+		    print "snp_naqme_in $snp_name_in\n";
+		    print "$snp_name_in $area_left{$snp_name_in}\n";
+		    print "$snp_name_in $area_right{$snp_name_in}\n";
+		}
+
+	    }
+	}
+    }
+
+    if ($missing_region){
+	print NOREP "missreg ".$area_missing{$snp_name}."\n" unless ($snp_name eq "SNP");
+    }
+    else {
+	print NOREP "reg ".$area_missing{$snp_name}."\n" unless ($snp_name eq "SNP");
+    }
+
+
+}
+close NOREP;
+
+#exit;
+
+## read all repout-files
+my $nreps = @dfile_arr;
+
+
+#####################################
+### read rep meta
+#####################################
+
+
+die "$!" unless open META, "< $out_name.rep.meta"; 
+#die "$!" unless open DANER, "> $out_name.rep.meta.metadaner"; 
+my $header = <META>;
+my $rep_single = 0;
+my @cells = @{&split_line_ref(\$header)};
+
+
+#if (@cells < 14) {
+if ($nreps == 1) {
+    $rep_single = 1;
+}
+
+
+my $extra_number = 0;
+if (@cells > 12) {
+    $extra_number += @cells - 12;
+}
+my $nneg = 0;
+
+while (<META>){
+    chomp;
+    my @cells = @{&split_line_ref(\$_)};
+    my $snp_name = $cells[$scol];
+
+
+    if (@cells > 12) {
+	foreach my $ccc (12..$#cells) {
+	    $rep_extra{$snp_name} .= "\t".$cells[$ccc];
+	}
+    }
+
+
+    next if (exists $excl{$snp_name});
+
+
+    $rep_snps{$snp_name} = $_;
+
+    $rep_p{$snp_name} = $cells[$pcol];
+    $rep_p_r{$snp_name} = $cells[$prcol];
+    $rep_p_r{$snp_name} = "-";
+    $rep_o{$snp_name} = $cells[$ocol];
+    $rep_o_r{$snp_name} = $cells[$orcol];
+    $rep_o_r{$snp_name} = "-";
+    $rep_q{$snp_name} = $cells[$qcol];
+    $rep_r2{$snp_name} = $cells[$r2col];
+    $rep_proxy{$snp_name} = $cells[$procol];
+    $rep_i{$snp_name} = $cells[$icol];
+    $rep_se{$snp_name} = $cells[$secol];
+
+#    print @cells. " ncells\n";
+#    print $cells[$r2col]. " r2col\n";
+    if ($rep_single == 1) {
+#	print "ja drunter\n";
+
+#	$rep_q{$snp_name} = 1.0;
+#	$rep_i{$snp_name} = 0;
+	$rep_q{$snp_name} = $rep_r2{$snp_name};
+	if ($snp_name ne $rep_proxy{$snp_name}) {
+#	    print "1:$snp_name\n";
+#	    print "2:$snp_name\n";
+	    $rep_i{$snp_name} = $rep_proxy{$snp_name};
+	}
+	else {
+	    $rep_i{$snp_name} = "same";
+	}
+
+	
+    }
+#    exit;
+
+    if ($rep_q{$snp_name} < 0){
+	print "negativ R2: $snp_name: $rep_q{$snp_name}\n" if ($nneg < 5);
+	print "arrived at 5\n" if ($nneg == 5);
+	$nneg++;
+#	sleep(1);
+    }
+
+
+    if (0) {
+	print DANER $cells[0];
+	print DANER "\t".$cells[2];
+	print DANER "\t".$cells[1];
+	print DANER "\t".$cells[3];
+	print DANER "\t".$cells[4];
+	print DANER "\t-";
+	print DANER "\t-";
+	print DANER "\t-";
+	print DANER "\t".$cells[8];
+	print DANER "\t".$cells[12];
+	print DANER "\t".$cells[6];
+	print DANER "\t-";
+	print DANER "\n";
+    }
+
+}
+close META;
+#close DANER;
+#&mysystem ("gzip -f $out_name.rep.meta.metadaner");
+#push @forest_files, "$out_name.rep.meta.metadaner.gz";
+push @forest_files, "$out_name.rep.metadaner.gz";
+
+print "read single results\n";
+
+&mysystem ("gzip -c $disc_name > $disc_name.gz");
+push @forest_files, "$disc_name.gz";
+
+#####################################
+### read single result files
+#####################################
+
+my $snp_col = 1;
+my $chr_col = 0;
+my $pos_col = 2;
+
+my $or_col = 8;
+my $se_col = 9;
+#my $se_col = 6;
+my $p_col = 10;
+my $a1_col = 3;
+my $a2_col = 4;
+my $fca_col = 5;
+my $fco_col = 6;
+my $q_col = 7;
+my $pr_col = 11;
+my $inf_col = 12;
+
+my %ld_hash = ();
+my %or_hash = ();
+my %fr_hash = ();
+my %pr_hash = ();  ## proxy_hash
+my %disc_or_hash = ();
+my %disc_p_hash = ();
+my %se_hash = ();
+my %ci_hash = ();
+my %dir_hash = ();
+my %p_hash = ();
+my %count_hash = ();
+my %maf_hash = ();
+my $p_head ;
+my $fr_head ;
+my $pr_head ;
+my $or_head ;
+my $se_head ;
+my $ci_head ;
+
+my %out_hash = ();
+
+
+
+#print "$disc_name\n";
+#sleep(5);
+
+die "$!" unless open DISC, "< $disc_name"; 
+
+my $header= <DISC>;
+chomp($header);
+my @cells = @{&split_line_ref(\$header)};
+my $out_str = $cells[$snp_col];
+$out_str .= "\t".$cells[$chr_col];
+$out_str .= "\t".$cells[$pos_col];
+$out_str .= "\t".$cells[$a1_col].$cells[$a2_col];
+$out_str .= "\t$genes_header";
+
+$out_str .= "\t".$cells[$fca_col];
+$out_str .= "\t".$cells[$fco_col];
+$out_str .= "\t".$cells[$q_col];
+$out_str .= "\t".$cells[$p_col];
+$out_str .= "\t".$cells[$or_col];
+$out_str .= "\t".$cells[$se_col];
+
+my $out_size_start = 11;
+my $out_head = $out_str;
+
+my $best_sw = 0;
+
+if ($cells[12] eq "winner" && $cells[14] eq "all") {
+    $best_sw = 1;
+    $extra_number += 2;
+}
+
+
+#my $lcc = 0;
+my $nca_glob = 0;
+my $nco_glob = 0;
+my %info_disc;
+my %p_disc;
+while (<DISC>){
+#    print "$lcc\n";
+#    $lcc++;
+    chomp;
+    my @cells = @{&split_line_ref(\$_)};
+    my $snp_name = $cells[$snp_col];
+
+
+
+    next unless (exists $comb_snps{$snp_name});
+
+    if ($best_sw == 1) {
+#	print "$cells[12], $cells[14]: $_\n";
+#	sleep(1);
+	$rep_extra{$snp_name} .= "\t".$cells[12];
+	$rep_extra{$snp_name} .= "\t".$cells[14];
+    }
+
+
+    if ($a1maf) {
+	if ($cells[$fco_col] > .5) {
+	    $maf_hash{$snp_name} = 1;
+	    print "will switch  at $cells[$snp_col]\n";
+	}
+    }
+
+    my $out_str = $cells[$snp_col];
+    $out_str .= "\t".$cells[$chr_col];
+    $out_str .= "\t".$cells[$pos_col];
+
+    if (exists $maf_hash{$snp_name}) {
+	$out_str .= "\t".$cells[$a2_col].$cells[$a1_col];
+	$cells[$fco_col] = 1 - $cells[$fco_col];
+	$cells[$or_col] = 1 / $cells[$or_col];
+    }
+    else {
+	$out_str .= "\t".$cells[$a1_col].$cells[$a2_col];
+    }
+    $out_str .= "\t".$comb_gene{$snp_name};
+    $out_str .= "\t".$cells[$fca_col];
+    $out_str .= "\t".$cells[$fco_col];
+    $out_str .= "\t".$cells[$q_col];
+
+    $info_disc{$snp_name} = $cells[$q_col];
+    $p_disc{$snp_name} = $cells[$p_col];
+
+    $out_str .= "\t".$cells[$p_col];
+    $out_str .= "\t".$cells[$or_col];
+
+    $out_str .= "\t".$cells[$se_col];
+#    print "$cells[$se_col]\n";
+
+    $out_hash{$snp_name} = $out_str;
+    $disc_or_hash{$snp_name} = $cells[$or_col];
+#    if ($snp_name eq "rs4741652") {
+#	print "or_disc: $cells[$or_col]\n";
+#    }
+    $disc_p_hash{$snp_name} = $cells[$p_col];
+
+#    if ($cells[$p_col] < 5.0e-08) {
+#	print "hn: discovery-p equals zero?\t";
+#	print $snp_name."\t".$cells[$p_col]."\t";
+#	print "@cells\n";
+ #   }
+
+}
+close DISC;
+
+#unless (exists $disc_p_hash{"rs1784780"}) {
+#    print "not existing\n";
+#}
+#print $disc_p_hash{"rs1784780"}."\trs1784780\tdebug\n";
+#exit;
+#exit;
+my $rep_count = 0;
+
+my @repsum = ();
+my @pdf_collection = ();
+my @info_pdf_collection = ();
+
+my $rc = 1;
+my $phi = 0;
+
+
+foreach my $repout (@dfile_arr) {
+
+    my $possum = 0;
+    my $nsum = 0;
+    my @p_coll_all;    
+    my @inf_coll_all;    
+
+    my $possum_p3 = 0;
+    my $nsum_p3 = 0;
+    my @p_coll_p3;
+    my $possum_p4 = 0;
+    my $nsum_p4 = 0;
+    my @p_coll_p4;
+    my $possum_p5 = 0;
+    my $nsum_p5 = 0;
+    my @p_coll_p5;
+    my $possum_p6 = 0;
+    my $nsum_p6 = 0;
+    my @p_coll_p6;
+    my $possum_gws = 0;
+    my $nsum_gws = 0;
+    my @p_coll_gws;
+
+
+
+    my $fill = "";
+    $fill = "\t" if ($rep_count > 0);
+    my $repname = $repout;
+    $repname =~ s/.repout.dir.daner$//;
+    $repname =~ s/.repout.dir.daner.clean$//;
+    $repname =~ s/^repl_//;
+    $repname .= ".rep";
+    $p_head .= $fill."p_$repname";
+    $or_head .= $fill."or_$repname";
+#    $or_head .= $fill."or_$repname\t9head -2 ci_$repname";
+    $se_head .= $fill."se_$repname";
+    $ci_head .= $fill."ci_$repname";
+    $fr_head .= $fill."fr_$repname";
+    $pr_head .= $fill."pr_$repname";
+    my $npos = 0;
+    my $nsum = 0;
+
+    &mysystem ("gzip -c $repout > $repout.gz");
+    push @forest_files, "$repout.gz";
+
+    print "repout: $repout\n";
+
+    die "$!" unless open REPOUT, "< $repout"; 
+    my $header= <REPOUT>;
+    while (<REPOUT>){
+	chomp;
+
+	my @cells = @{&split_line_ref(\$_)};
+	my $snp_name = $cells[$snp_col];
+
+#	print "$snp_name\n";
+#	if ($snp_name eq "rs3132671") {
+#	    print "$_";
+#	}
+#	sleep(1);
+
+	next if (exists $excl{$snp_name});
+	next unless (exists $disc_p_hash{$snp_name});
+
+	if ( $disc_p_hash{$snp_name} > $phi) {
+	    $phi = $disc_p_hash{$snp_name};
+	}  
+
+
+#	if ($cells[$q_col] < $r2_min_th){
+#	    print "$snp_name\n";
+#	    sleep(3);
+#	    next ;
+#	}
+	my $sumdir = "?";
+	my $fill = "";
+	$fill = "\t" if (exists $count_hash{$snp_name});
+	$p_hash{$snp_name} .= $fill.sprintf "%.3g",$cells[$p_col] ;
+	$or_hash{$snp_name} .= $fill.sprintf "%.3g",$cells[$or_col];
+	$se_hash{$snp_name} .= $fill.sprintf "%.3g",$cells[$se_col];
+	$fr_hash{$snp_name} .= $fill.sprintf "%.3g",$cells[$fco_col];
+
+	my $pr_loc = "same";
+	if ($cells[$pr_col] ne $snp_name) {
+	    $pr_loc = "$cells[$pr_col](".$cells[$q_col].")";
+	}
+	$pr_hash{$snp_name} .= $fill.$pr_loc;
+
+
+	my $or_tmp = $cells[$or_col];
+	if (exists $maf_hash{$snp_name}) {
+	    $or_tmp = sprintf "\t%.3f", 1 / $or_tmp;
+	}
+	my $se_tmp = $cells[$se_col];
+
+	my $tmp_ci_lo = exp(log($or_tmp) - $se_tmp * 1.96);
+	my $tmp_ci_hi = exp(log($or_tmp) + $se_tmp * 1.96);
+#	$tmp_str .=  sprintf "\t%.3f-%.3f",$tmp_ci_lo,$tmp_ci_hi;
+	my $ci_str =  sprintf "\t%.3f-%.3f",$tmp_ci_lo,$tmp_ci_hi;
+
+	$ci_hash{$snp_name} .= $fill.$ci_str;
+
+
+	if ($cells[$p_col] <= .5) {
+	    $dir_hash{$snp_name} .= "+";
+	    $npos++;
+	    $sumdir = "+";
+	}
+	else {
+	    $dir_hash{$snp_name} .= "0";
+	    $sumdir = "0";
+	}
+	$nsum ++;
+
+
+	$possum++ if ($sumdir eq "+");
+#	$nsum++ if ($sumdir eq "+" || $sumdir eq "0");
+
+	my $p_loc = $cells[$p_col];
+	my $p_2_loc = abs(abs(2*$p_loc - 1)-1);
+	push @p_coll_all, $cells[$snp_col]." $p_2_loc";
+
+
+
+	my $inf_loc = $cells[$inf_col];
+	push @inf_coll_all, $cells[$snp_col]." ".$info_disc{$cells[$snp_col]}." $inf_loc"." ".$p_disc{$cells[$snp_col]};
+
+
+
+	if ($disc_p_hash{$snp_name} <= 0.001) {
+	    $possum_p3++ if ($sumdir eq "+");
+	    $nsum_p3++ if ($sumdir eq "+" || $sumdir eq "0");
+	    push @p_coll_p3, $cells[$snp_col]." $p_2_loc";
+	}
+	if ($disc_p_hash{$snp_name} <= 0.0001) {
+	    $possum_p4++ if ($sumdir eq "+");
+	    $nsum_p4++ if ($sumdir eq "+" || $sumdir eq "0");
+	    push @p_coll_p4, $cells[$snp_col]." $p_2_loc";
+	}
+	if ($disc_p_hash{$snp_name} <= 0.00001) {
+	    $possum_p5++ if ($sumdir eq "+");
+	    $nsum_p5++ if ($sumdir eq "+" || $sumdir eq "0");
+	    push @p_coll_p5, $cells[$snp_col]." $p_2_loc";
+	}
+	if ($disc_p_hash{$snp_name} <= 0.000001) {
+	    $possum_p6++ if ($sumdir eq "+");
+	    $nsum_p6++ if ($sumdir eq "+" || $sumdir eq "0");
+	    push @p_coll_p6, $cells[$snp_col]." $p_2_loc";
+	}
+	if ($disc_p_hash{$snp_name} <= 0.00000005) {
+
+	    $possum_gws++ if ($sumdir eq "+");
+	    $nsum_gws++ if ($sumdir eq "+" || $sumdir eq "0");
+	    push @p_coll_gws, $cells[$snp_col]." $p_2_loc";
+	}
+
+
+	if ($disc_p_hash{$snp_name} == 0) {
+	    print "discovery-p equals zero?\t";
+	    print $disc_p_hash{$snp_name}."\t";
+	    print $snp_name."\n";
+	    sleep(2);
+#	    $possum_gws++ if ($sumdir eq "+");
+#	    $nsum_gws++ if ($sumdir eq "+" || $sumdir eq "0");
+	}	
+
+
+
+	$count_hash{$snp_name}++;
+#	$chr_hash{$snp_name} = $cells[$chr_col];
+#	$pos_hash{$snp_name} = $cells[$pos_col];
+	
+    }
+    close REPOUT;
+
+#    print "debug\n";
+#    exit;;
+
+    $rep_count++;
+    foreach my $snp_name (keys %comb_snps) {
+       unless ($count_hash{$snp_name} == $rep_count) {
+	    my $fill = "";
+	    $fill = "\t" if ($count_hash{$snp_name} > 0);
+	    $p_hash{$snp_name} .= $fill."-";
+	    $or_hash{$snp_name} .= $fill."-";
+	    $ci_hash{$snp_name} .= $fill."-";
+	    $se_hash{$snp_name} .= $fill."-";
+	    $fr_hash{$snp_name} .= $fill."-";
+	    $pr_hash{$snp_name} .= $fill."-";
+	    $dir_hash{$snp_name} .= "?";
+	    $count_hash{$snp_name}++;
+	}
+    }
+
+#    my $rc = $rep_count +1 ;
+#    $rc++ ;
+#    my $ratio = sprintf "%.2f",$npos/$nsum;
+#    push @repsum,"$repname\tall\t$npos\t$nsum\t=BINOMDIST(D$rc-(C$rc),D$rc,0.5,TRUE)\t=$ratio";
+
+
+    
+    my $ratio = "NA";
+    if ($nsum > 0){
+	$ratio = sprintf "%.2f",$possum/$nsum;
+    }
+    my $ratio_p3 = "NA";
+    if ($nsum_p3 > 0){
+	$ratio_p3 = sprintf "%.2f",$possum_p3/$nsum_p3;
+    }
+    my $ratio_p4 = "NA";
+    if ($nsum_p4 > 0){
+	$ratio_p4 = sprintf "%.2f",$possum_p4/$nsum_p4;
+    }
+    my $ratio_p5 = "NA";
+    if ($nsum_p5 > 0){
+	$ratio_p5 = sprintf "%.2f",$possum_p5/$nsum_p5;
+    }
+    my $ratio_p6 = "NA";
+    if ($nsum_p6 > 0){
+	$ratio_p6 = sprintf "%.2f",$possum_p6/$nsum_p6;
+    }
+    my $ratio_gws = "NA";
+    if ($nsum_gws > 0){
+	$ratio_gws = sprintf "%.2f",$possum_gws/$nsum_gws;
+    }
+    
+    my $nca_loc = $dfile_arr_cas{$repout};
+    my $nco_loc = $dfile_arr_con{$repout};
+    $nca_glob += $dfile_arr_cas{$repout};
+    $nco_glob += $dfile_arr_con{$repout};
+
+    my $info_repname = $repname;
+    $info_repname =~ s/SCZ52_0513.sh2_nodenmaarhirwtgrasswe6caticou3lie2mgs2.//;
+#    $info_repname =~ s///;
+    &info_comp ("info.all.$info_repname",@inf_coll_all);
+    push @info_pdf_collection, "info.all.$info_repname.pdf";
+    
+#    print "phi: $phi\n";
+#    exit;
+
+    if ($phi >1.0e-03) {
+	$rc++;    
+	push @repsum,"$repname\tall\t$possum\t$nsum\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio\t$nca_loc\t$nco_loc" ;
+	&qqplot ("qq.all.$repname",@p_coll_all);
+	push @pdf_collection, "qq.all.$repname"."-qq.pdf";
+
+    }
+
+
+    if ($phi >1.0e-04) {
+	$rc++;
+	push @repsum,"$repname\t1.0e-03\t$possum_p3\t$nsum_p3\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p3\t$nca_loc\t$nco_loc";
+	&qqplot ("qq.p3.$repname",@p_coll_p3);
+	push @pdf_collection, "qq.p3.$repname"."-qq.pdf";
+    }
+    if ($phi >1.0e-05) {
+	$rc++;
+	push @repsum,"$repname\t1.0e-04\t$possum_p4\t$nsum_p4\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p4\t$nca_loc\t$nco_loc";
+	&qqplot ("qq.p4.$repname",@p_coll_p4);
+	push @pdf_collection, "qq.p4.$repname"."-qq.pdf";
+    }
+    if ($phi >1.0e-06) {
+	$rc++;
+	push @repsum,"$repname\t1.0e-05\t$possum_p5\t$nsum_p5\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p5\t$nca_loc\t$nco_loc";
+	&qqplot ("qq.p5.$repname",@p_coll_p5);
+	push @pdf_collection, "qq.p5.$repname"."-qq.pdf";
+    }
+    
+    if ($phi >5.0e-08) {
+	$rc++;
+	push @repsum,"$repname\t1.0e-06\t$possum_p6\t$nsum_p6\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p6\t$nca_loc\t$nco_loc";
+	&qqplot ("qq.p6.$repname",@p_coll_p6);
+	push @pdf_collection, "qq.p6.$repname"."-qq.pdf";
+    }
+    $rc++;
+    push @repsum,"$repname\t5.0e-08\t$possum_gws\t$nsum_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_gws\t$nca_loc\t$nco_loc";
+
+    if (@p_coll_gws > 0 ) {
+	&qqplot ("qq.gws.$repname",@p_coll_gws);
+	push @pdf_collection, "qq.gws.$repname"."-qq.pdf";
+    }
+
+#    print "$repname\t$possum_gws\t$nsum_gws\n";
+    
+#    }
+
+
+
+}
+
+#print "phi: $phi\n";
+#print "debug\n";
+#exit;
+
+
+
+print "starting excel file\n";
+
+
+#################################################
+## excel too
+##########################################
+
+
+
+use lib '/home/gwas/bin/Spreadsheet-WriteExcel-2.25/blib/lib';
+use lib '/home/unix/sripke/perl_modules/Spreadsheet-WriteExcel-2.25/blib/lib';
+
+
+use lib '/home/gwas/bin/Parse-RecDescent-1.965001/lib/'; ## for formulas
+use lib '/home/unix/sripke/perl_modules/Parse-RecDescent-1.965001/lib'; ## for formulas
+
+die $! unless open NOREP, "> $out_name.norep.txt";
+die $! unless open REP, "> $out_name.rep.txt";
+
+use Spreadsheet::WriteExcel;                             # Step 0
+use Parse::RecDescent;                             # Step 0
+my $workbook = Spreadsheet::WriteExcel->new("$out_name.xls");   # Step 1
+$workbook->compatibility_mode(); 
+my $formatred = $workbook->add_format(color => 'red');
+my $formatorange = $workbook->add_format(color => 'orange');
+my $formatblue = $workbook->add_format(color => 'blue');
+my $formatgreen = $workbook->add_format(color => 'green');
+my $formatbrown = $workbook->add_format(color => 'brown');
+my $formats = $workbook->add_format(align => 'center');
+
+
+
+my $format_gwsign = $workbook->add_format(
+    color => 'red',
+    bold => 1,
+    underline => 1,
+    );
+
+my $format_link1 = $workbook->add_format(
+    color => 'green',
+    underline => 1,
+    );
+
+die "Problems creating new Excel file: $!" unless defined $workbook;
+
+
+## switch to maf
+##########################################
+
+
+#    if ($a1maf) {
+#	if ($fr > .5) {
+#	    print "would switch  at $snp_txt\n";
+#	}
+ #   }
+
+
+
+## single results
+##########################################
+
+
+
+unless ($nosingle) {
+if ($nreps > 1) {
+print "single worksheet\n";
+my $worksheet_single   = $workbook->add_worksheet("single results");  
+$worksheet_single->freeze_panes(1, 1);
+my $lc = 0;
+
+
+$worksheet_single->set_column(3, 3,  4, $formats);
+$worksheet_single->set_column(1, 1,  4, );
+$worksheet_single->set_column(0, 0,  12, );
+$worksheet_single->set_column(2, 2,  12, );
+$worksheet_single->set_column(4, 4,  18, );
+
+my $tmp_str = "$out_head";
+my @cells = @{&split_line_ref(\$tmp_str)};
+my $cc = 0;
+foreach (@cells) {
+    $worksheet_single->write($lc, $cc, $_, $formatred);
+    $cc++;
+}
+
+$tmp_str = "direction";
+@cells = @{&split_line_ref(\$tmp_str)};
+$worksheet_single->set_column($cc, $cc,  16, $formats);
+foreach (@cells) {
+    $worksheet_single->write($lc, $cc, $_, $formatgreen);
+    $cc++;
+}
+
+$tmp_str = $p_head;
+@cells = @{&split_line_ref(\$tmp_str)};
+foreach (@cells) {
+#    print "p-cells: $_\n";
+    $worksheet_single->write($lc, $cc, $_, $formatblue);
+    $cc++;
+}
+
+$tmp_str = $or_head;
+@cells = @{&split_line_ref(\$tmp_str)};
+foreach (@cells) {
+#    print "or-cells: $_\n";
+#    my $out_tmp = "$_\t95%-CI";
+    $worksheet_single->write($lc, $cc, $_, $formatorange);
+    $cc++;
+}
+## CI
+foreach (@cells) {
+#    print "or-cells: $_\n";
+#    my $out_tmp = "$_\t95%-CI";
+    my $locstr = $_;
+    $locstr =~ s/^or_//;
+    $worksheet_single->write($lc, $cc, "95%-CI_$locstr", $formatblue);
+    $cc++;
+}
+
+if (0) {
+    $tmp_str = $ci_head;
+    @cells = @{&split_line_ref(\$tmp_str)};
+    foreach (@cells) {
+#    print "se-cells: $_\n";
+	$worksheet_single->write($lc, $cc, $_, $formatorange);
+	$cc++;
+    }
+}
+
+$tmp_str = $se_head;
+@cells = @{&split_line_ref(\$tmp_str)};
+foreach (@cells) {
+#    print "se-cells: $_\n";
+    $worksheet_single->write($lc, $cc, $_, $formatorange);
+    $cc++;
+}
+
+
+$tmp_str = $fr_head;
+@cells = @{&split_line_ref(\$tmp_str)};
+foreach (@cells) {
+#    print "fr-cells: $_\n";
+    $worksheet_single->write($lc, $cc, $_, $formatblue);
+    $cc++;
+}
+
+$tmp_str = $pr_head;
+@cells = @{&split_line_ref(\$tmp_str)};
+foreach (@cells) {
+    $worksheet_single->write($lc, $cc, $_, $formatorange);
+    $cc++;
+}
+
+
+my $cccc1 = keys %comb_snps;
+my $cccc2 = keys %out_hash;
+print "N: $cccc1, $cccc2\n";
+#sleep(5);
+
+
+foreach my $snp_name (keys %comb_snps) {
+
+#    print $out_hash{$snp_name}."\n";
+#    sleep(1);
+
+    next unless (exists $out_hash{$snp_name});
+
+    $lc++;
+    $tmp_str = "";
+    $tmp_str .=  $out_hash{$snp_name};
+    $tmp_str .=  "\t>".$dir_hash{$snp_name}."<";
+    $tmp_str .=  "\t".$p_hash{$snp_name};
+
+#    my $tmps = $or_hash{$snp_name};
+ #   my @cells_or = @{&split_line_ref(\$tmps)};
+  #  my $tmpse = $se_hash{$snp_name};
+   # my @cells_se = @{&split_line_ref(\$tmpse)};
+    #my $tmpse = $fr_hash{$snp_name};
+    #my @cells_fr = @{&split_line_ref(\$tmpse)};
+
+
+
+
+    my $cc=0;
+#    my $ci_str = "";
+#    foreach my $or_tmp (@cells_or) {
+#	unless ($or_tmp > 0) {
+#	    $tmp_str .= "\t-\t-";
+#	    next;
+#	}
+#	if (exists $maf_hash{$snp_name}) {
+#	    $or_tmp = sprintf "\t%.3f", 1 / $or_tmp;
+#	}
+#	$tmp_str .=  "\t".$or_tmp;
+#	my $se_tmp = $cells_se[$cc];
+
+#	my $tmp_ci_lo = exp(log($or_tmp) - $se_tmp * 1.96);
+#	my $tmp_ci_hi = exp(log($or_tmp) + $se_tmp * 1.96);
+
+#	$ci_str .=  sprintf "\t%.3f-%.3f",$tmp_ci_lo,$tmp_ci_hi;
+#	$cc++;
+ #   }
+
+
+ #   $tmp_str .=  $ci_str;
+    $tmp_str .=  "\t".$or_hash{$snp_name};
+    $tmp_str .=  "\t".$ci_hash{$snp_name};
+    $tmp_str .=  "\t".$se_hash{$snp_name};
+    $tmp_str .=  "\t".$fr_hash{$snp_name};
+    $tmp_str .=  "\t".$pr_hash{$snp_name};
+    @cells = @{&split_line_ref(\$tmp_str)};
+    $worksheet_single->write_row($lc, 0, \@cells);
+
+    $worksheet_single->write($lc,8,$disc_p_hash{$snp_name} , $formatred) if ($disc_p_hash{$snp_name} < .05);
+    $worksheet_single->write($lc,8,$disc_p_hash{$snp_name} , $format_gwsign) if ($disc_p_hash{$snp_name} < 5e-08);
+
+
+
+
+
+}
+
+}
+
+} ## end unless (nosingle)
+
+
+## replication results
+##########################################
+
+print "combined worksheet\n";
+
+my $worksheet_repl   = $workbook->add_worksheet("replication results");  
+$worksheet_repl->freeze_panes(1, 9);
+my $lc = 0;
+$worksheet_repl->set_column(3, 3,  4, $formats);
+$worksheet_repl->set_column(1, 1,  4, );
+$worksheet_repl->set_column(0, 0,  12, );
+$worksheet_repl->set_column(2, 2,  12, );
+$worksheet_repl->set_column(4, 4,  18, );
+
+my $tmp_str = "$out_head";
+
+my @cells = @{&split_line_ref(\$tmp_str)};
+my $cc = 0;
+foreach (@cells) {
+    $worksheet_repl->write($lc, $cc, $_, $formatred);
+    $cc++;
+}
+print NOREP "@cells ";
+print REP "@cells ";
+
+$tmp_str = "direction\trep_dir";
+@cells = @{&split_line_ref(\$tmp_str)};
+$worksheet_repl->set_column($cc, $cc,  16, $formats);
+$worksheet_repl->set_column($cc+1, $cc+1,  4, $formats);
+foreach (@cells) {
+    $worksheet_repl->write($lc, $cc, $_, $formatgreen);
+    $cc++;
+}
+print NOREP "@cells ";
+print REP "@cells ";
+
+
+$tmp_str = "P-rep";
+
+#$tmp_str .= "\tP-rep-random";
+$tmp_str .= "\tOR-rep";
+#$tmp_str .= "\tOR-rep-random";
+$tmp_str .= "\tSE-rep";
+if ($rep_single) {
+    $tmp_str .= "\tR2";
+    $tmp_str .= "\tProxy";
+}
+else {
+    $tmp_str .= "\tQ-rep";
+    $tmp_str .= "\tI-rep";
+}
+
+
+my @cells = @{&split_line_ref(\$tmp_str)};
+foreach (@cells) {
+    $worksheet_repl->write($lc, $cc, $_, $formatblue);
+    $cc++;
+}
+print NOREP "@cells ";
+print REP "@cells ";
+
+$tmp_str = "P-comb";
+#$tmp_str .= "\tP-comb-random";
+$tmp_str .= "\tOR-comb";
+#$tmp_str .= "\tOR-comb-random";
+$tmp_str .= "\tSE-comb";
+$tmp_str .= "\tQ-comb";
+$tmp_str .= "\tI-comb";
+
+my @cells = @{&split_line_ref(\$tmp_str)};
+foreach (@cells) {
+    $worksheet_repl->write($lc, $cc, $_, $formatorange);
+    $cc++;
+}
+print NOREP "@cells ";
+print REP "@cells ";
+
+#$tmp_str = "comb_corr\tcomb_r_corr\tdisc_corr";
+$tmp_str = "\tdisc_corr";
+$tmp_str .= "\tP-rep-st";
+$tmp_str .= "\t95CI_low-rep";
+$tmp_str .= "\t95CI_high-rep";
+$tmp_str .= "\t95CI_low-comb";
+$tmp_str .= "\t95CI_low-comb";
+
+@cells = @{&split_line_ref(\$tmp_str)};
+foreach (@cells) {
+    $worksheet_repl->write($lc, $cc, $_, $formatgreen);
+    $cc++;
+}
+
+print NOREP "@cells ";
+print REP "@cells ";
+
+$tmp_str = "";
+
+if ($prekno_file1) {
+    $tmp_str .= "\tprekno";
+    $tmp_str .= "\tPub-SNP";
+    $tmp_str .= "\tPub-name(P)";
+    $tmp_str .= "\tR2_to_index";
+    $tmp_str .= "\tPosition_to_index";
+}
+if ($prekno_file2) {
+    $tmp_str .= "\tprekno2";
+    $tmp_str .= "\tPub-SNP2";
+    $tmp_str .= "\tPub-name(P)2";
+    $tmp_str .= "\tR2_to_index2";
+    $tmp_str .= "\tPosition_to_index2";
+}
+
+
+
+
+@cells = @{&split_line_ref(\$tmp_str)};
+foreach (@cells) {
+    $worksheet_repl->write($lc, $cc, $_, $formatbrown);
+    $cc++;
+}
+
+if (0) {
+    if ($extra_number > 0) {
+	foreach my $ex_count (1..$extra_number) {
+	    $worksheet_repl->write($lc, $cc, "extra.".$ex_count, $formatblue);
+	    $cc++;
+	}
+    }
+}
+
+$tmp_str .= "\tleft";
+$tmp_str .= "\tright";
+$tmp_str .= "\tleft.6";
+$tmp_str .= "\tright.6";
+$tmp_str .= "\tgwas_catalog.6";
+$tmp_str .= "\tld_friends.6";
+$tmp_str .= "\tRicopili-region";
+
+foreach my $genenn (1..$ngene_max) {
+    $tmp_str .= "\tRico-g.$genenn";
+}
+#$tmp_str .= "\tgenes.6.50kb(dist2index)";
+
+@cells = @{&split_line_ref(\$tmp_str)};
+
+
+foreach (@cells) {
+    $worksheet_repl->write($lc, $cc, $_, $formatblue);
+    $cc++;
+}
+
+
+
+#$worksheet_repl->write($lc, $cc, "left", $formatblue);
+#$cc++;
+#$worksheet_repl->write($lc, $cc, "right", $formatblue);
+#$cc++;
+#$worksheet_repl->write($lc, $cc, "left.6", $formatblue);
+#$cc++;
+#$worksheet_repl->write($lc, $cc, "right.6", $formatblue);
+#$cc++;
+#$worksheet_repl->write($lc, $cc, "gwas_catalog.6", $formatblue);
+#$cc++;
+#$worksheet_repl->write($lc, $cc, "genes.6.50kb(dist2index)", $formatblue);
+#$cc++;
+
+
+print NOREP "@cells\n";
+print REP "@cells\n";
+
+
+
+my $possum = 0;
+my $nsum = 0;
+my @p_coll_all;  
+
+my $possum_p3 = 0;
+my $nsum_p3 = 0;
+my @p_coll_p3;  
+
+my $possum_p4 = 0;
+my $nsum_p4 = 0;
+my @p_coll_p4;  
+my $possum_p5 = 0;
+my $nsum_p5 = 0;
+my @p_coll_p5;  
+my $possum_p6 = 0;
+my $nsum_p6 = 0;
+my @p_coll_p6;  
+my $possum_gws = 0;
+my $nsum_gws = 0;
+my @p_coll_gws;  
+
+my $counts = 0 ;
+
+foreach my $snp_name (keys %comb_snps) {
+
+
+    print "$counts\n" if ($counts % 100 == 0);
+    $counts++;
+
+#    if ($snp_name eq "rs4741652") {
+#	print "rs4741652\t$disc_or_hash{$snp_name}\t$rep_o{$snp_name}\n";
+#	print "or_disc: $cells[$or_col]\n";
+#	exit;
+#    }
+
+
+#    print "sleep: $snp_name\n";
+#    sleep(1);
+
+
+ #   if ($snp_name eq "12_123742918" || $snp_name eq "rs6846161"){
+#	print "found wiex: $snp_name\n";
+#	print "out-hash: $out_hash{$snp_name}\n";
+#	sleep(3);
+#    } 
+
+    next unless (exists $out_hash{$snp_name});
+
+    if (exists $maf_hash{$snp_name}) {
+	$rep_o{$snp_name} = 1 / $rep_o{$snp_name} if ($rep_o{$snp_name} != 0);
+	$rep_o_r{$snp_name} = 1 / $rep_o_r{$snp_name} if ($rep_o_r{$snp_name} != 0);
+	$comb_o{$snp_name} = 1 / $comb_o{$snp_name} if ($comb_o{$snp_name} != 0);
+	$comb_o_r{$snp_name} = 1 / $comb_o_r{$snp_name} if ($comb_o_r{$snp_name} != 0);
+    }
+
+    my $sumdir = "+";
+    my $prod_tmp = (1-$disc_or_hash{$snp_name})*(1-$rep_o{$snp_name});
+    $sumdir = "0" if ( $prod_tmp < 0);
+
+
+
+
+
+
+    my $out_size = $out_size_start;
+    $tmp_str = "";
+    $tmp_str .=  $out_hash{$snp_name};
+
+#    if ($snp_name ne "SNP") {
+#	print "out_hash: ".$out_hash{$snp_name}."\n";
+#	print "genes: ".$comb_gene{$snp_name}."\n";
+#	exit;
+ #   }
+
+
+    my $rep_report = 1;
+
+    if ($rep_single && $rep_q{$snp_name} < $r2_min_th) {
+	$dir_hash{$snp_name} = "-";
+	$sumdir = "?";
+	$rep_p{$snp_name} = "(".$rep_p{$snp_name}.")";
+        $rep_o{$snp_name} = "(".$rep_o{$snp_name}.")";
+        $rep_se{$snp_name} = "(".$rep_se{$snp_name}.")";
+
+
+	$comb_p{$snp_name} = "-";
+        $comb_o{$snp_name} = "-";
+        $comb_se{$snp_name} = "-";
+        $comb_q{$snp_name} = "-";
+        $comb_i{$snp_name} = "-";
+
+	$rep_report = 0;  ## report separately
+
+#	$tmp_str .= "\t".$rep_se{$snp_name};
+#	$tmp_str .= "\t".$rep_q{$snp_name};
+#	$tmp_str .= "\t".$rep_i{$snp_name};
+    }
+
+    else {
+
+#	if ($nmhc < 2) {
+	    $possum++ if ($sumdir eq "+");
+	    $nsum++ if ($sumdir eq "+" || $sumdir eq "0");
+	    my $p_loc = $rep_p{$snp_name};
+	    my $p_2_loc = $p_loc;
+	    if ($rep_single == 1) {
+		$p_2_loc = abs(abs(2*$p_loc - 1)-1);
+	    }
+	    push @p_coll_all, $cells[$snp_col]." $p_2_loc";
+	    
+	    if ($disc_p_hash{$snp_name} <= 0.001) {
+		$possum_p3++ if ($sumdir eq "+");
+		$nsum_p3++ if ($sumdir eq "+" || $sumdir eq "0");
+		push @p_coll_p3, $cells[$snp_col]." $p_2_loc";
+	    }
+	    if ($disc_p_hash{$snp_name} <= 0.0001) {
+		$possum_p4++ if ($sumdir eq "+");
+		$nsum_p4++ if ($sumdir eq "+" || $sumdir eq "0");
+		push @p_coll_p4, $cells[$snp_col]." $p_2_loc";
+	    }
+	    if ($disc_p_hash{$snp_name} <= 0.00001) {
+		$possum_p5++ if ($sumdir eq "+");
+		$nsum_p5++ if ($sumdir eq "+" || $sumdir eq "0");
+		push @p_coll_p5, $cells[$snp_col]." $p_2_loc";
+	    }
+	    if ($disc_p_hash{$snp_name} <= 0.000001) {
+		$possum_p6++ if ($sumdir eq "+");
+		$nsum_p6++ if ($sumdir eq "+" || $sumdir eq "0");
+		push @p_coll_p6, $cells[$snp_col]." $p_2_loc";
+	    }
+	    if ($disc_p_hash{$snp_name} <= 0.00000005) {
+		$possum_gws++ if ($sumdir eq "+");
+		$nsum_gws++ if ($sumdir eq "+" || $sumdir eq "0");
+		push @p_coll_gws, $cells[$snp_col]." $p_2_loc";
+	    }
+
+#	}
+    }
+
+
+
+    $tmp_str .=  "\t>".$dir_hash{$snp_name}."<";
+    $tmp_str .=  "\t$sumdir";
+    $tmp_str .= "\t".$rep_p{$snp_name};
+#    $tmp_str .= "\t".$rep_p_r{$snp_name};
+    $tmp_str .= "\t".$rep_o{$snp_name};
+#    $tmp_str .= "\t".$rep_o_r{$snp_name};
+    $tmp_str .= "\t".$rep_se{$snp_name};
+    $tmp_str .= "\t".$rep_q{$snp_name};
+    $tmp_str .= "\t".$rep_i{$snp_name};
+
+
+    $tmp_str .= "\t".$comb_p{$snp_name};
+#    $tmp_str .= "\t".$comb_p_r{$snp_name};
+    $tmp_str .= "\t".$comb_o{$snp_name};
+#    $tmp_str .= "\t".$comb_o_r{$snp_name};
+    $tmp_str .= "\t".$comb_se{$snp_name};
+
+    $tmp_str .= "\t".$comb_q{$snp_name};
+    $tmp_str .= "\t".$comb_i{$snp_name};
+
+
+
+
+
+
+    $lc++;
+    my $comb_p_col = "T".($lc+1);
+#    $tmp_str.= "\t=CHIDIST((NORMINV($comb_p_col/2,0,1)^2/$lam),1)";
+    my $comb_p_col = "U".($lc+1);
+#    $tmp_str.= "\t=CHIDIST((NORMINV($comb_p_col/2,0,1)^2/$lam),1)";
+    my $comb_p_col = "H".($lc+1);
+
+    if ($lam != 1.0) {
+	$tmp_str.= "\t=CHIDIST((NORMINV($comb_p_col/2,0,1)^2/$lam),1)";
+    }
+    else {
+	$tmp_str.= "\t-";
+    }
+
+
+    #### single tailed p-value
+    my $single_tp = $rep_p{$snp_name};
+    if ($sumdir eq "+") {
+	$single_tp = $single_tp / 2 ;
+    }
+    elsif ($sumdir eq "0"){
+	$single_tp = 1 - $single_tp / 2 ;
+    }
+    else {
+	my $single_tp = $rep_p{$snp_name}."(tt)";
+#	print "strange sumdir:$sumdir\n";
+    }
+    $tmp_str .= "\t".$single_tp;
+
+    ######### 95% CI
+#CI_low95 = exp(log(OR) -  SE *1.96)
+    my $rep_ci_lo = 0;
+    my $rep_ci_hi = 0;
+    my $comb_ci_lo = 0;
+    my $comb_ci_hi = 0;
+
+    if ($rep_o{$snp_name} > 0) {
+	$rep_ci_lo = exp(log($rep_o{$snp_name}) - $rep_se{$snp_name} * 1.96);
+	$rep_ci_hi = exp(log($rep_o{$snp_name}) + $rep_se{$snp_name} * 1.96);
+    }
+    if ($comb_o{$snp_name} > 0) {
+	$comb_ci_lo = exp(log($comb_o{$snp_name}) - $comb_se{$snp_name} * 1.96);
+	$comb_ci_hi = exp(log($comb_o{$snp_name}) + $comb_se{$snp_name} * 1.96);
+    }
+#    print "$rep_ci_lo\n";
+    $tmp_str .= "\t".sprintf "%.3f",$rep_ci_lo;
+    $tmp_str .= "\t".sprintf "%.3f",$rep_ci_hi;
+    $tmp_str .= "\t".sprintf "%.3f",$comb_ci_lo;
+    $tmp_str .= "\t".sprintf "%.3f",$comb_ci_hi;
+
+
+    #######PREKNO
+    ###############
+    my $preknotxt = "";
+
+
+
+    if ($prekno_file1) {
+
+
+
+	my $isnp = $snp_name;
+	my $outhash_tmp = $out_hash{$isnp};
+	my @cells_tmp = @{&split_line_ref(\$outhash_tmp)};
+	my $ipos = $cells_tmp[2];
+	my $ichr = $cells_tmp[1];
+	my $found = 0;
+	my $wide = 200000;
+
+	my $mhctxt = "";
+
+	if ($ichr == 6 && $ipos > 25000000 && $ipos < 35000000) {
+	    $mhctxt = "MHC.";
+	}
+
+	$preknotxt = "- "." - "." - "." - "." - ";
+
+
+
+	######### direct
+	if (exists $prekno_snp{$isnp}){
+	    $preknotxt = "same $isnp ".$prekno_snp{$isnp}." 1.0 "." 0 ";
+	    $found = 1;
+	}
+	######### region
+	if ($found == 0) {
+	    foreach my $ps_c (keys %prekno_reg_chr) {
+		if ($prekno_reg_chr{$ps_c} == $ichr) {
+		    if ($prekno_reg_beg{$ps_c} - $wide < $ipos && $prekno_reg_end{$ps_c} + $wide > $ipos){
+
+
+
+			#####################################
+			#### LD info
+			##########################################
+
+			my $ld_info = "" ;
+			my $ld_info_r2 = "";
+			my $haplo_txt_loc = "";
+			my $chr_txt = $ichr;
+
+#			print "$ps_c, and this: $isnp: $ld_info\n";
+#			sleep(5);
+			my $ref = "~/pgc-samples/hapmap_ref/plink_p3/single_chr/hapmap3_r2_b36_fwd.CEU.TSI.FOUNDERS.qc.poly.chr$chr_txt";
+#			$ref = "~/pgc-samples/hapmap_ref/plink_p2b/single_chr/hapmap_CEU_r23a.chr$chr_txt" if ($phase2);
+			
+#			my $ref = "ref_subdir/ref.$ichr";
+
+			my @pos_arr_ps_c = `grep -w $ps_c $ref.bim`;
+			my @pos_arr_isnp = `grep -w $isnp $ref.bim`;
+
+			if (@pos_arr_ps_c[0] eq "" || @pos_arr_isnp[0] eq "") {
+			    $ld_info = "(no-ld-info) - " ;
+			}
+			else {
+			    
+			    my $ld_cmd = "$ploc/plink --filter-founders --out ld_subdir/prekno.$ps_c.$isnp.ld --bfile $ref --ld $ps_c $isnp";
+			    unless (-e "ld_subdir/prekno.$ps_c.$isnp.ld.log") {
+				&mysystem ($ld_cmd);
+			    }
+			    die "$!" unless open LOG, "< ld_subdir/prekno.$ps_c.$isnp.ld.log";    
+			    while (my $line_tmp = <LOG>){
+				my @cells =  @{&split_line_ref(\$line_tmp)};
+				if ($cells[0] eq "R-sq") {
+				    $ld_info_r2 = $cells[2];
+				}
+				if ($cells[1] eq "phase") {
+				    $haplo_txt_loc = $cells[4];
+				}
+			    }
+			    close LOG;
+			    
+			    if ($ld_info_r2 eq "LD-R2") {
+				print "something is wrong\n";
+				exit;
+			    }
+			    
+			    
+			    my @cells = @{&split_line_ref(\@pos_arr_ps_c[0])}; 
+			    my $pos1 = @cells[3];
+			    my @cells = @{&split_line_ref(\@pos_arr_isnp[0])}; 
+			    my $pos2 = @cells[3];
+			    
+			    my $pos_diff = $pos1-$pos2;
+			    
+			    $ld_info = " $ld_info_r2 $pos_diff" ;
+			}
+
+
+			$preknotxt = "region $ps_c ".$prekno_snp{$ps_c}." ".$ld_info;
+			$found = 1;
+			last;
+		    }
+		}
+	    }
+	}
+
+	$tmp_str .= "\t$mhctxt$preknotxt";
+    }
+
+
+
+    if ($prekno_file2) {
+
+	my $isnp = $snp_name;
+	my $outhash_tmp = $out_hash{$isnp};
+	my @cells_tmp = @{&split_line_ref(\$outhash_tmp)};
+	my $ipos = $cells_tmp[2];
+	my $ichr = $cells_tmp[1];
+	my $found = 0;
+	my $wide = 200000;
+
+	my $mhctxt = "";
+
+	if ($ichr == 6 && $ipos > 25000000 && $ipos < 35000000) {
+	    $mhctxt = "MHC.";
+	}
+
+	$preknotxt = "- "." - "." - "." - "." - ";
+
+
+
+	######### direct
+	if (exists $prekno2_snp{$isnp}){
+	    $preknotxt = "same same ".$prekno2_snp{$isnp}." - "." - ";
+	    $found = 1;
+	}
+	######### region
+	if ($found == 0) {
+	    foreach my $ps_c (keys %prekno2_reg_chr) {
+		if ($prekno2_reg_chr{$ps_c} == $ichr) {
+		    if ($prekno2_reg_beg{$ps_c} - $wide < $ipos && $prekno2_reg_end{$ps_c} + $wide > $ipos){
+
+			#####################################
+			#### LD info
+			##########################################
+
+			my $ld_info = "" ;
+			my $ld_info_r2 = "";
+			my $haplo_txt_loc = "";
+			my $chr_txt = $ichr;
+
+#			print "$ps_c, and this: $isnp: $ld_info\n";
+#			sleep(5);
+			my $ref = "~/pgc-samples/hapmap_ref/plink_p3/single_chr/hapmap3_r2_b36_fwd.CEU.TSI.FOUNDERS.qc.poly.chr$chr_txt";
+
+#			$ref = "~/pgc-samples/hapmap_ref/plink_p2b/single_chr/hapmap_CEU_r23a.chr$chr_txt" if ($phase2);
+#			my $ref = "ref_subdir/ref.$ichr";	
+
+			my @pos_arr_ps_c = `grep -w $ps_c $ref.bim`;
+			my @pos_arr_isnp = `grep -w $isnp $ref.bim`;
+
+			if (@pos_arr_ps_c[0] eq "" || @pos_arr_isnp[0] eq "") {
+			    $ld_info = "(no-ld-info) - " ;
+			}
+			else {
+			    
+			    my $ld_cmd = "$ploc/plink --filter-founders --out ld_subdir/prekno.$ps_c.$isnp.ld --bfile $ref --ld $ps_c $isnp";
+			    unless (-e "ld_subdir/prekno.$ps_c.$isnp.ld.log") {
+				&mysystem ($ld_cmd);
+			    }
+			    die "$!" unless open LOG, "< ld_subdir/prekno.$ps_c.$isnp.ld.log";    
+			    while (my $line_tmp = <LOG>){
+				my @cells =  @{&split_line_ref(\$line_tmp)};
+				if ($cells[0] eq "R-sq") {
+				    $ld_info_r2 = $cells[2];
+				}
+				if ($cells[1] eq "phase") {
+				    $haplo_txt_loc = $cells[4];
+				}
+			    }
+			    close LOG;
+			    
+			    if ($ld_info_r2 eq "LD-R2") {
+				print "something is wrong\n";
+				exit;
+			    }
+			    
+			    my @cells = @{&split_line_ref(\@pos_arr_ps_c[0])}; 
+			    my $pos1 = @cells[3];
+			    my @cells = @{&split_line_ref(\@pos_arr_isnp[0])}; 
+			    my $pos2 = @cells[3];
+			    
+			    my $pos_diff = $pos1-$pos2;
+			    
+			    $ld_info = " $ld_info_r2 $pos_diff" ;
+			}
+
+
+			$preknotxt = "region $ps_c ".$prekno2_snp{$ps_c}." ".$ld_info;
+			$found = 1;
+			last;
+		    }
+		}
+	    }
+	}
+
+	$tmp_str .= "\t$mhctxt$preknotxt";
+    }
+
+
+    if (0){
+	if (exists $rep_extra {$snp_name}) {
+	    $tmp_str .= $rep_extra {$snp_name};
+	}
+    }
+    $tmp_str .= " ".$area_left {$snp_name};
+    $tmp_str .= " ".$area_right {$snp_name};
+    $tmp_str .= " ".$area_left2 {$snp_name};
+    $tmp_str .= " ".$area_right2 {$snp_name};
+    $tmp_str .= " ".$area_nhgri {$snp_name};
+    $tmp_str .= " ".$area_ldf6 {$snp_name};
+#    $tmp_str .= " ".$area_rico {$snp_name};
+#    $tmp_str .= " ".$area_gwc {$snp_name};
+
+
+
+#    if (@gene_arr > 1) {
+#	exit;
+ #   }
+
+#    $tmp_str .= " ".$area_rico {$snp_name};
+
+#    if ($snp_name eq "12_123742918" || $snp_name eq "rs6846161"){
+#	print "found wiex: $snp_name\n";
+#	print "$tmp_str\n";
+#	sleep(3);
+ #   } 
+
+
+    @cells = @{&split_line_ref(\$tmp_str)};
+    my $ncells = @cells;
+
+
+
+
+
+
+
+    ######################################################
+    #####   write to excel file
+    ######################################################
+
+    if ($rep_report == 1) {
+
+
+#	print "in: @cells\n";
+	print REP "@cells\n";
+
+
+	if ($counts < 3000) {	
+	    $worksheet_repl->write_row($lc, 0, \@cells,);
+	    
+	    $worksheet_repl->write($lc,8,$disc_p_hash{$snp_name} , $formatred) if ($disc_p_hash{$snp_name} < .05);
+	    $worksheet_repl->write($lc,8,$disc_p_hash{$snp_name} , $format_gwsign) if ($disc_p_hash{$snp_name} < 5e-08);
+	    
+	    
+	    #### rep P
+	    $worksheet_repl->write($lc,$out_size+2,$rep_p{$snp_name} , $formatred) if ($rep_p{$snp_name} < .05);
+#    $worksheet_repl->write($lc,$out_size+3,$rep_p_r{$snp_name} , $formatred) if ($rep_p_r{$snp_name} < .05);
+	    
+	    if ($rep_single) {
+		$worksheet_repl->write($lc,$out_size+5,$rep_q{$snp_name} , $formatred) if ($rep_q{$snp_name} < $r2_min_th);
+	    }
+	    else {
+		$worksheet_repl->write($lc,$out_size+5,$rep_q{$snp_name} , $formatred) if ($rep_q{$snp_name} < .05);
+	    }
+	    
+	    
+	    ####  comb P
+	    $out_size += 5;
+	    $worksheet_repl->write($lc,$out_size+2,$comb_p{$snp_name} , $formatred) if ($comb_p{$snp_name} < .05);
+#    $worksheet_repl->write($lc,$out_size+3,$comb_p_r{$snp_name} , $formatred) if ($comb_p_r{$snp_name} < .05);
+	    $worksheet_repl->write($lc,$out_size+8,$single_tp , $formatred) if ($single_tp < .05);
+	    $worksheet_repl->write($lc,$out_size+5,$comb_q{$snp_name} , $formatred) if ($comb_q{$snp_name} < .05);
+	    
+	    $worksheet_repl->write($lc,$out_size+2,$comb_p{$snp_name} , $format_gwsign) if ($comb_p{$snp_name} < 5e-08);
+#    $worksheet_repl->write($lc,$out_size+3,$comb_p_r{$snp_name} , $format_gwsign) if ($comb_p_r{$snp_name} < 5e-08);
+	    
+
+
+	    ####### ricolinks
+
+
+	    $worksheet_repl->write_url($lc,$ncells,$area_rico_link{$snp_name},"$area_rico_name{$snp_name}.$lc", $format_link1) ;
+	    $ncells++;
+
+
+
+	    ####### genelinks
+
+	    ###################
+	    ##### links to genes
+	    ##################
+	    
+	    my $genestr = $comb_gene{$snp_name};
+	    my @gene_arr = split /,/, $genestr;
+	    
+#	    foreach my $geneloc (@gene_arr) {
+	    foreach my $genenn (0..$ngene_max-1) {
+		my $geneloc = @gene_arr[$genenn];
+		my $genesym = $geneloc;
+		$genesym =~ s/\(.*//;
+		next if ($genesym eq "-");
+		next if ($genesym eq "");
+#		print "$snp_name: $genesym $geneloc\n";
+		my $genelink = 'http://www.broadinstitute.org/mpg/ricopili/index.php?gene=GENE&reference=REFERENCE';
+		$genelink =~ s/GENE/$genesym/;
+		$genelink =~ s/REFERENCE/PGC_SCZ52_may13/;
+		$worksheet_repl->write_url($lc,$ncells,$genelink, $genesym) ;
+#		$tmp_str .= " ".$genelink;
+		$ncells++;
+	    }
+
+
+
+	}
+	else {
+	    print "Error: max rows reached\n";
+	    exit ;
+	}
+
+
+    }
+    else {
+#	print "is out\n";
+	$lc--;
+	print NOREP "@cells\n";
+    }
+
+
+
+
+}
+
+close NOREP;
+close REP;
+#$worksheet_repl->write(7,8,"test", $formatred);
+
+#foreach my $snp_name (keys %area_missing) {
+#    $worksheet_repl->write_row($lc, 0, \@cells,);
+#}
+
+
+
+
+###################################################################
+## calculate sign tests
+################################################################
+
+
+my $ratio = sprintf "%.2f",$possum/$nsum;
+my $ratio_p3 = sprintf "%.2f",$possum_p3/$nsum_p3;
+my $ratio_p4 = sprintf "%.2f",$possum_p4/$nsum_p4;
+my $ratio_p5 = sprintf "%.2f",$possum_p5/$nsum_p5;
+my $ratio_p6 = "NA";
+if ($nsum_p6 > 0){
+    $ratio_p6 = sprintf "%.2f",$possum_p6/$nsum_p6;
+}
+
+my $ratio_gws = "NA";
+if ($nsum_gws > 0){
+    $ratio_gws = sprintf "%.2f",$possum_gws/$nsum_gws;
+}
+
+#my $rc = $rep_count +2 ;
+if ($phi >1.0e-03) {
+    $rc++;
+    push @repsum,"REPLICATION\tall\t$possum\t$nsum\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio\t$nca_glob\t$nco_glob" ;
+    &qqplot ("qq.all.comb.$out_name",@p_coll_all);
+    push @pdf_collection, "qq.all.comb.$out_name"."-qq.pdf";
+}
+if ($phi >1.0e-04) {
+    $rc++;
+    push @repsum,"REPLICATION\t1.0e-03\t$possum_p3\t$nsum_p3\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p3\t$nca_glob\t$nco_glob" ;
+   &qqplot ("qq.p3.comb.$out_name",@p_coll_p3);
+    push @pdf_collection, "qq.p3.comb.$out_name"."-qq.pdf";
+}
+if ($phi >1.0e-05) {
+    $rc++;
+    push @repsum,"REPLICATION\t1.0e-04\t$possum_p4\t$nsum_p4\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p4\t$nca_glob\t$nco_glob" ;
+   &qqplot ("qq.p4.comb.$out_name",@p_coll_p4);
+    push @pdf_collection, "qq.p4.comb.$out_name"."-qq.pdf";
+}
+if ($phi >1.0e-06) {
+    $rc++;
+    push @repsum,"REPLICATION\t1.0e-05\t$possum_p5\t$nsum_p5\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p5\t$nca_glob\t$nco_glob" ;
+   &qqplot ("qq.p5.comb.$out_name",@p_coll_p5);
+    push @pdf_collection, "qq.p5.comb.$out_name"."-qq.pdf";
+}
+if ($phi >5.0e-08) {
+    $rc++;
+    push @repsum,"REPLICATION\t1.0e-06\t$possum_p6\t$nsum_p6\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p6\t$nca_glob\t$nco_glob" ;
+   &qqplot ("qq.p6.comb.$out_name",@p_coll_p6);
+    push @pdf_collection, "qq.p6.comb.$out_name"."-qq.pdf";
+}
+
+
+$rc++;
+push @repsum,"REPLICATION\t5.0e-08\t$possum_gws\t$nsum_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_gws\t$nca_glob\t$nco_glob";
+if (@p_coll_gws > 0 ) {
+    &qqplot ("qq.gws.comb.$out_name",@p_coll_gws);
+    push @pdf_collection, "qq.gws.comb.$out_name"."-qq.pdf";
+}
+
+#if ($nreps > 1) {
+
+## single sum results
+##########################################
+
+    my $worksheet_sisu   = $workbook->add_worksheet("sign_tests");  
+    $worksheet_sisu->set_column(0, 0,  40, );
+    
+    my $lc = 0;
+    
+    my $tmp_str = "Name\tP_TH\tnpos\tnsum\tsign-test\tratio\tNcase\tNcontrol\n";
+    my @cells = @{&split_line_ref(\$tmp_str)};
+    $worksheet_sisu->write_row($lc, 0, \@cells);
+    
+#my $form="BINOMDIST(C2-(B2+1),C2,0.5,TRUE)";
+    
+    
+    foreach my $rep_str (@repsum) {
+	$lc++;
+	@cells = @{&split_line_ref(\$rep_str)};
+#	my $pv_loc = $cells[4] * 1;
+	my $pv_loc = 0;
+	my $nsum_loc = $cells[3];
+	my $npos_loc = $cells[2];
+	my $signout = "sign.$npos_loc.$nsum_loc";
+	
+	if ($nsum_loc > 0) {
+	    unless (-e $signout) {
+		my $R_templ = '
+               binom.test(NSUM-NPOS,NSUM,alternative="less")$p.value
+            ';
+		$R_templ =~ s/NSUM/$nsum_loc/g;
+		$R_templ =~ s/NPOS/$npos_loc/g;
+		
+		&a2file ("$out_name.sign.R",$R_templ);
+		my $r_script = "$r_sys < $out_name.sign.R --vanilla > $signout";
+#		my $r_script = "source /broad/software/scripts/useuse; use R-2.14; R < $out_name.sign.R --vanilla > $signout";
+		print "$r_script\n";
+		&mysystem ($r_script);
+	    }
+	    die "$!" unless open SIGN, "< $signout"; 
+	    print "get p-values out of $signout\n";
+	    while (<SIGN>){
+		my @cells = @{&split_line_ref(\$_)};
+		if ($cells [0] eq "[1]") {
+		    $pv_loc = $cells[1];
+		}
+	    }
+	    if ($pv_loc == 0){
+		print "Error: problem in sign test, \n";
+		exit;
+	    }
+	}
+	else {
+	    $pv_loc = 1.0;
+	}
+
+
+
+#	print "$pv_loc\n";
+#	print "@cells\n";
+
+	$worksheet_sisu->write_row($lc, 0, \@cells);
+
+#	my $pv_loc = 0.5;
+
+	if ($pv_loc < .05) {
+	    $worksheet_sisu->write($lc,4,$pv_loc , $formatred) 
+	}
+	if ($pv_loc > .95) {
+	    $worksheet_sisu->write($lc,4,$pv_loc , $formatorange) 
+	}
+#	$worksheet_sisu->write($lc,4,$cells[4] , $formatorange) if ($cells[4] > .95);
+#    $worksheet_sisu->write($lc,3,$cells[3] , $formatred) if ($cells[3] < .05);
+    }
+#exit;
+    
+
+## regions
+##########################################
+
+    my $worksheet_sisu   = $workbook->add_worksheet("regions");  
+
+    
+    my $lc = 0;
+
+{
+my $line = "discovery";
+my @cells = @{&split_line_ref(\$line)};
+$worksheet_sisu->write_row($lc, 0, \@cells);
+$lc++;
+}
+
+die $! unless open IN, "< $areator.regions";    
+while (my $line = <IN>){
+my @cells = @{&split_line_ref(\$line)};
+$worksheet_sisu->write_row($lc, 0, \@cells);
+$lc++;
+}
+close IN;
+
+{
+my $line = "combined";
+my @cells = @{&split_line_ref(\$line)};
+$worksheet_sisu->write_row($lc, 0, \@cells);
+$lc++;
+}
+
+die $! unless open IN, "< $out_name.comb.meta.gene.regions";    
+while (my $line = <IN>){
+my @cells = @{&split_line_ref(\$line)};
+$worksheet_sisu->write_row($lc, 0, \@cells);
+$lc++;
+}
+close IN;
+
+
+
+
+
+$workbook->close();
+print "$out_name.xls\n";
+#&mysystem("send_dropbox $out_name.xls");
+&mysystem("send_dropbox $out_name.xls");
+print "check common AT/CG SNPs!!!\n";
+print "check sign_test_expectation_v2.xls!!!\n";
+
+
+
+
+unless (-e "$out_name.qq.pdf") {
+    &mysystem ("pdfjoin --rotateoversize false --outfile $out_name.qq.pdf @pdf_collection");
+}
+
+unless (-e "$out_name.info.pdf") {
+    &mysystem ("pdfjoin --rotateoversize false --outfile $out_name.info.pdf @info_pdf_collection");
+}
+
+
+&mysystem("sort -k5,5g $out_name.missing.txt > $out_name.missing.txt.sorted");
+&mysystem("txt2xls --txt $out_name.missing.txt.sorted --xls  $out_name.missing.txt.sorted.xls --pcol 4 --cogr 5,13,14,18");
+
+print "missing: $out_name.missing.txt.sorted.xls\n";
+
+
+
+
+
+print "missing: $out_name.missing.txt.sorted.xls\n";
+
+exit;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#####################################
+#####################################
+#####################################
+### BIG EXIT
+#####################################
+#####################################
+#####################################
+#####################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#####################################
+### forest-plots
+#####################################
+
+foreach my $snp_name (keys %comb_snps) {
+   &mysystem ("forest_plot2  --short --out $snp_name  --snp $snp_name --nhead 3 @forest_files");
+#   exit;
+}
+
+
+
+exit;
+
+
+
+my %info_hash= ();## fake
+my $ninfo = keys %info_hash;
+
+
+#foreach my $snp (keys %neighbour) {
+#    print "$neighbour{$snp}\t$snp\n";
+#}
+#exit;
+#print "n_info".$ninfo."\n";
+
+
+
+
+die "$!" unless open OUT, "> $out_name"; 
+my $o_head;
+my $se_head;
+print OUT $info_hash{"SNP"};
+foreach my $repout (@dfile_arr) {
+    my $header = $repout;
+    $header =~ s/repl_//g;
+    $header =~ s/.repout$//g;
+    print OUT "\t"."p-$header";
+    $o_head .= "\t"."OR-$header";
+    $se_head .= "\t"."SE-$header";
+}
+
+#print "$o_head\n";
+#exit;
+print OUT "$o_head$se_head\tdirex\n";
+
+delete $info_hash{"SNP"};
+
+my @dir_sum;
+
+
+foreach my $snp_name (keys %info_hash) {
+
+    print OUT $info_hash{$snp_name};
+    my $dir_txt = "";
+    my $o_txt;
+    my $se_txt;
+    foreach my $repout (@dfile_arr) {
+	if (exists $dir_hash{"$snp_name\t$repout"} ){
+	    print OUT "\t".$p_hash{"$snp_name\t$repout"};
+	    $o_txt .= "\t".$or_hash{"$snp_name\t$repout"};
+	    $se_txt .= "\t".$se_hash{"$snp_name\t$repout"};
+	    if ($dir_hash{"$snp_name\t$repout"} > 0){
+		$dir_txt .= "+" ;
+		$dir_sum[1]++;
+	    }
+	    else {
+		$dir_txt .= "-";
+		$dir_sum[2]++;
+	    }
+	}
+	else {
+	    print OUT "\tNA";
+	    $o_txt .= "\tNA";
+	    $se_txt .= "\tNA";
+	    $dir_txt .= "0";
+	    $dir_sum[0]++;
+	}
+    }
+    print OUT "$o_txt$se_txt\t$dir_txt\n";
+}
+
+close OUT;
+
+
+#exit;
+
+my $R_templ = '
+
+
+
+read.delim("INNAME",header=T)->rep
+
+
+sumrow2<-function(x){
+    sumf <- 0;cnter = 0;
+   for(i in 13:(12+NREPS)){
+       if(!is.na(x[i])){
+          sumf <- sumf +  qnorm(as.numeric(x[i])); 
+          cnter <- cnter + 1;
+
+       }
+       else{}
+     };  
+   pnorm(sumf/sqrt(cnter));
+}
+
+
+
+
+
+for (j in 1:dim(rep)[1]) {sumrow2(rep[j,])-> rep[j,14+(3*NREPS)]}
+
+
+####################
+### weighted replication, based on SE
+####################
+
+if (0) {
+for (j in 1:dim(rep)[1]) {
+    weight<-0;
+    cnter = 0;
+    sumz <-0
+    sumo <-0
+
+#print (c(rep[j,1:3]))
+     for(i in 13:(12+NREPS)){
+      if(!is.na(rep[j,i])){
+
+
+         p = as.numeric(rep[j,i]);
+         se = as.numeric(rep[j,i+2*NREPS]);
+         or = as.numeric(rep[j,i+NREPS]);
+#       print (c(p,se))
+
+         z = qnorm(1-p);
+         w = 1/(se^2);
+         sumz <- sumz + w * z;
+         sumo <- sumo + w * or;
+         cnter <- cnter + 1;
+         weight <- weight + w;
+
+      }
+     };  
+
+     sumz <- (sumz*cnter)/weight
+     sumo <- (sumo)/weight
+     rep[j,15+(3*NREPS)] = 1 - pnorm (sumz/sqrt(cnter))
+     rep[j,16+(3*NREPS)] = sumo
+
+
+}
+}
+
+
+dirp = matrix (nrow=6,ncol=5)
+
+dirp[1,1]=0
+dirp[2,1]=0
+dirp[1,2]=0
+dirp[2,2]=0
+dirp[4,1]=0
+dirp[5,1]=0
+dirp[4,2]=0
+dirp[5,2]=0
+
+dirp[1,4]=0
+dirp[2,4]=0
+dirp[4,4]=0
+dirp[5,4]=0
+
+
+####################
+### weighted replication, based on or and se
+####################
+
+
+for (j in 1:dim(rep)[1]) {
+    sumhi <- 0; sumlo <-0;weight<-0;cnter = 0;
+
+        mhc =0
+        if (rep[j,2] == 6 & rep[j,3] > 25000000 & rep[j,3] < 35000000) {
+             mhc =1 
+        }
+
+#print (c(rep[j,1:3]))
+     for(i in 13:(12+NREPS)){
+         if(!is.na(rep[j,i]) & rep[j,i] < 1.0 & rep[j,i+NREPS] > 0){
+
+        p = as.numeric(rep[j,i]);
+
+          ###### directin counter for MHC and non-MHC
+         if (mhc ==1) {
+             if (p < .5) {dirp[1,1] = dirp[1,1] + 1}
+             dirp[1,2] = dirp[1,2] + 1;
+             dirp[1,4] = dirp[1,4] - 2 * log(p);
+
+         } else {
+             if (p < .5) {dirp[2,1] = dirp[2,1] + 1}
+             dirp[2,2] = dirp[2,2] + 1;
+             dirp[2,4] = dirp[2,4] - 2 * log(p);
+         }
+
+
+         se = as.numeric(rep[j,i+2*NREPS]);
+         or = as.numeric(rep[j,i+NREPS]);
+        es = log (or)
+#print (c(se,exp(rep[j,i+2*NREPS]) ))
+           sumhi = sumhi + es / (se^2)
+           sumlo = sumlo + 1 / (se^2)
+
+       }
+
+     };  
+     ea = sumhi / sumlo
+     sa = sqrt(1/ sumlo)
+
+     quot = ea / sa 
+
+#print (c(rep[j,1:3],quot,ea,sa,sumhi,sumlo))
+
+     psum = 1 - pnorm(abs(as.numeric(quot)));
+
+     dir =1
+
+    or_dis = as.numeric(rep[j,7])
+    if (log(or_dis) * ea < 0) {
+       dir =-1
+       psum = 1-psum;
+    }
+
+         if (mhc ==1) {
+             if (psum < .5) {dirp[4,1] = dirp[4,1] + 1}
+             dirp[4,2] = dirp[4,2] + 1;
+             dirp[4,4] = dirp[4,4] -2 * log(psum);
+         } else {
+             if (psum < .5) {dirp[5,1] = dirp[5,1] + 1}
+             dirp[5,2] = dirp[5,2] + 1;
+             dirp[5,4] = dirp[5,4] -2 * log(psum);
+         }
+
+  
+     rep[j,15+(3*NREPS)] = psum;
+     rep[j,16+(3*NREPS)] = exp(ea);
+     rep[j,17+(3*NREPS)] = sa;
+
+#print (psum)
+
+
+}
+
+
+
+
+
+########################
+### unweighted combined
+########################
+if (1) {
+for (j in 1:dim(rep)[1]) {
+      p1 = as.numeric(rep[j,6]);
+      z1 = qnorm(p1/2);
+      p2 = as.numeric(rep[j,15+(3*NREPS)]);
+      z2 = qnorm(p2);
+      #print (c(z1,z2))
+      z = z1 + z2;
+      rep[j,18+(3*NREPS)] = 2 * pnorm(z/sqrt(2));
+
+}
+}
+
+
+
+
+
+####################
+### weighted combined, based on or and se
+####################
+
+
+for (j in 1:dim(rep)[1]) {
+#    sumhi <- 0; sumlo <-0;weight<-0;cnter = 0;
+
+
+         p = as.numeric(rep[j,6]);
+         se = as.numeric(rep[j,8]);
+         or = as.numeric(rep[j,7]);
+
+        es = log (or)
+#print (c(se,exp(rep[j,i+2*NREPS]) ))
+        sumhi = es / (se^2)
+        sumlo = 1 / (se^2)
+
+
+#print (c(rep[j,1:3],p,se,or))
+     for(i in 13:(12+NREPS)){
+         if(!is.na(rep[j,i]) & rep[j,i] < 1.0 & rep[j,i+NREPS] > 0){
+
+        p = as.numeric(rep[j,i]);
+         se = as.numeric(rep[j,i+2*NREPS]);
+         or = as.numeric(rep[j,i+NREPS]);
+        es = log (or)
+#print (c(p,se,or))
+#print (c(se,exp(rep[j,i+2*NREPS]) ))
+           sumhi = sumhi + es / (se^2)
+           sumlo = sumlo + 1 / (se^2)
+
+       }
+
+     };  
+     ea = sumhi / sumlo
+     sa = sqrt(1/ sumlo)
+
+     quot = ea / sa 
+
+#print (c(rep[j,1:3],quot,ea,sa,sumhi,sumlo))
+
+     psum = 1 - pnorm(abs(as.numeric(quot)));
+
+     psum = psum * 2;
+
+#     dir =1
+
+#    or_dis = as.numeric(rep[j,7])
+#    if (log(or_dis) * ea < 0) {
+#       dir =-1
+#       psum = 1-psum;
+#    }
+
+  
+     rep[j,19+(3*NREPS)] = psum;
+     rep[j,20+(3*NREPS)] = exp(ea);
+     rep[j,21+(3*NREPS)] = sa;
+
+#print (psum)
+
+
+}
+
+
+
+
+############################
+
+
+colnames(rep)[14+(3*NREPS)] <- "p-rep"
+colnames(rep)[15+(3*NREPS)] <- "wp-rep"
+colnames(rep)[16+(3*NREPS)] <- "wor-rep"
+colnames(rep)[17+(3*NREPS)] <- "wse-rep"
+colnames(rep)[18+(3*NREPS)] <- "p-all"
+colnames(rep)[19+(3*NREPS)] <- "wp-all"
+colnames(rep)[20+(3*NREPS)] <- "wor-all"
+colnames(rep)[21+(3*NREPS)] <- "wse-all"
+
+
+
+write.table(file="INNAME.remeta", rep, quote=F, sep = "\t",row.names=F)
+
+dirp [3,1] = dirp[1,1] + dirp[2,1]
+dirp [3,2] = dirp[1,2] + dirp[2,2]
+dirp [3,4] = dirp[1,4] + dirp[2,4]
+
+dirp [6,1] = dirp[4,1] + dirp[5,1]
+dirp [6,2] = dirp[4,2] + dirp[5,2]
+dirp [6,4] = dirp[4,4] + dirp[5,4]
+
+colnames(dirp)<-c("test\tnpos","N","P","CHISQ","PFISH")
+#dirp[1,4] = "MHC"
+rownames(dirp)<-c("MHC-single","NONMHCs-single","ALL-single","MHC-rep","NONMHCs-rep","ALL-rep")
+for (x in 1:6) {
+dirp[x,3] = pbinom(dirp[x,1],dirp[x,2],0.5,lower.tail=F)
+dirp[x,5] = 1-pchisq(dirp[x,4],dirp[x,2]*2)CNTN5
+}
+
+write.table(file="INNAME.dirpsum", dirp, quote=F, sep = "\t")
+
+';
+
+    $R_templ =~ s/INNAME/$out_name/g;
+    $R_templ =~ s/NREPS/$nreps/g;
+
+&a2file ("$out_name.R",$R_templ);
+&mysystem ("$r_sys < $out_name.R --vanilla ");
+#&mysystem ("source /broad/software/scripts/useuse; use R-2.14; R < $out_name.R --vanilla ");
+#&mysystem ("R < $out_name.R --vanilla > /dev/null");
+
+
+&mysystem ("head -1 $out_name.remeta > tmp"); 
+my $lac = $nreps*3 + 19;
+&mysystem ("tail -n +2 $out_name.remeta | sort -k$lac,$lac"."g >> tmp"); 
+&mysystem ("mv tmp $out_name.remeta"); 
+
+#exit;
+
+
+#################################################
+## excel too
+##########################################
+
+
+
+  
+my $workbook = Spreadsheet::WriteExcel->new("$out_name.xls");   # Step 1
+
+die "Problems creating new Excel file: $!" unless defined $workbook;
+# Create a format for the column headings
+my $fheader = $workbook->add_format();
+$fheader->set_bold();
+#my $format_scien = $workbook->add_format();
+#$format_scien->set_num_format('0.000');
+#my $format_scien2 = $workbook->add_format();
+#$format_scien2->set_num_format('0.0000');
+
+
+#my $format_scien3 = $workbook->add_format();
+#$format_scien3->set_num_format('0.000000000');
+
+my $worksheet   = $workbook->add_worksheet("replication");  
+my $expl   = $workbook->add_worksheet("columns");  
+my $sum   = $workbook->add_worksheet("summary");  
+
+#$worksheet->set_column(12, 12+(2*$nreps),  10, $format_scien2);
+#$worksheet->set_column(13+(2*$nreps), 13+(2*2*$nreps),  16, $format_scien3);
+
+
+#my $format_red = $workbook->add_format();
+#my $format_mag = $workbook->add_format();
+#$format_red -> set_color ('red');
+#$format_mag -> set_color ('magenta');
+
+my $format_scien1 = $workbook->add_format();
+#my $format_scien3 = $workbook->add_format();
+#my $format_scien4 = $workbook->add_format();
+#my $format_scien5 = $workbook->add_format();
+#my $format_scien7 = $workbook->add_format();
+my $formats = $workbook->add_format(align => 'center');
+my $formatb = $workbook->add_format();
+$formatb->set_bold();
+my $formatgrey = $workbook->add_format(bg_color => 41);
+my $formatnei = $workbook->add_format(bg_color => 45);
+my $formatnavy = $workbook->add_format(
+               bg_color => 47, 
+#               fg_color=> 'white'
+            );
+
+ $worksheet->freeze_panes(1, 6);
+#$formatnavy = $workbook->set_bg_color ('navy');
+#$formatnavy = $workbook->set_fg_color ('white');
+#, fg_color=> 'white');
+
+#my $formatred = $workbook->add_format(bottom_color => 'green');
+
+$format_scien1->set_num_format('0.000');
+#$format_scien3->set_num_format('0.00E+00');
+
+
+my $format_nos = $workbook->add_format(
+    num_format => '0.000',
+    );
+
+my $format_mhc = $workbook->add_format(
+#    num_format => '0.000',
+    bg_color => 41,
+    );
+
+my $format_nomsign = $workbook->add_format(
+    color => 'red',
+    num_format => '0.00E+00',
+    );
+
+my $format_gwsign = $workbook->add_format(
+    color => 'red',
+    num_format => '0.00E+00',
+    bold => 1,
+    underline => 1,
+    );
+
+my $format_opsign = $workbook->add_format(
+    color => 'green',
+    num_format => '0.000',
+    );
+
+
+
+
+#$format_scien4->set_num_format('0.0000');
+#$format_scien4->set_num_format('[red]0.00E+00');
+#$format_scien5->set_num_format('[green]0.00E+00');
+#$format_scien7->set_num_format('0.0000');
+
+my $format_scien6 = $workbook->add_format();
+$format_scien6->set_border(1);
+$format_scien6->set_border_color('red');
+$format_scien6->set_align('center');
+
+#$format_scien7->set_border(1);
+#$format_scien7->set_border_color('green');
+
+$worksheet->set_column(0, 0,  12);
+$worksheet->set_column(1, 1,  4);
+$worksheet->set_column(2, 2,  10);
+
+#$worksheet->set_column(5, 5,  8, $format_scien3);
+$worksheet->set_column(5, 5,  8);
+
+$worksheet->set_column(11, 11,  6);
+$worksheet->set_column(12, 11 + $nreps,  8);
+#$worksheet->set_column(12, 11 + $nreps,  10, $format_scien1);
+$worksheet->set_column(12 + $nreps, 12+ 3*$nreps,  6, $format_scien1);
+
+
+$worksheet->set_column(13 + (3*$nreps), 14 + (3*$nreps), 8);
+$worksheet->set_column(15 + (3*$nreps), 15 + (3*$nreps), 6, $format_scien1);
+$worksheet->set_column(19 + (3*$nreps), 19 + (3*$nreps), 6, $format_scien1);
+#$worksheet->set_column(13 + (3*$nreps), 14 + (3*$nreps), 10, $format_scien1);
+
+$worksheet->set_column(16 + (3*$nreps), 17 + (3*$nreps), 8);
+#$worksheet->set_column(16 + (3*$nreps), 17 + (3*$nreps), 10, $format_scien1);
+
+
+$worksheet->set_column(3, 3,  16, $formats);
+$worksheet->set_column(9, 9,  4, $formats);
+$worksheet->set_column(12 + (3*$nreps), 12 + (3*$nreps),  12, $formats);
+
+$worksheet->set_row(0, undef, $formatnavy);
+
+
+###### p-cols
+my @pcols ;
+push @pcols, 5;
+foreach (1..$nreps){
+    push @pcols, 11+$_;
+}
+push @pcols, 13+(3*$nreps);
+push @pcols, 14+(3*$nreps);
+push @pcols, 17+(3*$nreps);
+push @pcols, 18+(3*$nreps);
+
+
+
+
+### grey cols (for mhc)
+my @gcols ;
+foreach (1..4){
+    push @gcols, $_;
+}
+#foreach (6..8){
+#    push @gcols, $_;
+#}
+#foreach (10..11){
+#    push @gcols, $_;
+#}
+#push @gcols, 15+(3*$nreps);
+#push @gcols, 18+(3*$nreps);
+
+
+
+my $lc=0;
+my $nnom=0;
+my $npos=0;
+my $nneg=0;
+die "$!" unless open REPOUT, "< $out_name.remeta"; 
+while (<REPOUT>){
+    chomp;
+    my @cells = @{&split_line_ref(\$_)};
+
+
+    my %pcols_sw = ();
+
+    ##header
+    if ($lc == 0) {
+	my $cc=0;
+	foreach (@cells) {
+	    $worksheet->write($lc, $cc, $_, ) ;
+	    $cc++;
+	}
+	$lc++;
+	next;
+    }
+
+
+
+
+    foreach my $pc (@pcols) {
+
+	$pcols_sw{$pc} = 1;
+	if ($cells[$pc] eq "NA") {
+	    $worksheet->write($lc, $pc, "-", $format_nos ) ;
+	}
+	elsif ($cells[$pc] <= 5e-08) {
+	    $worksheet->write($lc, $pc, $cells[$pc], $format_gwsign ) ;
+	}
+	elsif ($cells[$pc] <= .05) {
+	    $worksheet->write($lc, $pc, $cells[$pc], $format_nomsign );
+	}
+	elsif ($cells[$pc] > .95) {
+	    $worksheet->write($lc, $pc, $cells[$pc], $format_opsign );
+	}
+	else {
+	    $worksheet->write($lc, $pc, $cells[$pc], $format_nos );
+	}
+    }
+
+    if ( $cells[$#cells-1] <= 5e-08 ){
+	$worksheet->write($lc, 0, $cells[0], $format_gwsign ) ;
+	$pcols_sw{0} = 1;
+    }
+
+    if ($cells[1] == 6 && $cells[2] > 25000000 && $cells[2] < 35000000) {
+	foreach my $gc (@gcols) {
+	    $pcols_sw{$gc} = 1;
+	    $worksheet->write($lc, $gc, $cells[$gc], $format_mhc );
+	}
+    }
+    else {
+#	if (exists $neighbour {$cells[0]}) {
+	    $pcols_sw{1} = 1;
+	    $pcols_sw{2} = 1;
+	    $pcols_sw{3} = 1;
+	    $pcols_sw{4} = 1;
+	    $worksheet->write($lc, 1, $cells[1], $formatnei );
+	    $worksheet->write($lc, 2, $cells[2], $formatnei );
+	    $worksheet->write($lc, 3, $cells[3], $formatnei );
+	    $worksheet->write($lc, 4, $cells[4], $formatnei );
+#	}
+    }
+
+#    $worksheet->write_row($lc, 0, \@cells);
+    my $cc =0;
+    foreach (@cells) {
+	if ($_ eq "NA") {
+	    $worksheet->write($lc, $cc, "-") unless (exists $pcols_sw{$cc});
+	}
+	else {
+	    $worksheet->write($lc, $cc, $_, ) unless (exists $pcols_sw{$cc});
+	}
+	$cc++;
+    }
+    $cc++;
+
+
+	
+    if ($cells[$#cells-4] < 0.05){
+	$nnom++;
+    }
+    if ($cells[$#cells-4] <= 0.5){
+	$npos++;
+    }
+    if ($cells[$#cells-4] > 0.5){
+	$nneg++;
+    }
+	
+    $lc++;
+}
+#if (0){
+
+$sum->set_column(0, 0,  20);
+$sum->set_column(3, 3,  14, );
+$sum->set_column(5, 5,  14, );
+#$sum->set_column(2, 2,  40);
+
+
+
+die "$!" unless open DIRP, "< $out_name.dirpsum"; 
+$lc=0;
+while (<DIRP>){
+
+
+    my %pcols_sw = ();
+
+    chomp;
+    my @cells = @{&split_line_ref(\$_)};
+
+    if ($cells[3] < 0.05){
+	$sum->write($lc, 3, $cells[3], $format_nomsign);
+	$pcols_sw{3}=1;
+    }
+    if ($cells[5] < 0.05){
+	$sum->write($lc, 5, $cells[5], $format_nomsign);
+	$pcols_sw{5}=1;
+    }
+
+    my $pc = 0;
+    foreach  (@cells) {
+	$sum->write($lc, $pc, $_) unless (exists $pcols_sw{$pc});
+	$pc ++;
+    }
+
+    if (0){
+	
+	$sum->write($lc+7, 0, "direction summary, meta-p", $fheader); 
+	
+	$sum->write($lc+8, 0, $nnom,); 
+	if ($nnom < 0.05){
+	    $sum->write($lc+8, 0, $nnom, $format_nomsign); 
+	}
+	
+	$sum->write($lc+8, 1, "nominal singificant meta-values",); 
+	$sum->write($lc+9, 0, $npos,); 
+	$sum->write($lc+9, 1, "right direction meta-values",); 
+	$sum->write($lc+10, 0, $nneg,); 
+	$sum->write($lc+10, 1, "wrong direction",); 
+	
+	$sum->write($lc++, 0, "direction summary, all samples", $fheader); 
+	$sum->write($lc, 0, $dir_sum[1], ); 
+	$sum->write($lc++, 1, "same direction",); 
+	$sum->write($lc, 0, $dir_sum[2], ); 
+	$sum->write($lc++, 1, "opposite direction",); 
+	$sum->write($lc, 0, $dir_sum[0],); 
+	$sum->write($lc++, 1, "missing values",); 
+    }
+    $lc++;
+}
+close DIRP;
+
+
+$lc =0;
+my @columns ;
+push @columns, "best SNP in LD region (r2 > .2)" ;
+push @columns, "Chr-Name" ;
+push @columns, "Postition in Mb" ;
+push @columns, "Gene" ;
+push @columns, "additional Genes in 300Kb range" ;
+push @columns, "discovery p-value" ;
+push @columns, "discovery OR" ;
+push @columns, "discovery SE (out of logistic regression)" ;
+push @columns, "discovery Freq" ;
+push @columns, "genotype (OR and freq refers to first allele" ;
+push @columns, "Imputation Quality" ;
+push @columns, "N of neighbours in LD region" ;
+foreach my $repout (@dfile_arr) {
+    push @columns, "p - $repout, single tailed" ;
+}
+foreach my $repout (@dfile_arr) {
+    push @columns, "OR - $repout" ;
+}
+foreach my $repout (@dfile_arr) {
+    push @columns, "SE - $repout" ;
+}
+push @columns, "direction summary" ;
+push @columns, "single-tailed unweighted meta P (replication only)" ;
+push @columns, "single-tailed weighted (1/SE) meta P (replication only)" ;
+push @columns, "weighted meta OR (replication only)" ;
+push @columns, "weighted meta SE (replication only)" ;
+
+
+push @columns, "two-tailed weighted/unweighted meta P (weighted meta P + discovery P with equal weight both)" ;
+push @columns, "two-tailed weighted (1/SE) meta P (discovery P and all single replication values in weighted method)" ;
+push @columns, "weighted meta OR (including discovery)" ;
+push @columns, "weighted meta SE (including discovery)" ;
+#push @columns, "two-tailed weighted meta P (discovery P and all single replication values with different weighting (1/se) method)" ;
+#push @columns, "weighted meta OR (including discovery)" ;
+
+
+my @alpha=qw /A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC AD AE AF AG AH AI AJ AK AL AM AN AO AP AQ AR AS AT AU AV AW AX AY AZ/;
+$expl->set_column(1, 1,  120);
+$expl->set_column(2, 2,  40);
+
+$lc =0;
+foreach my $pl (@columns){
+    $expl->write($lc, 0, $alpha[$lc],); 
+    $expl->write($lc, 1, $pl,); 
+    $lc++;
+}
+$lc = 0;
+
+
+   $expl->write($lc++, 2,"FORMATS", );
+   $expl->write($lc++, 2,"mhc", $formatgrey);
+   $expl->write($lc++, 2,"neighbours outside mhc", $formatnei);
+   $expl->write($lc++, 2,"gw-significant region in SNP name", $format_gwsign);
+   $expl->write($lc++, 2,"nominal sign. p-value", $format_nomsign);
+   $expl->write($lc++, 2,"gw sign. p-value", $format_gwsign);
+   $expl->write($lc++, 2,"p-value > .95", $format_opsign);
+
+
+
+$workbook->close();
+
+
+

@@ -1,0 +1,332 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+
+use Getopt::Long;
+GetOptions( 
+	    "help"=> \my $help,
+	    "cobg"=> \my $cobg,
+    );
+
+
+
+if ($help){
+    print "usage: $progname 
+
+version: $version
+
+      options:
+
+        --cobg          special format for cobg
+
+        --help          print this message then quit
+
+ cleans a imputation dir for files not used any more.
+
+ created by Stephan Ripke 2014 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+
+
+use Cwd;
+use File::Path;
+use File::Copy;
+
+#####################################
+# print array to file with newline
+####################################
+
+sub a2filenew {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+print "reading directory...\n";
+
+my $target_dir = $ARGV[0];
+
+die unless (@ARGV == 1);
+die unless (-e $target_dir);
+
+print "cleaning $target_dir\n";
+
+chdir ($target_dir);
+
+my $deldir = "deldir";
+my $safedir = "safedir";
+
+unless (-e $deldir){
+    print "deldir is not existing, create one for you\n";
+    my @created = mkpath(   ## $created ?
+			    $deldir,
+			    {verbose => 0, mode => 0750},
+	);
+}
+unless (-e $safedir){
+    print "safedir is not existing, create one for you\n";
+    my @created = mkpath(   ## $created ?
+			    $safedir,
+			    {verbose => 0, mode => 0750},
+	);
+}
+
+
+if (-e "cleaned.tar.gz") {
+
+    print "cleaned.tar.gz already existing, trying to clean up and set as cleaned\n";
+
+
+    &mysystem ("rm -r $safedir") if (-e $safedir);
+    &mysystem ("rm -r $deldir") if (-e $deldir);
+
+
+    system ("touch $target_dir/cleaned");
+    exit;
+
+}
+
+
+
+my @files = ();
+opendir(DIR, ".") || die "can't opendir .: $!";
+@files = readdir(DIR);
+closedir DIR;
+
+my @tar_files;
+my @ex_files;
+
+
+#if (-e "$target_dir/clean_block") {
+#    print "Error: incomplete cleaning in $target_dir, please revisit\n";
+#    exit;
+#}
+
+#system ("touch clean_block");
+
+
+my %exclude;
+$exclude {"empty_files"} = 1;
+$exclude {"removed_nonempty_files"} = 1;
+$exclude {"cleaned.tar.gz"} = 1;
+$exclude {"errandout"} = 1;
+$exclude {"clean_block"} = 1;
+$exclude {"to_delete_list"} = 1;
+$exclude {"to_safe_list"} = 1;
+
+$exclude {"to_delete.tar.gz"} = 1;
+$exclude {$safedir} = 1;
+$exclude {$deldir} = 1;
+
+
+
+
+
+print "going through files...\n";
+
+die $! unless open EM, ">> empty_files";
+die $! unless open EX, ">> removed_nonempty_files";
+
+foreach my $fi (@files) {
+    if ($fi eq '.' || $fi eq '..') {
+#	print "dir-file: $fi\n";
+	next;
+    }
+
+    next if (exists $exclude{$fi});
+
+
+    my $size = -s $fi;
+
+
+    if ($cobg) {
+	if ($size == 0) {
+	    unless ($fi =~ /.fini$/) {
+		print EM "$fi\n";
+	    }
+	    push @ex_files, $fi;
+	    next;
+	}
+	
+	unless ($fi =~ /chr[0-9]/) {
+	    if ($fi =~ /.bed$/ || $fi =~ /.bim$/ || $fi =~ /.fam$/) {
+		print "excluding pruned bed/bim/fam\n";
+	    }
+	    else {
+		push @tar_files, $fi;
+	    }
+	    next;
+	}
+	if ($fi =~ /log$/) {
+	    push @tar_files, $fi;
+	}
+	else {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+    }
+
+
+    else {
+
+	if ($size == 0) {
+	    unless ($fi =~ /.fini$/) {
+		unless ($fi =~ /.hour$/) {
+		    print EM "$fi\n";
+		}
+	    }
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /spli[0-9]*.gz$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /.bed$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+	elsif ($fi =~ /.fam$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+	elsif ($fi =~ /.nosex$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /.dosage.gz$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /.done$/) {
+#	print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /.sample$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /.map$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /.pre$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /.combined$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	### right now remove the best guess haplotypes
+	elsif ($fi =~ /.allele_probs$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /spli[0-9]_haps$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+
+
+
+	else {
+	    unless (exists $exclude{$fi}) {
+		push @tar_files, $fi;
+	    }
+	}
+    }
+}
+
+close EM;
+close EX;
+
+
+
+
+
+#exit;
+print "moving files into $deldir: empty files and target files (spli[0-9], bed, fam, nosex...\n";
+
+print "N = ".@ex_files."\n";
+
+foreach (@ex_files) {
+    move ($_,"$deldir/$_");
+}
+
+
+print "moving files into $safedir: the ones to keep...\n";
+print "N = ".@tar_files."\n";
+
+foreach (@tar_files) {
+#    print "$safedir/$_\n";
+    move ($_,"$safedir/$_");
+}
+#exit;
+
+
+
+print "tarball the rest...\n";
+my $stro = system ("tar --ignore-failed-read -czf cleaned.tmp.tar.gz $safedir");
+
+if ($stro !=0 ) {
+    print "something went wrong with creating the to_keep tar-ball\n";
+    exit;
+}
+
+
+&mysystem ("mv cleaned.tmp.tar.gz cleaned.tar.gz");
+
+
+print "deleting safedir...\n";
+&mysystem ("rm -r $safedir");
+print "deleting deldir...\n";
+&mysystem ("rm -r $deldir");
+
+system ("touch $target_dir/cleaned");
+print "success...\n";
+
+exit;
+
+
+
+
+

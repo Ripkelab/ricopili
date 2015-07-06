@@ -1,0 +1,25 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+
+my $now = localtime time;
+
+my @cells = split /\s+/, $now;
+my $date = "$cells[1]"."_"."$cells[4]";
+#print "$now\t$date\n";
+#exit;
+
+
+my $sc = system ('du -h --summarize *'." | sort -k1,1h > du_out_$date");
+print "systemcode: $sc\n";
+if ($sc == 0){
+    system ("touch du.fini");
+    print "success\n";
+}
+
+
+
+
+
