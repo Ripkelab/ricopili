@@ -1,0 +1,75 @@
+#!/bin/bash
+
+######################
+#
+# impprob_to_2dos 
+# 
+# Convert impute2's 3 probability output format (i.e.
+# Oxford format) to dosages with 2 probabilities. The
+# rest of the format is left unchanged.
+#
+# Since the impute2 format doesn't guarantee that the
+# 3 genotype probabilities will sum to 1, we account 
+# for the remainder as follows:
+# - if the 3 probs sum to < .98, we return "NA" calls
+#     (probably poor quality calls)
+# - if the 3 probs sum to > 1.1, we return "NA" calls
+#     (something's probably gone very wrong)
+# - otherwise, divide by sum of probabilities to re-
+#     scale (rounded to 3 digits)
+#
+# Also includes a couple sanity checks:
+# - number of fields in input file consistent with
+#     3 probability format (check in first row only)
+# - output file has some content (wc -l and NF are
+#     10+)
+# 
+# Assumes 2 arguments: 
+# - input filename (a gzipped impute2 output file)
+# - output filename (also gzipped)
+# 
+# Current version using awk as a quick patch. Could
+# (or should) probably be made faster/more efficient 
+# later with some other language.
+#
+######################
+
+if [ ! -e $1 ]; then
+	echo "Error: input file (${1}) not found."
+	exit 1
+fi
+
+zcat $1 | awk '{
+	if(NR==1){
+		if( ($(NF-5) % 3) != 0){
+			print "Error: Incorrect number of fields";
+			exit 1
+		}
+	};
+	printf "%s %s %s %s %s",$1,$2,$3,$4,$5;
+	for(i=6; i<=NF; i+=3){
+		sum=($(i)+$(i+1)+$(i+2));
+		if( sum < .98 || sum > 1.1 || ){
+			printf "%s"," NA NA"
+		}else{
+			sum=($(i)+$(i+1)+$(i+2));
+			printf " %1.3f %1.3f %1.3f",$(i)/sum,$(i+1)/sum,$(i+2)/sum
+		}
+	}
+	printf "\n"
+}' | gzip > $2
+
+# verify output not entirely insane
+if [[ $(zcat $2 | head -n 10 | wc -l) -lt 10 ]]; then
+	echo "Error: Too few rows in generated output."
+	exit 1
+fi
+
+if [[ $(zcat $2 | head -n 1 | awk '{print NF}') -lt 10 ]]; then
+	echo "Error: Too few columns in generated output."
+	exit 1
+fi
+
+# exit successfully
+exit
+
