@@ -1,0 +1,7 @@
+#!/bin/bash
+# state branch name
+
+echo "Currently loaded: picopili, dev branch"
+
+exit
+
