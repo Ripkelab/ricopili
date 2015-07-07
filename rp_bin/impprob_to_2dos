@@ -41,7 +41,7 @@ fi
 
 zcat $1 | awk '{
 	if(NR==1){
-		if( ($(NF-5) % 3) != 0){
+		if( ((NF-5) % 3) != 0){
 			print "Error: Incorrect number of fields";
 			exit 1
 		}
@@ -49,11 +49,15 @@ zcat $1 | awk '{
 	printf "%s %s %s %s %s",$1,$2,$3,$4,$5;
 	for(i=6; i<=NF; i+=3){
 		sum=($(i)+$(i+1)+$(i+2));
-		if( sum < .98 || sum > 1.1 || ){
+		if( sum < .98 || sum > 1.1 ){
 			printf "%s"," NA NA"
 		}else{
 			sum=($(i)+$(i+1)+$(i+2));
-			printf " %1.3f %1.3f %1.3f",$(i)/sum,$(i+1)/sum,$(i+2)/sum
+			p0=sprintf("%1.3f", $(i)/sum);
+			p1=sprintf("%1.3f", $(i+1)/sum);
+			sub(/\.000$/,"",p0);
+			sub(/\.000$/,"",p1);
+			printf " %s %s",p0,p1
 		}
 	}
 	printf "\n"
