@@ -318,7 +318,14 @@ version: $version
   --noclean           do not clean up intermediate files at the very end
 
   --force1            do not exit if same fail, but do this only once
- 
+
+  --sleep INT         sleep for INT seconds, try this if you think there is a race condition
+                       (hints: stops a different steps, --serial works)
+                       try using 5 seconds first.
+
+  --serial            no sending jobs to queue all in one run
+                          -> usually only used for testing  
+
 
 ### remarks 
 
@@ -454,6 +461,8 @@ GetOptions(
 
     "help"=> \my $help,
     "serial"=> \my $serial,
+    "sleep=i"=> \my $sleep_sw,
+
 
 
     "outname=s"=> \my $outname,
@@ -476,6 +485,11 @@ GetOptions(
 
 
 
+
+if ($sleep_sw) {
+  print "sleeping for $sleep_sw seconds (only use if suspect of race condition)\n";
+  sleep ($sleep_sw);
+}
 
 
 

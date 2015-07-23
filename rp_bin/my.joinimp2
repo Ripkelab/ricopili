@@ -418,12 +418,12 @@ close JI;
 print "--------------------------------------\n";
 print "Success: joined the named directories, ";
 print "see joininfo.txt for detailed information\n";
-print "please start new run of impute_pipeline, it will only perform the last steps: ";
-print "(combining/pruning best guess genotypes for PCAer)\n";
+#print "please start new run of impute_pipeline, it will only perform the last steps: ";
+#print "(combining/pruning best guess genotypes for PCAer)\n";
 
-print "example (replace [NUMBER] and [NAME]): impute_dirsub_[NUMBER] --phase [NUMBER] --out [NAME]\n";
-print "be aware that this restart of the impute pipeline can take some time (around 20 minutes)\n";
-print "after that, check your impute_log file for progress (should start with around 900 cobg jobs)\n";
+#print "example (replace [NUMBER] and [NAME]): impute_dirsub_[NUMBER] --phase [NUMBER] --out [NAME]\n";
+#print "be aware that this restart of the impute pipeline can take some time (around 20 minutes)\n";
+#print "after that, check your impute_log file for progress (should start with around 900 cobg jobs)\n";
 print "--------------------------------------------------------\n";
 
 #die $!." <$deffile>" unless open IN, "< $deffile";

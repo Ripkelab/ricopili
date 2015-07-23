@@ -546,6 +546,10 @@ myraincolors <- (colors()[c(24,552,131,323,654,100,71,373,467,51,75,43,463,477,4
 myraincolors <- rep(c("orange","lightpink1","purple","grey","red","dodgerblue","green","maroon"),30)[1:le2[nc,1]]
 
 
+if (dim(le2)[1]<4) {
+myraincolors <- c("red","blue","green");
+}
+
 
 #emptycol
 
