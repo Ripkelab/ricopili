@@ -87,6 +87,9 @@ version: $version
   --serial          no sending jobs to queue all in one run
                            -> usually only used for testing 
 
+  --sleep INT       sleep for INT seconds, try this if you think there is a race condition
+                           (hints: stops a different steps, --serial works)
+                           try using 5 seconds first.
 
 default thresholds:
 
@@ -135,6 +138,7 @@ GetOptions(
 
     "trio"=> \my $trio,
     "serial"=> \my $serial,
+    "sleep=i"=> \my $sleep_sw,
     "help"=> \my $help,
     "disease=s"=> \$disname,
     "popname=s"=> \$popname,
@@ -161,6 +165,11 @@ GetOptions(
 
 
     );
+
+if ($sleep_sw) {
+  print "sleeping for $sleep_sw seconds (only use if suspect of race condition)\n";
+  sleep ($sleep_sw);
+}
 
 
 if ($hwe_th == 0 || $hwe_th_ca == 0) {
