@@ -481,65 +481,72 @@ print "copy done\n";
 my %addcov = ();
 #my $addcov_names;
 my $coco_str = "";
+my $cov_str = "";
+
+
 
 if ($mds_name){
 
     &mysystem ("cp $rootdir/$mds_name .");
 
-}
 
-if ($addcov_name){
-    
-    die "$addcov_name:".$! unless open IFILE, "< $addcov_name";
-    my $head = <IFILE>;
 
-    my @cells = &split_line($head);
-    my $id = $cells[0]."\t".$cells[1] ;
-
-    foreach (2..$#cells) {
-	$coco_str .= ",".$cells[$_];
-	$addcov{$id} .= "\t".$cells[$_];
-    }
-
-    while (my $line = <IFILE>){
-	my @cells = &split_line($line);
+    if ($addcov_name ){
+	
+	die "$addcov_name:".$! unless open IFILE, "< $addcov_name";
+	my $head = <IFILE>;
+	
+	my @cells = &split_line($head);
 	my $id = $cells[0]."\t".$cells[1] ;
+	
 	foreach (2..$#cells) {
+	    $coco_str .= ",".$cells[$_];
 	    $addcov{$id} .= "\t".$cells[$_];
 	}
-
-#	print $id.$addcov{$id}."\n";
-    }
-    close IFILE;
-
-
-
-    die "$mds_name:".$! unless open IFILE, "< $mds_name";
-    die "$mds_name.addcov:".$! unless open OFILE, "> $mds_name.addcov";
-    die "$mds_name.addcov.ex:".$! unless open EFILE, "> $mds_name.addcov.ex";
-
-    while (my $line = <IFILE>){
-	chomp($line);
-	my @cells = &split_line($line);
-	my $id = $cells[0]."\t".$cells[1] ;
-
-	if (exists $addcov{$id}) {
-	    print OFILE $line.$addcov{$id}."\n";
+	
+	while (my $line = <IFILE>){
+	    my @cells = &split_line($line);
+	    my $id = $cells[0]."\t".$cells[1] ;
+	    foreach (2..$#cells) {
+		$addcov{$id} .= "\t".$cells[$_];
+	    }
+	    
+	    #	print $id.$addcov{$id}."\n";
 	}
-	else {
-	    print EFILE $line."\n";
+	close IFILE;
+	
+	
+	
+	die "$mds_name:".$! unless open IFILE, "< $mds_name";
+	die "$mds_name.addcov:".$! unless open OFILE, "> $mds_name.addcov";
+	die "$mds_name.addcov.ex:".$! unless open EFILE, "> $mds_name.addcov.ex";
+	
+	while (my $line = <IFILE>){
+	    chomp($line);
+	    my @cells = &split_line($line);
+	    my $id = $cells[0]."\t".$cells[1] ;
+	    
+	    if (exists $addcov{$id}) {
+		print OFILE $line.$addcov{$id}."\n";
+	    }
+	    else {
+		print EFILE $line."\n";
+	    }
 	}
+	close IFILE;
+	close OFILE;
+	close EFILE;
+	
     }
-    close IFILE;
-    close OFILE;
-    close EFILE;
-
 }
+
+
+
 
 #exit;
 
 
-my $cov_str = "";
+
 
 if ($mds_name){
 
@@ -583,7 +590,40 @@ if ($mds_name){
     $cov_str = "--covar $mds_name" if ($mds_cols eq "ALL");
 
 }
+else {
+    if ($addcov_name) {
+	$mds_name = "$addcov_name";
 
+
+
+	###########################################################
+	### work here
+	####################################################
+	
+	die "$addcov_name:".$! unless open IFILE, "< $addcov_name";
+	my $head = <IFILE>;
+	
+	my @cells = &split_line($head);
+	my $id = $cells[0]."\t".$cells[1] ;
+	
+	foreach (2..$#cells) {
+	    $coco_str .= ",".$cells[$_];
+	}
+	
+	
+	$coco_str =~ s/^,//;
+	$cov_str = "--covar $addcov_name --covar-name $coco_str";
+
+	if ($mds_cols) {
+	    $cov_str = "--covar $addcov_name" if ($mds_cols eq "ALL");
+	}
+
+	###################################################
+	###
+	##########################################################
+    }
+
+}
 
 
 
@@ -754,6 +794,9 @@ while (my $line = <IFILE>){
 	unless (exists $mdsin{"$cells[0]\t$cells[1]"}){
 #	    print "$cells[0]\t$cells[1] not in mds-file\n";
 	    print EFILE "$cells[0]\t$cells[1]\n";
+
+
+	    
 	    delete ($alphe{"$cells[0]\t$cells[1]"});
 	    next;
 	}
@@ -831,35 +874,43 @@ print "star: $star\n";
 print "cases: $ncaco{2}\n";
 print "controls: $ncaco{1}\n";
 if (0) {
-if ($ncaco{1} ==0){
-    print "no controls left\n";
-    exit;
-}
-if ($ncaco{2} ==0){
-    print "no cases left\n";
-    exit;
-}
+    if ($ncaco{1} ==0){
+	print "no controls left\n";
+	exit;
+    }
+    if ($ncaco{2} ==0){
+	print "no cases left\n";
+	exit;
+    }
 }
 #sleep(10);
 
 #print "debug sleep\n";
 #sleep(10);
     
-die "$mds_name.ex: ".$! unless open FILE, "> $mds_name.ex";
-foreach (keys %mdsin){
-    print FILE "$_\n";
-}
-close FILE;
-&mysystem("cp $mds_name.ex $outdir") unless (-e "$outdir/$mds_name.ex");
 
-if ($pheno) {
-    die "$pheno.ex: ".$! unless open FILE, "> $pheno.ex";
-    foreach (keys %alphe){
-	print FILE "$_\n";
-    }
-    close FILE;
-    &mysystem("cp $pheno.ex $outdir") unless (-e "$outdir/$pheno.ex");
-}
+#die "$mds_name.ex: ".$! unless open FILE, "> $mds_name.ex";
+#foreach (keys %mdsin){
+#    print FILE "$_\n";
+#}
+#close FILE;
+#&mysystem("cp $mds_name.ex $outdir") unless (-e "$outdir/$mds_name.ex");
+
+
+
+#if ($pheno) {
+#    die "$pheno.ex: ".$! unless open FILE, "> $pheno.ex";
+#    foreach (keys %alphe){#
+#	print FILE "$_\n";
+#    }
+#    close FILE;
+#    &mysystem("cp $pheno.ex $outdir") unless (-e "$outdir/$pheno.ex");
+#}
+
+
+#&mysystem("cp $mds_name $outdir/$famfile.pt.ex.$mds_name") unless (-e "$outdir/$famfile.pt.ex.$mds_name");
+
+
 
 #    exit;
     
@@ -907,23 +958,27 @@ if ($danscore_file) {
 
     my @profilefiles = grep {/^$workname.S/} @files;
 
+    my $wc_soll = 0;
 
-#    my $wc_soll = `wc -l $famfile.pt`;
     my $loggrep = `grep Among $workname.log | grep remaining | tail -1`;
-    my @loggrep_arr = &split_line($loggrep);
 
-
-    my $wc_soll = $loggrep_arr[3] + $loggrep_arr[7];
-
+    if ($loggrep ne "") {
+	my @loggrep_arr = &split_line($loggrep);
+	$wc_soll = $loggrep_arr[3] + $loggrep_arr[7];
+    }
+    else {
+	$loggrep = `wc -l $famfile.pt`;
+	my @loggrep_arr = &split_line($loggrep);
+	$wc_soll = $loggrep_arr[0];
+    }
+    
     $wc_soll = $wc_soll * 1;
-
     if ($wc_soll < 1) {
 	print "Error: less than 1 ID left\n";
 	exit;
     }
 
-
-
+	
     foreach(@profilefiles) {
 	my $wc_str = `wc -l $_`;
 	my @wc_arr = &split_line($wc_str);
@@ -938,7 +993,7 @@ if ($danscore_file) {
     }
 #    sleep(10);
 #    print "first file is fine\n";
-#    sleep(100);
+#    sleep(10);
 
     &mysystem("cp $workname.S* $outdir/");
     

@@ -50,6 +50,16 @@ use strict;
 #
 #  version 14
 #    --nolahunt
+#
+#  version 15
+#    --fix some little things
+#    --clumper into clump-navi3
+#    --clumper out of --onlymeta and separate switch
+#
+#  version 16
+#    danerdir_6: for covariates in trio data (important for conditional tests)
+#
+#
 #######################################
 
 
@@ -288,7 +298,14 @@ version: $version
   --serial          no sending jobs to queue all in one run
                            -> usually only used for testing 
 
+  --sleep INT         sleep for INT seconds, try this if you think there is a race condition
+                       (hints: stops a different steps, --serial works)
+                       try using 5 seconds first.
+
+
   --noldsc          do not do ldscore (if problems there)
+  --nolahunt        do not do lahunt (speeds up the pipeline)
+  --gwclump         do genome wide clumping in the end (for scoring)
 
   ********
   uses puter and subchromosomes in reference
@@ -323,6 +340,8 @@ GetOptions(
     "cox"=> \my $cox,
     "outname=s"=> \my $outname,
    "serial"=> \my $serial,
+            "sleep=i"=> \my $sleep_sw,
+
     "walltime=i"=> \ $walltime,
     "mem=i"=> \ $jmem,
     "model=i" => \$gmodel,
@@ -364,6 +383,7 @@ GetOptions(
    "force1"=> \my $force1,
    "noldsc"=> \my $noldsc,
    "nolahunt"=> \my $nolahunt,
+   "gwclump"=> \my $gwclump,
 #    "cond"=> \my $cond,
 
 #    "chrX"=> \my $chrX,
@@ -377,7 +397,10 @@ if ($nohet) {
 }
 
 
-
+if ($sleep_sw) {
+  print "sleeping for $sleep_sw seconds (only use if suspect of race condition)\n";
+  sleep ($sleep_sw);
+}
 
 
 
@@ -392,7 +415,7 @@ my @test_scripts;
 
 
 my $metaber_script = "metaber5";               ### my.pipeline_tar
-my $daner_script = "danerdir_5";               ### my.pipeline_tar
+my $daner_script = "danerdir_6";               ### my.pipeline_tar
 my $dsc_script = "danscore_result_3";          ### my.pipeline_tar
 my $chunker_script = "chunker";                ### my.pipeline_tar
 my $danerhet2p_script = "my.daner_het2p";      ### my.pipeline_tar
@@ -407,7 +430,7 @@ my $lahunt_script = "lahunt_9";                ### my.pipeline_tar
 my $ldsc_script = "my.ldsc";                ### my.pipeline_tar
 my $blueprint_script = "blueprint";            ### my.pipeline_tar
 my $clumpnavi_script = "clump_navi";           ### my.pipeline_tar
-my $clumpnavi2_script = "clump_nav2";          ### my.pipeline_tar
+my $clumpnavi2_script = "clump_nav3";          ### my.pipeline_tar
 my $shrinkpdf_script = "shrinkpdf";            ### my.pipeline_tar
 my $comp1mhc_script = "comp1mhc2";             ### my.pipeline_tar
 #my $comp1mhc1_script = "comp1mhc";    
@@ -424,6 +447,8 @@ my $mystart_script = "my.start_job";           ### my.pipeline_tar
 my $replicator_script = "replicator13";        ### my.pipeline_tar
 my $replicmeta_script = "replicator_meta11";   ### my.pipeline_tar
 
+
+my $damecat_script = "my.dameta_cat";          ### my.pipeline_tar
 
 my $damecat_script = "my.dameta_cat";          ### my.pipeline_tar
 
@@ -963,7 +988,7 @@ sub send_jobarray {
     print "$nsja jobs successfully submitted\n";
     print "please see tail of $sjainfofile for regular updates\n";
     print "also check bjobs -w for running jobs\n";
-    print "possibly differnt command on different computer cluster: e.g. qstat -u USER\n";
+    print "possibly different command on different computer cluster: e.g. qstat -u USER\n";
     print "you will be informed via email if errors or successes occur\n";
     print "------------------------------------------------------------\n";
 
@@ -1013,31 +1038,6 @@ use Cwd;
 use File::Path;
 $rootdir = &Cwd::cwd();
 $sjainfotxt = "$rootdir\t$command_line";
-
-my $danerjobdir = "$rootdir/danerjobdir";
-
-
-
-
-my $pcaer_dir = "$rootdir/pcaer_sub";
-
-
-
-unless (-e $danerjobdir){
-    print "danerjobdir is not existing, create one for you\n";
-    my @created = mkpath(   ## $created ?
-			    $danerjobdir,
-			    {verbose => 0, mode => 0750},
-	);
-}
-
-unless (-e $pcaer_dir){
-    print "pcaer_dir is not existing, create one for you\n";
-    my @created = mkpath(   ## $created ?
-			    $pcaer_dir,
-			    {verbose => 0, mode => 0750},
-	);
-}
 
 
 
@@ -1177,7 +1177,7 @@ if (@bimfli_files == 1) {
 my %empty_files;
 unless (-e "empty_info") {
     &mysystem ("touch empty_info");
-    print "warning: error: no empty_info, created an empty one\n";
+    print "warning: no empty_info, created an empty one\n";
 #    exit;
 }
 else {
@@ -1384,6 +1384,20 @@ $outname = $outname."_perm".$siperm if ($siperm);
 
 
 
+my $danerjobdir = "$rootdir/danerjobdir_$outname";
+
+unless (-e $danerjobdir){
+    print "danerjobdir is not existing, create one for you\n";
+    my @created = mkpath(   ## $created ?
+			    $danerjobdir,
+			    {verbose => 0, mode => 0750},
+	);
+}
+
+
+
+
+
 my $danerdir = "$rootdir/daner_$outname";
 my $resdandir = "$rootdir/resdaner";
 my $danscoredir = "$rootdir/danscore_$outname";
@@ -1399,10 +1413,13 @@ my $daner_meta_pf = "daner_$outname";
 my $daner_meta = "$daner_meta_pf.meta.gz";
 my $daner_meta_nogz = "$daner_meta_pf.meta";
 
-my @created = mkpath(   ## $created ?
-			$reportdir,
-			{verbose => 0, mode => 0750},
-    );
+
+unless ($danscore_file ne "") {
+    my @created = mkpath(   ## $created ?
+			    $reportdir,
+			    {verbose => 0, mode => 0750},
+	);
+}
 
 if ($danscore_file ne "") {
 my @created = mkpath(   ## $created ?
@@ -1423,11 +1440,13 @@ my @created = mkpath(   ## $created ?
 			{verbose => 0, mode => 0750},
     );
 
-    
-my @created = mkpath(   ## $created ?
-			$dametadir,
-			{verbose => 0, mode => 0750},
-    );
+
+unless ($danscore_file ne "") {
+    my @created = mkpath(   ## $created ?
+			    $dametadir,
+			    {verbose => 0, mode => 0750},
+	);
+}
 
 #my @created = mkpath(   ## $created ?
 #			$danerdir,
@@ -1545,7 +1564,15 @@ unless ($result_name){
 	    if (-e $famloc.".fake") {
 		$famloc = "$rootdir/$famfile_loc";
 		$famloc =~ s/.ch.fl.fam/.fam/;
-		die "famfile, $famloc, not existing" unless (-e $famloc);
+		unless (-e $famloc) {
+		    $famloc =~ s/.hg19.fam/.fam/;
+		    unless (-e $famloc) {
+			die "famfile, $famloc, not existing" ;
+		    }
+		    else {
+			print "fake existing, taking this famfile: $famloc\n" ;
+		    }
+		}
 	    }
 	    die $!." <$famloc>" unless open IN, "< $famloc";
 	    while (my $line = <IN>){
@@ -1599,13 +1626,48 @@ unless ($result_name){
 		next;
 	    }
 
+	    my $bfile_root = $bfile;
+	    $bfile_root =~ s/.hg19.ch.fl$//;
+
+
+
 	    my $famloc = "$impute_dir/$famfile_loc";
+
 	    unless (-e $famloc) {
+		print "Warning: famfile ($famloc) not existing\n" ;
 		$famloc = "$rootdir/$famfile_loc";
 		$famloc =~ s/.ch.fl.fam/.fam/;
-		die "famfile, <$famloc>, not existing" unless (-e $famloc);
+
+		unless (-e $famloc) {
+		    print "Warning: famfile ($famloc) not existing\n" ;
+
+		    $famloc = "$impute_dir/$bfile_root.fam";
+		    unless (-e $famloc) {
+			print "Error: famfile ($famloc) not existing\n" ;
+			exit;
+		    }
+		    else {
+			print "-> taking root famfile ($famloc) instead\n" ;
+		    }
+		}
 #		print "no bimflifam, took the one from the rootdir\n";
 	    }
+	    if (-e $famloc.".fake") {
+		$famloc = "$rootdir/$famfile_loc";
+		$famloc =~ s/.ch.fl.fam/.fam/;
+		unless (-e $famloc) {
+		    $famloc =~ s/.hg19.fam/.fam/;
+		    unless (-e $famloc) {
+			die "famfile, $famloc, not existing" ;
+		    }
+		    else {
+			print "fake existing, taking this famfile: $famloc\n" ;
+		    }
+		}
+	    }
+
+
+
 	    die $!." <$famloc>" unless open IN, "< $famloc";
 	    while (my $line = <IN>){
 		my @cells = &split_line($line);
@@ -1874,13 +1936,25 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 		$bfile =~ s/.bim$//;
 		my $danerdir_loc = "$danerdir/da_$bfile";
-		
+
+		my $hg19_remove = 0;
 		
 		my $dasudir_loc = "$dasudir"."_$bfile";
 		my $dasudir_loc_qc1 = "$dasudir"."qc1_$bfile";
 
-#	    print "$dasudir_loc\n";	
-#	    print "$dasudir_loc_qc1\n";	
+		unless (-e $dasudir_loc_qc1) {
+		    my $tmpdir = $dasudir_loc_qc1;
+		    $tmpdir =~ s/.hg19.ch.fl/.ch.fl/;
+		    if (-e $tmpdir) {
+			print "old format is existing: $tmpdir\n";
+			$dasudir_loc_qc1 = $tmpdir;
+			$hg19_remove = 1;
+		    }
+		}
+
+#		print "$dasudir_loc\n";	
+#		print "$dasudir_loc_qc1\n";
+#		sleep(3);
 #	    my $dasudir_loc_qc1_hg19 = "$dasudir"."qc1_$bfile";
 
 		my $daner_out = "$danerdir_loc/dan_$bfile.$refind.assoc.dosage.ngt.gz";
@@ -1974,6 +2048,9 @@ unless (-e "$rootdir/daner_$outname.done") {
 			my $danscoredir_loc = "$danscoredir/dsc_$bfile";
 #			my $danscoredir_map = "$danscoredir/dsc._$bfile.map";
 			my $ident = "$bfile.$refind";
+			if ($hg19_remove) {
+			    $ident =~ s/.hg19.ch.fl/.ch.fl/;
+			}
 
 
 #			print "cat $dasudir_loc/dos_$ident.out.dosage.map >> dsc._$bfile.map\n";
@@ -2257,6 +2334,22 @@ if ($danscore_file ne "") {
     &mysystem ("paste plot.$outname.sum_all.nbin $outname.poly.out.txt > $outname.poly.out.txt.combined");
 
     &mysystem ("cp $outname.poly.out.txt.combined $distdir");
+    &mysystem ("cp $outname.pdf $distdir");
+
+
+    #############################################################
+    ## SUCCESSSS
+    #############################################################
+    
+    $sjadir = $rootdir;
+    $sjaname = "finished";
+    push @sjaarray, "tmp";
+    $sjatime = 2;
+    $sjamem = 1000;
+    
+    
+    &send_jobarray;
+
     
     exit;
 }
@@ -2406,6 +2499,8 @@ unless ($result_name){
 ######################################
 ##  here beginning with result files#
 #########################################
+
+unless (-e "$rootdir/resmeta_$outname.done") {
 if ($result_name){
     chdir ($reportdir);
     my @result_files ;
@@ -2499,6 +2594,7 @@ if ($result_name){
 	&mysystem ("ln -sf $daner_meta $daner_all");
     }
 }
+}
 
 
 
@@ -2544,6 +2640,8 @@ if (@result_meta_arr > 0) {
 }
 
 
+&mysystem ("touch $rootdir/resmeta_$outname.done");
+print "resmeta done\n";
 
 chdir ($reportdir);
 
@@ -2820,8 +2918,9 @@ if ($polyfrom_file ne "") {
     unless (-e $clu_out_file) {
 	my $sys = "$clumpnavi_script --pfile $daner_all --hq_f .02 --hq_i .9 --out $outname --clu_p1 1 --clu_p2 1 --clu_window 500 --clu_r2 0.25 --refdir $refdir --reinvo $reinvo_file";
 #	&mysystem($sys);
-#	print "$sys\n";#
-#	exit;
+	print "clump_navi needs to run on euro directory, with clump_nav3\n";#
+	print "$sys\n";#
+	exit;
 
 	&mysystem("echo $sys | $blueprint_script --njob $job_bn_th -b \"prefix\" -j --na clump_$outname");
 	
@@ -3138,6 +3237,7 @@ my $Xchr_txt = "";
 if (-e $areat_eurdir) {
     $areat_refdir = $areat_eurdir;
     print "using a european subset for clumping: $areat_refdir\n";
+#    $refdir = $areat_eurdir;
 }
 
 
@@ -3603,10 +3703,13 @@ foreach my $dc_loc (@daner_allcoll) {
 
 
 my $numbers_file = "basic.$outname.num.xls";
-unless (-e "$distdir/basic.$numbers_file") {
+unless (-e "$distdir/$numbers_file") {
     my $sys = "$numbers_script basic.$outname $daner_all @daner_single";
+
 #    print "$sys\n";
+#    print "$numbers_file\n";
 #    exit;
+
     &mysystem ($sys);
     &mysystem ("cp $numbers_file $distdir");
 
@@ -3749,22 +3852,14 @@ unless (-e "manhattan.daner_$outname.gz.nog2.pdf.empty") {
 
 
 
-if ($onlymeta) {
-
-    unless (-e "$distdir/replic/README") {
-
-	my $outfile = "$distdir/out.$daner_all.clumped.xmhc.gz";
-#    print "$outfile\nsleep\n";
-	chdir "$distdir";
-#    unless (-e $outfile) {
-	unless (-e "$distdir/$daner_all") {
-	    &mysystem ("ln -sf $reportdir/$daner_meta $distdir/$daner_all");
-	}
+if ($gwclump) {
+    chdir "$distdir";
+    my $sys_tmp  = "echo $clumpnavi2_script --noindel --pfile $daner_all --hq_f .05 --hq_i .9 --out $daner_all --clu_p1 1.0 --clu_p2 1.0 --clu_window 500 --clu_r2 0.1 --refdir $areat_refdir | $blueprint_script -b \"prefix\" --wa 4 -j --na _clumpnav_$daner_all";
+    my $bsys = $sys_tmp;
+    
+    
+    unless (-e "$daner_all.clumped.xmhc.gz") {
 	
-	my $sys_tmp  = "echo $clumpnavi2_script --noindel --pfile $daner_all --hq_f .02 --hq_i .9 --out out.$daner_all --clu_p1 1.0 --clu_p2 1.0 --clu_window 500 --clu_r2 0.1 --refdir $refdir | $blueprint_script -b \"prefix\" --wa 4 -j --na _clumpnav_$daner_all";
-	my $bsys = $sys_tmp;
-
-
 	unless ($noclumper) {
 	    if (1) {	
 		&mysystem ($bsys);
@@ -3782,10 +3877,26 @@ if ($onlymeta) {
 		&mysystem ("$sb_script manhattan.nog.$outname.pdf") ;
 		&mysystem ("$sb_script $areator_all.xls") ;
 		
-#	    &mysystem ("send_dropbox manhattan.nog.$outname.pdf") ;
-#	    &mysystem ("send_dropbox $areator_all.xls") ;
+		#	    &mysystem ("send_dropbox manhattan.nog.$outname.pdf") ;
+		#	    &mysystem ("send_dropbox $areator_all.xls") ;
 		
 	    }
+	}
+    }
+	
+}
+
+
+if ($onlymeta) {
+
+    unless (-e "$distdir/replic/README") {
+
+	my $outfile = "$distdir/out.$daner_all.clumped.xmhc.gz";
+#    print "$outfile\nsleep\n";
+	chdir "$distdir";
+#    unless (-e $outfile) {
+	unless (-e "$distdir/$daner_all") {
+	    &mysystem ("ln -sf $reportdir/$daner_meta $distdir/$daner_all");
 	}
 	
 
