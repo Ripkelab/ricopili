@@ -966,7 +966,17 @@ if ($job){
 	    if ($aend > 1000) {
 		$aend = 1000;
 	    }
-	    print JOB "#SBATCH --array=1-$aend\n";
+
+	    
+	    my $ast = "#SBATCH --array=1-$aend\n";
+	    if ($maxpar > 0) {	
+		$ast = "#SBATCH --array=1-$aend%maxpar\n";
+	    }
+	    print JOB $ast;
+
+
+
+
 	    if ($multi > 0) {
 		print JOB "#SBATCH --cpus-per-task $threads\n";
 	    }

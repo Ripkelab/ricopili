@@ -214,6 +214,7 @@ foreach my $st (1..10) {
 
     my %profiles = ();
     my %prof_count = ();
+    my %prof_count_collect = ();
     my @profiles_st = grep {/.*$st\.profile$/} @files;
 
     my $infile = "$out.$st.target.S$st.sumprofile";
@@ -223,6 +224,7 @@ foreach my $st (1..10) {
     my $cov_str = "";
     my $cov_str_a = "";
     print "create range $st\n";
+#    print "create range @profiles_st\n";
     unless (-e $infile_cov) {
 #	print "create $infile_cov\n";
 	foreach my $profile_loc (@profiles_st) {
@@ -237,12 +239,29 @@ foreach my $st (1..10) {
 		my @cells =  split /\s+/, $line;
 		unless ($quan) {
 		    unless ($cells[2] == 1 || $cells[2] == 2) {#
-			next;
+			
+			if ($trio) {
+			    if ($cells[0] =~ /_pca$/ ) {
+				$cells[2] = 2;
+			    }
+			    elsif ($cells[0] =~ /_pco$/ ) {
+				$cells[2] = 1;
+			    }
+			    else {
+				print "trio: invalid phenotype for $cells[0]\t$cells[1]\n";
+				next;
+			    }
+			}
+			else {
+			    print "not trio: invalid phenotype for $cells[0]\t$cells[1]\n";
+			    next;
+			}
 		    }
 		}
 		else {
 		    if ($cells[2] == -9) {#
-			next;
+			print "2: invalid phenotype $cells[0]\t$cells[1]\n";			
+			next; 
 		    }
 		}
 #		print "pt: $cells[2]\n";
@@ -263,23 +282,29 @@ foreach my $st (1..10) {
 	    print FILE $amds{"FID\tIID"};
 	}
 	print FILE "\n";
+	
 	foreach my $id (keys %profiles){
 #	    my @cells_loc = &split_line($_);
 	    if ($mdsfile){
 		if (exists $amds{$id}) {
 		    print FILE "$id";
 		    print FILE "\t$prof_count{$id}";
+
+		    $prof_count_collect{$prof_count{$id}} = 1;
+	    
 		    print FILE "\t$apt{$id}";
 		    print FILE "\t$profiles{$id}";
 		    print FILE $amds{$id};
 		    print FILE "\n";
-		    if ($prof_count{$id} - $nref < -2|| $prof_count{$id} - $nref > 2){
-			print "coutn problem $id: $prof_count{$id}, soll $nref\n";
+		    if ($prof_count{$id} - $nref < -12|| $prof_count{$id} - $nref > 12){
+			print "count problem $id: $prof_count{$id}, soll $nref\n";
 #			exit;
 		    }
 		}
 		else {
-		    print "no mds-score for $id\n"; 
+		    unless ($trio) {
+			print "no mds-score for $id\n";
+		    }
 		}
 	    }
 	    if ($trio) {
@@ -288,11 +313,15 @@ foreach my $st (1..10) {
 		print FILE "\t$apt{$id}";
 		print FILE "\t$profiles{$id}";
 		print FILE "\n";
-		if ($prof_count{$id} - $nref < -2|| $prof_count{$id} - $nref > 2){
-		    print "warning: trio coutn problem $id: $prof_count{$id}, soll $nref\n";
+		if ($prof_count{$id} - $nref < -12|| $prof_count{$id} - $nref > 12){
+		    print "warning: trio count problem $id: $prof_count{$id}, soll $nref\n";
 #		    exit;
 		}
 	    }
+	}
+	if (keys %prof_count_collect > 1) {
+	    print "Error: different profile-counts for different individuals, something is seriously wrong\n";
+	    exit;
 	}
 	close FILE;
 	&mysystem ("mds2cov $infile");
@@ -305,41 +334,35 @@ foreach my $st (1..10) {
 #    print "debug\n";
 #    sleep(10);
 
-    unless (-e "$infile_cov.pdf") {
 
-
-	die "$infile_cov: ".$! unless open FILE, "< $infile_cov";
-	my $header = <FILE>;
-	close FILE;
-	my @cells = &split_line($header);
-	$cov_str = "";
-	foreach my $i (2..$#cells) {
-#	    my $coln = $i + 1;
-	    print $cells[$i]."\n";
-	    if ($cells[$i] =~ /[cC][0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
-		$cov_str .= " + $cells[$i]" ;
-	    }
+    die "$infile_cov: ".$! unless open FILE, "< $infile_cov";
+    my $header = <FILE>;
+    close FILE;
+    my @cells = &split_line($header);
+    $cov_str = "";
+    foreach my $i (2..$#cells) {
+	#	    my $coln = $i + 1;
+	print $cells[$i]."\n";
+	if ($cells[$i] =~ /[cC][0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
+	    $cov_str .= " + $cells[$i]" ;
 	}
-#	print "$cov_str\n";
-
-	$cov_str_a = $cov_str;
-	$cov_str_a =~ s/^ + //;
-	
-	if ($trio) {
-	    $cov_str_a = "NSCORE";
-	    $cov_str = "";
-	}
-	
-	print "$cov_str\n";
-
-
-#	print "debug\n";
-#	sleep(10);
-
     }
-
-
-    push @out_coll, "$infile_cov.pdf";
+    #	print "$cov_str\n";
+    
+    $cov_str_a = $cov_str;
+    $cov_str_a =~ s/^ + //;
+    
+    if ($trio) {
+	$cov_str_a = "NSCORE";
+	$cov_str = "";
+    }
+    
+#    print "$cov_str\n";
+    
+    
+#    print "debug\n";
+#    sleep(10);
+    
 
 }
 
@@ -457,6 +480,8 @@ write.table(O,"INTEMPL.poly.out.txt",row.names=F,col.names=F,sep=" ")
 
 
 
+pdf(paste(FILE,"pdf",sep=""))
+
 
 for (j in (1:nj)){
 file=paste(FILE,j,".target.S",j,".sumprofile_cov",sep="")
@@ -464,6 +489,13 @@ file=paste(FILE,j,".target.S",j,".sumprofile_cov",sep="")
 read.table(file,head=T)->ri
 
 K=0.01 # baseline disorder risk for schizophrenia
+
+
+
+
+
+
+
 
 
 ### normalize the score
@@ -655,13 +687,74 @@ O=data.frame("INTEMPL",Pd[j],N,P,0.0,1.0,K,0,0,0.5,1,0,0,0,0,0)
 write.table(O,"INTEMPL.poly.out.txt",row.names=F,col.names=F,sep=" ",append=T)
 
 
+}
+
+
+
+####### density plots
+
+sp1 = ri$SCORE[ri$PHENO==1]
+sp2 = ri$SCORE[ri$PHENO==2]
+
+nsp1 = length(sp1)
+nsp2 = length(sp2)
+
+d1 <- density(sp1)
+d2 <- density(sp2)
+
+#sp1n = ri$NSCORE[ri$PHENO==1]
+#sp2n = ri$NSCORE[ri$PHENO==2]
+
+#d1n <- density(sp1n)
+#d2n <- density(sp2n)
+
+
+#print (d1)
+#print (d2)
+
+par(mfcol=c(2,1))
+minx = min(sp1,sp2)
+maxx = max(sp1,sp2)
+
+
+#minxn = min(sp1n,sp2n)
+#maxxn = max(sp1n,sp2n)
+
+
+#print (minx)
+#print (maxx)
+
+if (maxx > minx) {
+br=seq(minx,maxx,length.out=31)
+#brn=seq(minxn,maxxn,length.out=31)
+
+hist (sp1,col="grey",xlim=c(minx,maxx),breaks=br, xlab = paste (nsp1,"controls"), main = paste ("p <",Pd[j]))
+hist (sp2,col="red",xlim=c(minx,maxx),breaks=br, xlab = paste (nsp2,"cases"), main = paste ("p <",Pd[j]))
+legend("topleft",legend=c("cases","controls"), fill= c("red","grey"),cex=0.6,pt.cex=0.6)
+
+
+maxy=max(d1$y,d2$y)
+
+par(mfcol=c(1,1))
+plot(d1,xlim=c(minx,maxx), ylim=c(0,maxy), main = paste (nsp1,"controls and", nsp2,"cases at p <", Pd[j]), xlab = paste("r2 =",signif(NKv,3),", p=",signif(pval,3)))
+par(new=T)
+plot(d2,col="red",xlim=c(minx,maxx), ylim=c(0,maxy),xlab="",main="")
+
+
+#plot(d1n,xlim=c(minxn,maxxn), main = paste (nsp1,"controls and", nsp2,"cases at p <", Pd[j]))
+#par(new=T)
+#plot(d2n,col="red",xlim=c(minxn,maxxn),xlab="",main="")
+
+
+
+
 #"name" "Pd" "N" "Propcase" "NKr2" "pval" "PopRisk" "h2l_r2n" "se_h2l_r2" "AUC" "OR10decile" "ORL95" "ORH95"
 #"PGC_SCZ49.sh2_mds10_poly_nomgs2_mgs2" "0.00000005" 5120 0.515234375 0.0262591054481514 9.85086885717681e-24 0.01 0.0110338841031824 0.0021442267191595 0.581168950178969 3.03227366098336 2.33434192167739 3.938876078825
 
 }
 }
 
-
+dev.off()
 
 
 
@@ -771,6 +864,11 @@ $trio_sw = 1 if ($trio);
 print "end of danscore_result_3\n";
 
 
+#my $sys = "danscore_plot2  --out plot.$out @outfile_coll";
+#print "$sys\n";
+
+#&mysystem ("echo $sys >> startit.sh");
+
 
 
 #######################################################################
@@ -782,612 +880,4 @@ print "end of danscore_result_3\n";
 
 exit;
 
-
-
-
-
-if (0) {
-my @out_coll;
-foreach my $st (1..10) {
-
-    my %profiles = ();
-    my %prof_count = ();
-    my @profiles_st = grep {/.*$st\.profile$/} @files;
-
-    my $infile = "$out.$st.target.S$st.sumprofile";
-
-    my $outfile = "summary.$out.$st";
-    push @outfile_coll, $outfile;
-    my $infile_cov = $infile."_cov";
-    my $cov_str = "";
-    my $cov_str_a = "";
-    print "create range $st\n";
-    unless (-e $infile_cov) {
-#	print "create $infile_cov\n";
-	foreach my $profile_loc (@profiles_st) {
-#	    print "read $profile_loc\n";
-	    die "$profile_loc: ".$! unless open PRO, "< $profile_loc";
-	    
-	    my $line = <PRO>;
-	    my $cc=0;
-	    while ($line = <PRO>) {
-		chomp($line);
-		$line =~ s/^[\s]+//g;
-		my @cells =  split /\s+/, $line;
-		unless ($quan) {
-		    unless ($cells[2] == 1 || $cells[2] == 2) {#
-			next;
-		    }
-		}
-		else {
-		    if ($cells[2] == -9) {#
-			next;
-		    }
-		}
-#		print "pt: $cells[2]\n";
-#		die "$cells[0]\t$cells[1]\tnot existing in MDS" unless (exists $amds{"$cells[0]\t$cells[1]"});
-		$profiles{"$cells[0]\t$cells[1]"} += $cells[3];
-		$prof_count{"$cells[0]\t$cells[1]"}++;
-		$apt{"$cells[0]\t$cells[1]"} = $cells[2] unless (exists $apt{"$cells[0]\t$cells[1]"});
-		die "PT error" if ($apt{"$cells[0]\t$cells[1]"} ne $cells[2]);
-	    }
-	    close PRO;
-#	    exit;
-	}
-
-
-	die $! unless open FILE, "> $infile";
-	print FILE "FID\tIID\tCOUNT\tPHENO\tSCORE";
-	unless ($trio){
-	    print FILE $amds{"FID\tIID"};
-	}
-	print FILE "\n";
-	foreach my $id (keys %profiles){
-#	    my @cells_loc = &split_line($_);
-	    if ($mdsfile){
-		if (exists $amds{$id}) {
-		    print FILE "$id";
-		    print FILE "\t$prof_count{$id}";
-		    print FILE "\t$apt{$id}";
-		    print FILE "\t$profiles{$id}";
-		    print FILE $amds{$id};
-		    print FILE "\n";
-		    if ($prof_count{$id} - $nref < -2|| $prof_count{$id} - $nref > 2){
-			print "coutn problem $id: $prof_count{$id}, soll $nref\n";
-#			exit;
-		    }
-		}
-		else {
-		    print "no mds-score for $id\n"; 
-		}
-	    }
-	    if ($trio) {
-		print FILE "$id";
-		print FILE "\t$prof_count{$id}";
-		print FILE "\t$apt{$id}";
-		print FILE "\t$profiles{$id}";
-		print FILE "\n";
-		if ($prof_count{$id} - $nref < -2|| $prof_count{$id} - $nref > 2){
-		    print "warning: trio coutn problem $id: $prof_count{$id}, soll $nref\n";
-#		    exit;
-		}
-	    }
-	}
-	close FILE;
-	&mysystem ("mds2cov $infile");
-
-    }
-    if ($trio) {
-	&mysystem ("cp $infile $infile_cov");
-    }
-#    print "$outfile\n";
-#    print "debug\n";
-#    sleep(10);
-
-    unless (-e "$infile_cov.pdf") {
-
-
-	die "$infile_cov: ".$! unless open FILE, "< $infile_cov";
-	my $header = <FILE>;
-	close FILE;
-	my @cells = &split_line($header);
-	$cov_str = "";
-	foreach my $i (2..$#cells) {
-#	    my $coln = $i + 1;
-	    print $cells[$i]."\n";
-	    if ($cells[$i] =~ /[cC][0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
-		$cov_str .= " + $cells[$i]" ;
-	    }
-	}
-#	print "$cov_str\n";
-
-	$cov_str_a = $cov_str;
-	$cov_str_a =~ s/^ + //;
-	
-	if ($trio) {
-	    $cov_str_a = "NSCORE";
-	    $cov_str = "";
-	}
-	
-	print "$cov_str\n";
-
-
-#	print "debug\n";
-#	sleep(10);
-
-	my $R_rido = '
-read.table("INNAME",head=T)->ri
-library(Design)
- r = matrix (ncol=9,nrow=1)
-
-
-if (var (ri$SCORE) > 0 ) {
-(ri$SCORE-mean(ri$SCORE))/sd(ri$SCORE)->ri$NSCORE
-    lrm(PHENO ~ NSCORE COVSTR1 , data = ri )-> go
-    lrm(PHENO ~ COVSTR2 , data = ri )-> go_cov
-#lrm(PHENO ~ NSCORE , data = ri[1:21106,] )-> go_nocov
-    lrm(PHENO ~ NSCORE , data = ri )-> go_nocov
-
-    summary(glm(as.factor(PHENO) ~ NSCORE COVSTR1 , data=ri, family="binomial"))$coefficients["NSCORE",4]-> p_score_cov
-
-    summary(glm(as.factor(PHENO) ~ COVSTR2 , data=ri, family="binomial"))$coefficients[2,4]-> p_cov
-
-    summary(glm(as.factor(PHENO) ~ NSCORE , data=ri, family="binomial"))$coefficients["NSCORE",4]-> p_score_nocov
-
-    print (p_score_cov)
-    print (p_cov)
-    print (p_score_nocov)
-
-
-#quit()
-
-    go$stats -> go_s
-    go_cov$stats -> go_cov_s
-    go_nocov$stats -> go_nocov_s
-
-    go$coefficients -> go_c
-
-
-    r2_diff = go_s["R2"] - go_cov_s["R2"]  
-
-    if (TRIO == 1) {
-	r2_diff = go_s["R2"]
-}
-
-
-C_diff = go_s["C"] - go_cov_s["C"]
-    r2_nocov = go_nocov_s["R2"]
-
-    if (go_c["NSCORE"] < 0) {
-	r2_diff = -r2_diff
-	    C_diff = -C_diff
-	    r2_nocov = -r2_nocov
-}
-
-# print (c(signif(go_s["P"],3),C_diff,r2_diff,go_cov_s["R2"]))
-# print (c(signif(go_s["P"],3),r2_diff,go_cov_s["R2"],C_diff))
-#cor (ri[,3],ri[,4]) ^ 2 -> r2
-
-
-pdf("INNAME.pdf")
-    par(mfcol=c(2,1))
-
-# boxplot (ri[,"SCORE"]~ri[,"PHENO"], main="INNAME", sub = paste("r2 = ",signif(r2_nocov,3), ", p = ", signif(go_nocov_s["P"],3)), las=1)
-
-    maxx = max(ri[, "NSCORE"],na.rm = T)
-    minx = min(ri[, "NSCORE"],na.rm = T)
-    maxxo = signif(max(ri[, "SCORE"],na.rm = T),3)
-    minxo = signif(min(ri[, "SCORE"],na.rm = T),3)
-
-
-    bb = seq (minx,maxx,length=23)
-
-    hist (ri[ri["PHENO"] == 1 , "NSCORE"],col="grey",main = "Scores controls",xlim = c(minx,maxx), breaks=bb, sub = "INNAME", cex.sub = .6)
-    hist (ri[ri["PHENO"] == 2 , "NSCORE"],col="grey",main = "Scores cases",xlim = c(minx,maxx), breaks=bb, sub = paste ("original score-range",minxo,";",maxxo), cex.sub = .6)
-
-    dev.off()
-
-
-
-    cc = 1
-    r[1,cc] = "GROUPNAME";
-cc = cc + 1;
-r[1,cc] = PTH;
-cc = cc + 1;
-r[1,cc] = dim(ri)[1];
-cc = cc + 1;
-r[1,cc] = signif(p_score_cov,4);
-#    r[1,cc] = signif(go_s["P"],4);
-cc = cc + 1;
-r[1,cc] = signif(p_score_nocov,4);
-#    r[1,cc] = signif(go_nocov_s["P"],4);
-
-cc = cc + 1;
-r[1,cc] = signif(r2_diff,4);
-cc = cc + 1;
-r[1,cc] = signif(go_s["R2"],4);
-#    r[1,cc] = signif(go_cov_s["R2"],4);
-cc = cc + 1;
-r[1,cc] = signif(r2_nocov,4);
-cc = cc + 1;
-r[1,cc] = signif(C_diff,4);
-#cc = cc + 1;
-#    r[1,cc] = signif(p_cov,4);
-
-
-#row.names(r) = c("P-nocov", "R2-diff", "R2-cov", "R2-nocov", "C-diff");
-
-write.table (r, file = "OUTNAME", quote = F, row.names = F, col.names= F)
-# write.table (c(go_nocov_s["P"],r2_diff,go_cov_s["R2"],r2_nocov,C_diff), file = "OUTNAME", quote = F, row.names = F, col.names= F)
-
-    print(go_s)
-    print(go_cov_s)
-    print(go_nocov_s)
-
-
-} else {
- cc = 1
-    r[1,cc] = "GROUPNAME";
-cc = cc + 1;
-    r[1,cc] = PTH;
-cc = cc + 1;
-    r[1,cc] = dim(ri)[1];
-cc = cc + 1;
-    r[1,cc] = 1.0;
-cc = cc + 1;
-    r[1,cc] = 1.0;
-cc = cc + 1;
-    r[1,cc] = 0;
-cc = cc + 1;
-    r[1,cc] = 0;
-cc = cc + 1;
-    r[1,cc] = 0;
-cc = cc + 1;
-    r[1,cc] = 0;
-
-
- write.table (r, file = "OUTNAME", quote = F, row.names = F, col.names= F)
-pdf("INNAME.pdf")
-plot(0,0,main="no scores for this p-threshold")
-dev.off()
-}
-';
-
-my $infile_cov_templ = "$out";
-	$R_rido =~ s/INTEMPL/$out/g;
-
-
-        my $groupname = "$st";
-	$R_rido =~ s/PTH/$st/g;
-	$R_rido =~ s/GROUPNAME/$groupname/g;
-
-	$R_rido =~ s/OUTNAME/$outfile/g;
-	$R_rido =~ s/COVSTR1/$cov_str/g;
-	$R_rido =~ s/COVSTR2/$cov_str_a/g;
-
-my $trio_sw = 0;
-$trio_sw = 1 if ($trio);
-
-	$R_rido =~ s/TRIO/$trio_sw/g;
-
-#print "$cov_str\n";
-#print "$cov_str_a\n";
-#exit;
-	
-	my $R_file = "R.$out.S$st.Rin";
-	&a2file_new($R_file, $R_rido);
-	
-        unless ($quan) {
-#	   &mysystem("source /broad/software/scripts/useuse; use R-2.14; R < $R_file --vanilla");
-	   &mysystem("$r_sys < $R_file --vanilla");
-        }
-        else {
-           &mysystem("touch $infile_cov.pdf");
-        }
-
-}
-
-
-     push @out_coll, "$infile_cov.pdf";
-
-}
-
-
-
-}
-
-########## write out first column with row-names
-my $sys_join = "pdfjoin --rotateoversize false --outfile single.collect.$out.pdf @out_coll";
-&mysystem ($sys_join);
-
-#my $sys = "danscore_plot  --out plot.$out --nids $nids_file @sumfiles";
-my $sys = "danscore_plot2  --out plot.$out @outfile_coll";
-print "$sys\n";
-#exit;
-&mysystem ($sys);
-&mysystem ("echo $sys >> startit.sh");
-#&mysystem ("danscore_plot  --out plot.$out --nids $nids_file @sumfiles");
-
-
-print "single.collect.$out.pdf\n";
-
-die $! unless open FILE, "> summary.aaa.row.names";
-
-print FILE "Group";
-print FILE " PTH";
-print FILE " NIDS";
-print FILE " P-nocov";
-print FILE " R2-diff";
-print FILE " R2-cov";
-print FILE " R2-nocov";
-print FILE " C-diff\n";
-
-close FILE;
-
-
-exit;
-
-
-
-
-
-
-
-
-
-
-exit;
-
-#print "dkjfgj\n";
-###########################################################
-### logistic regression
-#####################################################
-
-#my %nids_st_train_ca;
-my %nids_st_target_co;
-my %nids_st_train_co;
-my %nids_st_target_ca;
-my %nids_st_train_ca;
-my %ids_train;
-my $nids_file = "$out.nidfile";
-
-my @sumfiles = ();
-
-#print "dsfhvhhlkasjdh\n";
-
-#foreach my $st (keys %studies) {
-foreach my $ttc (@tatra_collection) {
-
-
-    my ($st,$mds_train,$mds_target) = &split_line($ttc);
-    my $pthc = 0;
-    foreach my $pt (@p_th) {
-	$pthc++;
-	
-	my $sum_file = "$out.$st.S$pthc.out.sum";
-
-	push @sumfiles, $sum_file;
-
-	next if (-e $sum_file);
-
-	my $infile = "$out.$st.target.S$pthc.sumprofile";
-	print "$infile\n";
-	unless (-e $infile) {
-	    
-	    my %profiles = ();
-	    #### sum profile files 
-	    foreach (@dosfiles){
-		my $dosfile = $_;
-		my $profile_loc = "$out.$st.$dosfile.target.S$pthc.profile";
-#		print "$profile_loc\n";
-		die "$profile_loc: ".$! unless open PRO, "< $profile_loc";
-		
-		my $line = <PRO>;
-		my $cc=0;
-		while ($line = <PRO>) {
-		    chomp($line);
-		    my @cells = &split_line($line);
-		    $profiles{"$cells[0]\t$cells[1]\t$cells[2]"} += $cells[3];
-		}
-		close PRO;
-	    }
-
-	    print "$infile\n";
-	    die $! unless open FILE, "> $infile";
-	    print FILE "FID\tIID\tPHENO\tSCORE";
-	    print FILE $amds{"FID\tIID"};
-	    print FILE "\n";
-#	    my $nids = 0;
-	    foreach (keys %profiles){
-		my @cells_loc = &split_line($_);
-		die "no mds-score for $cells_loc[0]\t$cells_loc[1]" unless (exists $amds{"$cells_loc[0]\t$cells_loc[1]"});
-#		$nids++;
-		print FILE "$_\t$profiles{$_}";
-		print FILE $amds{"$cells_loc[0]\t$cells_loc[1]"};
-		print FILE "\n";
-	    }
-	    close FILE;
-	    &mysystem ("mds2cov $infile");
-#	    exit;
-	}
-
-	my $infile = $infile."_cov";
-	die "$infile: ".$! unless open FILE, "< $infile";
-	my $header = <FILE>;
-	close FILE;
-	my @cells = &split_line($header);
-	my $cov_str = "";
-	foreach my $i (4..$#cells) {
-#	    my $coln = $i + 1;
-#	    print $cells[$i]."\n";
-	    if ($cells[$i] =~ /C[0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
-		$cov_str .= " + $cells[$i]" ;
-	    }
-	}
-#	print "$cov_str\n";
-
-	my $cov_str_a = $cov_str;
-	$cov_str_a =~ s/^ + //;
-
-
-
-#	exit;
-
-	my $R_rido = '
-read.table("INNAME",head=T)->ri
-library(Design)
-
-(ri$SCORE-mean(ri$SCORE))/sd(ri$SCORE)->ri$NSCORE
-lrm(PHENO ~ NSCORE + COVSTR1 , data = ri )-> go
-lrm(PHENO ~ COVSTR2 , data = ri )-> go_cov
-lrm(PHENO ~ NSCORE , data = ri )-> go_nocov
-go$stats -> go_s
-go$coefficients -> go_c
-go_cov$stats -> go_cov_s
-go_nocov$stats -> go_nocov_s
-
-r2_diff = 0 - go_cov_s["R2"] + go_s["R2"] 
-C_diff = 0 - go_cov_s["C"] + go_s["C"] 
-r2_nocov = go_nocov_s["R2"]
-
-    if (go_c["NSCORE"] < 0) {
-      r2_diff = -r2_diff
-      C_diff = -C_diff
-      r2_nocov = -r2_nocov
-    }
-
-# print (c(signif(go_s["P"],3),C_diff,r2_diff,go_cov_s["R2"]))
-# print (c(signif(go_s["P"],3),r2_diff,go_cov_s["R2"],C_diff))
-# cor (ri[,3],ri[,4]) ^ 2 -> r2
-
-pdf("INNAME.pdf")
-# boxplot (ri[,"SCORE"]~ri[,"PHENO"], main="INNAME", sub = paste("r2 = ",signif(r2,3), ", p = ", signif(go[4],3)), las=1)
-dev.off()
- print (c(go_nocov_s["P"],r2_diff,go_cov_s["R2"],r2_nocov,C_diff))
-';
-
-	$R_rido =~ s/INNAME/$infile/g;
-	$R_rido =~ s/COVSTR1/$cov_str/g;
-	$R_rido =~ s/COVSTR2/$cov_str_a/g;
-
-	
-	my $R_file = "$out.$st.S$pthc.Rin";
-	&a2file_new($R_file, $R_rido);
-	
-#exit;	
-#	&mysystem("R < $R_file --vanilla");
-
-#exit;
-	my @outp = split "\n", `R < $R_file --vanilla`;
-#	print "-----------\n";
-#	print "@outp\n";
-	print "3:@outp[$#outp-3]\n";#
-	print "2:@outp[$#outp-2]\n";
-	print "1:@outp[$#outp-1]\n";
-	print "0:@outp[$#outp-0]\n";
-#	print "$R_file\n";
-	print "$infile\n";
-#	exit;
-
-	my @cells = &split_line($outp[$#outp-2]);
-	my $sum_out = "$st";
-#    $sum_out .= "\t$study_arr[$tcount].studin";
-#    $sum_out .= "\t$pth";
-	$sum_out .= "\t".$pt;
-
-
-
-	my $rido_n = &count_lines($infile);
-	$sum_out .= "\t".$rido_n;
-	$sum_out .= "\t".$cells[0];
-	$sum_out .= "\t".$cells[1];
-	$sum_out .= "\t".$cells[2];
-	$sum_out .= "\t".$cells[3];
-	$sum_out .= "\t".$cells[4];
-
-	print $sum_out."\n";
-#	exit;
-	&a2file_new($sum_file, $sum_out);
-#	exit;
-    }
-
-
-
-#########  IDs target
-    my $infile = "$out.$st.target.S1.sumprofile";
-    die "$infile: ".$! unless open IN, "< $infile";
-    
-    my $line = <IN>;
-    my $nca=0;
-    my $nco=0;
-    while ($line = <IN>) {
-	chomp($line);
-	my @cells = &split_line($line);
-	$nca++ if ($cells[2] == 2);
-	$nco++ if ($cells[2] == 1);
-    }
-    close IN;
-
-    $nids_st_target_ca{$st} = $nca;
-    $nids_st_target_co{$st} = $nco;
-
-
-############# IDs training
-%ids_train = ();
-    die "$mdsfile: ".$! unless open IN, "< $mdsfile";
-    while ($line = <IN>) {
-	chomp($line);
-	my @cells = &split_line($line);
-        $ids_train{"$cells[0]\t$cells[1]"}++ ;
-    }
-    close IN;
-
-
-   die "$mds_train: ".$! unless open IN, "< $mds_train";
-    while ($line = <IN>) {
-	chomp($line);
-	my @cells = &split_line($line);
-        $ids_train{"$cells[0]\t$cells[1]"}++ ;
-    }
-    close IN;
-
-
-    $nca=0;
-    $nco=0;
-    die "$famfile: ".$! unless open IN, "< $famfile";
-        while ($line = <IN>) {
-	chomp($line);
-	my @cells = &split_line($line);
-        if ($ids_train{"$cells[0]\t$cells[1]"} == 2){
-            $nca++ if ($cells[5] == 2);
-            $nco++ if ($cells[5] == 1);
-        }
-    }
-    close IN;
-
-    $nids_st_train_ca{$st} = $nca;
-    $nids_st_train_co{$st} = $nco;
-
-#print "$nca\t$nco\n";
-
-#    exit;
-}
-
-
-&mysystem ("rm -f *.profile");
-
-die $! unless open FILE, "> $nids_file";
-print FILE "study\tnca_train\tnco_train\tnca_target\tnco_target\n";
-foreach my $st (sort keys %nids_st_target_ca){
-    print FILE "$st\t$nids_st_train_ca{$st}";
-    print FILE "\t$nids_st_train_co{$st}";
-   print FILE "\t$nids_st_target_ca{$st}";
-   print FILE "\t$nids_st_target_co{$st}\n";
-}
-close FILE;
-#exit;
-
-
-print "danscore_plot  --out plot.$out --nids $nids_file @sumfiles\n";
-&mysystem ("danscore_plot  --out plot.$out --nids $nids_file @sumfiles");
 
