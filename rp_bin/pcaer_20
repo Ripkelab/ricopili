@@ -2052,8 +2052,6 @@ unless (-e "$bfile_menv.mds") {
 		    $sjaweek = 1;
 		}
 		if ($n_noov > 60000) {
-		    $sjamem = 10000;
-		} elsif ($n_noov > 40000) {
 		    $sjamem = 8000;
 		} else {
 		    $sjamem = 6000;
