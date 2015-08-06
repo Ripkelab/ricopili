@@ -553,9 +553,11 @@ foreach my $bele (@bfile_list) {
     if ($flip_sw) {
     
 	my $cmd = "$p2loc/plink --memory 2000 --bfile $inbele --out $b_short.tmp --make-bed $remove_str $keep_str --extract SNPs.intersec";
+	print "1: $cmd\n";
 	&mysystem ($cmd);
 
 	$cmd = "$p2loc/plink --memory 2000 --bfile $b_short.tmp --make-bed --out $b_short --flip $rootdir/$bele.bim.flip";
+	print "2: $cmd\n";
 	&mysystem ($cmd);
 
 	&mysystem ("rm $b_short.tmp.bed");

@@ -972,6 +972,13 @@ sub send_jobarray {
     if ($qloc eq "qsub") {
 	$wt_file = "$sjadir/j.$sjaname.$outname.id";
     }
+    if ($qloc eq "qsub_c") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    if ($qloc eq "qsub_b") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    
 
     if ($serial) {
 	my $sys_re = "$command_line";
@@ -3702,19 +3709,6 @@ foreach my $dc_loc (@daner_allcoll) {
 
 
 
-my $numbers_file = "basic.$outname.num.xls";
-unless (-e "$distdir/$numbers_file") {
-    my $sys = "$numbers_script basic.$outname $daner_all @daner_single";
-
-#    print "$sys\n";
-#    print "$numbers_file\n";
-#    exit;
-
-    &mysystem ($sys);
-    &mysystem ("cp $numbers_file $distdir");
-
-}
-
 
 
 
@@ -3887,6 +3881,25 @@ if ($gwclump) {
 }
 
 
+
+my $numbers_file = "basic.$outname.num.xls";
+unless (-e "$distdir/$numbers_file") {
+    my $sys = "$numbers_script basic.$outname $daner_all @daner_single";
+
+#    print "$sys\n";
+#    print "$numbers_file\n";
+#    exit;
+
+    &mysystem ($sys);
+    &mysystem ("cp $numbers_file $distdir");
+
+}
+
+
+
+
+
+
 if ($onlymeta) {
 
     unless (-e "$distdir/replic/README") {
@@ -3960,7 +3973,7 @@ unless ($noldsc) {
     unless (-e "$distdir/$ldsc_tar") {
 	
 	
-	&mysystem ("tar -cvzf $ldsc_tar $daner_all.ldsc.log h2.$daner_all.observed.log h2.$daner_all.liability.log rg.PGC_SCZ49.sh2_mds10.$daner_all.observed.log rg.PGC_SCZ49.sh2_mds10.$daner_all.liability.log cmd.ldsc.txt");
+	&mysystem ("tar --ignore-failed-read -cvzf $ldsc_tar $daner_all.ldsc.log h2.$daner_all.observed.log h2.$daner_all.liability.log rg.PGC_SCZ49.sh2_mds10.$daner_all.observed.log rg.PGC_SCZ49.sh2_mds10.$daner_all.liability.log cmd.ldsc.txt");
 	
 	&mysystem ("cp $daner_all.ldsc.sumstats.gz $distdir/$daner_all.ldsc.sumstats.gz");
 	&mysystem ("cp $ldsc_tar $distdir/$ldsc_tar");

@@ -545,6 +545,15 @@ sub send_jobarray {
 	$wt_file = "$sjadir/j.$sjaname.$outname.id";
     }
 
+    if ($qloc eq "qsub_c") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    if ($qloc eq "qsub_b") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+
+
+    
     if ($serial) {
 	my $sys_re = "$command_line";
 	&mysystem ($sys_re);
@@ -2051,7 +2060,12 @@ unless (-e "$bfile_menv.mds") {
 		if ($n_bim > 40000 && $n_noov > 5000) {
 		    $sjaweek = 1;
 		}
-		$sjamem = 6000;
+		if ($n_noov > 60000) {
+		    $sjamem = 8000;
+		} else {
+		    $sjamem = 6000;
+		}
+
 	    }
 
 	    

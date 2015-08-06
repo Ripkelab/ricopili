@@ -27,6 +27,13 @@ if ($systype) {
     }
 }
 
+$systype = $ENV{HOSTNAME};
+if ($systype =~ /computerome01/) {
+    $db_bin = "/home/people/sripke/dropbox/july_2015/dropbox_uploader.sh";
+}
+
+
+
 foreach my $file (@ARGV) {
 #my $file = $ARGV[0];
     print "upload $file\n";

@@ -508,7 +508,8 @@ my $checkflip_script = "checkflip4";       ### my.pipeline_tar
 my $chuck_script = "my.chuck2";            ### my.pipeline_tar
 my $preph_script = "my.preph";             ### my.pipeline_tar
 my $imp2_script = "my.imp2.3";             ### my.pipeline_tar
-my $dos_script = "haps2dos3";              ### my.pipeline_tar
+my $dos_script = "haps2dos4";              ### my.pipeline_tar
+my $impprob_script = "impprob_to_2dos";    ### my.pipeline_tar
 my $dabg_script = "daner_bg3";             ### my.pipeline_tar
 my $cobg_script = "bcomb_4_p2";            ### my.pipeline_tar
 my $cobg_gw_script = "comb_bg_dir_1";      ### my.pipeline_tar
@@ -528,7 +529,8 @@ my $blue_script = "blueprint";         ### my.pipeline_tar
 
 
 
-push @test_scripts, $readref_script ;
+push @test_scripts, $readref_script;
+push @test_scripts, $impprob_script;
 push @test_scripts, $readrefsum_script ;
 push @test_scripts, $buigue_script ;
 push @test_scripts, $checkpos_script ;
@@ -1057,6 +1059,13 @@ sub send_jobarray {
     if ($qloc eq "qsub") {
 	$wt_file = "$sjadir/j.$sjaname.$outname.id";
     }
+    if ($qloc eq "qsub_c") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    if ($qloc eq "qsub_b") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    
 
 
     if ($serial) {
@@ -2217,6 +2226,7 @@ if ($prephase_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "preph_mu2";
 	$sjatime = 4;
+	$sjaweek = 1;
 	$sjamulti = $multithread2;
 	$sjamem = 4000;
 	@sjaarray = @preph_arr_mu2;
@@ -2663,7 +2673,7 @@ if ($dos_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "dos";
 	$sjatime = 4;
-	$sjamem = 1000;
+	$sjamem = 2000;
 	$sjamaxpar = 100;
 	@sjaarray = @dos_arr;
 	

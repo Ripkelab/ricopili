@@ -13,7 +13,9 @@ my %conf = ();
 die $!."($conf_file)" unless open FILE, "< $conf_file";
 while (my $line = <FILE>){
     my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
+    if (@cells > 1) {
+	$conf{$cells[0]} = $cells[1];
+    }
 }
 close FILE;
 
@@ -111,7 +113,7 @@ sub split_line_ref {
 die $!."$outname.shapeit.cmd" unless open BC, "> $outname.shapeit.cmd";
 
 
-my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $inname.bim $famfile --output-max $outname.haps $outname.sample --output-log $outname.shape.log --input-map $gemafile $multi_txt";
+my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $inname.bim $famfile --output-max $outname.haps $outname.sample --output-log $outname.shape.log --input-map $gemafile $multi_txt > /dev/null";
 
 my $sc = 0;
 unless (-e "$outname.first.fini"){
