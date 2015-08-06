@@ -783,7 +783,9 @@ push (@text, "email $email");
 push (@text, "loloc $loloc");
 
 ### define queue depending on cluster
-if ($clusters{broad}){push (@text, "queue bsub")}
+#if ($clusters{broad}){push (@text, "queue bsub")}
+
+if ($clusters{broad}){push (@text, "queue qsub_b")}
 if ($clusters{lisa}){push (@text, "queue qsub")}
 if ($clusters{genomedk}){push (@text, "queue slurm")}
 if ($clusters{mssm}){push (@text, "queue msub")}

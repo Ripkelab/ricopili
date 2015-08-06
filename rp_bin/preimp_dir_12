@@ -647,6 +647,13 @@ sub send_jobarray {
     if ($qloc eq "qsub") {
 	$wt_file = "$sjadir/j.$sjaname.$outname.id";
     }
+    if ($qloc eq "qsub_c") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    if ($qloc eq "qsub_b") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    
 
 
     if ($serial) {
@@ -656,6 +663,7 @@ sub send_jobarray {
     }
     else {
 	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 4 --di -j --fwt $wt_file --na _pr_$outname";
+	print "$sys_re\n";
 	&mysystem ($sys_re);
     }
     

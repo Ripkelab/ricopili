@@ -35,8 +35,19 @@ sub trans {
 
 my $qloc = &trans("queue");
 
+my $qsub =0;
+my $qsub_computerome =0;
+my $qsub_broad =0; 
+if ($qloc eq "qsub"){
+    $qsub = 1;
+}
+if ($qloc eq "qsub_c"){
+    $qsub_computerome =1;
+}
+if ($qloc eq "qsub_b"){
+    $qsub_broad =1;
+}
 
-my $qsub =1 if ($qloc eq "qsub");
 my $bsub =1 if ($qloc eq "bsub");
 my $msub =1 if ($qloc eq "msub");
 my $slurm =1 if ($qloc eq "slurm");
@@ -297,7 +308,7 @@ if ($wait_file){
 }
 
 if ($wait_fi_file){
-    if ($qsub) {
+    if ($qsub == 1) {
 
 	$count_jobs = 1 ;
 	die "$! <$wait_fi_file>;<$ENV{PWD}>" unless open WF, "< $wait_fi_file";
@@ -862,7 +873,7 @@ if ($job){
 
 
 ########################################
-### SLURM (genomedk(
+### SLURM 
 ##########################################
 
     if ($slurm) {
@@ -1005,6 +1016,175 @@ if ($job){
 
     }
 
+    
+########################################
+### BROAD UGER
+##########################################
+
+
+    if ($qsub_broad) {
+	
+	my $inst_n=0;
+	my $job_n=0;
+	my $sum=0;
+	
+	#    my $cores=$inst;
+	#    $cores=2 if ($cores < 2);
+	
+	my $jobname;
+
+
+
+
+	if ($jobarray ne "") {
+
+
+	    my $wallstr = "$walltime:00:00";
+	    if ($walltime ==0){
+		$wallstr = "0:10:00";
+	    }
+
+#	    $cores = 28;
+	    
+	    
+	    print "starting job_array, $jobname\n";
+	    $jobname="j.$NOJ";
+
+	    
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+
+
+	    print JOB "#PBS -lnodes=1:ppn=1\n";
+	    print JOB "#PBS -lwalltime=$wallstr\n";
+	    print JOB "cd $rootdir\n";
+	    print JOB "my.start_job -n ".'$SGE_TASK_ID'." --jobfile $jobarray\n";
+	    close JOB;
+	    
+	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages -t 1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job $hhmm $jobname";
+	    my $qsub_txt = "$qsub_cmd > $jobname.id";
+	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
+	    
+	    &mysystem ($qsub_log);
+	    &mysystem ($qsub_txt);
+	    exit;
+	}
+	
+	
+
+
+	if ($wait_fi_file){
+	    die "$! <$wait_fi_file>" unless open WF, "< $wait_fi_file";
+	    my $id_str = <WF>;
+	    chomp($id_str);
+	    $id_str =~ s/Your job-array //;
+	    $id_str =~ s/\..*//;
+
+
+	    close WF;
+
+	    my $wallstr = "$walltime:00:00";
+	    
+	    print "starting motherscript, depending on $id_str\n";
+	    
+	    $jobname="j.$NOJ";
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+	    print JOB "#PBS -lnodes=1\n";
+	    print JOB "#PBS -lwalltime=$wallstr\n";
+	    print JOB "cd $ENV{PWD}\n";
+	    print JOB "$bp\n";
+	    close JOB;
+	    
+	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages  -hold_jid $id_str -e $ENV{PWD}/$errname/ -o $ENV{PWD}/$errname/ $name_of_job $hhmm $jobname";
+	    my $qsub_txt = "$qsub_cmd > $jobname.id";
+	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
+
+	    &mysystem ($qsub_log);
+	    &mysystem ($qsub_txt);
+	    exit;
+	}
+    }
+########################################
+### COMPUTEROME
+##########################################
+
+
+    if ($qsub_computerome) {
+	
+	my $inst_n=0;
+	my $job_n=0;
+	my $sum=0;
+	
+	#    my $cores=$inst;
+	#    $cores=2 if ($cores < 2);
+	
+	my $jobname;
+
+
+
+
+	if ($jobarray ne "") {
+
+
+	    my $wallstr = "$walltime:00:00";
+	    if ($walltime ==0){
+		$wallstr = "0:10:00";
+	    }
+
+	    $cores = 28;
+	    
+	    
+	    print "starting job_array, $jobname\n";
+	    $jobname="j.$NOJ";
+
+	    
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+
+
+	    print JOB "#PBS -lnodes=1:ppn=1\n";
+	    print JOB "#PBS -lwalltime=$wallstr\n";
+	    print JOB "cd $rootdir\n";
+	    print JOB "my.start_job -n ".'$PBS_ARRAYID'." --jobfile $jobarray\n";
+	    close JOB;
+	    
+
+	    my $qsub_txt = "qsub -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+	    my $qsub_log = "echo qsub -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.log";
+	    
+	    &mysystem ($qsub_log);
+	    &mysystem ($qsub_txt);
+	    exit;
+	}
+	
+	
+
+
+	if ($wait_fi_file){
+	    die "$! <$wait_fi_file>" unless open WF, "< $wait_fi_file";
+	    my $id_str = <WF>;
+	    chomp($id_str);
+	    close WF;
+
+	    my $wallstr = "$walltime:00:00";
+	    
+	    print "starting motherscript, depending on $id_str\n";
+	    
+	    $jobname="j.$NOJ";
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+	    print JOB "#PBS -lnodes=1\n";
+	    print JOB "#PBS -lwalltime=$wallstr\n";
+	    print JOB "cd $ENV{PWD}\n";
+	    print JOB "$bp\n";
+	    close JOB;
+	    
+	    
+	    my $qsub_txt = "qsub -W depend=afteranyarray:$id_str -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+	    my $qsub_log = "echo qsub -W depend=afteranyarray:$id_str -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.log";
+
+	    &mysystem ($qsub_log);
+	    &mysystem ($qsub_txt);
+	    exit;
+	}
+    }
 
 
 ########################################
@@ -1031,8 +1211,9 @@ if ($job){
 	    $wallstr = "0:10:00";
 	}
 
-
-	#	$cores = 16;
+#	if ($qsub_computerome){
+#	    $cores = 28;
+#	}
 
 	## very complicated to get the ceiling of the job-N = number of nodes
 	my $numnode = ($job_bn_th-0.000001)/$cores;
@@ -1052,7 +1233,14 @@ if ($job){
 
 	    
 	die "$! ($jobname)" unless open JOB, "> $jobname";
-	print JOB "#PBS -lnodes=1:cores$cores:ppn=$cores\n";
+
+
+#	if ($qsub_computerome){
+#	    print JOB "#PBS -lnodes=1:ppn=$cores\n";
+#	}
+#	else {
+	    print JOB "#PBS -lnodes=1:cores$cores:ppn=$cores\n";
+#	}
 	print JOB "#PBS -lwalltime=$wallstr\n";
 	print JOB "cd $rootdir\n";
 	print JOB "my.start_job --parn $cores -n ".'$PBS_ARRAYID'." --jobfile $jobarray\n";

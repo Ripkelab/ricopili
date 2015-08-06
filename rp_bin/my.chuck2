@@ -13,7 +13,9 @@ my %conf = ();
 die $!."($conf_file)" unless open FILE, "< $conf_file";
 while (my $line = <FILE>){
     my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
+    if (@cells > 1) {
+	$conf{$cells[0]} = $cells[1];
+    }
 }
 close FILE;
 
