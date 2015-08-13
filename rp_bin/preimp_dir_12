@@ -467,7 +467,7 @@ sub reinvo_b {
 	$wt_file =~ s/.*blueprint_joblist_file-//;
     }
 
-    &mysystem ("$blue_script -b \"$command_line\" --wa 4 --di -j --fwt $wt_file --na _pri_$disname");
+    &mysystem ("$blue_script -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na _pri_$disname");
     exit;
 
 }
@@ -1003,6 +1003,7 @@ foreach my $name (@name_arr) {
 #### QC
 ##############################
 my @qc_arr;
+my $qc_fini = 0;
 my @meta_files;
 print "\n------------------------\n";
 print "starting QC scripts\n";
@@ -1044,6 +1045,7 @@ foreach my $bprefix (@bfiles_pi) {
     }
     else {
 	push @meta_files, "$bprefix-qc.meta" ;
+	$qc_fini++;
     }
    # }
 }
@@ -1055,7 +1057,8 @@ if (@qc_arr > 0) {
 
     $sjadir = "$rootdir/$qc_dir";
     $sjaname = "qc";
-    $sjatime = 4;
+    $sjatime = 2;
+    $sjatime = 4 if ($qc_fini > 0);
     $sjamem = 2000;
     @sjaarray = @qc_arr;
     

@@ -33,7 +33,7 @@ my $hmloc = &trans("hmloc");
 
 #####################################################
 
-my $sc_file = "$hmloc/snp_platform_collection.txt.new.0114.gz";
+my $sc_file = "$hmloc/snp_platform_collection.txt.new.0815.gz";
 
 my $scol = 2;
 
@@ -110,6 +110,21 @@ print "size of bim-file: $nbim\n\n";
 my @out_lines = ();
 
 ## compare with snp-collection
+
+unless (-e $sc_file) {
+    $sc_file = "$hmloc/snp_platform_collection.txt.new.0114.gz";
+    if (-e $sc_file) {
+	print "Warning: using older platform reference $sc_file\n";
+	sleep(4);
+    }
+    else {
+	print "Error: no platform reference found\n";
+	exit;
+    }
+}
+print "platform reference: $sc_file\n";
+
+
 my $sc = gzopen($sc_file, "rb")  or die "Cannot open $sc_file: $gzerrno\n" ;
 while ($sc->gzreadline(my $line) > 0) {
     chomp($line);

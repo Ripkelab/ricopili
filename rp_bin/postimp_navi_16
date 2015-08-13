@@ -422,7 +422,7 @@ my $danerhet2p_script = "my.daner_het2p";      ### my.pipeline_tar
 my $topfilter_script = "topfilter";            ### my.pipeline_tar
 my $areator_script = "areator_dan8";           ### my.pipeline_tar
 my $areaplot_script = "area_plot_16_speed";    ### my.pipeline_tar
-my $forestplot_script = "forest_plot7";        ### my.pipeline_tar
+my $forestplot_script = "forest_plot8";        ### my.pipeline_tar
 my $manhattanplot_script = "manhattan_p4";     ### my.pipeline_tar
 my $manhattanplot2_script = "manhattan_plot2";  ### my.pipeline_tar
 my $qqplot_script = "qqplot_5";                ### my.pipeline_tar
@@ -690,6 +690,16 @@ sub mysystem(){
     system($systemstr);
     my $status = ($? >> 8);
     die "----\n->system call failed: $status\ncommand: $systemstr\n" if ($status != 0);
+}
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem_nodie(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    print "----\n->Warning: system call problem: $status\ncommand: $systemstr\n" if ($status != 0);
 }
 
 
@@ -986,7 +996,7 @@ sub send_jobarray {
 	exit;
     }
     else {
-	my $sys_re = "$blueprint_script --njob $job_bn_th -b \"$command_line\" --wa 1 --di -j --fwt $wt_file --na _pi_$outname";
+	my $sys_re = "$blueprint_script --njob $job_bn_th -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na _pi_$outname";
 	&mysystem ($sys_re);
     }
 
@@ -2212,7 +2222,7 @@ if ($danscore_file ne "") {
 
 	$sjadir = $danscoredirsum;
 	$sjaname = "dsc";
-	$sjatime = 4;
+	$sjatime = 2;
 	$sjamem = 5000;
 	@sjaarray = @dsc_arr;
 	
@@ -2368,7 +2378,7 @@ if (@danerdir_arr > 0) {
     
     $sjadir = $danerjobdir;
     $sjaname = "daner";
-    $sjatime = 4;
+    $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @danerdir_arr;
     
@@ -2380,7 +2390,7 @@ if (@danerdir_arr_long > 0) {
     
     $sjadir = $danerjobdir;
     $sjaname = "danerlong";
-    $sjatime = 4;
+    $sjatime = 2;
     $sjaweek = 1;
     $sjamem = 2000;
     @sjaarray = @danerdir_arr_long;
@@ -2619,7 +2629,7 @@ if (@chunker_arr > 0) {
     
     $sjadir = $resdandir;
     $sjaname = "chunk";
-    $sjatime = 4;
+    $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @chunker_arr;
     
@@ -3523,11 +3533,11 @@ my $area_plot_collection = "areas.$outname.pdf";
 #print "distdir/$area_plot_collection\n";
 #exit;
 
-unless (-e "$distdir/$area_plot_collection.gz") {
+unless (-e "$distdir/$area_plot_collection") {
     print "join area_plots\n";
     &mysystem ("$pdfjoin_script --rotateoversize false --outfile $area_plot_collection @areap_files");
-    &mysystem ("gzip $area_plot_collection");
-    &mysystem ("cp $area_plot_collection.gz $distdir");
+#    &mysystem ("gzip $area_plot_collection");
+    &mysystem ("cp $area_plot_collection $distdir");
 
 }
 
@@ -3548,11 +3558,11 @@ if ($regplot_file) {
 
 my $forest_plot_collection = "areas.fo.$outname.pdf";
 if (@forestp_files > 0) {
-    unless (-e "$distdir/$forest_plot_collection.gz") {
+    unless (-e "$distdir/$forest_plot_collection") {
 	print "join forest_plots\n";
 	&mysystem ("$pdfjoin_script --rotateoversize false --outfile $forest_plot_collection @forestp_files");
-	&mysystem ("gzip $forest_plot_collection");
-	&mysystem ("cp $forest_plot_collection.gz $distdir");
+#	&mysystem ("gzip $forest_plot_collection");
+	&mysystem ("cp $forest_plot_collection $distdir");
 	
     }
 }
@@ -3948,6 +3958,7 @@ if ($onlymeta) {
 ###################################
 ### LD_SCORE
 ###################################
+my $ldsc_tar = "$daner_all.ldsc.tar.gz";
 
 unless ($noldsc) {
     my @ldsc_arr = ();
@@ -3969,11 +3980,10 @@ unless ($noldsc) {
     }
     
     
-    my $ldsc_tar = "$daner_all.ldsc.tar.gz";
     unless (-e "$distdir/$ldsc_tar") {
 	
 	
-	&mysystem ("tar --ignore-failed-read -cvzf $ldsc_tar $daner_all.ldsc.log h2.$daner_all.observed.log h2.$daner_all.liability.log rg.PGC_SCZ49.sh2_mds10.$daner_all.observed.log rg.PGC_SCZ49.sh2_mds10.$daner_all.liability.log cmd.ldsc.txt");
+	&mysystem_nodie ("tar -cvzf $ldsc_tar $daner_all.ldsc.log h2.$daner_all.observed.log h2.$daner_all.liability.log rg.PGC_SCZ49.sh2_mds10.$daner_all.observed.log rg.PGC_SCZ49.sh2_mds10.$daner_all.liability.log cmd.ldsc.txt");
 	
 	&mysystem ("cp $daner_all.ldsc.sumstats.gz $distdir/$daner_all.ldsc.sumstats.gz");
 	&mysystem ("cp $ldsc_tar $distdir/$ldsc_tar");
@@ -4702,10 +4712,36 @@ unless (-e "$areator_all.summary") {
 
 &mysystem ('cat '.$areator_all.'.summary | '.$mutt_script.' -s Daner_results_ready_'.$outname.' '.$email) ;
 
-&mysystem ("$senddropbox_script manhattan.v2.$outname.pdf") ;
-&mysystem ("$senddropbox_script $areator_all.xls") ;
+#&mysystem ("$senddropbox_script manhattan.v2.$outname.pdf") ;
+#&mysystem ("$senddropbox_script $areator_all.xls") ;
 
 
+unless (-e "README.send_dropbox.txt") {
+    my $sd_txt;
+    $sd_txt .= "$senddropbox_script manhattan.v2.$outname.pdf\n";
+    $sd_txt .= "$senddropbox_script manhattan.nog2.$outname.pdf\n";
+    $sd_txt .= "$senddropbox_script manhattan.nog.$outname.pdf\n";
+    $sd_txt .= "$senddropbox_script qq.$outname.pdf\n";
+    $sd_txt .= "$senddropbox_script qq.$outname.het.pdf\n";
+    $sd_txt .= "$senddropbox_script basic.$outname.num.xls\n";
+
+    $sd_txt .= "$senddropbox_script $areator_all.xls\n";
+    $sd_txt .= "$senddropbox_script $area_plot_collection\n";
+    $sd_txt .= "$senddropbox_script $forest_plot_collection\n";
+
+    unless ($noldsc) {
+	$sd_txt .= "$senddropbox_script manhattan.nog.$outname.pdf\n";
+    }
+
+    $sd_txt .= "$senddropbox_script report.qc.$outname.pdf.gz\n";
+    $sd_txt .= "$senddropbox_script report.si.$outname.pdf.gz\n";
+
+    die $!."(README.send_dropbox.txt)" unless open OUT, "> README.send_dropbox.txt";
+    print OUT "$sd_txt\n";
+    close OUT;
+
+
+}
 
 unless (-e "replic/README") {
     &mysystem ("mkdir replic") unless (-e "replic");
@@ -4718,6 +4754,7 @@ unless (-e "replic/README") {
 
     &mysystem ("echo $repl_txt > README") ;
 }
+
 
 
 
