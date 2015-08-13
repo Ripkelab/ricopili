@@ -73,7 +73,7 @@ my $multi = -1;
 my $threads = 4;
 my $multi_str = "";
 my $errname="errandout";
-my $jmem = 1000;
+my $jmem = 2000;
 
 my $hhmm = "";
 
@@ -1033,7 +1033,8 @@ if ($job){
 	
 	my $jobname;
 
-
+	my $mem_str = ($jmem / 1000) * 1;
+	$mem_str = 1 if ($mem_str < 1);
 
 
 	if ($jobarray ne "") {
@@ -1050,7 +1051,10 @@ if ($job){
 	    print "starting job_array, $jobname\n";
 	    $jobname="j.$NOJ";
 
-	    
+	    my $qlong_str = "";
+	    if ($walltime > 2) {
+		$qlong_str = "-q long";
+	    }
 	    die "$! ($jobname)" unless open JOB, "> $jobname";
 
 
@@ -1060,7 +1064,7 @@ if ($job){
 	    print JOB "my.start_job -n ".'$SGE_TASK_ID'." --jobfile $jobarray\n";
 	    close JOB;
 	    
-	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages -t 1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job $hhmm $jobname";
+	    my $qsub_cmd = "qsub -l m_mem_free=".$mem_str."g $qlong_str -v PATH,rp_perlpackages -t 1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job $hhmm $jobname";
 	    my $qsub_txt = "$qsub_cmd > $jobname.id";
 	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
 	    
@@ -1094,7 +1098,7 @@ if ($job){
 	    print JOB "$bp\n";
 	    close JOB;
 	    
-	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages  -hold_jid $id_str -e $ENV{PWD}/$errname/ -o $ENV{PWD}/$errname/ $name_of_job $hhmm $jobname";
+	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages -l m_mem_free=".$mem_str."g  -hold_jid $id_str -e $ENV{PWD}/$errname/ -o $ENV{PWD}/$errname/ $name_of_job $hhmm $jobname";
 	    my $qsub_txt = "$qsub_cmd > $jobname.id";
 	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
 
@@ -1119,7 +1123,8 @@ if ($job){
 	
 	my $jobname;
 
-
+	my $mem_str = ($jmem / 1000) * 1;
+	$mem_str = 1 if ($mem_str < 1);
 
 
 	if ($jobarray ne "") {
@@ -1130,7 +1135,7 @@ if ($job){
 		$wallstr = "0:10:00";
 	    }
 
-	    $cores = 28;
+#	    $cores = 28;
 	    
 	    
 	    print "starting job_array, $jobname\n";
@@ -1141,6 +1146,7 @@ if ($job){
 
 
 	    print JOB "#PBS -lnodes=1:ppn=1\n";
+	    print JOB "#PBS -lmem=".$mem_str."gb\n";
 	    print JOB "#PBS -lwalltime=$wallstr\n";
 	    print JOB "cd $rootdir\n";
 	    print JOB "my.start_job -n ".'$PBS_ARRAYID'." --jobfile $jobarray\n";
@@ -1170,7 +1176,8 @@ if ($job){
 	    
 	    $jobname="j.$NOJ";
 	    die "$! ($jobname)" unless open JOB, "> $jobname";
-	    print JOB "#PBS -lnodes=1\n";
+	    print JOB "#PBS -lnodes=1:ppn=1\n";
+	    print JOB "#PBS -lmem=".$mem_str."gb\n";
 	    print JOB "#PBS -lwalltime=$wallstr\n";
 	    print JOB "cd $ENV{PWD}\n";
 	    print JOB "$bp\n";
@@ -1201,6 +1208,15 @@ if ($job){
     my $jobname;
 
 
+    my $mem_str = ($jmem / 1000) * 1;
+    if ($mem_str < 8){
+	$mem_str = 32;
+    }
+    else {
+	$mem_str = 64;
+	$cores =6;
+	
+    }
 
 
     if ($jobarray ne "") {
@@ -1210,10 +1226,6 @@ if ($job){
 	if ($walltime ==0){
 	    $wallstr = "0:10:00";
 	}
-
-#	if ($qsub_computerome){
-#	    $cores = 28;
-#	}
 
 	## very complicated to get the ceiling of the job-N = number of nodes
 	my $numnode = ($job_bn_th-0.000001)/$cores;
@@ -1228,18 +1240,20 @@ if ($job){
 #	print "jpbname: $jobname"."\n";
 #	exit;
 
-
- 
-
 	    
 	die "$! ($jobname)" unless open JOB, "> $jobname";
 
 
-#	if ($qsub_computerome){
-#	    print JOB "#PBS -lnodes=1:ppn=$cores\n";
-#	}
-#	else {
-	    print JOB "#PBS -lnodes=1:cores$cores:ppn=$cores\n";
+
+	if ($mem_str == 64) {
+#	    print JOB "#PBS -lnodes=1:cores$cores:ppn=$cores:mem64gb\n";
+	    print JOB "#PBS -lnodes=1:mem64gb\n";
+	}
+	else {
+#	    print JOB "#PBS -lnodes=1:cores$cores:ppn=$cores\n";
+	    print JOB "#PBS -lnodes=1\n";
+	}
+#	print JOB "#PBS -lmem=".$mem_str."gb\n";
 #	}
 	print JOB "#PBS -lwalltime=$wallstr\n";
 	print JOB "cd $rootdir\n";
@@ -1252,11 +1266,14 @@ if ($job){
 
       
 #	my $qsub_txt = "qsub -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
-	my $qsub_txt = "qsub -t 1-$numnode -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+	my $qsub_cmd = "qsub -t 1-$numnode -e $errname/ -o $errname/ $name_of_job $hhmm $jobname";
+	my $qsub_txt = "$qsub_cmd > $jobname.id";
+	my $qsub_log = "echo $qsub_cmd > $jobname.log";
 
 #	print "$qsub_txt\n";
 
-#	exit;
+	#	exit;
+	&mysystem ($qsub_log);
 	&mysystem ($qsub_txt);
 #	sleep (3);	
 	exit;
@@ -1278,6 +1295,7 @@ if ($job){
 	$jobname="j.$NOJ";
 	die "$! ($jobname)" unless open JOB, "> $jobname";
 	print JOB "#PBS -lnodes=1\n";
+#	print JOB "#PBS -lmem=".$mem_str."gb\n";
 	print JOB "#PBS -lwalltime=$wallstr\n";
 	print JOB "cd $ENV{PWD}\n";
 	print JOB "$bp\n";
@@ -1288,12 +1306,17 @@ if ($job){
 	#my.start_job -n $PBS_ARRAYID --jobfile array_test_2
 
       
-	my $qsub_txt = "qsub -W depend=afteranyarray:$id_str -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+	my $qsub_cmd = "qsub -W depend=afteranyarray:$id_str -e $errname/ -o $errname/ $name_of_job $hhmm $jobname";
+	my $qsub_txt = "$qsub_cmd > $jobname.id";
+	my $qsub_log = "echo $qsub_cmd > $jobname.log";
+
+
 
 	print "$qsub_txt\n";
 
 	#	    exit;
 	&mysystem ($qsub_txt);
+	&mysystem ($qsub_log);
 	exit;
     }
 

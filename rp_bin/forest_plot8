@@ -1,0 +1,1303 @@
+#!/usr/bin/perl
+use strict;
+
+
+###################################################
+#
+# needs rmeta installed in a subdir, specified by (in ~/.bashrc):
+#   
+#
+#
+#
+################################################
+
+
+
+
+my $out ="forest";
+my $title ="";
+my $snp ="";
+my $nhead = 1;
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("ploc");
+my $rloc = &trans("rloc");
+my $sloc = &trans("sloc");
+my $rpac = &trans("rpac");
+
+###############################################
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+}
+elsif ($rloc eq "/usr/bin/") {
+    $r_sys = "module load R/3.1.2; R";
+}
+else {
+    unless (-e "$rloc/R" ){
+	print "\n***** Error: couldn't find the following:\n";
+	print "$rloc/R\n";
+	exit;
+    }
+}
+
+
+
+my $short =0;
+
+use Getopt::Long;
+GetOptions( 
+    "out=s"=> \$out,
+    "title=s"=> \$title,
+    "snp=s"=> \$snp,
+    "rep=s"=> \my $repfile,
+    "meta=s"=> \my $metafile,
+    "reverse"=> \my $reverse,
+    "danerdirs=s"=> \my $danerdirs,
+    "nhead=i"=> \$nhead,
+    "short=i"=> \$short,
+    "chr=i"=> \my $chr_loc,
+    "pos=i"=> \my $pos_loc,
+ 
+   "help!"=> \my $help,
+   "maf"=> \my $maf,
+ );
+
+
+if ($help || $snp eq ""){
+    print "usage: $0 daner-file (zipped)
+
+      options:
+        --out           outname
+        --short INT     1 - without frequencies, 2- only one freq-col
+        --reverse       reverse effect
+        --nhead INT     number of sum-files, default = $nhead
+#        --or            or and CI
+        --meta STRING   name of meta file (out of daner)
+	--help          print this message and exit
+        --snp STRING    take this SNP
+        --maf           refer to minor allele
+#        --rep STRING    rep-info file, with summary at the end
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+my $gsnp = "\"$snp\"";
+$gsnp =~ s/\*/\\*/;
+
+#print "$snp\t$gsnp\n";
+#print "$gsnp\n";
+#exit;
+
+use Cwd;
+use File::Path;
+
+my $rootdir = &Cwd::cwd();
+
+my $outdir = "$rootdir";
+
+
+my $scratchdir = "$sloc";
+my $workdir="$scratchdir/for_$out";
+
+while (-e $workdir) {
+    $workdir .= ".f";
+}
+#&mysystem ("rm -rf $workdir");
+
+my @created = mkpath(   ## $created ?
+			"$workdir",
+			{verbose => 0, mode => 0750},
+    );
+
+print "$workdir\n";
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+#################################################
+#  copy to scratch
+#################################################
+chdir($workdir);
+#print "@ARGV<EDN>\n";
+my @file_list = @ARGV;
+
+
+############################
+#### here danerdirs
+
+my @danerdirs = ();
+my @danerstr = ();
+
+if ($danerdirs) {
+    die "$! ($rootdir/$danerdirs)" unless open DD, "< $rootdir/$danerdirs";
+    while (my $cd = <DD>){
+	chomp($cd);
+	my $found = 0;
+	my $cd_str = $cd;
+	$cd_str =~ s/^.*\///;
+	push @danerstr, $cd_str;
+#	print "suche: $cd_str\n";
+	die "$cd/dirlist: ".$! unless open DL, "< $cd/dirlist";
+	while (my $line = <DL>){
+	    last if ($found == 1);
+#	    my @cells = @{&split_line_ref(\$line)};
+#	    print "";
+	    chomp($line);    
+	    my $refind = $line;
+	    if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
+		$refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
+	    }
+	    my @tcells = split /_/, $refind;
+	    my $mega_start = $tcells[1];
+	    my $mega_end = $tcells[2];
+	    my $chr_ind = $tcells[0];
+	    $chr_ind =~ s/chr//;
+	    if ($mega_end eq "") {
+		$mega_end = $mega_start * 10;
+		$mega_start = $mega_end - 10;
+	    }
+	    my $start_loc = $mega_start *1.0e06;
+	    my $end_loc = $mega_end *1.0e06;
+	    
+	    if ($chr_ind == $chr_loc){
+		if ($start_loc <= $pos_loc){
+		    if ($end_loc > $pos_loc){
+#			print "$start_loc\t$end_loc\t$refind\n";
+			push @file_list, $cd."/".$line;
+#			print "list: ".$cd."/".$line."\n";
+			$found = 1;
+		    }
+		}
+	    }
+	}
+	close DL;
+	push @danerdirs, $_;
+    }
+    close DD;
+    $metafile = $file_list[0];
+}
+#exit;
+
+
+
+if (0) {
+    foreach (@file_list) {
+#    print "copy $_\n";
+	&mysystem("cp $rootdir/$_ .") unless (-e "$_");
+    }
+    
+    die "no metafile" if ($metafile eq "");
+    &mysystem("cp $rootdir/$metafile .") unless (-e "$metafile");
+}
+
+#print "copy over\n";
+
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+##########################################
+# subroutine extract ncases and ncontrols
+##########################################
+
+sub excaco {
+    my ($line)=@_;
+    my ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol);
+    $nocc = 0;
+    $nca = 0;
+    $nco = 0;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    $beta = 0;
+    my $cc = 0;
+    $ngtcol = -1;
+    foreach (@cols){
+	if ($_ =~ /^FRQ_A_/){
+	    $nca = $_;
+	    $nca =~ s/FRQ_A_//;
+	    $a1col = $cc;
+	}
+	if ($_ =~ /^FRQ_U_/){
+	    $nco = $_;
+	    $nco =~ s/FRQ_U_//;
+	    $a2col = $cc;
+	}
+	if ($_ eq "FRQ"){
+	    $a1col = $cc;
+	    $a2col = $cc;
+	}
+	if ($_ eq "BETA") {
+	    $beta = 1;
+	    $orcol = $cc;
+	}
+	if ($_ eq "OR") {
+	    $beta = 0;
+	    $orcol = $cc;
+	}
+	if ($_ eq "ngt") {
+	    $ngtcol = $cc;
+	}
+	if ($_ eq "INFO") {
+	    $infocol = $cc;
+	}
+	if ($_ eq "P") {
+	    $pcol = $cc;
+	}
+	if ($_ eq "SE") {
+	    $secol = $cc;
+	}
+	$cc++;
+	last if ($cc > 15);
+    }
+
+    $nocc = 1 if ($nca==0 && $nco ==0);
+#    print "@cols\n";
+#    print "nocc,nca,nco,beta: $nocc, $nca, $nco, $beta\n";
+#    print "nca,nco,beta,nocc,ngtcol,infocol,pcol,a1col,a2col,orcol,secol\n";
+#    print "$nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol\n";
+    ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol);
+}
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2fileapp {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, ">> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+#############################
+# test, if running on server
+#############################
+
+
+unless (-e "$ploc/plink" ){
+    print "\n***** Error: couldn't find the following:\n";
+    print "please check --ploc or $conf_file\n";
+    exit;
+}
+
+
+
+#####################################
+# study-names
+#####################################
+
+my %st_names = ();
+
+#scz_carwtc_eur  Cardiff-UK
+#scz_cat2_eur    CATIE
+#scz_ab_eur      ISC-Aberdeen
+#scz_bulg_eur    ISC-Cardiff
+#scz_dub_eur     ISC-Dublin
+#scz_edi_eur     ISC-Edinburgh
+#scz_ucl_eur     ISC-London
+#scz_port_eur    ISC-Portugal
+#scz_sw1_eur     ISC-SW1
+#scz_sw2_eur     ISC-SW2
+#scz_mgs2_eur    MGS
+#scz_bon_eur     SGENE-Bonn
+#scz_dk_eur      SGENE-Copenhagen
+#scz_muc_eur     SGENE-Munich
+#scz_top3_eur    SGENE-TOP3
+#scz_ucla_eur    SGENE-UCLA
+#scz_zhh_eur     Zucker-Hillside
+#ripke@ripkes-MacBook-Pro:~$ cat tmp | awk '{print "$st_names{\""$1"\"} = \""$2"\";"}'
+
+
+if (0) {
+
+
+#daner_stard_eur_remit_0111.gz
+#gendep_mdremit12_covar_dosage.txt.gz
+#v4_marsdich12.assoc.dosage.gz
+    $st_names{"gendep_mdremit12_covar_dosage.txt"} = "PCG GENDEP";
+    $st_names{"stard_eur_remit_0111"} = "PCG STAR*D";
+    $st_names{"v4_marsdich12.assoc.dosage"} = "PCG MARS";
+    $st_names{"PCG3_0111_remit"} = "PCG META REMIT";
+
+#daner_stard_eur_response.gz
+#gendep_mdresp2_dosage.txt.gz
+#v4_marsdich02.assoc.dosage.gz
+    $st_names{"gendep_mdresp2_dosage.txt"} = "PCG GENDEP";
+    $st_names{"stard_eur_response"} = "PCG STAR*D";
+    $st_names{"v4_marsdich02.assoc.dosage"} = "PCG MARS";
+    $st_names{"PCG3_0111_response"} = "PCG META RESPONSE";
+
+#daner_stard_eur_qids_wk2.gz
+#v2_gendep_mdperc2_dosage.txt.gz
+#v5_marsquan02_zscores.assoc.dosage.gz
+    $st_names{"v2_gendep_mdperc2_dosage.txt"} = "PCG GENDEP";
+    $st_names{"stard_eur_qids_wk2"} = "PCG STAR*D";
+    $st_names{"v5_marsquan02_zscores.assoc.dosage"} = "PCG MARS";
+    $st_names{"PCG3_0111_qids2"} = "PCG META QIDS2";
+
+#daner_stard_eur_qids_wk12.gz
+#v2_gendep_mdperc12_dosage.txt.gz
+#v5_marsquan12_zscores.assoc.dosage.gz
+    $st_names{"v2_gendep_mdperc12_dosage.txt"} = "PCG GENDEP";
+    $st_names{"stard_eur_qids_wk12"} = "PCG STAR*D";
+    $st_names{"v5_marsquan12_zscores.assoc.dosage"} = "PCG MARS";
+    $st_names{"PCG3_0111_qids12"} = "PCG META QIDS12";
+
+    $st_names{"scz_carwtc_eur"} = "SCZ Cardiff - UK";
+    $st_names{"scz_cat2_eur"} = "SCZ CATIE";
+    $st_names{"scz_ab_eur"} = "SCZ ISC - Aberdeen";
+    $st_names{"scz_bulg_eur"} = "SCZ ISC - Cardiff";
+    $st_names{"scz_dub_eur"} = "SCZ ISC - Dublin";
+    $st_names{"scz_edi_eur"} = "SCZ ISC - Edinburgh";
+    $st_names{"scz_ucl_eur"} = "SCZ ISC - London";
+    $st_names{"scz_port_eur"} = "SCZ ISC - Portugal";
+    $st_names{"scz_sw1_eur"} = "SCZ ISC - SW1";
+    $st_names{"scz_sw2_eur"} = "SCZ ISC - SW2";
+    $st_names{"scz_mgs2_eur"} = "SCZ MGS";
+    $st_names{"scz_bon_eur"} = "SCZ SGENE - Bonn";
+    $st_names{"scz_dk_eur"} = "SCZ SGENE - Copenhagen";
+    $st_names{"scz_muc_eur"} = "SCZ SGENE - Munich";
+    $st_names{"scz_top3_eur"} = "SCZ SGENE - TOP3";
+    $st_names{"scz_ucla_eur"} = "SCZ SGENE - UCLA";
+    $st_names{"scz_zhh_eur"} = "SCZ Zucker - Hillside";
+    $st_names{"replication.aust1e"} = "University of Queensland";
+    $st_names{"replication.dk1d"} = "SGENE - Copenhagen";
+    $st_names{"replication.multi1d"} = "Multicenter - Pedigree";
+    $st_names{"replication.sw3e"} = "SW3";
+    $st_names{"replication.sw4e"} = "SW4";
+    $st_names{"replication.wtccc2f"} = "ISGC and WTCCC2";
+    $st_names{"replication.sgene1f"} = "SGENE - Lookup";
+    $st_names{"replication.sgene2e"} = "SGENE - Typed";
+
+    $st_names{"ADAUMABISC45_0511_0711b.ADD4"} = "ADHD";
+    $st_names{"ADAUMABISC45_0511_0711b.AUT8"} = "ASD";
+    $st_names{"ADAUMABISC45_0511_0711b.BIP11"} = "BPD";
+    $st_names{"ADAUMABISC45_0511_0711b.MDD9"} = "MDD";
+    $st_names{"ADAUMABISC45_0511_0711b.SCZ17"} = "SCZ";
+    $st_names{"ADAUMABISC45_0511_0711b"} = "ALL";
+
+    $st_names{"bonn"} = "BOMA-bipolar Study";
+    $st_names{"dub"} = "Trinity College Dublin";
+    $st_names{"edi"} = "University of Edinburgh";
+    $st_names{"gain"} = "GAIN and BiGS";
+    $st_names{"gsk"} = "GSK";
+    $st_names{"mich"} = "NIMH/Pritzker";
+    $st_names{"st1"} = "STEP1";
+    $st_names{"st2"} = "STEP2";
+    $st_names{"top3"} = "TOP";
+    $st_names{"ucl"} = "University College London";
+    $st_names{"wtc"} = "WTCCC";
+
+    $st_names{"SCZ17f"} = "SZ-PGC Stage 1";
+    $st_names{"replication.REP"} = "SZ-PGC Stage 2";
+    $st_names{"replication.META"} = "SZ-PGC Stage 1 and 2";
+
+
+    $st_names{"met_BIP11.small.metadaner.ow"} = "PGC BD Stage 1";
+
+}
+
+#####################################
+# BEGIN
+#####################################
+
+
+## extract header
+my %hh;
+my %hr;
+
+
+my @farr_tmp ;
+
+print "start\n";
+foreach my $fl (@file_list) {
+#    print "fl: $fl\n";
+    unless ($fl =~ /^\//){
+	push @farr_tmp, "$rootdir/$fl";
+    }
+    else {
+	push @farr_tmp, "$fl";
+    }
+}
+@file_list = @farr_tmp;
+#exit;
+
+my %head_files;
+#foreach (0..($nhead-1)){
+    $head_files{$danerstr[$_]} = 1;
+#    $head_files{$file_list[$_]} = 1;
+#}
+my $tmp = keys %head_files;
+#print "nonon:".$tmp.", nhead: "."$nhead\n";
+#foreach (keys %head_files) {
+#    print "header-file:\t$_\n";
+#}
+
+
+#my $hh1 = `zcat $rootdir/$file_list[0] | head -1`;
+#print "mion: $file_list[0]\n";
+my $hh1 = `gunzip -c $file_list[0] | head -1`;
+foreach my $c (0..$#file_list) {
+#    print "mion: $file_list[$c]\n";
+#    $hh{$file_list[$c]} = `zcat $rootdir/$file_list[$c] | head -1`;
+#    $hh{$file_list[$c]} = `zcat $file_list[$c] | head -1`;
+    $hh{$danerstr[$c]} = `gunzip -c $file_list[$c] | head -1`;
+    chomp($hh{$danerstr[$c]});
+#    chomp($hh{$file_list[$c]});
+#    print "file-header:\t$hh{$file_list[$c]}\n";
+}
+#exit;
+
+
+## extract info
+my %finfo;
+my $ws = '[[:space:]]';
+
+my $main = `zgrep -m 1 -w $gsnp $file_list[0]`;
+#my $main = `zgrep -m 1 -w $gsnp $rootdir/$file_list[0]`;
+foreach (0..$#file_list) {
+#    print "grep in :\t$file_list[$_]\n";
+#    $finfo{$file_list[$_]} = `zgrep -m 1 -w $gsnp $file_list[$_]`;
+    my $str_tmp = `zgrep -m 1 -w $gsnp $file_list[$_]`;
+    $finfo{$danerstr[$_]} = $str_tmp;
+
+#    print "$str_tmp\n";
+
+
+}
+
+#my ($nca,$nco) = &excaco($hh1);
+#print "$nca\t$nco\n";
+
+#foreach (keys %finfo){
+#    print "$_\t$finfo{$_}";
+#}
+
+#exit;
+
+
+
+
+########################################
+## meta including heterogeneity
+#######################################
+
+
+my $meta_q;
+my $meta_p;
+my $meta_d;
+my $meta_i;
+my $meta_f;
+
+my $meta_line = `zgrep -m 1 -w $gsnp $metafile`;
+#my $meta_line = `zgrep -m 1 -w $gsnp $rootdir/$metafile`;
+#    print $meta_line."\n";
+#    exit;
+my @cells_m = &split_line($meta_line);
+$meta_p = $cells_m[16];
+$meta_i = $cells_m[13];
+$meta_d = $cells_m[12];
+$meta_f = $cells_m[6];
+
+my $mafdir = 1;
+if ($maf){
+    $mafdir = -1 if ($meta_f > .5);
+}
+
+
+
+########################
+## prepare forest-file
+########################
+
+my $forest_file = "forest_$out";
+
+my @forest_lines_head = ();
+my @forest_lines = ();
+my @forest_lines_repl = ();
+my @forest_head_lines = ();
+my $found = 0;
+
+
+################################3
+### forest-header
+#################################
+
+my @cells = &split_line($main);
+    
+
+my $for_head;
+my $chr = $cells[0];
+my $pos = $cells[2];
+my $a1 = $cells[3];
+my $a2 = $cells[4];
+    
+
+
+my $oline = "";
+
+
+
+
+
+foreach my $study (sort keys %finfo){
+    my $rep_sw =0;
+    $oline = "";
+    print "$study\n";
+
+    print "info: ".$finfo{$study}."\n";
+
+    my @cells = &split_line($finfo{$study});
+    next if (@cells < 5);
+
+    my $direc = 1;
+    if ($a1 ne $cells[3]) {
+	if ($a1 eq $cells[4]) {
+	    $direc = -1;
+	}
+	else {
+	    print "some strange alleles: $a1,$a2 and $cells[3] and $cells[4]\n";
+	}
+    }
+    $direc = $direc * $mafdir;
+
+    my $st_str = $study;
+    my ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol) = &excaco($hh{$study});
+
+    print "hh_st($study): $hh{study}\n";
+#    sleep(2);
+
+    $st_str =~ s/^.*\///;
+
+    $st_str =~ s/chr[0-9]*_[0-9]*_[0-9]*.*$//;
+    $st_str =~ s/^daner_//;
+    $st_str =~ s/^dameta_//;
+    $st_str =~ s/^da_//;
+    $st_str =~ s/^qc2report_//;
+    $st_str =~ s/_QC1B.*gz$//;
+    $st_str =~ s/_gene_hg19_.*$//;
+    $st_str =~ s/^forest.*adda/replication/;
+    $st_str =~ s/\.gz$//;
+    $st_str =~ s/\.meta.gene.metadaner$//;
+    $st_str =~ s/\.meta.metadaner$//;
+
+    $st_str =~ s/_step7_additionalqc_step2.after_hwe.ch.fl$//;
+    $st_str =~ s/\.post_merge_qc.ch.fl$//;
+
+    $st_str =~ s/assoc.dosage.daner//;
+
+    $st_str =~ s/dosage.txt.daner//;
+    $st_str =~ s/daner$//;
+    $st_str =~ s/_eur.*/_eur/;
+
+    $st_str =~ s/imp2.site.//;
+    $st_str =~ s/.assoc.gz.small//;
+
+
+    $rep_sw = 1 if ($st_str =~ /^replication/);
+
+    $st_str = $st_names{$st_str} if (exists $st_names{$st_str});
+
+    $oline .= sprintf "%s",$st_str;
+
+#    my $ecol = 11;
+#    $ecol = 10 if ($nocc ==1);
+#    print "$short\n";
+#    exit;
+
+    if ($short == 2) {
+	$oline .= sprintf "\t";
+    }
+    else {
+	if ($ngtcol > -1) {
+	    $oline .= sprintf "\t%s",$cells[$ngtcol];
+	}
+	else {
+	    $oline .= sprintf "\t-";
+	}
+#	$oline .= sprintf "\t-";
+    }
+
+#    print "$short\n";
+#    print "oline:$oline\n";
+#    exit;
+#    $ecol = 7;
+#    $ecol = 6 if ($nocc ==1);
+
+    if ($short == 2) {
+#	print "two\n";
+	$oline .= sprintf "\t";
+    }
+    else {
+#	print "not two\n";
+	$oline .= sprintf "\t%.2f",$cells[$infocol];
+    }
+ #   exit;
+#    $ecol = 10;
+#    $ecol = 9 if ($nocc ==1);
+    my $valid = 1 ;
+    $valid =0 if ($cells[$pcol] eq "NA"); 
+
+    if ($short == 2) {
+	$oline .= sprintf "\t";
+    }
+    else {
+	if ($valid) {
+	    $oline .= sprintf "\t%.3g",$cells[$pcol];
+	}
+	else {
+	    $oline .= sprintf "\t-";
+	}
+    }
+	    
+
+
+    if ($short == 1) {
+	$oline .= "\t-";
+	$oline .= "\t-";
+    }
+    elsif ($short == 2) {
+	$oline .= "\t ";
+	if ($cells[$a2col] > 0){
+	    if ($direc == 1) {
+#		$oline .= sprintf "\t%.2f",$cells[$a1col];
+		$oline .= sprintf "\t";
+	    }
+	    else {
+#		$oline .= sprintf "\t%.2f",1-$cells[$a1col];
+		$oline .= sprintf "\t";
+ 	    }
+	}
+	else {
+	    $oline .= "\t-";
+	    $oline .= "\t-";
+	}
+    }
+    else {
+#	my $ecol1 = 5;
+#	my $ecol2 = 6;
+#	if ($nocc ==1) {
+#	    $ecol1 = 5;
+#	    $ecol2 = 5;
+#	}
+	if ($cells[$a2col] > 0){
+	    if ($direc == 1) {
+		$oline .= sprintf "\t%.3f($nca)",$cells[$a1col];
+		$oline .= sprintf "\t%.3f($nco)",$cells[$a2col];
+	    }
+	    else {
+		$oline .= sprintf "\t%.3f($nca)",1-$cells[$a1col];
+		$oline .= sprintf "\t%.3f($nco)",1-$cells[$a2col];
+	    }
+	}
+	else {
+	    $oline .= "\t-";
+	    $oline .= "\t-";
+	}
+    }
+    
+    if ($valid) {
+	my $beta_str;
+	my $se_str;
+
+#	my $ecol1 = 8;
+#	my $ecol2 = 9;
+#	if ($nocc ==1) {
+#	    $ecol1 = 7;
+#	    $ecol2 = 8;
+#	}
+	
+	my $beta_out;
+	if ($beta == 0) {
+	    if ($cells[$orcol] > 0) {
+		$beta_out = log($cells[$orcol]);
+	    }
+	    else {
+		$beta_str = "NA";
+	    }
+	    $se_str .= sprintf "%.3g",$cells[$secol];
+	}
+	else {
+	    $beta_out = $cells[$orcol];
+	    $se_str .= sprintf "%.3g",$cells[$secol];
+	}
+	if ($direc == -1) {
+	    $beta_out = $beta_out * (-1);
+	}
+	if ($reverse) {
+	    $beta_out = $beta_out * (-1);
+	}
+	$beta_str = sprintf "%.3g",$beta_out;
+	if ($short == 2) {
+	    $oline .= "\t\t";
+	    $oline .= "\t$beta_str\t$se_str";
+	}
+	else {
+	    $oline .= "\t$beta_str\t$se_str";
+	    $oline .= "\t$beta_str\t$se_str";
+	}
+    }
+    else {
+	if ($short == 2) {
+	    $oline .= sprintf "\tNA";
+	    $oline .= sprintf "\tNA";
+	}
+	else {
+	    $oline .= sprintf "\t-";
+	    $oline .= sprintf "\t-";
+	    $oline .= sprintf "\tNA";
+	    $oline .= sprintf "\tNA";
+	}
+    }
+
+    if (exists $head_files{$study}){  
+	$oline .= sprintf "\tTRUE";
+    }
+    else {
+	$oline .= sprintf "\tFALSE";
+    }
+    $oline .= sprintf "\n";
+    
+    if (exists $head_files{$study}){  
+	push @forest_head_lines, $oline;
+    }
+    else {
+	if ($rep_sw ==0){
+	    push @forest_lines, $oline;
+	}
+	else {
+	    push @forest_lines_repl, $oline;
+	}
+    }
+    print $oline;
+}
+
+#exit;
+
+$oline ="";
+foreach (1..9) {
+    $oline .= "\tNA";
+}
+$oline .= "\tTRUE";
+$oline .= "\n";
+my @empty_lines= ();
+push @empty_lines, $oline;
+
+
+$oline ="";
+
+my $st1 = "";
+my $st2 = "";
+my $st12 = "";
+
+
+if (0) {
+if (@forest_head_lines == 3) {
+    my @tmp_lines = ();
+    foreach (@forest_head_lines) {
+	if ($_ =~ /^replication.META/) {
+	    print "no.\n";
+#	    $tmp_lines[2] = $_;
+	}
+	elsif ($_ =~ /^replication.REP/) {
+	    print "no.\n";
+#	    $tmp_lines[1] = $_;
+	}
+	else {
+	    $st1 = $_;
+#	    push @tmp_lines, $_;
+	}
+    }
+    foreach (@forest_head_lines) {
+	if ($_ =~ /^replication.REP/) {
+	    $st2 = $_;
+#	    push @tmp_lines, $_;
+	}
+    }
+    foreach (@forest_head_lines) {
+	if ($_ =~ /^replication.META/) {
+	    $st12 = $_;
+#	    push @tmp_lines, $_;
+	}
+    }
+
+    @forest_head_lines = @tmp_lines;
+}
+}
+
+$st1 = @forest_head_lines[0];
+$st2 = @forest_head_lines[2];
+$st12 = @forest_head_lines[1];
+
+@forest_lines = sort @forest_lines;
+@forest_lines_repl = sort @forest_lines_repl;
+#&a2file ($forest_file, @forest_lines_head, @forest_lines, @empty_lines, @forest_lines_repl, @empty_lines, @forest_head_lines);
+
+#&a2file ($forest_file, @forest_lines);
+
+#&mysystem ("sort -k1,1 $forest_file > $forest_file.sorted");
+#&mysystem ("mv $forest_file.sorted $forest_file");
+
+
+
+#### some useless stuff from old meta-file readings
+if (0) {
+
+    my $head_single = "SNP\tCHR\tBP\tA1\tA2\tP\tOR\tSE";
+    my @si_files = ();
+    my $file_cc = 0;
+    foreach (@forest_lines) {
+
+	my @cells_si=  split /\t/, $_;
+	my $info_str = $cells_si[3];
+	$info_str .= "\t".$cells_si[6];
+	$info_str .= "\t".$cells_si[7];
+
+	die $! unless open SIFILE, "> meta$file_cc.sire";
+	print SIFILE "$head_single\n";
+	print SIFILE "$snp\t\t$chr\t$pos\t$a1\t$a2\t$info_str\n";
+	close SIFILE;
+
+	push @si_files, "meta$file_cc.sire";
+	$file_cc++;
+    }
+
+
+    die "$!" unless open META, "< $snp.meta.meta";
+    
+    my $header_tmp = <META>;
+
+    my $meta_line = <META>;
+    my @cells_m = &split_line($meta_line);
+    $meta_q = $cells_m[10];
+    $meta_i = $cells_m[11];
+
+
+    close META;
+
+
+}
+
+
+#####################################
+### write forest-file
+########################################
+###### HEADER1
+$for_head .= "$snp";
+
+$for_head .= "\tNA";
+if ($mafdir == 1) {
+    unless ($reverse) {
+	$for_head .= "\t$a1/$a2";
+    }
+    else {
+	$for_head .= "\t$a2/$a1";
+    }
+}
+else {
+    unless ($reverse) {
+	$for_head .= "\t$a2/$a1";
+    }
+    else {
+	$for_head .= "\t$a1/$a2";
+    }
+}
+$for_head .= "\tNA";
+if ($short == 2) {
+    $for_head .= "\tNA";
+}
+else {
+    $for_head .= "\t$chr:$pos";
+}
+$for_head .= "\tNA";
+$for_head .= "\tNA";
+
+$for_head .= "\tNA";
+$for_head .= "\tNA";
+#unless ($short == 2) {
+    $for_head .= "\tNA";
+#}
+$for_head .= "\tTRUE";
+$for_head .= "\n";
+
+unless ($short == 2) {
+###### HEADER1
+    $for_head .= "NA";
+    $for_head .= "\t\t$meta_d";
+    $for_head .= "\tNA\thet_P:\t";
+    $for_head .= sprintf "%.2f",$meta_p;
+    $for_head .= "\thet_I:\t$meta_i";
+    
+    
+#$for_head .= "\tNA";
+    $for_head .= "\tNA";
+    $for_head .= "\tNA";
+    $for_head .= "\tFALSE";
+    $for_head .= "\n";
+}
+
+my $ncol = 9;
+#$ncol =7 if ($short == 2);
+
+foreach (1..$ncol) {
+    $for_head .= "\tNA";
+}
+$for_head .= "\tTRUE";
+$for_head .= "\n";
+
+
+    $for_head .= "";
+#$for_head .= "\tngt/proxy";
+    if ($short == 2) {
+	$for_head .= "\t.";
+    }
+    else {
+	$for_head .= "\tngt";
+    }
+    
+    
+    if ($short == 1) {
+	$for_head .= "\tinfo";
+	$for_head .= "\tp_value";
+	$for_head .= "\t-";
+	$for_head .= "\t-";
+    }
+    elsif ($short == 2) {
+	$for_head .= "\t.";
+	$for_head .= "\t.";
+	$for_head .= "\t.";
+	$for_head .= "\t.";
+#    $for_head .= "\tfreq";
+    }
+    else {
+	$for_head .= "\tinfo";
+	$for_head .= "\tp_value";
+	$for_head .= "\tf_ca(n)";
+	$for_head .= "\tf_co(n)";
+    }
+    
+    if ($short == 2) {
+	$for_head .= "\t.";
+	$for_head .= "\t.";
+    }
+    else {
+	$for_head .= "\tln(OR)";
+	$for_head .= "\tSTDerr";
+    }
+    $for_head .= "\tNA";
+    $for_head .= "\tNA";
+    $for_head .= "\tTRUE";
+    $for_head .= "\n";
+
+	
+$for_head .= "";
+
+foreach (1..$ncol) {
+    $for_head .= "\tNA";
+}
+$for_head .= "\tTRUE";
+$for_head .= "\n";
+
+push @forest_lines_head, $for_head;
+
+
+&a2file ($forest_file, @forest_lines_head, @forest_lines, @empty_lines, @forest_lines_repl, @empty_lines, $st1, $st2, $st12);
+
+
+
+#&a2fileapp ($forest_file, @forest_head_lines);
+
+
+#exit;
+########################################
+## forest plot
+#######################################
+
+
+my $R_templ_for = '
+LIBRARY
+
+######### changed fsize and  heights = unit(c(rep(1, nr), 0.5) in  heights = unit(c(rep(.75, nr), 0.5)
+####### graphwidth = unit(3, "inches"), fsize =7
+
+my.forestplot <- function (labeltext, mean, lower, upper, align = NULL, is.summary = FALSE, 
+    clip = c(-5, 5), xlab = "", zero = 0, graphwidth = unit(3, 
+        "inches"), col = meta.colors(), xlog = FALSE, xticks = NULL, 
+    boxsize = NULL, fsize =7, rowheight =.75 ,...) 
+{
+    cellsize = 1.2
+    require("grid") || stop("grid package not found")
+    require("rmeta") || stop("rmeta package not found")
+    drawNormalCI <- function(LL, OR, UL, size) {
+        size = 0.75 * size
+        clipupper <- convertX(unit(UL, "native"), "npc", valueOnly = TRUE) > 
+            1  ## original 1
+        cliplower <- convertX(unit(LL, "native"), "npc", valueOnly = TRUE) < 
+            0  ## original 0
+        box <- convertX(unit(OR, "native"), "npc", valueOnly = TRUE)
+        clipbox <- box < 0 || box > 1
+        if (clipupper || cliplower) {
+            ends <- "both"
+            lims <- unit(c(0, 1), c("npc", "npc"))
+            if (!clipupper) {
+                ends <- "first"
+                lims <- unit(c(0, UL), c("npc", "native"))
+            }
+            if (!cliplower) {
+                ends <- "last"
+                lims <- unit(c(LL, 1), c("native", "npc"))
+            }
+            grid.lines(x = lims, y = 0.5, arrow = arrow(ends = ends, 
+                length = unit(0.05, "inches")), gp = gpar(col = col$lines,fontsize=fsize))
+            if (!clipbox) 
+                grid.rect(x = unit(OR, "native"), width = unit(size, 
+                  "snpc"), height = unit(size, "snpc"), gp = gpar(fill = col$box, fontsize=fsize,
+                  col = col$box))
+        }
+        else {
+            grid.lines(x = unit(c(LL, UL), "native"), y = 0.5, 
+                gp = gpar(col = col$lines,fontsize=fsize))
+            grid.rect(x = unit(OR, "native"), width = unit(size, 
+                "snpc"), height = unit(size, "snpc"), gp = gpar(fill = col$box, fontsize=fsize,
+                col = col$box))
+            if ((convertX(unit(OR, "native") + unit(0.5 * size, 
+                "lines"), "native", valueOnly = TRUE) > UL) && 
+                (convertX(unit(OR, "native") - unit(0.5 * size, 
+                  "lines"), "native", valueOnly = TRUE) < LL)) 
+                grid.lines(x = unit(c(LL, UL), "native"), y = 0.5, 
+                  gp = gpar(col = col$lines,fontsize=fsize))
+        }
+    }
+    drawSummaryCI <- function(LL, OR, UL, size) {
+        grid.polygon(x = unit(c(LL, OR, UL, OR), "native"), y = unit(0.5 + 
+            c(0, 0.5 * size, 0, -0.5 * size), "npc"), gp = gpar(fill = col$summary,fontsize=fsize, 
+            col = col$summary))
+    }
+    plot.new()
+    widthcolumn <- !apply(is.na(labeltext), 1, any)
+    nc <- NCOL(labeltext)
+    labels <- vector("list", nc)
+    if (is.null(align)) 
+        align <- c("l", rep("r", nc - 1))
+    else align <- rep(align, length = nc)
+    nr <- NROW(labeltext)
+    is.summary <- rep(is.summary, length = nr)
+    for (j in 1:nc) {
+        labels[[j]] <- vector("list", nr)
+        for (i in 1:nr) {
+            if (is.na(labeltext[i, j])) 
+                next
+            x <- switch(align[j], l = 0, r = 1, c = 0.5)
+            just <- switch(align[j], l = "left", r = "right", 
+                c = "center")
+            labels[[j]][[i]] <- textGrob(labeltext[i, j], x = x, 
+                just = just, gp = gpar(fontface = if (is.summary[i]) 
+                  "bold"
+                else "plain", col = rep(col$text, length = nr)[i],fontsize=fsize))
+        }
+    }
+    colgap <- unit(3, "mm")  ## orig 3 
+    colwidths <- unit.c(max(unit(rep(1, sum(widthcolumn)), "grobwidth", 
+        labels[[1]][widthcolumn])), colgap)
+    if (nc > 1) {
+        for (i in 2:nc) colwidths <- unit.c(colwidths, max(unit(rep(1, 
+            sum(widthcolumn)), "grobwidth", labels[[i]][widthcolumn])), 
+            colgap)
+    }
+    colwidths <- unit.c(colwidths, graphwidth)
+
+    pushViewport(viewport(layout = grid.layout(nr + 1, nc * 2 + 
+        1, widths = colwidths , heights = cellsize * unit(c(rep(rowheight, nr), 0.5), 
+        "lines"))))
+    cwidth <- (upper - lower)
+#    xrange <- c(max(min(lower, na.rm = TRUE), clip[1]), min(max(upper, 
+    xrange <- c(max(min(c(lower,0), na.rm = TRUE), clip[1]), min(max(c(upper,0), 
+        na.rm = TRUE), clip[2]))
+    info <- 1/cwidth
+    info <- info/max(info[!is.summary], na.rm = TRUE)
+    info[is.summary] <- 1
+    if (!is.null(boxsize)) 
+        info <- rep(boxsize, length = length(info))
+    for (j in 1:nc) {
+        for (i in 1:nr) {
+            if (!is.null(labels[[j]][[i]])) {
+                pushViewport(viewport(layout.pos.row = i, layout.pos.col = 2 * 
+                  j - 1))
+                grid.draw(labels[[j]][[i]])
+                popViewport()
+            }
+        }
+    }
+    pushViewport(viewport(layout.pos.col = 2 * nc + 1, xscale = xrange))
+    grid.lines(x = unit(zero, "native"), y = 0:1, gp = gpar(col = col$zero,fontsize=fsize))
+    if (xlog) {
+        if (is.null(xticks)) {
+            ticks <- pretty(exp(xrange))
+            ticks <- ticks[ticks > 0]
+        }
+        else {
+            ticks <- xticks
+        }
+        if (length(ticks)) {
+            if (min(lower, na.rm = TRUE) < clip[1]) 
+                ticks <- c(exp(clip[1]), ticks)
+            if (max(upper, na.rm = TRUE) > clip[2]) 
+                ticks <- c(ticks, exp(clip[2]))
+            xax <- xaxisGrob(gp = gpar(cex = 0.6, col = col$axes,fontsize=fsize), 
+                at = log(ticks), name = "xax")
+            xax1 <- editGrob(xax, gPath("labels"), label = format(ticks, 
+                digits = 2))
+            grid.draw(xax1)
+        }
+    }
+    else {
+##### fontsize of xaxis
+        if (is.null(xticks)) {
+            grid.xaxis(gp = gpar(cex = 0.6, col = col$axes,fontsize=fsize+2))
+        }
+        else if (length(xticks)) {
+            grid.xaxis(at = xticks, gp = gpar(cex = 0.6, col = col$axe,fontsize=fsize))
+        }
+    }
+
+#####   fontsize of xlab
+    grid.text(xlab , y = unit(-2.5, "lines"), gp = gpar(col = col$axes,fontsize=fsize))
+
+    popViewport()
+    for (i in 1:nr) {
+        if (is.na(mean[i])) 
+            next
+        pushViewport(viewport(layout.pos.row = i, layout.pos.col = 2 * 
+            nc + 1, xscale = xrange))
+        if (lower[i] < -10 || upper[i] > 10) 
+    	     drawNormalCI(lower[i], mean[i], upper[i], info[i])
+#            next
+        if (is.summary[i]) 
+            drawSummaryCI(lower[i], mean[i], upper[i], info[i])
+        else drawNormalCI(lower[i], mean[i], upper[i], info[i])
+        popViewport()
+    }
+    popViewport()
+}
+
+
+
+
+
+pdf ("INNAME.pdf",8.7,6)
+read.delim("INNAME",header=F)->fp
+rh = .75;
+fs = 7; # fontsize
+    if (dim(fp)[1]>25) {rh=.5; fs = 7}
+    if (dim(fp)[1]>35) {rh=.4; fs = 6}
+    ntex = 8
+my.forestplot(fp[,1:ntex],mean=fp[,ntex+1], lower= fp[,ntex+1]-1.96*fp[,ntex+2], xlab = "ln(OR), 95% CI",upper = fp[,ntex+1]+1.96*fp[,ntex+2],zero=0,is.summary=fp[,ntex+3], 
+       xlog=FALSE,col=meta.colors(box="royalblue",line="darkblue", summary="royalblue",zero="red")
+       , rowheight= rh
+       , fsize = fs)
+dev.off()
+';
+
+
+my $lib_txt = "library(rmeta)";
+if ($rpac ne "NA") {
+    $lib_txt = 'library(rmeta,lib.loc="'.$rpac.'")';;
+}
+
+#exit;
+
+
+$R_templ_for =~ s/INNAME/$forest_file/g ;
+$R_templ_for =~ s/LIBRARY/$lib_txt/g ;
+&a2file ( "R_forest_$out.in_tmp" , $R_templ_for);
+&mysystem("$r_sys < R_forest_$out.in_tmp --vanilla ");
+#&mysystem("source /broad/software/scripts/useuse; use R-2.14; R < R_forest_$out.in_tmp --vanilla");
+
+&mysystem("cp $forest_file.pdf $rootdir");
+
+&mysystem ("tar -cvzf $forest_file.pdf.tar.gz R_forest_$out.in_tmp $forest_file");
+&mysystem ("cp $forest_file.pdf.tar.gz $rootdir");
+
+&mysystem ("rm -rf $workdir");
+
+print "$forest_file.pdf\n";

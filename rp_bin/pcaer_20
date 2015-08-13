@@ -560,7 +560,7 @@ sub send_jobarray {
 	exit;
     }
     else {
-	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 4 --di -j --fwt $wt_file --na _pc_$outname";
+	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na _pc_$outname";
 	&mysystem ($sys_re);
     }
 
@@ -1061,7 +1061,7 @@ if (0) {
 
 	$sjadir = $pcaer_dir;
 	$sjaname = "mesp";
-	$sjatime = 3;
+	$sjatime = 2;
 	$sjamem = 3000;
 	push @sjaarray, $cmd_str;
 
@@ -1317,7 +1317,7 @@ unless (-e "$bfile_mepr.bim") {
 
     $sjadir = "$pcaer_dir";
     $sjaname = "mepr";
-    $sjatime = 3;
+    $sjatime = 2;
     $sjamem = 3000;
     push @sjaarray, $cmd_str;
 
@@ -2052,7 +2052,7 @@ unless (-e "$bfile_menv.mds") {
 
 	    $sjadir = "$pcaer_dir/$subdir_mds";
 	    $sjaname = "epca";
-	    $sjatime = 4;
+	    $sjatime = 2;
 	    $sjamem = 2000;
 	    @sjaarray = @job_arr;
 
@@ -2353,7 +2353,7 @@ unless (-e "$bfile_menv.mds") {
 	    
 	    $sjadir = "$pcaer_dir/$subdir_mds";
 	    $sjaname = "epca";
-	    $sjatime = 4;
+	    $sjatime = 2;
 	    $sjamem = 2000;
 	    @sjaarray = @job_arr;
 	    

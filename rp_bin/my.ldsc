@@ -55,6 +55,11 @@ if ($ldsc eq "/home/gwas/ldsc/") {
     $ldsc_sys = "module load ldsc; ";
 }
 
+if ($ldsc eq "/home/people/sripke/rp_external_bins/ldsc/") {
+    $ldsc_sys = "module load tools; module load anaconda;  python $ldsc/";
+}
+
+
 
 
 
@@ -206,7 +211,7 @@ close OUT;
 
 
 
-
+sleep 2;
 if ($sc == 0) {
     &mysystem ("touch $danerfile.ldsc.fini");
 }
