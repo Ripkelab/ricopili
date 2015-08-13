@@ -49,6 +49,11 @@ use strict;
 #
 # version 55:
 #   serial
+#
+# version 56
+#   probability check (patch from raymond)
+#   UGER at broad
+#
 #######################################
 
 
@@ -947,7 +952,11 @@ sub send_jobarray {
     my $jobfile = "$sjaname.job_list";
     while (-e $jobfile) {
 	$jobfile .= ".s";
+	$sjatime = 4;
     }
+
+
+    
     &a2filenew ($jobfile, @sjaarray);
 
 #    print "$jobfile\n";
@@ -1074,7 +1083,7 @@ sub send_jobarray {
 	exit;
     }
     else {
-	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 4 --di -j --fwt $wt_file --na _if_$outname";
+	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na _if_$outname";
 	&mysystem ($sys_re);
     }
 
@@ -1501,6 +1510,7 @@ else {
 ###################################
 
 my @buigue_arr = ();
+my $buigue_fini = 0;
 
     unless (-e "$rootdir/buigue_done") {
     unless (-e "$rootdir/posing_done") {
@@ -1513,13 +1523,19 @@ my @buigue_arr = ();
 	    unless (exists $bimhg19_array{$accfli}) {
 		push @buigue_arr, "$buigue_script --lift19 $bfile.bim" ;#
 	    }
+	    else {
+		$buigue_fini++;
+	    }
 	}
 
 	if (@buigue_arr > 0) {
 	    
 	    $sjadir = $impute_dir;
 	    $sjaname = "buigue";
+	    
 	    $sjatime = 2;
+#	    $sjatime = 4 if ($buigue_fini > 0);
+	    
 	    $sjamem = 3000;
 	    @sjaarray = @buigue_arr;
 	    
@@ -1540,6 +1556,7 @@ my @buigue_arr = ();
 
 
 my @readref_arr = ();
+my $readref_fini = 0;
 
 if ($readref_sw == 1) {
     unless (-e "$rootdir/readref_done") {
@@ -1557,6 +1574,9 @@ if ($readref_sw == 1) {
 		    push @readref_arr, "$readref_script --chr $chrloc --ref $reffi $accfli" ;#
 #		print "$readref_script --chr $chrloc --ref $reffi $bimfile\n" ;#
 		}
+		else {
+		    $readref_fini;
+		}
 	    }
 	}
 #    exit;
@@ -1564,11 +1584,15 @@ if ($readref_sw == 1) {
 	    
 	    $sjadir = $impute_dir;
 	    $sjaname = "readref";
-	    $sjatime = 4;
+	    $sjatime = 2;
+#	    $sjatime = 4 if ($readref_fini > 0);
+	    
 	    $sjamem = 3000;
 	    $sjamaxpar = 100;
 	    @sjaarray = @readref_arr;
 	    
+
+
 	    &send_jobarray;
 	}
 	else {
@@ -1585,6 +1609,7 @@ if ($readref_sw == 1) {
     unless (-e "$rootdir/readrefsum_done") {
 
 	my @readrefsum_arr = ();
+	my $readrefsum_fini = 0;
 	
 	unless (-e "$rootdir/readrefsum_done") {
 	    foreach (@bim_files) {
@@ -1597,6 +1622,9 @@ if ($readref_sw == 1) {
 		unless (exists $bimref_array{$bimref_done}) {
 		    push @readrefsum_arr, "$readrefsum_script $accfli" ;#
 		}
+		else {
+		    $readrefsum_fini++;
+		}
 	    }
 	    
 	    if (@readrefsum_arr > 0) {
@@ -1606,7 +1634,9 @@ if ($readref_sw == 1) {
 		
 		$sjadir = $impute_dir;
 		$sjaname = "reresum";
-		$sjatime = 4;
+		$sjatime = 2;
+#		$sjatime = 4 if ($readrefsum_fini > 0);
+
 		$sjamem = 1000;
 		@sjaarray = @readrefsum_arr;
 		
@@ -1633,6 +1663,7 @@ if ($readref_sw == 1) {
 ###################################
 
 my @chepos_arr = ();
+my $chepos_fini = 0;
 
 #print "???\n";
 #exit;
@@ -1651,11 +1682,17 @@ unless (-e "$rootdir/posing_done") {
 #		print "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim\n" ;#
 
 	    }
+	    else {
+		$chepos_fini++;
+	    }
 	}
 	else {
 	    print "locref $locref is not existing! would be better if it did\n";
 	    unless (exists $bimpos_array{$accfli}) {
 		push @chepos_arr, "$checkpos_script --dbcol 1,8,9 --dbsnp $refdir/$suminfo_s $bfile.hg19.bim" ;#
+	    }
+	    else {
+		$chepos_fini++;
 	    }
 	}
 
@@ -1667,7 +1704,8 @@ unless (-e "$rootdir/posing_done") {
 	
 	$sjadir = $impute_dir;
 	$sjaname = "chepos";
-	$sjatime = 4;
+	$sjatime = 2;
+#	$sjatime = 4 if ($chepos_fini > 0);
 	$sjamem = 3000;
 	@sjaarray = @chepos_arr;
 	
@@ -1689,6 +1727,7 @@ unless (-e "$rootdir/posing_done") {
 #exit;
 
 my @chefli_arr = ();
+my $chefli_fini = 0;
 
     unless (-e "$rootdir/flipping_done") {
 	foreach (@bim_files) {
@@ -1707,10 +1746,16 @@ my @chefli_arr = ();
 #		    push @chepos_arr, "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim" ;#
 		    
 		}
+		else {
+		    $chefli_fini++;
+		}
 	    }
 	    else {
 		unless (exists $bimfli_array{$accfli}) {
 		    push @chefli_arr, "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim" ;
+		}
+		else {
+		    $chefli_fini++;
 		}
 	    }
 
@@ -1723,7 +1768,8 @@ my @chefli_arr = ();
 	    
 	    $sjadir = $impute_dir;
 	    $sjaname = "chefli";
-	    $sjatime = 4;
+	    $sjatime = 2;
+#	    $sjatime = 4 if ($chefli_fini > 0);
 	    $sjamem = 3000;
 	    @sjaarray = @chefli_arr;
 	    
@@ -1940,6 +1986,7 @@ if (-e "$rootdir/chucking_done") {
 
 
 my @chuck_arr = ();
+my $chuck_fini = 0;
 if ($chucking_done == 0) {
     ### loop for datasets
     foreach (@bimfli_files) {
@@ -1989,6 +2036,9 @@ if ($chucking_done == 0) {
 	    unless (exists $finifiles_hash{$plink_ch_out_fini} ) {
 		push @chuck_arr, "$chuck_script --out $plink_ch_out --in $bprefix --sfile $snps_extract $mendel_sw --empty $empty_ch_out";
 	    }
+	    else {
+		$chuck_fini++;
+	    }
 	    
 	}
     }
@@ -2005,6 +2055,7 @@ if ($chucking_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "chuck";
 	$sjatime = 0;
+#	$sjatime = 1 if ($chuck_fini > 0);
 	$sjamem = 4000;
 	@sjaarray = @chuck_arr;
 
@@ -2034,8 +2085,10 @@ my $spliha_n_2= $spliha_n * 2;
 
 
 my @preph_arr = ();
+my $preph_fini = 0;
 my @preph_arr_mu1 = ();
 my @preph_arr_mu2 = ();
+
 if ($prephase_done == 0) {
     ### loop for datasets
     foreach (@bimfli_files) {
@@ -2182,6 +2235,9 @@ if ($prephase_done == 0) {
 #		    print "$backbone\n";
 #		    exit;
 		}
+		else {
+		    $preph_fini++;
+		}
 	    }
 	}
     }
@@ -2198,7 +2254,8 @@ if ($prephase_done == 0) {
 	
 	$sjadir = $impute_dir;
 	$sjaname = "preph";
-	$sjatime = 4;
+	$sjatime = 2;
+#	$sjatime = 4 if ($preph_fini > 0);
 	$sjamem = 4000;
 	@sjaarray = @preph_arr;
 
@@ -2402,6 +2459,7 @@ if (-e "$rootdir/imp2_done") {
 
 my $n_imp2_done = 0;
 my @imp2_arr = ();
+my $imp2_fini = 0;
 if ($imp2_done == 0) {
 
     ### loop for datasets
@@ -2493,6 +2551,7 @@ if ($imp2_done == 0) {
 #			exit;
 		    }
 		    else {
+			$imp2_fini++;
 			$n_imp2_done++;
 		    }
 		}
@@ -2511,10 +2570,11 @@ if ($imp2_done == 0) {
 	
 	$sjadir = $impute_dir;
 	$sjaname = "imp2";
-	$sjatime = 4;
+	$sjatime = 2;
 	$sjamem = 8000;
-	if ($n_imp2_done > 0) {
+	if ($imp2_fini > 0) {
 	    $sjamem = 14000;
+#	    $sjatime = 4;
 	}
 	@sjaarray = @imp2_arr;
 	
@@ -2552,6 +2612,7 @@ my $dasudir = "$rootdir/dasu";
 #exit;
 
 my @dos_arr = ();
+my $dos_fini = 0;
 if ($dos_done == 0) {
     ### loop for datasets
     foreach (@bimfli_files) {
@@ -2656,6 +2717,9 @@ if ($dos_done == 0) {
 		    push @dos_arr, $sys_loc;
 #		    exit;
 		}
+		else {
+		    $dos_fini++;
+		}
 
 	    }
 	}
@@ -2672,7 +2736,8 @@ if ($dos_done == 0) {
 	
 	$sjadir = $impute_dir;
 	$sjaname = "dos";
-	$sjatime = 4;
+	$sjatime = 2;
+#	$sjatime = 4 if ($dos_fini > 0);
 	$sjamem = 2000;
 	$sjamaxpar = 100;
 	@sjaarray = @dos_arr;
@@ -2703,6 +2768,7 @@ if (-e "$rootdir/dabg_done") {
 
 
 my @dabg_arr = ();
+my $dabg_fini = 0;
 if ($dabg_done == 0) {
     ### loop for datasets
     foreach (@bimfli_files) {
@@ -2763,6 +2829,9 @@ if ($dabg_done == 0) {
 #		print "$sys_loc\n";
 #		exit;
 		}
+		else {
+		    $dabg_fini++;
+		}
 	    }
 	}
     }
@@ -2778,7 +2847,8 @@ if ($dabg_done == 0) {
 
 	$sjadir = $impute_dir;
 	$sjaname = "dabg";
-	$sjatime = 4;
+	$sjatime = 2;
+#	$sjatime = 4 if ($dabg_fini = 0);
 	$sjamem = 1000;
 	$sjamaxpar = 100;
 	@sjaarray = @dabg_arr;
@@ -2829,7 +2899,7 @@ unless (-e $cobg_dir) {
     &mysystem ("mkdir -p $cobg_dir");
 }
 print "start cobg\n";
-my @cobg_arr;    
+my @cobg_arr;
 my @prune_arr;   
 my @merge_arr; 
 unless (-e "$rootdir/cobg_done"){
@@ -2881,6 +2951,7 @@ unless (-e "$rootdir/cobg_done"){
 		if ($in == 1){
 		    push @cobg_arr,$sys_loc;
 		}
+
 #		if ($in == 0){
 #		    print "$sys_loc\n";
 #		    exit;
@@ -3029,7 +3100,8 @@ unless (-e $cobg_gw_dir) {
     &mysystem ("mkdir -p $cobg_gw_dir");
 }
 print "start cobg genome wide\n";
-my @cobg_gw_arr;    
+my @cobg_gw_arr;
+my $cobg_gw_fini= 0;    
 
 unless (-e "$rootdir/cobg_gw_done"){
     foreach (@bimfli_files) {
@@ -3042,6 +3114,10 @@ unless (-e "$rootdir/cobg_gw_done"){
 #	    print "$sys_loc\n";
 	    push @cobg_gw_arr,$sys_loc;
 	}
+	else {
+	    $cobg_gw_fini++;
+	}
+	
 
 	my $cobg_bg_fini = "$cobg_gw_dir/$bprefix.bg.fini";
 	unless (-e $cobg_bg_fini) {	    
@@ -3049,6 +3125,9 @@ unless (-e "$rootdir/cobg_gw_done"){
 	    my $sys_loc = "$cobg_gw_script --out $bprefix.bg $dasudir_loc_bg";
 #	    print "$sys_loc\n";
 	    push @cobg_gw_arr,$sys_loc;
+	}
+	else {
+	    $cobg_gw_fini++;
 	}
 
 	my $cobg_bgs_fini = "$cobg_gw_dir/$bprefix.bgs.fini";
@@ -3058,6 +3137,9 @@ unless (-e "$rootdir/cobg_gw_done"){
 #	    print "$sys_loc\n";
 	    push @cobg_gw_arr,$sys_loc;
 	    
+	}
+	else {
+	    $cobg_gw_fini++;
 	}
     }
 }
@@ -3074,7 +3156,8 @@ if (@cobg_gw_arr > 0) {
     
     $sjadir = $cobg_gw_dir;
     $sjaname = "cobg_gw";
-    $sjatime = 4;
+    $sjatime = 2;
+#    $sjatime = 4 if ($cobg_gw_fini > 0);
     $sjamem = 12000;
     @sjaarray = @cobg_gw_arr;
     
@@ -3219,7 +3302,7 @@ unless (-e "$rootdir/clean_done"){
 #	exit;
 	$sjadir = $rootdir;
 	$sjaname = "clean";
-	$sjatime = 4;
+	$sjatime = 2;
 	$sjamem = 1000;
 	$sjamaxpar = 100;
 	@sjaarray = @clean_arr;
@@ -3264,7 +3347,7 @@ if (@du_arr > 0) {
     
     $sjadir = $rootdir;
     $sjaname = "du";
-    $sjatime = 4;
+    $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @du_arr;
     

@@ -550,7 +550,13 @@ sub send_jobarray {
     if ($qloc eq "qsub") {
 	$wt_file = "$sjadir/j.$sjaname.$outname.id";
     }
-
+    if ($qloc eq "qsub_c") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }    
+    if ($qloc eq "qsub_b") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    
     if ($serial) {
 	my $sys_re = "$command_line";
 	&mysystem ($sys_re);
@@ -892,7 +898,7 @@ if (@job_arr > 0 ) {
     
     $sjadir = $rootdir;
     $sjaname = "clump";
-    $sjatime = 4;
+    $sjatime = 2;
     $sjamem = 2000;
     @sjaarray = @job_arr;
     
