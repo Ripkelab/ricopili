@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use strict;
 use File::Basename;
 use Cwd;
@@ -1011,15 +1011,15 @@ if ($clusters{computerome} == 1) {
 
 
 print "-------------------------------------------------------------------\n";
-print "adding these commands to your ~/.bashrc can be very helpful\n(just copy/paste the follwong lines into ~/.bashrc)\n(you have to logout and login again for this to be in effect)\n\n";
+print "adding these commands to your ~/.bashrc can be very helpful\n(just copy/paste the following lines into ~/.bashrc)\n(you have to logout and login again for these to take effect)\n\n";
 print "## for colored output of ls:\n";
 print 'alias ls=\'ls --color=auto\''."\n\n";
 print "## for easy copy over to your local machine:\n";
 print 'alias c=\'sed "s#.*#scp '.$ENV{LOGNAME}.'@'.$hostname.':$(pwd)/& .#"\''."\n\n";
 
 
-print "## for list of commands:\n";
-if ($clusters{lisa} == 1 || $clusters{computerome} == 1) {
+print "## for list of cluster jobs:\n";
+if ($clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{broad} == 1 ) {
     print 'alias q=\'qstat -u '.$ENV{LOGNAME}."\'\n\n";
 }
 else {
@@ -1033,7 +1033,7 @@ if ($clusters{computerome} == 1) {
 }
 
 print "## different prompt:\n";
-print 'PS1="$USER@computerome.cbs.dtu.dk:"\'\w\'" "'."\n\n";    
+print 'PS1="'.$ENV{LOGNAME}.'@'.$hostname.':"\'\w\'" "'."\n\n";    
 
 print "-------------------------------------------------------------------\n";    
 exit;
