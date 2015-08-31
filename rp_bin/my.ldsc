@@ -221,5 +221,40 @@ print "success2\n";
 
 
 
+exit;
+
+################################################
+### compare to MDD
+####################################################
+
+
+
+my $scz_sumstats = "$ldsc/scz52/daner_PGC_SCZ49.sh2_mds10.gz.ldsc.sumstats.gz";
+my $scz_sumstats_loc = "daner_PGC_SCZ49.sh2_mds10.gz.ldsc.sumstats.gz";
+
+unless (-e $scz_sumstats_loc) {
+    system ("ln -s $scz_sumstats .");
+}
+
+
+
+
+$sys = "$ldsc_sys"."ldsc.py --rg $scz_sumstats_loc,$danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out rg.PGC_SCZ49.sh2_mds10.$danerfile.observed";
+#$sys = "$ldsc_sys"."ldsc.py --rg $scz_sumstats_loc,$danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out rg.PGC_SCZ49.sh2_mds10.$danerfile.nointercept --samp-prev 0.4310,$sample_prev --pop-prev 0.01,$pop_prev --no-intercept";
+
+die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
+print OUT "$sys\n";
+close OUT;
+
+$sc = system ($sys);
+
+if ($sc != 0) {
+    print "Error with observed rg\n";
+    exit;
+}
+
+
+
+
 
 
