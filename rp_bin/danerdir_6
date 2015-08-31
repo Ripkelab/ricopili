@@ -934,7 +934,8 @@ if ($idin_name || $males || $females) {
 
 my $sys;
 unless ($danscore_file) {
-    $sys = "$p2loc/plink --dosage $dosfile format=2 frq2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
+    $sys = "$p2loc/plink --dosage $dosfile format=2 case-control-freqs --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
+
 
 }
 else {

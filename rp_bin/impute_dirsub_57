@@ -516,7 +516,7 @@ my $imp2_script = "my.imp2.3";             ### my.pipeline_tar
 my $dos_script = "haps2dos4";              ### my.pipeline_tar
 my $impprob_script = "impprob_to_2dos";    ### my.pipeline_tar
 my $dabg_script = "daner_bg3";             ### my.pipeline_tar
-my $cobg_script = "bcomb_4_p2";            ### my.pipeline_tar
+my $cobg_script = "bcomb_5_p2";            ### my.pipeline_tar
 my $cobg_gw_script = "comb_bg_dir_1";      ### my.pipeline_tar
 my $prune_script = "my.prune";             ### my.pipeline_tar
 my $merge_script = "my.merge";             ### my.pipeline_tar
@@ -952,7 +952,9 @@ sub send_jobarray {
     my $jobfile = "$sjaname.job_list";
     while (-e $jobfile) {
 	$jobfile .= ".s";
-	$sjatime = 4;
+	if (@sjaarray < 200) {
+	    $sjatime = 4;
+	}
     }
 
 
@@ -2208,7 +2210,12 @@ if ($prephase_done == 0) {
 			push @preph_arr, $backbone;
 		    }
 		    if ($multi_sw == 1) {
-			push @preph_arr_mu1, $backbone." $multi_txt";
+			if ($qloc eq "qsub_b"){
+			    push @preph_arr_mu1, $backbone;
+			}
+			else {
+			    push @preph_arr_mu1, $backbone." $multi_txt";
+			}
 		    }
 		    print "multi: $multi_sw\n";
 		    if ($multi_sw == 2) {
@@ -2268,9 +2275,11 @@ if ($prephase_done == 0) {
 
 	$sjadir = $impute_dir;
 	$sjaname = "preph_mu1";
-	$sjatime = 4;
-	$sjamulti = $multithread1;
-	$sjamem = 4000;
+	$sjatime = 20;
+	unless ($qloc eq "qsub_b") {
+	    $sjamulti = $multithread1;
+	}
+	$sjamem = 16000;
 	@sjaarray = @preph_arr_mu1;
 
 	&send_jobarray;
@@ -2280,6 +2289,11 @@ if ($prephase_done == 0) {
 
     if (@preph_arr_mu2 > 0) {
 
+
+	if ($qloc eq "qsub_b") {
+	    print "Error: multithread currently not supported at Broad\n";
+	    exit;
+	}
 	$sjadir = $impute_dir;
 	$sjaname = "preph_mu2";
 	$sjatime = 4;

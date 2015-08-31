@@ -427,7 +427,7 @@ my $manhattanplot_script = "manhattan_p4";     ### my.pipeline_tar
 my $manhattanplot2_script = "manhattan_plot2";  ### my.pipeline_tar
 my $qqplot_script = "qqplot_5";                ### my.pipeline_tar
 my $lahunt_script = "lahunt_9";                ### my.pipeline_tar
-my $ldsc_script = "my.ldsc";                ### my.pipeline_tar
+my $ldsc_script = "my.ldsc2";                ### my.pipeline_tar
 my $blueprint_script = "blueprint";            ### my.pipeline_tar
 my $clumpnavi_script = "clump_navi";           ### my.pipeline_tar
 my $clumpnavi2_script = "clump_nav3";          ### my.pipeline_tar
@@ -3980,13 +3980,11 @@ unless ($noldsc) {
     }
     
     
-    unless (-e "$distdir/$ldsc_tar") {
+    unless (-e "$distdir/ldsc.$daner_all.tar.gz") {
 	
-	
-	&mysystem_nodie ("tar -cvzf $ldsc_tar $daner_all.ldsc.log h2.$daner_all.observed.log h2.$daner_all.liability.log rg.PGC_SCZ49.sh2_mds10.$daner_all.observed.log rg.PGC_SCZ49.sh2_mds10.$daner_all.liability.log cmd.ldsc.txt");
 	
 	&mysystem ("cp $daner_all.ldsc.sumstats.gz $distdir/$daner_all.ldsc.sumstats.gz");
-	&mysystem ("cp $ldsc_tar $distdir/$ldsc_tar");
+	&mysystem ("cp ldsc.$daner_all.tar.gz $distdir/ldsc.$daner_all.tar.gz");
 	
     }
 }

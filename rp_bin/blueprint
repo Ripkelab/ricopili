@@ -363,27 +363,32 @@ if ($direct){
 }
 else {
     if ($jobarray eq "") {
+#	print "is it here?\n";
 	while (<>){
 	    chomp;
 	    my $line=$bp;
 	    $line =~ s/$prefix/$_/g;
+	    $line =~ s/"//g;
 #	print $line."\n";
 	    if ($pxarg){
 		foreach my $subs ($pxstart..$pxend){
-#		print "$subs\n";
+#		    print "this is a a command: $subs\n";
 		    my $line2=$line;
 		    $line2 =~ s/$pxstring/$subs/g;
 		    push @job_arr, $line2;
 		}
 	    }
 	    else {
+		
 		push @job_arr, $line;
+#		print "2: this is a a command: $line\n";
 	    }
 	}
     }
 }
 
-
+#print "sleep\n";
+#sleep(3);
 
 my $module ="";
 $module = "module load plink\n" if $plink;
@@ -1037,6 +1042,39 @@ if ($job){
 	$mem_str = 1 if ($mem_str < 1);
 
 
+	$jobname="j.$NOJ";
+
+
+	unless ($wait_fi_file){
+	if ($jobarray eq "") {
+
+	    if (@job_arr > 0) {
+
+		die "$! ($jobname.scripts)" unless open SCR, "> $jobname.scripts";
+		foreach (@job_arr) {
+
+		    print SCR "$_\n";   
+
+		}
+		close SCR;
+		$jobarray = "$jobname.scripts";
+	    }
+	    else {
+		print "Exit: no jobs to process\n";
+		exit;
+	    }
+	    
+	    print "wrote $jobname.scripts\n";
+	    $job_bn_th = @job_arr;
+#	    print "sleep\n";
+#	    sleep (3);
+
+	}
+	}
+
+
+
+	
 	if ($jobarray ne "") {
 
 
@@ -1049,7 +1087,7 @@ if ($job){
 	    
 	    
 	    print "starting job_array, $jobname\n";
-	    $jobname="j.$NOJ";
+
 
 	    my $qlong_str = "";
 	    if ($walltime > 2) {
@@ -1106,6 +1144,15 @@ if ($job){
 	    &mysystem ($qsub_txt);
 	    exit;
 	}
+
+
+
+
+
+
+
+
+	
     }
 ########################################
 ### COMPUTEROME
