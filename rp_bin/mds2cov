@@ -21,7 +21,7 @@ version: $version
  created by Stephan Ripke 2010 at MGH, Boston, MA
 ';
 
-
+ 
 ##########################################
 # split a plink-output-line
 ##########################################
