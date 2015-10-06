@@ -854,7 +854,7 @@ foreach (keys %variables){
     if ($variables{$_} eq "broadinstitute" && $longvar{$_} eq "R") {
 	print "You are running R on broad, took the default value\n\n";
     }
-    if ($variables{$_} eq "NA" && $longvar{$_} eq "Rpackages") {
+    elsif ($variables{$_} eq "NA" && $longvar{$_} eq "Rpackages") {
 	print "assuming library rmeta is installed on standard R\n\n";
     }
     else {
