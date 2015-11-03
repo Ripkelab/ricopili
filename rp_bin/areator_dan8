@@ -363,7 +363,8 @@ if ($prekno_file) {
 	my @cells = @{&split_line_ref(\$line)};
 	push @prekno_arr,$cells[0];
 	if ($cells[5]) {
-	    unless ($prekno_txt{$cells[0]} =~ /$cells[5]/) {
+#	    unless ($prekno_txt{$cells[0]} =~ /$cells[5]/) {
+	    unless ($prekno_txt{$cells[0]} eq $cells[5]) {
 		next if ($cells[4] > 5.0e-08);
 		unless (exists $prekno_txt{$cells[0]}) {
 		    $prekno_txt{$cells[0]} .= "$cells[0];$cells[5]($cells[4])";
@@ -838,13 +839,21 @@ if ($pliclu) {
 
 #		my @log_str = `tail -2 $out_name.clump.chr$chr.log`;
 #		my @log_str = `tail -3 $out_name.clump.chr$chr.log`; ## plink2
-		my @log_str = `tail -4 $out_name.clump.chr$chr.log`; ## plink2
+		my @log_str = `tail -5 $out_name.clump.chr$chr.log`; ## plink2
 #		unless ($log_str[0] =~ /Analysis finished/) {
 #		print "$log_str[0]\n";
 		unless ($log_str[0] =~ /Results written/) {  ## plink2
 		    unless ($log_str[1] =~ /Results written/) {  ## for longer lines
-			print "Error: clumping not successfulL: see $out_name.clump.chr$chr.log\n";
-			exit;		
+			unless ($log_str[2] =~ /Results written/) {  ## for longer lines
+
+
+
+
+
+			
+			    print "Error: clumping not successfulL: see $out_name.clump.chr$chr.log\n";
+			    exit;
+			}
 		    }
 		}
 

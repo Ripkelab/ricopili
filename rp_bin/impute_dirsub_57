@@ -893,6 +893,13 @@ my $sjamaxpar = 0;
 
 my $sjatime = -1;
 my $sjamaxjobs = 30000;
+
+
+if ($qloc eq "qsub") {
+    $sjamaxjobs = 8000;
+}
+
+
 my $sjainfofile = "$loloc/impute_dir_info";
 unless (-e $sjainfofile) {
     print "log-file ($sjainfofile) is not existing\n";
@@ -966,10 +973,14 @@ sub send_jobarray {
 
     my $nsja = @sjaarray;
 
+
+    
     my $nsja_loc = $nsja;
-    if ($nsja_loc > 30000) {
-	$nsja_loc = 30000;
+    if ($nsja_loc > $sjamaxjobs) {
+	$nsja_loc = $sjamaxjobs;
     }
+    
+    
 
     my $multi_txt = "";
     if ($sjamulti > 0) {
@@ -2275,7 +2286,7 @@ if ($prephase_done == 0) {
 
 	$sjadir = $impute_dir;
 	$sjaname = "preph_mu1";
-	$sjatime = 20;
+	$sjatime = 30;
 	unless ($qloc eq "qsub_b") {
 	    $sjamulti = $multithread1;
 	}
@@ -2862,7 +2873,7 @@ if ($dabg_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "dabg";
 	$sjatime = 2;
-#	$sjatime = 4 if ($dabg_fini = 0);
+#	$sjatime = 20 if ($dabg_fini == 0);
 	$sjamem = 1000;
 	$sjamaxpar = 100;
 	@sjaarray = @dabg_arr;

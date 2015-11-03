@@ -580,6 +580,14 @@ print ("debug2b");
 print (unique(pca_nomiss[,"ST"]));
 
 #print (p_assoc)
+
+if (dim(pca_nomiss)[1] == 0 ) {
+
+ for (y in (header_col+1):length(pca)) {
+    p_assoc[y-header_col] = 1.0;
+ }
+
+} else {
 if (length(unique(pca_nomiss[,"ST"])) == 1) {
 # print ("debug2c");
  for (y in (header_col+1):length(pca)) {
@@ -592,6 +600,7 @@ if (length(unique(pca_nomiss[,"ST"])) == 1) {
 #   print (length(pca));
    p_assoc[y-header_col] = summary(glm( CC ~ pca_nomiss[,y] + as.factor(ST), data=pca_nomiss, family="binomial"))$coeff[2,4]
  }
+}
 }
 
 #print ("debug3");

@@ -57,8 +57,8 @@ start within new (empty directory)
 
 print "replace reference_info\n";
 print "look for triset\n";
-print "do not redo cobg\n";
-print "put cobg_gw into original collectiona and copy over\n";
+#print "do not redo cobg\n";
+#print "put cobg_gw into original collectiona and copy over\n";
 #sleep (5);
 
 
@@ -179,7 +179,7 @@ if (@targetfiles > 0) {
     exit;
 }
 
-&mysystem("mkdir pi_sub");
+#&mysystem("mkdir pi_sub");
 &mysystem("mkdir cobg_dir_genome_wide");
 
 my %bhash;
@@ -191,7 +191,7 @@ foreach my $sd (@sourcedirs) {
     closedir DIR;
     my @bimfiles = grep {/\.bim$/} @files;
     my @mds_cov_files = grep {/\.mds_cov$/} @files;
-    my @cobg_dir = grep {/cobg_dir_genome_wide/} @files;
+    my @cobg_dir = grep {/^cobg_dir_genome_wide$/} @files;
     if (@cobg_dir > 1) {
 	print "more than 1 cobg_dir in source dir: $sd\n";
 	exit;
@@ -256,43 +256,43 @@ foreach my $sd (@sourcedirs) {
 	    }
 	}
 	
-	chdir("pi_sub");
+#	chdir("pi_sub");
 
-	if ($nohg19 == 0) {
-	    &mylink("$sd/pi_sub/$bfile.hg19.bed") if (-e "$sd/pi_sub/$bfile.hg19.bed");
-	    &mylink("$sd/pi_sub/$bfile.hg19.bim");
-	    &mylink("$sd/pi_sub/$bfile.hg19.fam")  if (-e "$sd/pi_sub/$bfile.hg19.fam");
-	    &mylink("$sd/pi_sub/$bfile.hg19.ch.bed")  if (-e "$sd/pi_sub/$bfile.hg19.ch.bed");
-	    &mylink("$sd/pi_sub/$bfile.hg19.ch.bim");
-	    &mylink("$sd/pi_sub/$bfile.hg19.ch.fam")  if (-e "$sd/pi_sub/$bfile.hg19.ch.fam");
-	    &mylink("$sd/pi_sub/$bfile.hg19.ch.fl.bed")  if (-e "$sd/pi_sub/$bfile.hg19.ch.fl.bed");
-	    &mylink("$sd/pi_sub/$bfile.hg19.ch.fl.bim");
-	    &mylink("$sd/pi_sub/$bfile.hg19.ch.fl.fam")  if (-e "$sd/pi_sub/$bfile.hg19.ch.fl.fam");
-	    &mylink("$sd/pi_sub/$bfile.bed");
-	    &mylink("$sd/pi_sub/$bfile.bim");
-	    &mylink("$sd/pi_sub/$bfile.fam");
+	# if ($nohg19 == 0) {
+	#     &mylink("$sd/pi_sub/$bfile.hg19.bed") if (-e "$sd/pi_sub/$bfile.hg19.bed");
+	#     &mylink("$sd/pi_sub/$bfile.hg19.bim");
+	#     &mylink("$sd/pi_sub/$bfile.hg19.fam")  if (-e "$sd/pi_sub/$bfile.hg19.fam");
+	#     &mylink("$sd/pi_sub/$bfile.hg19.ch.bed")  if (-e "$sd/pi_sub/$bfile.hg19.ch.bed");
+	#     &mylink("$sd/pi_sub/$bfile.hg19.ch.bim");
+	#     &mylink("$sd/pi_sub/$bfile.hg19.ch.fam")  if (-e "$sd/pi_sub/$bfile.hg19.ch.fam");
+	#     &mylink("$sd/pi_sub/$bfile.hg19.ch.fl.bed")  if (-e "$sd/pi_sub/$bfile.hg19.ch.fl.bed");
+	#     &mylink("$sd/pi_sub/$bfile.hg19.ch.fl.bim");
+	#     &mylink("$sd/pi_sub/$bfile.hg19.ch.fl.fam")  if (-e "$sd/pi_sub/$bfile.hg19.ch.fl.fam");
+	#     &mylink("$sd/pi_sub/$bfile.bed");
+	#     &mylink("$sd/pi_sub/$bfile.bim");
+	#     &mylink("$sd/pi_sub/$bfile.fam");
 	    
-	}
-	else {
+	# }
+	# else {
 
-	    &mysystem("touch $bfile.bed");
-	    &mysystem("touch $bfile.bim");
-	    &mysystem("touch $bfile.fam");
-	    &mysystem("touch $bfile.fam.fake");
-	    &mysystem("touch $bfile.ch.bed");
-	    &mysystem("touch $bfile.ch.bim");
-	    &mysystem("touch $bfile.ch.fam");
-	    &mysystem("touch $bfile.ch.fam.fake");
-	    &mysystem("touch $bfile.ch.fl.bed");
-	    &mysystem("touch $bfile.ch.fl.bim");
-	    &mysystem("touch $bfile.ch.fl.fam");
-	    &mysystem("touch $bfile.ch.fl.fam.fake");	    
+	#     &mysystem("touch $bfile.bed");
+	#     &mysystem("touch $bfile.bim");
+	#     &mysystem("touch $bfile.fam");
+	#     &mysystem("touch $bfile.fam.fake");
+	#     &mysystem("touch $bfile.ch.bed");
+	#     &mysystem("touch $bfile.ch.bim");
+	#     &mysystem("touch $bfile.ch.fam");
+	#     &mysystem("touch $bfile.ch.fam.fake");
+	#     &mysystem("touch $bfile.ch.fl.bed");
+	#     &mysystem("touch $bfile.ch.fl.bim");
+	#     &mysystem("touch $bfile.ch.fl.fam");
+	#     &mysystem("touch $bfile.ch.fl.fam.fake");	    
 
 	    
-	}
+	# }
 	
 
-	chdir("../");
+#	chdir("../");
 
 
 	chdir("cobg_dir_genome_wide");
@@ -343,13 +343,17 @@ foreach my $sd (@sourcedirs) {
     
     my $mdscov_found = 0;
     if (@mds_cov_files > 0) {
+#	print "mds_files:\n";
 	foreach (@mds_cov_files) {
+#	    print "$_\n";
 	    &mylink("$sd/$_");
 	}
+#	print "\n";
 	$mdscov_found = 1;
     }
 
 }
+
 
 
 	
@@ -358,8 +362,8 @@ print "renaming reference_info\n";
 #print "have to rename with config file\n";
 #exit;
 
-&mysystem("mv reference_info reference_info.sich");
-die $! unless open FI, "< reference_info.sich";
+&mysystem("mv reference_info .reference_info.sich");
+die $! unless open FI, "< .reference_info.sich";
 die $! unless open FO, "> reference_info";
 my $cc=1;
 while (my $line = <FI>){
@@ -401,16 +405,16 @@ close FI;
 close FO;
 		    
 
-&mysystem("touch buigue_done");
-&mysystem("touch chucking_done");
-&mysystem("touch clean_done");
-&mysystem("touch dabg_done");
-&mysystem("touch dos_done");
-&mysystem("touch flipping_done");
-&mysystem("touch imp2_done");
-&mysystem("touch posing_done");
-&mysystem("touch prephase_done");
-&mysystem("touch pseudo_done");
+#&mysystem("touch buigue_done");
+#&mysystem("touch chucking_done");
+#&mysystem("touch clean_done");
+#&mysystem("touch dabg_done");
+#&mysystem("touch dos_done");
+#&mysystem("touch flipping_done");
+#&mysystem("touch imp2_done");
+#&mysystem("touch posing_done");
+#&mysystem("touch prephase_done");
+#&mysystem("touch pseudo_done");
 
 
 close JI;

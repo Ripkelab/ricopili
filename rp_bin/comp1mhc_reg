@@ -298,7 +298,7 @@ while (my $line = <IN>){
     }
 
     if ($overlap == 1){
-	if ($pv_loc < 1.0e-06) {
+	if ($pv_loc <= 1.0e-06) {
 	    if ($old_index eq "") {
 		$old_index = $snp_loc ;
 
@@ -317,9 +317,13 @@ while (my $line = <IN>){
 #	print "old: $old_index, $old_left, $old_right\n";
     }
     else {
-#	print "old: $old_left\n";
-#	print "old: $old_right\n";
-#	print "old: $old_left, $old_right\n";
+#	if ($old_chr == 12) {
+#	    print "old_snp: $old_index\n";
+#	    print "new_snp: $snp_loc\n";
+#	    print "old: $old_left\n";
+#	    print "old: $old_right\n";
+#	    print "old: $old_left, $old_right\n";
+#	}
 	if ($old_index ne "rsx") {
 	    if ($old_pvloc <= $pth) { 
 		my $pos_out = sprintf "%d",$old_left/1000000;
@@ -339,7 +343,7 @@ while (my $line = <IN>){
 	$old_right = $right_loc;
 	$old_left = $left_loc;
 #	if ($pv_loc < 1.0e-06) {
-	if ($pv_loc < $pth) {
+	if ($pv_loc <= $pth) {
 	    $old_index = $snp_loc;
 
 	}

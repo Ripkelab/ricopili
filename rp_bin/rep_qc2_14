@@ -110,6 +110,7 @@ my $hwe_th_ca=0.0000000001;
 my $me_th1=0.05;
 my $me_th2=0.1;
 my $withpna=0;
+my $sexcheck_min = 10;
 
 
 #############################################################################
@@ -142,6 +143,8 @@ options:
   --chrx           chr X qc
 #  -co              case only or control only report
   --minsize INT    for lahunt, default $minsize
+
+  --sexmin INT     minimum number of chrX SNPs to perform sexcheck, default: $sexcheck_min
 
   --prekno FILE    prekno-file
   --th_prekno FLOAT  p-value from where excluding new regions
@@ -269,6 +272,7 @@ GetOptions(
 
     "hwe_th_co=f"=> \$hwe_th,
     "hwe_th_ca=f"=> \$hwe_th_ca,
+    "sexmin=i"=> \$sexcheck_min,
 
 
 #    "co"=> \my $conly,  # case/control only
@@ -1300,7 +1304,7 @@ unless (-e "$idfiprefix.sex.sexcheck") {
     close BIM;
 #	print "N23: $n23\n";
 #	exit;
-    if ($n23 > 10) {
+    if ($n23 >= $sexcheck_min) {
 	&mysystem ("$ploc/plink $allow --bfile $prefix --out $idfiprefix.sextmp --mind 1 --geno 1 --check-sex $extract --exclude $nofiprefix.snpex.detex.txt --noweb ");  
     }
     else {
