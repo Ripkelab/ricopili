@@ -644,7 +644,7 @@ if (0) {
 my $tmp_sys = "metaber5 --nofilter --out $out_name.comb $disc_name @dfile_arr";
 print "$tmp_sys\n";
 #exit;
-#sleep(1);
+sleep(3);
 &mysystem ($tmp_sys);
 $tmp_sys = "metaber5 --nofilter --out $out_name.rep @dfile_arr";
 print "$tmp_sys\n";

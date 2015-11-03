@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 use strict;
 use File::Basename;
 use Cwd;
@@ -25,8 +25,9 @@ my $command_line = "$progname @ARGV";
 # Ask user what cluster they're using
 #############################
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"other",0);
-my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"other",0);
-my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","other");
+#my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"other",0);
+my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"other",0);
+my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","other");
 print "Please enter your cluster name from the following options:\n";
 my $i = 1;
 foreach (@cluster_names){
@@ -225,7 +226,7 @@ if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
                     print "\n## A copy of $home/.my.cshrc is available at my.cshrc.copy\n";
                 }
             }
-            elsif ($clusters{genomedk} == 1 || $clusters{mssm} == 1 || $clusters{lisa} == 1 || $clusters{computerome} == 1) {
+            elsif ($clusters{genomedk} == 1 || $clusters{mssm} == 1 || $clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{co_ipsych} == 1) {
                 if (-e "$home/.bashrc") {
                     &mysystem("grep -v \"rp_bin\\|rp_perlpackages\" $home/.bashrc > my.bashrc_minus_rpbin.txt");
                     &mysystem("cp $home/.bashrc my.bashrc.copy");
@@ -296,6 +297,9 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
     if ($clusters{computerome}){
         print FILE "export rp_perlpackages=/home/people/sripke/rp_external_bins/perl_packages\n";
     }
+    if ($clusters{co_ipsych}){
+        print FILE "export rp_perlpackages=/data/user_tools/rp_external_bins/perl_packages\n";
+    }    
     if ($clusters{broad}){
         print FILE "export rp_perlpackages=/home/unix/sripke/perl_modules\n";
     }
@@ -404,6 +408,26 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
         &mysystem("touch install_true");        
         exit;
     }
+    elsif ($clusters{co_ipsych}){
+	my $i = 1;    
+
+        if (-e "$home/.bashrc") {
+            print "cat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "PATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "PATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;        
+        }
+	print "export rp_perlpackages=/data/user_tools/rp_external_bins/perl_packages\n";
+	print "./rp_config\n\n";
+        &mysystem("touch install_true");        
+        exit;
+    }
+
+    
 
     
     elsif ($clusters{mssm}){
@@ -600,6 +624,23 @@ elsif ($clusters{computerome} == 1) {
     }
 }
 
+elsif ($clusters{co_ipsych} == 1) {
+    $sloc = "/data/scratch/";
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				$sloc =~ s/^~/$ENV{HOME}/g;
+				$sloc =~ s/^\./$cd/g;        
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
 
 elsif ($clusters{genomedk} == 1) {
     $sloc = "/project/ricopili/scratch_dir/";
@@ -817,6 +858,22 @@ elsif ($clusters{computerome}){
 }
 
 
+elsif ($clusters{co_ipsych}){
+    %variables = ("ploc", "/data/tools/plink-1.07/",
+		  "p2loc","/data/tools/plink2_sept2015/",
+		  "shloc","/data/tools/shapeit_sept_2015/",
+		  "i2loc","/data/tools/impute-2.3.2/",
+		  "liloc","/data/user_tools/rp_external_bins/liftover/",
+		  "ldloc","/data/user_tools/rp_external_bins/ldsc/",
+		  "eloc","/data/tools/eigensoft-6.0.1/bin/",
+		  "rloc","/data/tools/R-3.2.1/bin/",
+		  "rpac","/data/user_tools/rp_external_bins/Rpackages/",
+		  "hmloc","/data/user_tools/imputation_references/",
+		  "meloc","/data/tools/metal-20110325/",
+#		  "hvloc","./",
+	);
+}
+
 elsif ($clusters{genomedk}){
     %variables = ("ploc", "/project/ricopili/plink_src/",
 		  "p2loc","/project/ricopili/plink_1.9_jul4/",
@@ -913,7 +970,7 @@ push (@text, "loloc $loloc");
 
 if ($clusters{broad}){push (@text, "queue qsub_b")}
 if ($clusters{lisa}){push (@text, "queue qsub")}
-if ($clusters{computerome}){push (@text, "queue qsub_c")}
+if ($clusters{computerome} || $clusters{co_ipsych}){push (@text, "queue qsub_c")}
 if ($clusters{genomedk}){push (@text, "queue slurm")}
 if ($clusters{mssm}){push (@text, "queue msub")}
 }
@@ -1012,17 +1069,21 @@ if ($clusters{computerome} == 1) {
     $hostname = "computerome.cbs.dtu.dk";
 }
 
+if ($clusters{co_ipsych} == 1) {
+    $hostname = "ipsych.computerome.cbs.dtu.dk";
+}
+
 
 print "-------------------------------------------------------------------\n";
-print "adding these commands to your ~/.bashrc can be very helpful\n(just copy/paste the following lines into ~/.bashrc)\n(you have to logout and login again for these to take effect)\n\n";
+print "adding these commands to your ~/.bashrc can be very helpful\n(just copy/paste the follwong lines into ~/.bashrc)\n(you have to logout and login again for this to be in effect)\n\n";
 print "## for colored output of ls:\n";
 print 'alias ls=\'ls --color=auto\''."\n\n";
 print "## for easy copy over to your local machine:\n";
 print 'alias c=\'sed "s#.*#scp '.$ENV{LOGNAME}.'@'.$hostname.':$(pwd)/& .#"\''."\n\n";
 
 
-print "## for list of cluster jobs:\n";
-if ($clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{broad} == 1 ) {
+print "## for list of commands:\n";
+if ($clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{co_ipsych} == 1) {
     print 'alias q=\'qstat -u '.$ENV{LOGNAME}."\'\n\n";
 }
 else {
@@ -1036,7 +1097,11 @@ if ($clusters{computerome} == 1) {
 }
 
 print "## different prompt:\n";
-print 'PS1="'.$ENV{LOGNAME}.'@'.$hostname.':"\'\w\'" "'."\n\n";    
+print 'PS1="$USER@computerome.cbs.dtu.dk:"\'\w\'" "'."\n\n";  
+
+print "## different prompt:\n";
+print 'PS1="$USER@ipsych.computerome.cbs.dtu.dk:"\'\w\'" "'."\n\n";  
+  
 
 print "-------------------------------------------------------------------\n";    
 exit;

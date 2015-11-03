@@ -59,7 +59,9 @@ my $mend_th=4; # per SNP
 my $imend_th=10000; # per ID
 my $Fhet_th=.2; # per ID
 my $hwe_th=0.000001; 
-my $hwe_th_ca=0.0000000001; 
+my $hwe_th_ca=0.0000000001;
+my $sexcheck_min = 10;
+
 my $withpna=0;
 my $noassoc = 0;
 
@@ -105,7 +107,7 @@ default thresholds:
    hwe_th_co  $hwe_th
    hwe_th_ca  $hwe_th_ca
    withpna    $withpna
-
+   sexmin     $sexcheck_min
 
 options to change these values:
 
@@ -120,6 +122,7 @@ options to change these values:
   --hwe_th_co NUM   HWE_controls < NUM
   --hwe_th_ca NUM   HWE_cases < NUM
   --withpna 1       inlcude SNPs with p=NA (monomorph)
+  --sexmin INT      minimum number of chrX SNPs to perform sexcheck, default: $sexcheck_min
 
 
  created by Stephan Ripke 2011 at MGH, Boston, MA
@@ -1038,6 +1041,7 @@ foreach my $bprefix (@bfiles_pi) {
     $option_txt .= " --hwe_th_co $hwe_th";
     $option_txt .= " --hwe_th_ca $hwe_th_ca";
     $option_txt .= " --withpna $withpna";
+    $option_txt .= " --sexmin $sexcheck_min";
 
 
     unless (-e "$bprefix-qc.fini") {

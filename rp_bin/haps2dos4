@@ -258,9 +258,7 @@ unless (-e $twodos_tmp_success) {
 
 # check success
 # if successful, remove $haps_file_gz now to save space
-if (-e $twodos_tmp_success) {
-    &mysystem("rm $haps_file_gz")
-} else {
+unless (-e $twodos_tmp_success) {
     die "Failed to create $twodos_tmp from $haps_file_gz";
 }
 
@@ -330,6 +328,6 @@ close BC;
 
 
 &mysystem ("touch $finiout");
-&mysystem ("rm $twodos_tmp");
+&mysystem ("rm $haps_file_gz");
 
 print "done\n";

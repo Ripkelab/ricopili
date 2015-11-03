@@ -148,7 +148,7 @@ unless (-e $dbsnp_file) {
 
 unless (-e "$p2loc/plink" ){
     print "\n***** Error: couldn't find the following:\n";
-    print "please check --ploc or $conf_file\n";
+    print "please check --p2loc or $conf_file\n";
     exit;
 }
 

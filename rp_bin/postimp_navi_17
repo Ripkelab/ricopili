@@ -1138,6 +1138,9 @@ $refdir =~ s!/home/radon01/sripke/bakker_ripke/hapmap_ref!/psych/genetics_data/r
 
 my @bimfli_files;
 
+######### define dasudir
+my $dasudir = "$rootdir/dasu";
+
 
 unless (-e "datasets_info") {
     print "warning: no datasets_info, create one with all datasets\n";
@@ -1150,7 +1153,25 @@ unless (-e "datasets_info") {
     foreach (@bim_files) {
 	my $bitemp = $_;
 	$bitemp =~ s/.bim$//;
-	$bitemp .= ".hg19.ch.fl";
+
+	my $dasudir_loc_qc1 = "$dasudir"."qc1_$bitemp";
+	$dasudir_loc_qc1 .= ".hg19.ch.fl";
+#	print "start: $dasudir_loc_qc1  \n";
+	unless (-e $dasudir_loc_qc1) {
+	    my $tmpdir = $dasudir_loc_qc1;
+
+	    $tmpdir =~ s/.hg19.ch.fl/.ch.fl/;
+	    if (-e $tmpdir) {
+		print "found old format: $tmpdir\n";
+		$bitemp .= ".ch.fl";
+	    }
+	    else {
+		print "not old and not new format: $tmpdir\n";
+	    }
+	}
+	else {
+	    $bitemp .= ".hg19.ch.fl";
+	}
 	print BF "$bitemp\n";
     }
     close BF;
@@ -1249,8 +1270,7 @@ foreach my $bifi (@bimfli_files) {
 }
 #exit;
 
-######### define dasudir
-my $dasudir = "$rootdir/dasu";
+
 
 
 ###################################
@@ -1850,10 +1870,10 @@ unless ($result_name) {
 		
 		push @id_arr, "$cells[0]\t$cells[1]";
 		my $pt_loc = -9;
-		if ($cells[0] =~ /^case/) {
+		if ($cells[0] =~ /^cas_/) {
 		    $pt_loc = 2;
 		}
-		if ($cells[0] =~ /^control/) {
+		if ($cells[0] =~ /^con_/) {
 		    $pt_loc = 1;
 		}
 		push @pt_arr, $pt_loc;
@@ -1928,7 +1948,8 @@ my @danscore_arr = ();
 my $danscore_neg = 0;
 $danscore_neg = 1 if (-e "$rootdir/danscore_$outname"."_done");
 
-
+my $n_old_format = 0;
+my $n_nomap = 0;
 unless (-e "$rootdir/daner_$outname.done") {
     unless ($result_name){
 	foreach my $refind (@refind_arr) {
@@ -1963,7 +1984,10 @@ unless (-e "$rootdir/daner_$outname.done") {
 		    my $tmpdir = $dasudir_loc_qc1;
 		    $tmpdir =~ s/.hg19.ch.fl/.ch.fl/;
 		    if (-e $tmpdir) {
-			print "old format is existing: $tmpdir\n";
+			if ($n_old_format < 100) {
+			    print "found old format: $tmpdir\n";
+			}
+			$n_old_format++;
 			$dasudir_loc_qc1 = $tmpdir;
 			$hg19_remove = 1;
 		    }
@@ -1980,6 +2004,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 #	    my $daner_out_fini = "$danerdir_loc/dan_$bfile.$refind.assoc.dosage.ngt.gz.fini";
 		#### NEW!!!!!
 		if (-e $daner_out) {
+
 		    $daner_fini_count++;
 		    push @dasifiles, $daner_out;
 		}
@@ -2046,6 +2071,13 @@ unless (-e "$rootdir/daner_$outname.done") {
 				    
 				    
 				}
+			    }
+			    else {
+				if ($n_nomap < 100) {
+				    print "no map file ($mapfile)\n";
+				}
+				$n_nomap++;
+
 			    }
 
 			}
@@ -2392,7 +2424,7 @@ if (@danerdir_arr_long > 0) {
     $sjaname = "danerlong";
     $sjatime = 2;
     $sjaweek = 1;
-    $sjamem = 2000;
+    $sjamem = 16000;
     @sjaarray = @danerdir_arr_long;
     
     &send_jobarray;
@@ -2503,12 +2535,15 @@ push  @daner_chunkdirs,$dametadir;
 #########################################
 
 unless ($result_name){
+    print "bimfli_files:\n";
     foreach (@bimfli_files) {
+	print "$_\n";
 	my $bfile = $_;
 	$bfile =~ s/.bim$//;
 	my $danerdir_loc = "$danerdir/da_$bfile";
 	push  @daner_chunkdirs,$danerdir_loc;
     }
+    print "\n";
 }
 
 
@@ -2518,99 +2553,107 @@ unless ($result_name){
 #########################################
 
 unless (-e "$rootdir/resmeta_$outname.done") {
-if ($result_name){
-    chdir ($reportdir);
-    my @result_files ;
+    if ($result_name){
+	chdir ($reportdir);
+	my @result_files ;
 
+	die "$rootdir/$result_name: ".$! unless open FILE, "< $rootdir/$result_name";
+	while (my $line = <FILE>){
+	    chomp($line);
+	    push @result_files, $line;
+	    push @daner_collect, $line;
+	    unless (-e "$rootdir/$line") {
+		print "Error: <$rootdir/$line> is not existing as a daner-file\n";
+		print "please check $result_name, maybe an empty line in there?\n";
+		print "exiting now\n";
+		exit;
+	    }
+	    &mysystem ("$linksub_script $rootdir/$line") unless (-e $line);
+	}
+	close FILE;
+
+	my %refc;
+
+	foreach my $rf (@result_files) {
+	    $rf =~ s/.gz$//;
+	    my $outdir = "$resdandir/".$rf;
+	    push  @daner_chunkdirs,$outdir;
+
+	    unless (-e $outdir) {
+		print "create $outdir\n";
+		&mysystem("mkdir -p $outdir");
+	    }
+	    unless (-e "$outdir/$rf.gz") {
+		print "create link\n";
+		chdir ($outdir);
+		&mysystem("$linksub_script $reportdir/$rf.gz");
+		chdir ($reportdir);
+	    }
+	    my $ff = "$outdir/$rf.chunked";
+	    unless (-e $ff) {
+		my $Xchr_txt = "";
+		if ($Xchr){
+		    $Xchr_txt = "--Xchr";
+		}
+		my $sys = "$chunker_script $Xchr_txt --workdir $outdir $rf.gz";
+		print "$sys\n";
+		push @chunker_arr, $sys;
+	    }
+	    else {
+		my $fc = "$outdir/$rf.count";
+		print "read $fc\n";
+		die $!."$fc" unless open FILE, "< $fc";
+		while (my $line = <FILE>){
+		    my @cells = @{&split_line_ref(\$line)};
+		    $refc{$cells[0]} .= " $outdir/$cells[1].gz";
+		}
+		close FILE;
+	    }
+	}
+
+	foreach my $rc (keys %refc){
+	    my $dameta_out = "$dametadir/dan_$rc.assoc.dosage.meta.ngt";
+	    unless (-e "$dameta_out.metadaner.gz") {
+		my $sys = "$metaber_script $xdf_txt --out $dameta_out $refc{$rc}";
+		push @result_meta_arr, $sys;
+		#	    print "$sys\n";
+	    }
+	    else {
+		my $dameta_out_short = "dan_$rc.assoc.dosage.meta.ngt";
+		push @dameta_files, "$dameta_out_short.metadaner.gz";
+	    }
+	}
+
+
+	#    exit;
+
+
+
+	if (0) {
+	    unless (-e $daner_meta) {
+		print "$daner_meta not existing\n";
+		#	exit;
+		if (-e "$daner_meta_nogz.metadaner.gz"){
+		    &mysystem ("mv $daner_meta_nogz.metadaner.gz $daner_meta");
+		}
+		else {
+		    $walltime = 4 if (@result_files > 6);
+		    &mysystem ("$blueprint_script --njob $job_bn_th -b \"$metaber_script --detout $xdf_txt --out $daner_meta_nogz @result_files\" --mem 5000 --di --wa $walltime -j --na metaber_$outname");
+		    &reinvo_b ("metaber","$reportdir/blueprint_joblist_file-metaber_$outname");
+		}
+	    }
+	    
+	    &mysystem ("ln -sf $daner_meta $daner_all");
+	}
+    }
+}
+else {
     die "$rootdir/$result_name: ".$! unless open FILE, "< $rootdir/$result_name";
     while (my $line = <FILE>){
 	chomp($line);
-	push @result_files, $line;
 	push @daner_collect, $line;
-	unless (-e "$rootdir/$line") {
-	    print "Error: <$rootdir/$line> is not existing as a daner-file\n";
-	    print "please check $result_name, maybe an empty line in there?\n";
-	    print "exiting now\n";
-	    exit;
-	}
-	&mysystem ("$linksub_script $rootdir/$line") unless (-e $line);
     }
     close FILE;
-
-    my %refc;
-
-    foreach my $rf (@result_files) {
-	$rf =~ s/.gz$//;
-	my $outdir = "$resdandir/".$rf;
-	push  @daner_chunkdirs,$outdir;
-
-	unless (-e $outdir) {
-	    print "create $outdir\n";
-	    &mysystem("mkdir -p $outdir");
-	}
-	unless (-e "$outdir/$rf.gz") {
-	    print "create link\n";
-	    chdir ($outdir);
-	    &mysystem("$linksub_script $reportdir/$rf.gz");
-	    chdir ($reportdir);
-	}
-	my $ff = "$outdir/$rf.chunked";
-	unless (-e $ff) {
-	    my $Xchr_txt = "";
-	    if ($Xchr){
-		$Xchr_txt = "--Xchr";
-	    }
-	    my $sys = "$chunker_script $Xchr_txt --workdir $outdir $rf.gz";
-	    print "$sys\n";
-	    push @chunker_arr, $sys;
-	}
-	else {
-	    my $fc = "$outdir/$rf.count";
-	    print "read $fc\n";
-	    die $!."$fc" unless open FILE, "< $fc";
-	    while (my $line = <FILE>){
-		my @cells = @{&split_line_ref(\$line)};
-		$refc{$cells[0]} .= " $outdir/$cells[1].gz";
-	    }
-	    close FILE;
-	}
-    }
-
-    foreach my $rc (keys %refc){
-	my $dameta_out = "$dametadir/dan_$rc.assoc.dosage.meta.ngt";
-	unless (-e "$dameta_out.metadaner.gz") {
-	    my $sys = "$metaber_script $xdf_txt --out $dameta_out $refc{$rc}";
-	    push @result_meta_arr, $sys;
-#	    print "$sys\n";
-	}
-	else {
-	    my $dameta_out_short = "dan_$rc.assoc.dosage.meta.ngt";
-	    push @dameta_files, "$dameta_out_short.metadaner.gz";
-	}
-    }
-
-
-#    exit;
-
-
-
-    if (0) {
-	unless (-e $daner_meta) {
-	    print "$daner_meta not existing\n";
-#	exit;
-	    if (-e "$daner_meta_nogz.metadaner.gz"){
-		&mysystem ("mv $daner_meta_nogz.metadaner.gz $daner_meta");
-	    }
-	    else {
-		$walltime = 4 if (@result_files > 6);
-		&mysystem ("$blueprint_script --njob $job_bn_th -b \"$metaber_script --detout $xdf_txt --out $daner_meta_nogz @result_files\" --mem 5000 --di --wa $walltime -j --na metaber_$outname");
-		&reinvo_b ("metaber","$reportdir/blueprint_joblist_file-metaber_$outname");
-	    }
-	}
-	
-	&mysystem ("ln -sf $daner_meta $daner_all");
-    }
-}
 }
 
 
@@ -2685,9 +2728,11 @@ unless (-e "danerdirs") {
 #####################################
 ## write directory file for each directory
 foreach my $cd (@daner_chunkdirs) {
-#    print "CD: $cd\n";
+    print "CD: $cd\n";
     unless (-e "$cd/dirlist"){
-#	print "not existing: $cd/dirlist\n";
+	print "not existing: $cd/dirlist\n";
+
+
 	opendir(DIR, "$cd") || die "can't opendir : $cd";
 	my @cdfiles = readdir(DIR);
 	closedir DIR;
@@ -3147,9 +3192,13 @@ if (0){
 
 
 
+#print "################# debug: @daner_collect\n";
+#print "##################### debug: @daner_cdg_coll\n";
+
 my @daner_single = ();
 foreach my $dc_loc (@daner_collect,@daner_cdg_coll) {
-   next if ($dc_loc eq "$daner_all");
+    next if ($dc_loc eq "$daner_all");
+#    print "##### debug: $dc_loc\n";
    push @daner_single, $dc_loc;
 }
 
@@ -3267,7 +3316,7 @@ if ($prekno_file){
 }
 #$prekno_txt = "--prekno $hapmap_ref_root/gwascatalog/1211/gwascatalog.txt.ow.short.new.sorted";
 #$prekno_txt = "--prekno $hapmap_ref_root/gwascatalog/0712/gwascatalog.txt.ow.short.new.sorted";
-$prekno_txt = "--prekno $hapmap_ref_root/gwascatalog/0413/gwascatalog.txt.ow.short.new.sorted";
+$prekno_txt = "--prekno $hapmap_ref_root/gwascatalog/1015b/gwascatalog.txt.ow.short.new.sorted";
 
 
 
@@ -3896,9 +3945,11 @@ my $numbers_file = "basic.$outname.num.xls";
 unless (-e "$distdir/$numbers_file") {
     my $sys = "$numbers_script basic.$outname $daner_all @daner_single";
 
+#    print "####################################### DEBUG ###############\n";
 #    print "$sys\n";
 #    print "$numbers_file\n";
-#    exit;
+#    print "####################################### DEBUG ###############\n";
+#    sleep (4);
 
     &mysystem ($sys);
     &mysystem ("cp $numbers_file $distdir");
@@ -4279,17 +4330,7 @@ unless (-e "$distdir/report.si.$outname.pdf.gz") {
 
 
 
-#if (0){
-### supplementary plots as single files
-#    unless (-e "$distdir/report.su.$outname.single.files.tar.gz") {
 
-#	&mysystem ("tar -cvzf report.su.$outname.single.files.tar.gz @par_su_files");
-#	&mysystem ("cp report.su.$outname.single.files.tar.gz $distdir/");
-
-#    }
-
-
-#}
 
 
 chdir ($rootdir);
@@ -4312,393 +4353,6 @@ unless (-e $performerdir){
 
 
 
-if (0) {
-
-    chdir ("pi_sub/errandout");
-    opendir(DIR, ".") || die "can't opendir .: $!";
-    my @eo_files = readdir(DIR);
-    closedir DIR;
-    
-    {
-    ############################################
-    ##### CHUCK
-    ###############################################
-    my @eoc;
-    my $fc = 0;
-    foreach my $eo (@eo_files) {
-	next unless ($eo =~ /^chuck/) ;
-	push @eoc, $eo;
-#	last if ($fc++ > 10);
-    }
-    @eoc = sort (@eoc);
-    if (@eoc == 0) {
-	print "chuck_file seems finished\n";
-    }
-    else {
-
-	my $chuck_sum = "sum_chuck_$outname";
-	my $chuck_sum_sum = "sum_chuck_$outname.sum";
-	
-	my $chuck_sum_dir = "$rootdir/pi_sub/errandout/subdir_for_chuck";
-	unless (-e $chuck_sum_dir){
-	    my @created = mkpath(   ## $created ?
-				    $chuck_sum_dir,
-				    {verbose => 0, mode => 0750},
-		);
-	}
-
-
-	my $pc = 0;
-	while (-e "$performerdir/$chuck_sum.$pc"){
-	    $pc++;
-	}
-	
-	die $! unless open EOS, "> $performerdir/$chuck_sum.$pc";
-	print EOS "job-id success sec mem-Mb mthread add_info\n";
-	foreach my $eo (@eoc) {
-	    
-	    my $success = 0;
-	    my $c_time = 0;
-	    my $mmem = 0;
-	    my $mthread = 0;
-	    my $lc = 0;
-	    my $add_info = "";
-#	die $! unless open EOL, "> eocout";
-#	my $eol = "pi_sub/errandout";
-	    die $! unless open EOI, "< $eo";
-	    while (my $line = <EOI>){
-		my @cells = @{&split_line_ref(\$line)};
-		if ($cells[0] eq "Successfully"){
-		    $success = 1;
-		}
-		if ($cells[0] eq "CPU" && $cells[1] eq "time"){
-		    $c_time = $cells[3];
-		}
-		if ($cells[0] eq "Max" && $cells[1] eq "Memory"){
-		    $mmem = $cells[3];
-		}
-		if ($cells[0] eq "Job" && $cells[4] eq "host(s)"){
-		    $mthread = $cells[5];
-		    $mthread =~ s/^<//;
-		    $mthread =~ s/\*.*//;
-		}
-		if ($cells[0] eq "--out"){
-		    $add_info = $cells[1];
-		    $add_info =~ s!.*/plink.!!;
-		    $add_info =~ s/.tmp$//;
-		    
-		}
-#	    last if ($lc > 30);
-		$lc++;
-	    }
-#	close EOL;
-	    close EOI;
-	    
-	    $mthread = $mthread*1;
-	    print EOS "$eo $success $c_time $mmem $mthread $add_info\n";
-	    &mysystem ("mv $eo $chuck_sum_dir")
-	}
-	close EOS;
-    }
-
-    }
-
-
-    ############################################
-    ##### PREPH
-    ###############################################
-    {
-	my @eop;
-	my $fc = 0;
-	foreach my $eo (@eo_files) {
-	    next unless ($eo =~ /^preph/) ;
-	    push @eop, $eo;
-#	last if ($fc++ > 10);
-	}
-	@eop = sort (@eop);
-	if (@eop == 0) {
-	    print "preph_file seems finished\n";
-	}
-	else {
-
-
-	    my $preph_sum = "sum_preph_$outname";
-	    my $preph_sum_sum = "sum_preph_$outname.sum";
-	    
-	    my $preph_sum_dir = "$rootdir/pi_sub/errandout/subdir_for_preph";
-	    unless (-e $preph_sum_dir){
-		my @created = mkpath(   ## $created ?
-					$preph_sum_dir,
-					{verbose => 0, mode => 0750},
-		    );
-	    }
-	    my $pc = 0;
-	    while (-e "$performerdir/$preph_sum.$pc"){
-		$pc++;
-	    }
-	
-	    die $! unless open EOS, "> $performerdir/$preph_sum.$pc";
-	    print EOS "job-id success sec mem-Mb mthread add_info\n";
-	    foreach my $eo (@eop) {
-
-#		print "$eo\n";
-#		next;
-		
-		my $success = 0;
-		my $c_time = 0;
-		my $mmem = 0;
-		my $mthread = 0;
-		my $lc = 0;
-		my $add_info = "";
-		
-		die $! unless open EOI, "< $eo";
-		while (my $line = <EOI>){
-		    my @cells = @{&split_line_ref(\$line)};
-		    if ($cells[0] eq "Successfully"){
-			$success = 1;
-		    }
-		    if ($cells[0] eq "CPU" && $cells[1] eq "time"){
-			$c_time = $cells[3];
-		    }
-		    if ($cells[0] eq "Max" && $cells[1] eq "Memory"){
-			$mmem = $cells[3];
-		    }
-#		    if ($cells[0] eq "Max" && $cells[1] eq "Threads"){
-#			$mthread = $cells[3];
-#		    }
-		    if ($cells[0] eq "Job" && $cells[4] eq "host(s)"){
-			$mthread = $cells[5];
-			$mthread =~ s/^<//;
-			$mthread =~ s/\*.*//;
-		    }
-
-
-		    if ($cells[0] eq "Genotype" && $cells[1] eq "file"){
-			$add_info = $cells[2];
-			$add_info =~ s!.*/plink.!!;
-			$add_info =~ s/.bed.*//;
-			
-		    }
-		    $lc++;
-		}
-		close EOI;
-
-
-
-		$mthread = $mthread*1;
-		print EOS "$eo $success $c_time $mmem $mthread $add_info\n";
-#		print "$eo $success $c_time $mmem $mthread $add_info\n";
-
-#		sleep(2);		
-#		print "$eo $success $c_time $mmem $mthread $add_info\n";
-		&mysystem ("mv $eo $preph_sum_dir")
-	    }
-	    close EOS;
-	}
-	
-    }
-
-
-
-    ############################################
-    ##### PUTE
-    ###############################################
-    {
-	my @eou;
-	my $fc = 0;
-	foreach my $eo (@eo_files) {
-	    next unless ($eo =~ /^pute/) ;
-	    push @eou, $eo;
-#	last if ($fc++ > 10);
-	}
-	@eou = sort (@eou);
-	if (@eou == 0) {
-	    print "pute_file seems finished\n";
-	}
-	else {
-
-
-	    my $pute_sum = "sum_pute_$outname";
-	    my $pute_sum_sum = "sum_pute_$outname.sum";
-	    
-	    my $pute_sum_dir = "$rootdir/pi_sub/errandout/subdir_for_pute";
-	    unless (-e $pute_sum_dir){
-		my @created = mkpath(   ## $created ?
-					$pute_sum_dir,
-					{verbose => 0, mode => 0750},
-		    );
-	    }
-	    my $pc = 0;
-	    while (-e "$performerdir/$pute_sum.$pc"){
-		$pc++;
-	    }
-	
-	    die $! unless open EOS, "> $performerdir/$pute_sum.$pc";
-	    print EOS "job-id success sec mem-Mb mthread add_info\n";
-	    foreach my $eo (@eou) {
-		
-		my $success = 0;
-		my $c_time = 0;
-		my $mmem = 0;
-		my $mthread = 0;
-		my $lc = 0;
-		my $add_info = "";
-		
-		die $! unless open EOI, "< $eo";
-		while (my $line = <EOI>){
-		    my @cells = @{&split_line_ref(\$line)};
-		    if ($cells[0] eq "Successfully"){
-			$success = 1;
-		    }
-		    if ($cells[0] eq "CPU" && $cells[1] eq "time"){
-			$c_time = $cells[3];
-		    }
-		    if ($cells[0] eq "Max" && $cells[1] eq "Memory"){
-			$mmem = $cells[3];
-		    }
-
-		    if ($cells[0] eq "Job" && $cells[4] eq "host(s)"){
-			$mthread = $cells[5];
-			$mthread =~ s/^<//;
-			$mthread =~ s/\*.*//;
-		    }
-
-
-		    if ($cells[0] eq "main" && $cells[1] eq "output:"){
-			$add_info = $cells[2];
-			$add_info =~ s!.*/plink.!!;
-			$add_info =~ s/.haps$//;
-			
-		    }
-		    $lc++;
-		}
-		close EOI;
-		
-		$mthread = $mthread*1;
-		print EOS "$eo $success $c_time $mmem $mthread $add_info\n";
-#		print "$eo $success $c_time $mmem $mthread $add_info\n";
-		&mysystem ("mv $eo $pute_sum_dir")
-	    }
-	    close EOS;
-	}
-	
-    }
-
-
-
-    ############################################
-    ##### DOS
-    ###############################################
-    {
-	my @eod;
-	my $fc = 0;
-	foreach my $eo (@eo_files) {
-	    next unless ($eo =~ /^dos_/) ;
-	    push @eod, $eo;
-#	last if ($fc++ > 10);
-	}
-	@eod = sort (@eod);
-	if (@eod == 0) {
-	    print "dos_file seems finished\n";
-	}
-	else {
-
-
-	    my $dos_sum = "sum_dos_$outname";
-	    my $dos_sum_sum = "sum_dos_$outname.sum";
-	    
-	    my $dos_sum_dir = "$rootdir/pi_sub/errandout/subdir_for_dos";
-	    unless (-e $dos_sum_dir){
-		my @created = mkpath(   ## $created ?
-					$dos_sum_dir,
-					{verbose => 0, mode => 0750},
-		    );
-	    }
-	    my $pc = 0;
-	    while (-e "$performerdir/$dos_sum.$pc"){
-		$pc++;
-	    }
-	
-	    die $! unless open EOS, "> $performerdir/$dos_sum.$pc";
-	    print EOS "job-id success sec mem-Mb mthread add_info\n";
-	    foreach my $eo (@eod) {
-		
-		my $success = 0;
-		my $c_time = 0;
-		my $mmem = 0;
-		my $mthread = 0;
-		my $lc = 0;
-		my $add_info = "";
-		
-		die $! unless open EOI, "< $eo";
-		while (my $line = <EOI>){
-		    my @cells = @{&split_line_ref(\$line)};
-		    if ($cells[0] eq "Successfully"){
-			$success = 1;
-		    }
-		    if ($cells[0] eq "CPU" && $cells[1] eq "time"){
-			$c_time = $cells[3];
-		    }
-		    if ($cells[0] eq "Max" && $cells[1] eq "Memory"){
-			$mmem = $cells[3];
-		    }
-
-		    if ($cells[0] eq "Job" && $cells[4] eq "host(s)"){
-			$mthread = $cells[5];
-			$mthread =~ s/^<//;
-			$mthread =~ s/\*.*//;
-		    }
-
-		    if ($cells[0] eq "--out"){
-			$add_info = $cells[1];
-			$add_info =~ s!.*/dos_!!;
-		    }
-		    $lc++;
-		}
-		close EOI;
-		
-		$mthread = $mthread*1;
-		print EOS "$eo $success $c_time $mmem $mthread $add_info\n";
-#		print "$eo $success $c_time $mmem $mthread $add_info\n";
-		&mysystem ("mv $eo $dos_sum_dir")
-	    }
-	    close EOS;
-	}
-	
-    }
-
-
-
-#read.delim("sum_preph_SCZ17_noswe.0",sep=" ")->hm3
-#read.delim("sum_preph_SCZ17_1KG.0",sep=" ")->tkg
-
-#summary(hm3[hm3[,2]=="1",4])
-#summary(hm3[hm3[,2]=="1",3])
-#summary(hm3[hm3[,2]=="1",5])
-
-#summary(hm3[tkg[,2]=="1",5])
-
-#hist(hm3[hm3[,2]=="0",3],breaks=200,col="grey")
-
-#par(mfrow=c(2,1))
-
-#hist(hm3[hm3[,2]=="1",3],breaks=200,col="grey")
-#hist(tkg[tkg[,2]=="1",3],breaks=200,col="grey")
-#hist(hm3[hm3[,2]=="1",4],breaks=200,col="grey")
-#hist(tkg[tkg[,2]=="1",4],breaks=200,col="grey")
-
-#hist(hm3[,2],breaks=200,col="grey")
-#hist(tkg[,2],breaks=200,col="grey")
-
-
-
-
-
-
-
- #   }
-    
-}
 
 #print "sleep\n";
 #sleep(4);

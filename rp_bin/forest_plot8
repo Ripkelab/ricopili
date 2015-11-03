@@ -655,6 +655,7 @@ foreach my $study (sort keys %finfo){
     $st_str =~ s/^da_//;
     $st_str =~ s/^qc2report_//;
     $st_str =~ s/_QC1B.*gz$//;
+    $st_str =~ s/3_depression_meta_20130618.txt.ow2.or.indel.alleles.clean.nox$//;
     $st_str =~ s/_gene_hg19_.*$//;
     $st_str =~ s/^forest.*adda/replication/;
     $st_str =~ s/\.gz$//;

@@ -1092,6 +1092,7 @@ if ($job){
 	    my $qlong_str = "";
 	    if ($walltime > 2) {
 		$qlong_str = "-q long";
+#		$qlong_str = "-P sanctioned -q sanctioned";
 	    }
 	    die "$! ($jobname)" unless open JOB, "> $jobname";
 
@@ -1200,8 +1201,8 @@ if ($job){
 	    close JOB;
 	    
 
-	    my $qsub_txt = "qsub -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
-	    my $qsub_log = "echo qsub -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.log";
+	    my $qsub_txt = "qsub -V -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+	    my $qsub_log = "echo qsub -V -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.log";
 	    
 	    &mysystem ($qsub_log);
 	    &mysystem ($qsub_txt);
@@ -1231,8 +1232,8 @@ if ($job){
 	    close JOB;
 	    
 	    
-	    my $qsub_txt = "qsub -W depend=afteranyarray:$id_str -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
-	    my $qsub_log = "echo qsub -W depend=afteranyarray:$id_str -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.log";
+	    my $qsub_txt = "qsub -V -W depend=afteranyarray:$id_str -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+	    my $qsub_log = "echo qsub -V -W depend=afteranyarray:$id_str -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.log";
 
 	    &mysystem ($qsub_log);
 	    &mysystem ($qsub_txt);
@@ -1278,6 +1279,10 @@ if ($job){
 	my $numnode = ($job_bn_th-0.000001)/$cores;
 	$numnode=sprintf "%d",$numnode;
 	$numnode++;
+
+	if ($numnode > 1000){
+	    $numnode = 1000;
+	}
 	
 	
 	print "starting job_array, $jobname\n";
@@ -1428,11 +1433,13 @@ if ($job){
       
 #	my $qsub_txt = "qsub -t 1-$job_bn_th -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
 	my $qsub_txt = "qsub -t 1-$numnode -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.id";
+	my $qsub_log = "echo qsub -t 1-$numnode -e $errname/ -o $errname/ $name_of_job $hhmm $jobname > $jobname.log";
 
 #	print "$qsub_txt\n";
 
 #	exit;
 	&mysystem ($qsub_txt);
+	&mysystem ($qsub_log);
 #	sleep (3);	
 	exit;
     }

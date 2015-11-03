@@ -934,12 +934,12 @@ if ($idin_name || $males || $females) {
 
 my $sys;
 unless ($danscore_file) {
-    $sys = "$p2loc/plink --dosage $dosfile format=2 case-control-freqs --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
+    $sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 case-control-freqs --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
 
 
 }
 else {
-    $sys = "$p2loc/plink --dosage $dosfile format=2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $idex_str --q-score-range $range_file --q-score-file $score_p_file --score $score_w_file";
+    $sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $idex_str --q-score-range $range_file --q-score-file $score_p_file --score $score_w_file";
 }
 
 print "$sys\n";
@@ -1039,7 +1039,7 @@ foreach my $iperm (1..$permut) {
 	close IFILE;
 	close PFILE;
 	
-	my $sys = "$p2loc/plink --dosage $dosfile format=2 --fam $famfile.pt.perm --allow-no-sex --out $workname.perm --map $mapfile $cov_str";
+	my $sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt.perm --allow-no-sex --out $workname.perm --map $mapfile $cov_str";
 	print "$sys\n";
 	
 	&mysystem($sys);
