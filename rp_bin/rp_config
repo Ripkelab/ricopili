@@ -911,7 +911,7 @@ foreach (keys %variables){
     if ($variables{$_} eq "broadinstitute" && $longvar{$_} eq "R") {
 	print "You are running R on broad, took the default value\n\n";
     }
-    if ($variables{$_} eq "NA" && $longvar{$_} eq "Rpackages") {
+    elsif ($variables{$_} eq "NA" && $longvar{$_} eq "Rpackages") {
 	print "assuming library rmeta is installed on standard R\n\n";
     }
     else {
@@ -1032,8 +1032,14 @@ close FILE;
 
 my $fail = 0;
 if ($#fail_path != -1) {    
-    foreach (@fail_path) {
-        unless ($_ eq "rloc" && $clusters{broad} == 1) {
+    foreach my $confvar (@fail_path) {
+       if ($confvar eq "rloc" && $clusters{broad} == 1) {
+            next;
+       }
+       elsif ($confvar eq "rpac" && $clusters{lisa} != 1 && $clusters{other} != 1) {
+            next;
+       }
+       else{
             $fail += 1;            
         }
     }
