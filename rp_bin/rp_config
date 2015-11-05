@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use strict;
 use File::Basename;
 use Cwd;
@@ -911,7 +911,7 @@ foreach (keys %variables){
     if ($variables{$_} eq "broadinstitute" && $longvar{$_} eq "R") {
 	print "You are running R on broad, took the default value\n\n";
     }
-    if ($variables{$_} eq "NA" && $longvar{$_} eq "Rpackages") {
+    elsif ($variables{$_} eq "NA" && $longvar{$_} eq "Rpackages") {
 	print "assuming library rmeta is installed on standard R\n\n";
     }
     else {
@@ -1032,8 +1032,14 @@ close FILE;
 
 my $fail = 0;
 if ($#fail_path != -1) {    
-    foreach (@fail_path) {
-        unless ($_ eq "rloc" && $clusters{broad} == 1) {
+    foreach my $confvar (@fail_path) {
+       if ($confvar eq "rloc" && $clusters{broad} == 1) {
+            next;
+       }
+       elsif ($confvar eq "rpac" && $clusters{lisa} != 1 && $clusters{other} != 1) {
+            next;
+       }
+       else{
             $fail += 1;            
         }
     }
@@ -1075,15 +1081,15 @@ if ($clusters{co_ipsych} == 1) {
 
 
 print "-------------------------------------------------------------------\n";
-print "adding these commands to your ~/.bashrc can be very helpful\n(just copy/paste the follwong lines into ~/.bashrc)\n(you have to logout and login again for this to be in effect)\n\n";
+print "adding these commands to your ~/.bashrc can be very helpful\n(just copy/paste the following lines into ~/.bashrc)\n(you have to logout and login again for these to take effect)\n\n";
 print "## for colored output of ls:\n";
 print 'alias ls=\'ls --color=auto\''."\n\n";
 print "## for easy copy over to your local machine:\n";
 print 'alias c=\'sed "s#.*#scp '.$ENV{LOGNAME}.'@'.$hostname.':$(pwd)/& .#"\''."\n\n";
 
 
-print "## for list of commands:\n";
-if ($clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{co_ipsych} == 1) {
+print "## for list of cluster jobs:\n";
+if ($clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{co_ipsych} == 1 || $clusters{broad} == 1) {
     print 'alias q=\'qstat -u '.$ENV{LOGNAME}."\'\n\n";
 }
 else {
@@ -1097,10 +1103,7 @@ if ($clusters{computerome} == 1) {
 }
 
 print "## different prompt:\n";
-print 'PS1="$USER@computerome.cbs.dtu.dk:"\'\w\'" "'."\n\n";  
-
-print "## different prompt:\n";
-print 'PS1="$USER@ipsych.computerome.cbs.dtu.dk:"\'\w\'" "'."\n\n";  
+print 'PS1="'.$ENV{USER}.'@'.$hostname.':"\'\w\'" "'."\n\n";
   
 
 print "-------------------------------------------------------------------\n";    

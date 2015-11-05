@@ -439,7 +439,7 @@ if ($job){
 
 
 	my $wallmin = $walltime * 60;
-	$wallmin = 240 if ($walltime > 240);
+	$wallmin = 240 if ($wallmin > 240);
 	my $wallstr = "-W $wallmin";
 
 
