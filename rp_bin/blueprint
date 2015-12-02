@@ -1,6 +1,14 @@
 #!/usr/bin/perl
 use strict;
 
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
 my $version = "3.1.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
@@ -14,24 +22,6 @@ my $command_line = "$progname @ARGV";
 #############################
 # read config file
 #############################
-
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
-
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
-
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 my $qloc = &trans("queue");
 
@@ -945,7 +935,7 @@ if ($job){
 	    print JOB "#SBATCH --mem-per-cpu $mem_str"."g\n";
 	    print JOB "#SBATCH --time $wallstr\n";
 	    print JOB "#SBATCH --dependency afterany:$idn\n";
-	    
+
 	    print JOB "$bp\n";
 	    close (JOB);
 

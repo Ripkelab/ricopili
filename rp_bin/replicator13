@@ -15,6 +15,13 @@ use strict;
 
 ## look at snptest: /psych/genetics_data/ripke/pgc/bip/wave2_0613/batch123/distribution/PGC_BIP16.sh2_mds9/replic/README
 
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
 
 #############################
 # write log-file
@@ -38,24 +45,6 @@ close FILE;
 #############################
 # read config file
 #############################
-
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
-
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
-
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 my $ploc = &trans("p2loc");
 my $rloc = &trans("rloc");

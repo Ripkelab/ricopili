@@ -75,8 +75,13 @@ use strict;
 
 ### look for here working (2 spots)
 
+#############################
+# load utility functions
+#############################
 
-
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
 
 my $version = "1.0.24";
 my $progname = $0;
@@ -145,24 +150,6 @@ my $host = hostname;
 #############################
 # read config file
 #############################
-
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
-
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
-
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 my $ploc = &trans("ploc");
 my $shloc = &trans("shloc"); # shapeit
