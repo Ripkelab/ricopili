@@ -5,6 +5,7 @@ my $version = "1.3.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 
+use lib $ENV{rp_perlpackages};
 use Compress::Zlib ;
 
 #############################
@@ -252,13 +253,19 @@ my $twodos_tmp = "$haps_file1.combined.tmp2dos.gz";
 my $twodos_tmp_success = "$twodos_tmp.fini";
 my $imp_proc = "impprob_to_2dos $haps_file_gz $twodos_tmp";
 print "$imp_proc\n";
+
 unless (-e $twodos_tmp_success) {
     &mysystem ($imp_proc);
 }
 
 # check success
 # if successful, remove $haps_file_gz now to save space
-unless (-e $twodos_tmp_success) {
+
+
+if (-e $twodos_tmp_success) {
+    &mysystem("rm $haps_file_gz")
+} 
+else {
     die "Failed to create $twodos_tmp from $haps_file_gz";
 }
 
@@ -328,6 +335,7 @@ close BC;
 
 
 &mysystem ("touch $finiout");
-&mysystem ("rm $haps_file_gz");
+#&mysystem ("rm $haps_file_gz");
+&mysystem ("rm $twodos_tmp");
 
 print "done\n";

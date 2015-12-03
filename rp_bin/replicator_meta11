@@ -610,7 +610,20 @@ while (my $line = <FILE>){
 
 
     if (exists $snp_hash{$cells[1]}) {
-	print OUT "$line\n";
+
+
+	unless ($cells[1] eq "SNP") {
+	    if ($cells[3] =~ /I/) {
+		$cells[3] = "I";
+	    }
+	    if ($cells[4] =~ /I/) {
+		$cells[4] = "I";
+	    }
+	}
+	
+	print OUT "@cells\n";
+
+	
     }
     $lc++;
 }

@@ -1,7 +1,9 @@
 #!/usr/bin/perl
 use strict;
 
+use lib $ENV{rp_perlpackages};
 use Compress::Zlib ;
+
 
 my $out_name = "metaber";
 

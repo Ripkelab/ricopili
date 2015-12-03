@@ -33,6 +33,8 @@
 ######################
 
 use strict;
+
+use lib $ENV{rp_perlpackages};
 use Compress::Zlib;
 
 # verify two arguments

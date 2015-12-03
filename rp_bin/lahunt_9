@@ -42,7 +42,7 @@ if ($rloc eq "broadinstitute") {
 }
 
 
-
+use lib $ENV{rp_perlpackages};
 use Compress::Zlib ;
 
 

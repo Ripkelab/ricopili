@@ -89,7 +89,7 @@ sub mysystem(){
     die "$systemstr\n->system call failed: $status" if ($status != 0);
 }
 
-
+use lib $ENV{rp_perlpackages};
 use Compress::Zlib ;
 
 
