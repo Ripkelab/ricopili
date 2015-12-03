@@ -31,7 +31,12 @@ sub trans {
 my $liloc = &trans("liloc");
 
 
+
+
 #####################################################
+use lib $ENV{rp_perlpackages};
+
+
 
 my @bu_files;
 push @bu_files, "$liloc/snp.txt.pos.scz49.gz";

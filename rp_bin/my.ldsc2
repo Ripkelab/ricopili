@@ -74,6 +74,9 @@ if ($ldsc eq "/home/people/sripke/rp_external_bins/ldsc/") {
     $ldsc_sys = "module load tools; module load anaconda;  python $ldsc/";
 }
 
+if ($ldsc eq "/data/user_tools/rp_external_bins/ldsc/") {
+    $ldsc_sys = "module load anaconda/2.2.0 ;  python $ldsc/";
+}
 
 
 

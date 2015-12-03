@@ -75,7 +75,8 @@ unless (-e "$inname.bim") {
     exit;
 }
 
-my $shapeit_bin = "shapeit.v2.r644.linux.x86_64";
+#my $shapeit_bin = "shapeit.v2.r644.linux.x86_64";
+my $shapeit_bin = "shapeit.v2.r837.linux.x86_64";
 
 my $xtxt = "";
 if ($chrx) {

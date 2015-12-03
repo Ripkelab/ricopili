@@ -8,7 +8,8 @@ use warnings;
 # use lib '/home/unix/sripke/perl_modules//Compress-Raw-Zlib-2.065/blib/lib';
 # use lib '/home/unix/sripke/perl_modules//IO-Compress-2.064/blib/lib';
 
- use Compress::Zlib ;
+use lib $ENV{rp_perlpackages};
+use Compress::Zlib ;
 
 my @opt = @ARGV;
 #my $workdir = shift(@opt);

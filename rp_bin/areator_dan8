@@ -227,7 +227,7 @@ if ($p2th_val){
 #sleep(10);
 
 ###print "first111111\n";
-
+use lib $ENV{rp_perlpackages};
 use Compress::Zlib ;
 #use lib '/home/gwas/bin/Spreadsheet-WriteExcel-2.25/blib/lib';
 use lib $ENV{rp_perlpackages}.'/Spreadsheet-WriteExcel-2.40/blib/lib';

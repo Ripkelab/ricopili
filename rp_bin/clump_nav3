@@ -599,6 +599,7 @@ sub send_jobarray {
 use File::Copy;
 use File::Path;
 use Cwd;
+use lib $ENV{rp_perlpackages};
 use Compress::Zlib ;
 
 
