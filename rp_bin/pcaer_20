@@ -2780,6 +2780,12 @@ print "$rootdir\n";
  &mysystem ("cp $pcaer_dir/$bfile_menv.mds.1d.pdf.gz .");
  &mysystem ("cp $pcaer_dir/$bfile_menv.mds.2d.pdf.gz .");
  &mysystem ("cp $pcaer_dir/$bfile_menv.mds.2ds.pdf.gz .");
+
+if (-e "$pcaer_dir/$bfile_menv.mds.overworked.p_assoc.txt") {
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.overworked.p_assoc.txt .");
+}
+
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.2ds.pdf.gz .");
  &mysystem ("cp $pcaer_dir/$bfile_menv.mds.sum.pdf .");
 if (0) {
  &mysystem ("cp $pcaer_dir/$bfile_menv.mds.lahu-nup.pdf.gz .");

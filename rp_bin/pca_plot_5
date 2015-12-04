@@ -575,9 +575,9 @@ pca_nomiss <- pca[pca[,"CC"] != "mis",]
 ################################
 p_assoc <- rep(0,length(pca) - header_col)
 
-print ("debug2b");
+#print ("debug2b");
 #print (pca[,"ST"]);
-print (unique(pca_nomiss[,"ST"]));
+#print (unique(pca_nomiss[,"ST"]));
 
 #print (p_assoc)
 
@@ -604,6 +604,9 @@ if (length(unique(pca_nomiss[,"ST"])) == 1) {
 }
 
 #print ("debug3");
+
+
+
 
 par (mar=c(8, 4, 4, 4)+0.1)
 
@@ -1031,7 +1034,7 @@ par(mfrow=c(2,2))
 ##  ggplot(m6[1:30000,], aes(C1, C2)) + geom_point(size=1, colour="gray") + geom_density2d(colour="red", fill="blue",size=.2,linetype=identity) + facet_wrap(~ST, ncol=4) + xlab("PC1") + ylab("PC2") 
 
 
-#write.table(p_assoc,"MDSFILE.p_assoc");
+write.table(p_assoc,"MDSFILE.p_assoc");
 
 
 dev.off();
@@ -1061,6 +1064,49 @@ my $systemR = "$r_sys --vanilla < $R_in";
 system ($systemR);
 
 
+my %la_p;
+
+die $! unless open IN, "< $pla";
+while (my $line = <IN>) {
+    my @cells = &split_line($line);
+    $la_p{$cells[0]} = $cells[1];
+#    print "$cells[0]\n";
+}
+close IN;
+
+
+
+
+die $! unless open IN, "< $mds_ow_file.p_assoc";
+die $! unless open OUT, "> $mds_ow_file.p_assoc.txt";
+my $lc=1;
+my $line = <IN>;
+print OUT "PCA\tLAMBDA_GC\tP\n";
+
+while (my $line = <IN>) {
+
+    my @cells = &split_line($line);
+    my $pca_txt = "PCA$lc";
+
+#    print "$pca_txt\n";
+    if (exists $la_p{$pca_txt}){
+	my $out_line = $pca_txt."\t".$la_p{$pca_txt};
+	#    print OUT "PCA$lc\t";
+	my $txt2 = sprintf "%.3g",$cells[1];
+	$out_line .= "\t".$txt2."\n";
+	print OUT $out_line;
+    }
+    $lc++;
+}
+close IN;
+close OUT;
+#exit;
+
+
+
+
+
+
 
 
 if ($bfile) {
@@ -1083,6 +1129,7 @@ unless ($spec) {
   copy ("$pdf_name_single","$rootdir/");
   copy ("$pdf_name_sum","$rootdir/");
   copy ("$mds_ow_file","$rootdir/");
+  copy ("$mds_ow_file.p_assoc.txt","$rootdir/");
 }
 
 copy ("$pdf_name_2ds","$rootdir/");
