@@ -13,7 +13,7 @@ use Ricopili::Utils qw(trans);
 # read config file
 #############################
 
-$rloc = &trans("rloc");
+my $rloc = &trans("rloc");
 
 ###############################################
 

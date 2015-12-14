@@ -41,6 +41,7 @@ if ($qloc eq "qsub_b"){
 my $bsub =1 if ($qloc eq "bsub");
 my $msub =1 if ($qloc eq "msub");
 my $slurm =1 if ($qloc eq "slurm");
+my $slurm_u = 1 if ($qloc eq "slurm_u");
 
 
 ##########################################
@@ -871,7 +872,13 @@ if ($job){
 ### SLURM 
 ##########################################
 
-    if ($slurm) {
+    if ($slurm || $slurm_u) {
+
+    # get uppmax account identifier
+    my $uppmax_project;
+    if ($slurm_u) {
+        $uppmax_project = &trans("uppmax_project");
+    }
 
 #	my $job_n=0;
 	my $sum=0;
@@ -936,6 +943,12 @@ if ($job){
 	    print JOB "#SBATCH --time $wallstr\n";
 	    print JOB "#SBATCH --dependency afterany:$idn\n";
 
+        # Uppmax specials
+        if ($slurm_u) {
+            print JOB "#SBATCH --account $uppmax_project\n";
+            print JOB "#SBATCH --partition core\n";
+        }
+
 	    print JOB "$bp\n";
 	    close (JOB);
 
@@ -966,6 +979,11 @@ if ($job){
 	    print JOB "#SBATCH --job-name $NOJ\n";
 	    print JOB "#SBATCH --output errandout/$NOJ.-%j.out\n";
 
+        # Uppmax specials
+        if ($slurm_u) {
+            print JOB "#SBATCH --account $uppmax_project\n";
+            print JOB "#SBATCH --partition core\n";
+        }
 
 #	    print JOB "#SBATCH --ntasks $job_bn_th\n";
 	    my $aend = $job_bn_th;

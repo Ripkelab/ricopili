@@ -634,7 +634,7 @@ sub send_jobarray {
     if ($qloc eq "bsub" || $qloc eq "msub") {
 	$wt_file =~ s/.*blueprint_joblist_file-//;
     }
-    if ($qloc eq "slurm") {
+    if ($qloc eq "slurm" || $qloc eq "slurm_u") {
 	$wt_file = "$sjadir/$jobfile.script.id";
     }
     if ($qloc eq "qsub") {
