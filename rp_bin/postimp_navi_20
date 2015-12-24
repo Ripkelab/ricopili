@@ -200,7 +200,8 @@ version: $version
  --walltime INT    walltime for imp-jobs : $walltime
  --mem INT         memory for puter-jobs, in MB, default $jmem
  --trio            for trio data.
- --triset STRING  for subset of trio datasets (can contain bimfiles)
+ --triset STRING   for subset of trio datasets (can contain bimfiles)
+ --triocov         to allow covariates for trio data (may be unstable)
  --idin STRING     ID inclusion list (before imputation, while ripping)
  --mds STRING      mds-file (with studyindicator, (if necessary), 
                        NOMDS if no pcaer wished and analysis without covariates
@@ -329,6 +330,7 @@ GetOptions(
     "nj=i"=> \ $nj,
     "trio"=> \my $trio,
     "triset=s"=> \my $trioset_file,
+    "triocov"=> \my $triocov,
 
     "metaset=s"=> \my $metaset_file,
     "remeta=s"=> \my $remeta,
@@ -657,6 +659,10 @@ if ($trio) {
     die "please use size (--s2gr) compatible for trios, keep in mind, size will be n*4" unless ($s2gr % 3 == 0 || $s2gr > 200);
 }
 
+
+if ($triocov){
+    print "WARNING: triocov argument may be unstable for non-GWAS analysis (e.g. polygenic scoring).\n";
+}
 
 
 
@@ -1983,8 +1989,11 @@ unless (-e "$rootdir/daner_$outname.done") {
 		my $bfile = $_;
 
 		my $co_str_loc = $co_str;
-		$co_str_loc = "" if (exists $trioset_bimfli{$bfile});
-		
+		if(exists $trioset_bimfli{$bfile}){
+		    unless($triocov){
+		        $co_str_loc = "";
+		    }
+		}
 
 
 		$bfile =~ s/.bim$//;
