@@ -1747,7 +1747,7 @@ my $chefli_fini = 0;
 	    my $bfile = $_;
 	    $bfile =~ s/.bim$//;
 	    my $accfli ="$bfile".".hg19.ch.fl.bim";
-	    my $locref = $bfile.".bim.ref.sum";
+	    my $locref = $bfile.".hg19.bim.ref.sum";
 
 	    if (-e $locref) {
 		print "locref $locref is existing! safes some time\n";
@@ -1764,6 +1764,7 @@ my $chefli_fini = 0;
 		}
 	    }
 	    else {
+	        print "locref $locref is not existing! would be better if it did\n";
 		unless (exists $bimfli_array{$accfli}) {
 		    push @chefli_arr, "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim" ;
 		}
