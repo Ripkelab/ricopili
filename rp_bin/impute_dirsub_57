@@ -2890,6 +2890,35 @@ if ($dabg_done == 0) {
 
 
 
+
+############################################################
+#### write chunks empty after qc
+##############################################################
+
+unless (-e "$rootdir/qc1empty_info") {
+    die $! unless open FAILINF, "> qc1empty_info.tmp";
+
+    
+    foreach (@bimfli_files) {
+        my $bprefix = $_;
+        $bprefix =~ s/.bim$//;
+
+	my $dasudir_loc_qc1 = "$dasudir"."qc1_$bprefix";
+	opendir(DIR, "$dasudir_loc_qc1/qc1") || die "can't opendir : $!";
+	my @qc1fall_files = grep {/\.out.dosage.gz.empty$/} readdir(DIR);
+	closedir(DIR);
+	foreach (@qc1fall_files) {
+	    print FAILINF "$_\n";
+	}
+    }
+    close FAILINF;
+
+    &mysystem ("mv qc1empty_info.tmp $rootdir/qc1empty_info");
+}
+
+
+
+
 ##################################################################################################################################
 ##################################################################################################################################
 ##################################################################################################################################
