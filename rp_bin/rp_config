@@ -26,8 +26,8 @@ my $command_line = "$progname @ARGV";
 #############################
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"other",0);
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"other",0);
-my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"other",0);
-my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","other");
+my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"other",0);
+my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","uppmax","other");
 print "Please enter your cluster name from the following options:\n";
 my $i = 1;
 foreach (@cluster_names){
@@ -57,8 +57,96 @@ while (1) {
 }
 print "\nUsing the following cluster: $cluster\n\n";
 
+# If on an Uppmax cluster, determine which one, and which account to use.
+# Uses code from the projinfo utility on Uppmax
+my $uppmax_project;
+my $uppmax_cluster;
+my $username;
+if ($clusters{uppmax}) {
+    # get username
+    $username = getlogin || getpwuid($<);
 
+    # get cluster name
+    open CONFIG, "scontrol show conf 2>&1 |"
+      or die "Error: Cannot find SLURM configuration.\n";
+    while (<CONFIG>) {
+        chomp;
+        my $line = lc $_;
 
+        if ($line =~ /^clustername\s+=\s+(\S+)\s*$/) {
+            $uppmax_cluster = $1;
+            last
+        }
+    }
+    close CONFIG;
+
+    # get user's current projects
+    my $grantfile = "/sw/share/slurm/$uppmax_cluster/grantfile";
+    my @uppmax_projects;
+
+    open GRANTFILE, "< $grantfile"
+      or die "Error: Cannot read file $grantfile.\n";
+    while (<GRANTFILE>) {
+        chomp;
+        my $line = $_;
+        next if /^\s*$/;        # Empty line
+        next if /^\s*#/;        # Comment
+        if (/^([^,]+),[^,]+,([^,]+),[^#]+#(.*)$/) {
+            my $projectname = $1;
+            my $grant = $2;
+            my $members = $3;
+            if ($members =~
+                /^$username$|^$username\s|\s$username\s|\s$username$/)
+            {
+                push @uppmax_projects, $projectname;
+            }
+        }
+        elsif (/^([^:]+):(\d+):.*:([^:]*)$/) {
+            my $projectname = $1;
+            my $grant = $2;
+            my $members = $3;
+            if ($members =~ /^$username$|^$username,|,$username,|,$username$/) {
+                push @uppmax_projects, $projectname;
+            }
+        }
+        else { # Error in file
+            die "Error: Bad line in file $grantfile:\n\t$line\n";
+        }
+    }
+    close GRANTFILE;
+
+    # choose project (account) to use with ricopili
+    print "Please choose the Uppmax project you want to use with ricopili:\n";
+    my $i = 1;
+    foreach (@uppmax_projects){
+        print "\t($i) $_\n";
+        $i += 1;
+    }
+    print "\n";
+    while (1) {
+        my $project = lc <>;
+        chomp $project;
+        if ( grep(/^$project$/, @uppmax_projects) ){ $uppmax_project = $project; last;}
+        else {
+            $project =~ s/(\)|\()//g;
+            if ($project >= 1 && $project <= $i){
+                $project -= 1;
+                $uppmax_project = $uppmax_projects[$project];
+                last;
+            }
+            else {
+                print "Did not recognize option. Please enter a project identifier from the options below:\n";
+                my $i = 1;
+                foreach (@uppmax_projects){
+                    print "\t($i) $_\n";
+                    $i += 1;
+                }
+                print "\n";
+            }
+        }
+    }
+    print "\nUsing the following Uppmax project: $uppmax_project\n\n";
+}
 
     
 #############################
@@ -183,7 +271,7 @@ if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
                     &mysystem("grep -v \"rp_bin\\|rp_perlpackages\" $home/.my.bashrc > my.bashrc_minus_rpbin.txt");
                     &mysystem("cp $home/.my.bashrc my.bashrc.copy");
                     print "\n----------------------------------------------------\n";                    
-                    print "\n$## To remove rp_bin permanently from the default search path in bash, run the following command:\n\n";
+                    print "\n## To remove rp_bin permanently from the default search path in bash, run the following command:\n\n";
                     $i += 1;
                     print "\tmv my.bashrc_minus_rpbin.txt $home/.my.bashrc\n\n";
                     print "## which will delete the following lines from your $home/.my.bashrc file:\n";
@@ -226,12 +314,12 @@ if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
                     print "\n## A copy of $home/.my.cshrc is available at my.cshrc.copy\n";
                 }
             }
-            elsif ($clusters{genomedk} == 1 || $clusters{mssm} == 1 || $clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{co_ipsych} == 1) {
+            elsif ($clusters{genomedk} == 1 || $clusters{mssm} == 1 || $clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{co_ipsych} == 1 || $clusters{uppmax} == 1) {
                 if (-e "$home/.bashrc") {
                     &mysystem("grep -v \"rp_bin\\|rp_perlpackages\" $home/.bashrc > my.bashrc_minus_rpbin.txt");
                     &mysystem("cp $home/.bashrc my.bashrc.copy");
                     print "\n----------------------------------------------------\n";                    
-                    print "\n$## To remove rp_bin permanently from the default search path in bash, run the following command:\n\n";
+                    print "\n## To remove rp_bin permanently from the default search path in bash, run the following command:\n\n";
                     $i += 1;
                     print "\tmv my.bashrc_minus_rpbin.txt $home/.bashrc\n\n";
                     print "## which will delete the following lines from your $home/.bashrc file:\n";
@@ -302,6 +390,9 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
     }    
     if ($clusters{broad}){
         print FILE "export rp_perlpackages=/home/unix/sripke/perl_modules\n";
+    }
+    if ($clusters{uppmax}){
+        print FILE "export rp_perlpackages=/proj/$uppmax_project/ricopili/software/perl_modules\n";
     }
     close FILE;
 
@@ -447,6 +538,26 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
         &mysystem("touch install_true");        
         exit;
     }
+
+    elsif ($clusters{uppmax}){
+	my $i = 1;
+
+        if (-e "$home/.bashrc") {
+            print "cat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "PATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "PATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;
+        }
+	print "export rp_perlpackages=/proj/$uppmax_project/ricopili/software/perl_modules\n";
+	print "./rp_config\n\n";
+        &mysystem("touch install_true");
+        exit;
+    }
+
     else {
         print "You'll need to add the following paths to your default search path:\n";
         print "\t$cdir\n";
@@ -679,6 +790,25 @@ elsif ($clusters{mssm} == 1) {
         else {print "Please answer with y or n.\n";}
     }
 }
+
+elsif ($clusters{uppmax} == 1) {
+    $sloc = "\$TMPDIR"; # $TMPDIR gets populated with /scratch/$SLURM_JOB_ID for
+                        # each job. Storing files directly in /scratch is not safe.
+                        # On login nodes $TMPDIR is just /scratch/.
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
+
 else {
     print "Please enter a scratch directory to use:\n";
     $sloc = "$cd/tmp/";
@@ -699,7 +829,7 @@ else {
 
 unless (-d $sloc) {
     print "Making scratch directory: $sloc\n\n";
-    &mysystem("mkdir $sloc");    
+    &mysystem("mkdir -p $sloc");
 }
 else {
     print "Scratch directory already exists at $sloc\n";
@@ -903,6 +1033,20 @@ elsif ($clusters{mssm}){
 #		  "hvloc","./",
 	);
 }
+    elsif ($clusters{uppmax}){
+        %variables = ("ploc", "/sw/apps/bioinfo/plink/1.07/$uppmax_cluster/",
+    		  "p2loc","/proj/$uppmax_project/ricopili/software/plink2/",
+    		  "shloc","/proj/$uppmax_project/ricopili/software/shapeit/bin/",
+    		  "i2loc","/proj/$uppmax_project/ricopili/software/impute2/impute_v2.3.2_x86_64_static/",
+    		  "liloc","/proj/$uppmax_project/ricopili/software/liftover/",
+    		  "ldloc","/proj/$uppmax_project/ricopili/software/ldsc/",
+    		  "eloc","/proj/$uppmax_project/ricopili/software/EIG6.0.1/bin/",
+    		  "rloc","/usr/bin/",
+    		  "rpac","/proj/$uppmax_project/ricopili/software/Rpackages",
+    		  "hmloc","/proj/$uppmax_project/ricopili/hapmap_ref/",
+    		  "meloc","/proj/$uppmax_project/ricopili/software/metal/generic-metal/"
+    	);
+}
 
 
 
@@ -973,6 +1117,8 @@ if ($clusters{lisa}){push (@text, "queue qsub")}
 if ($clusters{computerome} || $clusters{co_ipsych}){push (@text, "queue qsub_c")}
 if ($clusters{genomedk}){push (@text, "queue slurm")}
 if ($clusters{mssm}){push (@text, "queue msub")}
+if ($clusters{uppmax}){push (@text, "queue slurm_u")}
+if ($clusters{uppmax}){push (@text, "uppmax_project $uppmax_project")}
 }
 
 unless ( -e $conf_file && $ans_ow eq "n") {
@@ -1096,6 +1242,9 @@ print 'alias c=\'sed "s#.*#scp '.$ENV{LOGNAME}.'@'.$hostname.':$(pwd)/& .#"\''."
 print "## for list of cluster jobs:\n";
 if ($clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{co_ipsych} == 1 || $clusters{broad} == 1) {
     print 'alias q=\'qstat -u '.$ENV{LOGNAME}."\'\n\n";
+}
+elsif ($clusters{uppmax}) {
+    print 'alias q=\'squeue -u '.$username."\'\n\n";
 }
 else {
     print "alias q=\'bjobs -w\'\n\n";
