@@ -84,7 +84,7 @@ if ($chrx) {
 }
 
 my $multi_txt = "";
-if ($multi > 0 ) {
+if ($multi > 1 ) {
     $multi_txt = "--thread $multi";
 }
 
