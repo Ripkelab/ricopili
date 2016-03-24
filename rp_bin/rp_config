@@ -1232,7 +1232,7 @@ if ($clusters{co_ipsych} == 1) {
 
 
 print "-------------------------------------------------------------------\n";
-print "adding these commands to your ~/.bashrc can be very helpful\n(just copy/paste the follwing lines into ~/.bashrc)\n(you have to logout and login again for this to be in effect)\n\n";
+print "adding these commands to your ~/.bashrc can be very helpful\n(just copy/paste the following lines into ~/.bashrc)\n(you have to logout and login again for these to be in effect)\n\n";
 print "## for colored output of ls:\n";
 print 'alias ls=\'ls --color=auto\''."\n\n";
 print "## for easy copy over to your local machine:\n";
