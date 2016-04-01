@@ -708,8 +708,8 @@ if (@filehandles > 1) {
 	if ($noindel) {
 	    next if (length($a1) != 1);
 	    next if (length($a2) != 1);
-	    next unless ($a1 =~ /[ACGT]/);
-	    next unless ($a2 =~ /[ACGT]/);
+	    next unless ($a1 =~ /[ACGTacgt]/);
+	    next unless ($a2 =~ /[ACGTacgt]/);
 	}
 
 
