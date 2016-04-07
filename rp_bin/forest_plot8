@@ -463,6 +463,21 @@ if (0) {
     $st_names{"met_BIP11.small.metadaner.ow"} = "PGC BD Stage 1";
 
 }
+if (1) {
+    
+    $st_names{"PGC_MDD29_23andme_gera_ukb_gs_ipsych_decode.0216a"} = "PGC MD wave2 Feb 2016";
+    $st_names{"GERA.euro.depress.0915a_mds5.id"} = "GERA";
+    $st_names{"MDD29.0515a_mds6.id"} = "PGC MDD 29";
+    $st_names{"mdd_23andMe_V3_1215b"} = "23andMe";
+    $st_names{"mdd_decode_160211"} = "Decode";
+    $st_names{"mdd_ipsych_1215a.id2"} = "iPsych";
+
+#               mdd_ipsych_1215a.id2
+    $st_names{"mdd_ukb_1215a.id2"} = "UKB";
+    $st_names{"mdd_genscot_1215a"} = "GenScot";
+   
+
+}
 
 #####################################
 # BEGIN
@@ -664,7 +679,16 @@ foreach my $study (sort keys %finfo){
 
     $rep_sw = 1 if ($st_str =~ /^replication/);
 
-    $st_str = $st_names{$st_str} if (exists $st_names{$st_str});
+    print "###################################\n";
+    print "STR: <$st_str>\n";
+    if (exists $st_names{$st_str}) {
+	$st_str = $st_names{$st_str}; 
+	print "is existing\n";
+    }
+    print "STR: <$st_str>\n";
+    print "###################################\n"; 
+
+    
 
     $oline .= sprintf "%s",$st_str;
 

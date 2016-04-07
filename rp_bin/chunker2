@@ -3,6 +3,10 @@ use strict;
 
 srand(0);
 
+###############################
+## version 2 also transforms I[0-9]* into I
+#################################
+
 #############################
 # load utility functions
 #############################
@@ -110,6 +114,7 @@ sub split_line_ref {
 
 
 
+#print "debug 1\n";
 
 
 #####################################
@@ -125,9 +130,14 @@ if ($workdir) {
 #####################################
 
 my $pfile = $ARGV[0];
+unless (-e $pfile) {
+    print "$pfile is not existing\n";
+    exit;
+}
 
+my $pfile_nogz;
 if ($pfile =~ /.gz$/) {
-    my $pfile_nogz = $pfile;
+    $pfile_nogz = $pfile;
     $pfile_nogz =~ s/.gz$//;
 
     unless (-e $pfile_nogz) {
@@ -141,12 +151,16 @@ if ($pfile =~ /.gz$/) {
 #    exit;
 }
 
+# print "debug 2\n";
+
 
 ##################
 # define columns
 ##################
 my $chrcol = 1;
 my $poscol = 3;
+my $a1col = 4;
+my $a2col = 5;
 
 
 my $chr_start = 1;
@@ -191,6 +205,9 @@ unless (-e $pfile_chr) {
 	my @cells = @{&split_line_ref(\$line)};
 	my $pchr = $cells[$chrcol-1];	
 	my $ppos = $cells[$poscol-1];
+	$cells[$a1col-1] =~ s/I[0-9]*/I/;
+	$cells[$a2col-1] =~ s/I[0-9]*/I/;
+
 
 	my $ppos_int = $ppos *1 ;
 	next if ($ppos_int ne $ppos);
@@ -218,7 +235,7 @@ unless (-e $pfile_chr) {
 }
 #exit;
 
-
+# print "debug 3\n";
 
 ########################
 ## sort all 22 files
@@ -229,21 +246,34 @@ unless (-e $pfile_sorted){
 
     foreach my $chr ($chr_start..$chr_end) {
 	print "sort $pfile.chr$chr\n";
-	&mysystem("sort -k$poscol,$poscol"."n $pfile.chr$chr > $pfile.chr$chr.sorted");
+	&mysystem("sort -k$poscol,$poscol"."n $pfile.chr$chr > $pfile.chr$chr.sorted.tmp");
+	&mysystem("mv $pfile.chr$chr.sorted.tmp $pfile.chr$chr.sorted");
+	&mysystem("rm $pfile.chr$chr");
     }
 #    &mysystem("sort -k$chrcol,$chrcol"."n -k$poscol,$poscol"."n $pfile > $pfile_sorted.tmp");
     &mysystem("touch $pfile_sorted");
+
+    
 }
 
 #exit;
+
+
+
 
 ########################
 ## chunk all 22 files
 ##########################
 
 my $pfile_chunked = $pfile.".chunked";
+print "$pfile_chunked: debug 4\n";
+
 unless (-e $pfile_chunked){
 
+
+
+    print "debug 5\n";
+    
     my %scount;
     my %cname;
 
@@ -329,7 +359,11 @@ unless (-e $pfile_chunked){
 }
 
 
-
+foreach my $chr ($chr_start..$chr_end) {
+    print "remove $pfile.chr$chr.sorted\n";
+    &mysystem("rm $pfile.chr$chr.sorted");
+}
+&mysystem("rm $pfile_nogz");
 &mysystem("touch chunker_done");
 
 

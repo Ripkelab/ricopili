@@ -274,9 +274,9 @@ sub error {
 
 
 
-    my $mailtxt = 'echo \''.$expr."\': ".$command_line.' | mail -s ricopili_error sripke@broadinstitute.org';
-    print "$mailtxt\n";
-    system($mailtxt);
+#    my $mailtxt = 'echo \''.$expr."\': ".$command_line.' | mail -s ricopili_error sripke@broadinstitute.org';
+#    print "$mailtxt\n";
+#    system($mailtxt);
 
 
 

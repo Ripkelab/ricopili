@@ -2149,12 +2149,12 @@ unless (-e $repname_sub) {
 	}
 	unless ($one_chr) {
 	    if ($chr_si < 1 || $chr_si > 22){
-		print "outside autosomes: $chr_si, $line\n";
+		print "outside autosomes: $chr_si, $line, $rep_name\n";
 
 		$error_n++;
 		if ($error_n == 10) {
 		    print "outside autosomes with more than 10 times, not exit\n";
-#		    die;
+ 		    die;
 		}
 		next ;
 	    }
@@ -2938,7 +2938,7 @@ while (my $line = <BASIC>){
 		my $rem = $ipos %10;
 		my $ld_subdir = "ld_subdir/chr$ichr/$rem";
 		unless (-e $ld_subdir) {
-		    print "subdir not existing: $ld_subdir\n";
+#		    print "subdir not existing: $ld_subdir\n";
 		    &mysystem("mkdir -p $ld_subdir");
 		}
 #		sleep(3);
@@ -3128,9 +3128,15 @@ while (my $line = <BASIC>){
 	    $a1 = "I";
 	    $a2 = "D";
 	}
+	elsif ($gt =~ /^D/){
+	    $a1 = "D";
+	    $a2 = "I";
+	}
 	else {
-	    $a1 = "I";
-	    $a2 = "D";
+	    print "Error: strange indel format: $gt\n";
+	    exit;
+#	    $a1 = "I";
+#	    $a2 = "D";
 	}
 
 
@@ -3297,22 +3303,32 @@ while (my $line = <BASIC>){
 		if ($haplo_txt_loc =~ "I"){
 		    my $haplo_txt_loc_new = $haplo_txt_loc;
 		    my $indel = $haplo_txt_loc;
-		    $haplo_txt_loc_new =~ s/I[0-9]*/i/;
+		    
+#		    $haplo_txt_loc_new =~ s/I[0-9]*/i/;
+		    $haplo_txt_loc_new =~ s/I[0-9]*/I/;
+
 		    $indel =~ s/.*(I[0-9]*).*/\1/;
 		    my $indel2 = "p";
 		    if ($haplo_txt_loc_new =~ "I"){
+			print "new: $haplo_txt_loc_new\n";
 			my $haplo_txt_loc_new_new = $haplo_txt_loc_new;
 			$indel2 = $haplo_txt_loc_new;
-			$haplo_txt_loc_new_new =~ s/I[0-9]*/p/;
+
+#			$haplo_txt_loc_new_new =~ s/I[0-9]*/p/;
+			$haplo_txt_loc_new_new =~ s/I[0-9]*/I/;
+
+
+
+#			print "new: $haplo_txt_loc_new_new\n";
 			$indel2 =~ s/.*(I[0-9]*).*/\1/;
 
 
 
 			$haplo_txt_loc_new = $haplo_txt_loc_new_new;
-			if ($haplo_txt_loc_new_new =~ "I"){
-			    print "something strange with long phased SNPs: third indel: $haplo_txt_loc, $snp_txt $repsnp_name\n";
-			    exit;
-			}
+#			if ($haplo_txt_loc_new_new =~ "I"){
+#			    print "something strange with long phased SNPs: third indel: $haplo_txt_loc, $snp_txt $repsnp_name\n";
+#			    exit;
+#			}
 		    }
 
 #		    print "old: $haplo_txt_loc\n";
@@ -3325,16 +3341,23 @@ while (my $line = <BASIC>){
 		    $ld_info_phase_os2 = substr($haplo_txt_loc_new,3,1);
 		    $ld_info_phase_gwas2 = substr($haplo_txt_loc_new,4,1);
 
-		    $ld_info_phase_os =~ s/i/$indel/;
-		    $ld_info_phase_os2 =~ s/i/$indel/;
-		    $ld_info_phase_gwas =~ s/i/$indel/;
-		    $ld_info_phase_gwas2 =~ s/i/$indel/;
 
-		    $ld_info_phase_os =~ s/p/$indel2/;
-		    $ld_info_phase_os2 =~ s/p/$indel2/;
-		    $ld_info_phase_gwas =~ s/p/$indel2/;
-		    $ld_info_phase_gwas2 =~ s/p/$indel2/;
 
+		    if (0) {
+			$ld_info_phase_os =~ s/i/$indel/;
+			$ld_info_phase_os2 =~ s/i/$indel/;
+			$ld_info_phase_gwas =~ s/i/$indel/;
+			$ld_info_phase_gwas2 =~ s/i/$indel/;
+			
+			$ld_info_phase_os =~ s/p/$indel2/;
+			$ld_info_phase_os2 =~ s/p/$indel2/;
+			$ld_info_phase_gwas =~ s/p/$indel2/;
+			$ld_info_phase_gwas2 =~ s/p/$indel2/;
+
+		    }
+
+
+		    
 		}
 		else {
 		    print "something strange with long phased SNPs: $haplo_txt_loc,  $snp_txt $repsnp_name\n";
@@ -3449,7 +3472,8 @@ while (my $line = <BASIC>){
     my $gwas_frqa = $gwascells[5];
     my $gwas_frqu = $gwascells[6];
 
-
+#    print "gwas_a1: $gwas_a1\n";
+    
 
     if (0) {
     if ($gwas_a1 =~ /^I/) {
@@ -3557,11 +3581,16 @@ while (my $line = <BASIC>){
 
 #    $out_str .= "a1-alleles:$gwascells[3]-$a1\ta2-alleles:$gwascells[4]-$a2\t";
 
-
+    my $a1_i = $a1;
+    $a1_i =~ s/I[0-9]*/I/;
     my $a1_phase = 0;
-    $a1_phase = 1 if ($a1 eq $ld_info_phase_os);
+    $a1_phase = 1 if ($a1_i eq $ld_info_phase_os);
+
+    my $gwas_a1_i = $gwas_a1;
+    $gwas_a1_i =~ s/I[0-9]*/I/;
+
     my $gwas_a1_phase = 0;
-    $gwas_a1_phase = 1 if ($gwas_a1 eq $ld_info_phase_gwas);
+    $gwas_a1_phase = 1 if ($gwas_a1_i eq $ld_info_phase_gwas);
 #    $out_str .= "$a1_phase-$gwas_a1_phase\t";
 
     my $a1_phase_sum = $a1_phase + $gwas_a1_phase;
@@ -3594,6 +3623,17 @@ while (my $line = <BASIC>){
 	    $ld_info_r2 = -1 * $ld_info_r2;
 
 	    print "\nWarning: $problem\n";
+#	    if ($snp_txt eq "chr4_41978481_I") {
+#		exit;
+#	    }
+	    if ($ld_info_r2 < -0.6) {
+		print "$a1_phase, $a1_i, $ld_info_phase_os\n";
+		print "$gwas_a1_phase, $gwas_a1_i, $ld_info_phase_gwas\n";
+		print "$snp_txt, $repsnp_name\n";
+		
+		print "Error: with R2 of greater than 0.6, this is hard to believe,\n";
+		exit;
+	    }
 	    push @problem_arr, $problem;
 #	    next;
 #	    exit;
