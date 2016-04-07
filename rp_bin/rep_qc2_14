@@ -919,7 +919,6 @@ if ($calc){
 
 	unless ($noassoc) {
 	    &asso2tdt_frq("$nofiprefix.tmp") if ($tdt == 1);        # jigold -- moved this line into noassoc block in case case-only trio study 10/1/15
- 	    &mysystem ("mv $nofiprefix.tmp.assoc $nofiprefix.assoc");
 	    &mysystem ("mv $nofiprefix.tmp.assoc $nofiprefix.assoc");
 	}
 
