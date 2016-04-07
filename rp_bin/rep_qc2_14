@@ -926,8 +926,10 @@ if ($calc){
 	&mysystem ("$ploc/plink $allow --bfile $prefix --out $nofiprefix.tmp --geno 1 --mind 1 --noweb $assotdt --missing --freq");  
 
 
+
 	unless ($noassoc) {
-        &asso2tdt_frq("$nofiprefix.tmp") if ($tdt == 1);        # jigold -- moved this line into noassoc block in case case-only trio study 10/1/15
+	    &asso2tdt_frq("$nofiprefix.tmp") if ($tdt == 1);        # jigold -- moved this line into noassoc block in case case-only trio study 10/1/15
+ 	    &mysystem ("mv $nofiprefix.tmp.assoc $nofiprefix.assoc");
 	    &mysystem ("mv $nofiprefix.tmp.assoc $nofiprefix.assoc");
 	}
 
@@ -2352,12 +2354,14 @@ if ($calc) {
 #$fifiprefix.snpex.nassoc.detex.txt    exclude for NA in assoc
 
 	if ($tdt) {
-        unless ($noassoc) { # jigold add for scenario with trio data with only cases 10/1/15
-            &mysystem ("cat $fifiprefix.snpex.hwe.con.detex.txt $fifiprefix.snpex.hwe.cas.detex.txt $fifiprefix.snpex.temiss.detex.txt $fifiprefix.snpex.frq.detex.txt $fifiprefix.snpex.lmendel.detex.txt $fifiprefix.snpex.nassoc.detex.txt > $fifiprefix.snpex.detex.txt.comb  ");            
-        } 
-        else {
-            &mysystem ("cat $fifiprefix.snpex.hwe.con.detex.txt $fifiprefix.snpex.frq.detex.txt  $fifiprefix.snpex.lmendel.detex.txt > $fifiprefix.snpex.detex.txt.comb  ");            # jigold add for scenario with trio data with only cases 10/1/15
-        }
+
+	    unless ($noassoc) { # jigold add for scenario with trio data with only cases 10/1/15
+		&mysystem ("cat $fifiprefix.snpex.hwe.con.detex.txt $fifiprefix.snpex.hwe.cas.detex.txt $fifiprefix.snpex.temiss.detex.txt $fifiprefix.snpex.frq.detex.txt $fifiprefix.snpex.lmendel.detex.txt $fifiprefix.snpex.nassoc.detex.txt > $fifiprefix.snpex.detex.txt.comb  ");            
+	    } 
+	    else {
+		&mysystem ("cat $fifiprefix.snpex.hwe.con.detex.txt $fifiprefix.snpex.frq.detex.txt  $fifiprefix.snpex.lmendel.detex.txt > $fifiprefix.snpex.detex.txt.comb  ");            # jigold add for scenario with trio data with only cases 10/1/15
+	    }
+	    
 	}
 	else {
 	    unless ($noassoc) {

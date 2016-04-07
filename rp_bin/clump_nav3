@@ -859,10 +859,10 @@ my @clump_files;
 	    
 	my $cmd;
 	    
-	$cmd = "$p2loc/plink --bfile $bfile_sc --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
+	$cmd = "$p2loc/plink --memory 2000 --bfile $bfile_sc --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
 	    
 	if ($detformat == 2) {
-	    $cmd = "$p2loc/plink --bfile $bfile_sc --clump-range $gene_list_0610_plink --clump-verbose --clump-range-border $gene_range --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
+	    $cmd = "$p2loc/plink --memory 2000 --bfile $bfile_sc --clump-range $gene_list_0610_plink --clump-verbose --clump-range-border $gene_range --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
 	}
 	
 	my $out_loc = "$outname_loc.clumped";
@@ -879,10 +879,14 @@ my @clump_files;
 #		$rerun = 1;
 #	    }
 	}
+	unless (-e $out_loc) {
+	    $rerun = 1;
+	}
 	#    print "$cmd\n";
 	    #    print "$chr\t$cr2\t$out_loc\n";
 	push @job_arr, $cmd if ($rerun == 1);
-	push @clump_files, $out_loc;
+	push @clump_files, $out_loc if ($rerun == 0);
+#	print "$log_loc, $rerun\n"
     }
     #    print "$cmd\n";
     

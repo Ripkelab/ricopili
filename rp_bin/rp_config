@@ -183,7 +183,7 @@ if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
                     &mysystem("grep -v \"rp_bin\\|rp_perlpackages\" $home/.my.bashrc > my.bashrc_minus_rpbin.txt");
                     &mysystem("cp $home/.my.bashrc my.bashrc.copy");
                     print "\n----------------------------------------------------\n";                    
-                    print "\n$## To remove rp_bin permanently from the default search path in bash, run the following command:\n\n";
+                    print "\n## To remove rp_bin permanently from the default search path in bash, run the following command:\n\n";
                     $i += 1;
                     print "\tmv my.bashrc_minus_rpbin.txt $home/.my.bashrc\n\n";
                     print "## which will delete the following lines from your $home/.my.bashrc file:\n";
