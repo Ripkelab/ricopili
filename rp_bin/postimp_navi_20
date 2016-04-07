@@ -66,6 +66,18 @@ use strict;
 #    getting rid of pi_sub
 #    checking --idin
 #
+#  verion 19
+#    metaber6 with checks of consistency of SNPs.
+#
+#  version 20
+#    metaber7 with detailed samplesize per SNP
+#
+#
+########################
+#  asked: actual sample size per SNP
+#  check if mds file fits to famfiles ( I thoughts thats done but apparently not, see swapnil and run1 and run2)
+####################
+#
 #######################################
 
 
@@ -420,13 +432,13 @@ my @test_scripts;
 
 
 
-my $metaber_script = "metaber5";               ### my.pipeline_tar
+my $metaber_script = "metaber7";               ### my.pipeline_tar
 my $daner_script = "danerdir_6";               ### my.pipeline_tar
 my $dsc_script = "danscore_result_3";          ### my.pipeline_tar
-my $chunker_script = "chunker";                ### my.pipeline_tar
+my $chunker_script = "chunker2";                ### my.pipeline_tar
 my $danerhet2p_script = "my.daner_het2p";      ### my.pipeline_tar
 my $topfilter_script = "topfilter";            ### my.pipeline_tar
-my $areator_script = "areator_dan8";           ### my.pipeline_tar
+my $areator_script = "areator_dan9";           ### my.pipeline_tar
 my $areaplot_script = "area_plot_16_speed";    ### my.pipeline_tar
 my $forestplot_script = "forest_plot8";        ### my.pipeline_tar
 my $manhattanplot_script = "manhattan_p4";     ### my.pipeline_tar

@@ -69,10 +69,14 @@ my $fre1col = 11;
 my $fre2col = 12;
 my $faicol = 8;
 my $ngtcol = 9;
-my $hmicol = 14;
+
+#my $hmicol = 14;
 my $detcol_beg = 14;
 my $out_name = "areator_out";
 
+my $ncacol = 17;
+my $ncocol = 18;
+my $neffcol = 19;
 
 
 
@@ -91,8 +95,11 @@ if (1){
     $fre2col = 7;
     $faicol = 13;
     $ngtcol = 12;
-    $hmicol = 12;
+#    $hmicol = 12;
     $detcol_beg = 18;
+    $ncacol = 17;
+    $ncocol = 18;
+    $neffcol = 19;
 }
 
 
@@ -531,7 +538,8 @@ while ($ns == 0) {
 	}
     }
     
-    print SF $cells[$snpcol-1]."\t".$cells[$pcol-1]."\n";
+    print SF $cells[$snpcol-1]."\tP\n";
+#    print SF $cells[$snpcol-1]."\t".$cells[$pcol-1]."\n";
     print BB "@cells\n";
     
 
@@ -549,7 +557,7 @@ while ($ns == 0) {
     $bb_head .= " ".$cells[$fre1col-1];
     $bb_head .= " ".$cells[$fre2col-1];
     $bb_head .= " INFO";
-    $bb_head .= " Dir";
+    $bb_head .= " (Nca,Nco,Neff)Dir";
     $bb_head .= " ngt";
     $bb_head .= " LD-friends($r2th).p$pth2";
     $bb_head .= " range.left";
@@ -617,12 +625,25 @@ while ($ns == 0) {
 	$bb_hash{$cells[$snpcol-1]} .= " ".$cells[$fre1col-1];
 	$bb_hash{$cells[$snpcol-1]} .= " ".$cells[$fre2col-1];
 	$bb_hash{$cells[$snpcol-1]} .= " ".$cells[$qualicol-1];
+
+	$bb_hash{$cells[$snpcol-1]} .= " ";
+	## add NCa, Nco, Neff
+	if ($cells[$neffcol-1] ne "") {
+	    $bb_hash{$cells[$snpcol-1]} .= "(".$cells[$ncacol-1];
+	    $bb_hash{$cells[$snpcol-1]} .= ",".$cells[$ncocol-1];
+	    $bb_hash{$cells[$snpcol-1]} .= ",".$cells[$neffcol-1].")";
+	}
+
+	## directional column only if there is info
 	if ($cells[$faicol-1] ne "") {
-	    $bb_hash{$cells[$snpcol-1]} .= " ".$cells[$faicol-1];
+	    $bb_hash{$cells[$snpcol-1]} .= $cells[$faicol-1];
 	}
 	else {
-	    $bb_hash{$cells[$snpcol-1]} .= " ".$cells[$qualicol-1];
+	    $bb_hash{$cells[$snpcol-1]} .= $cells[$qualicol-1];
 	}
+
+
+	
 	$bb_hash{$cells[$snpcol-1]} .= " ".$cells[$ngtcol-1];
 #	print 	$bb_hash{$cells[$snpcol-1]} ;
 #	print 	"\n" ;
