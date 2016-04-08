@@ -175,7 +175,7 @@ unless (-e "$p2loc/plink" ){
     exit;
 }
 
-
+#change
 my $bim_file=@ARGV[0];
 
 
