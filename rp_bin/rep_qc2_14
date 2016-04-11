@@ -922,7 +922,7 @@ if ($calc){
 	    &mysystem ("mv $nofiprefix.tmp.assoc $nofiprefix.assoc");
 	}
 
-#	&mysystem ("mv $nofiprefix.tmp.lmiss $nofiprefix.lmiss");
+	&mysystem ("mv $nofiprefix.tmp.lmiss $nofiprefix.lmiss");
 	&mysystem ("mv $nofiprefix.tmp.imiss $nofiprefix.imiss");
     }
 
