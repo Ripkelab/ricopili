@@ -1,6 +1,15 @@
 #!/usr/bin/perl
 
 use strict;
+
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
 use Data::Dumper;
 use Cwd;
 
@@ -14,25 +23,6 @@ my $command_line = "$progname @ARGV";
 #############################
 # read ricopili.config file with default parameters
 #############################
-my $conf_file = $ENV{HOME}."/ricopili.conf"; #### Config file has to be in the users home directory.
-my %conf = (); ## hash with config parameters
-
-### Read config file
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
-
-### Function to test whether entry is in ricopili.config -- if not, dies
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 #### Parameters read from ricopili.config
 my $p2loc = &trans("p2loc"); # plink2 location

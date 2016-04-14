@@ -1,6 +1,14 @@
 #!/usr/bin/perl
 use strict;
 
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
 my $version = "8.0.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
@@ -56,24 +64,6 @@ close FILE;
 #############################
 # read config file
 #############################
-
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
-
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
-
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 #my $p1loc = &trans("ploc");
 my $ploc = &trans("p2loc");
@@ -929,7 +919,6 @@ if ($calc){
 
 	unless ($noassoc) {
 	    &asso2tdt_frq("$nofiprefix.tmp") if ($tdt == 1);        # jigold -- moved this line into noassoc block in case case-only trio study 10/1/15
- 	    &mysystem ("mv $nofiprefix.tmp.assoc $nofiprefix.assoc");
 	    &mysystem ("mv $nofiprefix.tmp.assoc $nofiprefix.assoc");
 	}
 

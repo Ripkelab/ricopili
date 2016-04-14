@@ -76,9 +76,13 @@ use strict;
 ## 46 cleanup, week jobs
 ## 47 read out reference per week.
 
+#############################
+# load utility functions
+#############################
 
-
-
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
 
 my $version = "1.0.24";
 my $progname = $0;
@@ -92,10 +96,6 @@ my $jnum = 7; ### number of imputation job per node
 my $spliha_n = 1500; ## split haplotypes with N individuals
 
 my $best_lahunt = 5;
-
-my $multithread1 = 4;
-my $multithread2 = 8;
-
 
 my $phas = -1;
 
@@ -136,24 +136,6 @@ my $host = hostname;
 #############################
 # read config file
 #############################
-
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
-
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
-
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 my $ploc = &trans("p2loc");
 my $shloc = &trans("shloc"); # shapeit
@@ -249,6 +231,13 @@ my $freq_th = 0.005;
 my $bg_th = 0.8;
 
 my $sjamem_incr = 0;
+
+my $multithread1 = 4;
+my $multithread2 = 8;
+if ($qloc eq "qsub_b"){
+    $multithread1 = 1;
+}
+
 #exit;
 
 my $sec_freq = .2;  ## secure freq distance around 50%
@@ -1074,7 +1063,7 @@ sub send_jobarray {
 	$wt_file =~ s/.*blueprint_joblist_file-//;
     }
 
-    if ($qloc eq "slurm") {
+    if ($qloc eq "slurm" || $qloc eq "slurm_u") {
 	$wt_file = "$sjadir/$jobfile.script.id";
     }
 
@@ -1747,7 +1736,7 @@ my $chefli_fini = 0;
 	    my $bfile = $_;
 	    $bfile =~ s/.bim$//;
 	    my $accfli ="$bfile".".hg19.ch.fl.bim";
-	    my $locref = $bfile.".bim.ref.sum";
+	    my $locref = $bfile.".hg19.bim.ref.sum";
 
 	    if (-e $locref) {
 		print "locref $locref is existing! safes some time\n";
@@ -1764,6 +1753,7 @@ my $chefli_fini = 0;
 		}
 	    }
 	    else {
+	        print "locref $locref is not existing! would be better if it did\n";
 		unless (exists $bimfli_array{$accfli}) {
 		    push @chefli_arr, "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim" ;
 		}
@@ -2221,12 +2211,7 @@ if ($prephase_done == 0) {
 			push @preph_arr, $backbone;
 		    }
 		    if ($multi_sw == 1) {
-			if ($qloc eq "qsub_b"){
-			    push @preph_arr_mu1, $backbone;
-			}
-			else {
-			    push @preph_arr_mu1, $backbone." $multi_txt";
-			}
+		    	push @preph_arr_mu1, $backbone." $multi_txt";
 		    }
 		    print "multi: $multi_sw\n";
 		    if ($multi_sw == 2) {
@@ -2300,21 +2285,43 @@ if ($prephase_done == 0) {
 
     if (@preph_arr_mu2 > 0) {
 
-
+	# no multithread on broad makes another resub pointless, so fail here
 	if ($qloc eq "qsub_b") {
-	    print "Error: multithread currently not supported at Broad\n";
+
+	    $sjaname = "preph_mu1" ;
+	    my $err_message ;
+	    $err_message .= "##################################################################\n";
+	    $err_message .= "##### Error: \n";
+    	    $err_message .= "##### step $sjaname has been done repeatedly without any progress\n";
+    	    $err_message .= "##### imputation pipeline stopped: $command_line\n";
+    	    $err_message .= "##### $sjainfotxt\n";
+   	    $err_message .= "##### if reason does not appear obvious\n";
+    	    $err_message .= "##### have a look at the wiki page\n"; 
+    	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
+    	    $err_message .= "##### or contact the developers\n";
+    	    $err_message .= "##################################################################\n";
+    	    print "$err_message\n";
+
+    	    die $! unless open ERR, "> error_file";
+    	    print ERR $err_message."\n";
+    	    close ERR;
+
+    	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_pipeline_error '.$email) ;
 	    exit;
+
+	} else {
+
+	    $sjadir = $impute_dir;
+	    $sjaname = "preph_mu2";
+	    $sjatime = 4;
+	    $sjaweek = 1;
+	    $sjamulti = $multithread2;
+	    $sjamem = 4000;
+	    @sjaarray = @preph_arr_mu2;
+
+	    &send_jobarray;
+
 	}
-	$sjadir = $impute_dir;
-	$sjaname = "preph_mu2";
-	$sjatime = 4;
-	$sjaweek = 1;
-	$sjamulti = $multithread2;
-	$sjamem = 4000;
-	@sjaarray = @preph_arr_mu2;
-
-	&send_jobarray;
-
     }
     else {
 	&mysystem ("touch $rootdir/prephase_done");

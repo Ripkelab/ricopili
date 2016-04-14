@@ -28,31 +28,18 @@ use strict;
 #awk '{print $4,$2}' liftes > liftes.new
 #/fg/debakkerscratch/ripke/plink/1.08/src/plink --bfile ../cmc2_051310.8_toimpute --update-map liftes.new --make-bed
 
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
 
 
 #############################
 # read config file
 #############################
-
-#print "host: ".$ENV{HOST}."\n";
-#exit;
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
-
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
-
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 my $ploc = &trans("p2loc");
 my $liloc = &trans("liloc");

@@ -87,8 +87,13 @@ use strict;
 
 ### look for here working (2 spots)
 
+#############################
+# load utility functions
+#############################
 
-
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
 
 my $version = "1.0.24";
 my $progname = $0;
@@ -157,24 +162,6 @@ my $host = hostname;
 #############################
 # read config file
 #############################
-
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
-
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
-
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 my $ploc = &trans("ploc");
 my $shloc = &trans("shloc"); # shapeit
@@ -464,8 +451,6 @@ my $pdflatex_script = "pdflatex";              ### my.pipeline_tar
 my $mystart_script = "my.start_job";           ### my.pipeline_tar
 my $replicator_script = "replicator13";        ### my.pipeline_tar
 my $replicmeta_script = "replicator_meta11";   ### my.pipeline_tar
-
-
 my $damecat_script = "my.dameta_cat";          ### my.pipeline_tar
 
 my $mutt_script = "mutt";
@@ -992,7 +977,7 @@ sub send_jobarray {
 	$wt_file =~ s/.*blueprint_joblist_file-//;
     }
 
-    if ($qloc eq "slurm") {
+    if ($qloc eq "slurm" || $qloc eq "slurm_u") {
 	$wt_file = "$sjadir/$jobfile.script.id";
     }
 
@@ -2817,7 +2802,7 @@ unless (-e "$reportdir/$daner_meta") {
 
 #	my $sys6 = "mv $reportdir/$daner_meta.tmp $reportdir/$daner_meta";
 
-	my $sys_loc = "my.dameta_cat $dametadir $reportdir/$daner_meta @dameta_files";
+	my $sys_loc = "$damecat_script $dametadir $reportdir/$daner_meta @dameta_files";
 	push @dametacat_arr, $sys_loc;
 
 #	print "$sys6\n";
@@ -2871,7 +2856,7 @@ if ($n_cdg > 1) {
 		### have to work on metadisease!!!!
 		print "debug, work on metadisease\n";
 		exit;
-		my $sys_loc = "my.dameta_cat $danerdir $reportdir/$daner_meta_pf.$cx.gz @dadimeta_files_loc";
+		my $sys_loc = "$damecat_script $danerdir $reportdir/$daner_meta_pf.$cx.gz @dadimeta_files_loc";
 		push @dametacat_arr, $sys_loc;
 		
 	    }
@@ -2911,7 +2896,7 @@ unless ($result_name){
 		    @zehn = @dalofiles;
 		}	  
 		print "$zehn[0]\n";
-		my $sys_loc = "my.dameta_cat $danerdir_loc $reportdir/$daner_bim @dalofiles";
+		my $sys_loc = "$damecat_script $danerdir_loc $reportdir/$daner_bim @dalofiles";
 		push @dametacat_arr, $sys_loc;
 
 	    }
