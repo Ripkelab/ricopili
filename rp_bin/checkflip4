@@ -345,13 +345,36 @@ my @created = mkpath(   ## $created ?
 
 chdir ($workdir);
 
-my $bfile = $bim_file;
-$bfile =~ s/.bim$//;
+#my $bfile = $bim_file;
+#$bfile =~ s/.bim$//;
 
 &mysystem("ln -sf $rootdir/$bfile.bim .") unless (-e "$bfile.bim");
 &mysystem("ln -sf $rootdir/$bfile.bed .") unless (-e "$bfile.bed");
 &mysystem("ln -sf $rootdir/$bfile.fam .") unless (-e "$bfile.fam");
 
+
+
+
+###############################
+### do some checks on alleles
+
+&mysystem ("mv $bim_file $bim_file.sich") unless (-e "$bim_file.sich");
+die $!." <$bim_file.sich>" unless open BIMI, "< $bim_file.sich";
+die $!." <$bim_file>" unless open BIMO, "> $bim_file";
+
+while (my $line = <BIMI>) {
+    my @cells = &split_line($line);
+#    $cells[4] =~ tr/acgt/ACGT/;
+#    $cells[5] =~ tr/acgt/ACGT/;
+    $cells[4] =~ tr/acgtid/ACGTID/;
+    $cells[5] =~ tr/acgtid/ACGTID/;
+    print BIMO "@cells\n";
+}
+close BIMI;
+close BIMO;
+
+#print "debug";
+#sleep(10);
 
 
 ###############################
@@ -563,79 +586,48 @@ while (my $line = <FJ>) {
 
 
 
-    if ($a1_bim eq "I" || $a2_bim eq "I") {
+#    if ($a1_bim ~= "I" || $a2_bim ~= "I") {
+#	if ($a1_ref ~= "I" || $a2_ref ~= "I") {
 
-	my $a1_bim_orig = $a1_bim;
-	my $a2_bim_orig = $a2_bim;
-
-	my $la1r = length($a1_ref);
-	my $la2r = length($a2_ref);
-
-	if ($a1_bim eq "I") {
-	    if ($la1r > $la2r) {
-		$a1_bim = $a1_ref;
-		$a2_bim = $a2_ref;
-	    }
-	    else {
-		$a1_bim = $a2_ref;
-		$a2_bim = $a1_ref;
-	    }
+    my $a1_bim_orig = $a1_bim;
+    my $a2_bim_orig = $a2_bim;
+    my $indel_trans = 0; 
+	    
+#	    my $la1r = length($a1_ref);
+#	    my $la2r = length($a2_ref);
+	    
+    if ($a1_bim =~ "I" || $a2_bim eq "-") {
+	if ($a1_ref =~ "I") {
+	    $a1_bim = $a1_ref;
+	    $a2_bim = $a2_ref;
+	    $indel_trans = 1; 
 	}
-	if ($a2_bim eq "I") {
-	    if ($la1r > $la2r) {
-		$a2_bim = $a1_ref;
-		$a1_bim = $a2_ref;
-	    }
-	    else {
-		$a2_bim = $a2_ref;
-		$a1_bim = $a1_ref;
-	    }
+	if ($a2_ref =~ "I") {
+	    $a1_bim = $a2_ref;
+	    $a2_bim = $a1_ref;
+	    $indel_trans = 1; 
 	}
-	
-	
+    }
+    if ($a2_bim =~ "I" || $a1_bim eq "-") {
+	if ($a1_ref =~ "I") {
+	    $a2_bim = $a1_ref;
+	    $a1_bim = $a2_ref;
+	    $indel_trans = 1; 
+	}
+	if ($a2_ref =~ "I") {
+	    $a2_bim = $a2_ref;
+	    $a1_bim = $a1_ref;
+	    $indel_trans = 1; 
+	}
+    }
+    if ($indel_trans) {
 	push @snp_inde, "$snp\t$a1_bim_orig\t$a2_bim_orig\t$a1_bim\t$a2_bim\t$fr_bim\t$fr_ref\n";
     }
-
-
-   if ($a1_bim eq "-" || $a2_bim eq "-") {
-
-	my $a1_bim_orig = $a1_bim;
-	my $a2_bim_orig = $a2_bim;
-
-	my $la1r = length($a1_ref);
-	my $la2r = length($a2_ref);
-
-	### the other way round, - is the deletion not the insertion, so changed ep into ne
-	if ($a1_bim ne "-") {
-	    if ($la1r > $la2r) {
-		$a1_bim = $a1_ref;
-		$a2_bim = $a2_ref;
-	    }
-	    else {
-		$a1_bim = $a2_ref;
-		$a2_bim = $a1_ref;
-	    }
-	}
-	if ($a2_bim ne "-") {
-	    if ($la1r > $la2r) {
-		$a2_bim = $a1_ref;
-		$a1_bim = $a2_ref;
-	    }
-	    else {
-		$a2_bim = $a2_ref;
-		$a1_bim = $a1_ref;
-	    }
-	}
+#	}
 	
 	
-	push @snp_inde, "$snp\t$a1_bim_orig\t$a2_bim_orig\t$a1_bim\t$a2_bim\t$fr_bim\t$fr_ref\n";
-#	print "$snp\t$a1_bim_orig\t$a2_bim_orig\t$a1_bim\t$a2_bim\t$fr_bim\t$fr_ref\n";
 
-
-    }
-
-
-
+ #   }
 
 
     

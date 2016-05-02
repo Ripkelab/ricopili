@@ -1756,6 +1756,7 @@ my $chefli_fini = 0;
 	    else {
 	        print "locref $locref is not existing! would be better if it did\n";
 		unless (exists $bimfli_array{$accfli}) {
+		    print "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim\n" ;
 		    push @chefli_arr, "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim" ;
 		}
 		else {
@@ -1768,6 +1769,10 @@ my $chefli_fini = 0;
 
 #	exit;
 
+#	print "debug\n";
+#	sleep (10);
+
+	
 	if (@chefli_arr > 0) {
 	    
 	    $sjadir = $impute_dir;
@@ -1788,6 +1793,7 @@ my $chefli_fini = 0;
 
 
 
+    
 #exit;
 
 
