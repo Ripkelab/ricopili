@@ -215,6 +215,9 @@ breaks_n = breaks_n * (range / range_plot);
 #print (range)
 #print (range_plot)
 #print (breaks_n)
+if (breaks_n < 10) {
+  breaks_n = 10
+}
 
 hist(dat[,1], main="TITLE", xlab=colnames(dat)[1], cex.sub =.6, ylab ="counts", col = "red", breaks = breaks_n,
  sub = paste ("mean =",mean_pr,", median =",median,", var =",variance_pr,", se =",se_pr),xlim = c(XLIM1,XLIM2) )
