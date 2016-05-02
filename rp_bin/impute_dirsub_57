@@ -1719,6 +1719,7 @@ unless (-e "$rootdir/posing_done") {
     }
 }
 
+#print "debug\n";
 #exit;
 
 ###################################
