@@ -1794,7 +1794,7 @@ my $chefli_fini = 0;
 
 
     
-#exit;
+exit;
 
 
 
