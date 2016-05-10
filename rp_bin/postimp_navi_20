@@ -2569,6 +2569,7 @@ unless ($result_name){
 
 unless (-e "$rootdir/resmeta_$outname.done") {
     if ($result_name){
+
 	chdir ($reportdir);
 	my @result_files ;
 
@@ -2588,7 +2589,8 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 	close FILE;
 
 	my %refc;
-
+	my $rf_count_max = 0;
+	
 	foreach my $rf (@result_files) {
 	    $rf =~ s/.gz$//;
 	    my $outdir = "$resdandir/".$rf;
@@ -2616,13 +2618,45 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 	    }
 	    else {
 		my $fc = "$outdir/$rf.count";
+		unless (-e "$outdir/$rf.count") {
+		    print "----------------------------------------------\n";
+		    print "Error: $outdir/$rf.count\ndoes not exist,\nplease remove $outdir\nand rerun pipeline\n";
+		    print "----------------------------------------------\n";
+		    exit;
+		}
 		print "read $fc\n";
+		my $rf_count = 0;
 		die $!."$fc" unless open FILE, "< $fc";
 		while (my $line = <FILE>){
 		    my @cells = @{&split_line_ref(\$line)};
 		    $refc{$cells[0]} .= " $outdir/$cells[1].gz";
+		    $rf_count++;
 		}
 		close FILE;
+		if ($rf_count == 0) {
+		    print "----------------------------------------------\n";
+		    print "Error: $outdir/$rf.count\nhas no entries,\nplease remove $outdir\nand rerun pipeline\n";
+		    print "----------------------------------------------\n";
+		    exit;
+		}
+		if ($rf_count_max == 0) {
+		    $rf_count_max = $rf_count;
+		}
+		else {
+		    if ($rf_count_max - $rf_count > 5) {
+			print "----------------------------------------------\n";
+			print "Error: $outdir/$rf.count\nhas not enough entries,\nplease remove $outdir\nand rerun pipeline, check other count files as well\n";
+			print "----------------------------------------------\n";
+			exit;
+		    }
+		    if ($rf_count_max - $rf_count < -5) {
+			print "----------------------------------------------\n";
+			print "Error: $outdir/$rf.count\nhas too many entries,\nplease check other count files, maybe restart from scratch\n";
+			print "----------------------------------------------\n";
+			exit;
+		    }	    
+		
+		}
 	    }
 	}
 
@@ -2630,6 +2664,9 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 	    my $dameta_out = "$dametadir/dan_$rc.assoc.dosage.meta.ngt";
 	    unless (-e "$dameta_out.metadaner.gz") {
 		my $sys = "$metaber_script $xdf_txt --out $dameta_out $refc{$rc}";
+#		print "$sys\n";
+#		print "debug\n";
+#		exit;
 		push @result_meta_arr, $sys;
 		#	    print "$sys\n";
 	    }
@@ -2673,7 +2710,7 @@ else {
 
 
 
-
+#print "debug\n";
 #exit;
 
 #if (@chunker_arr > 0) {
