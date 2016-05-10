@@ -731,13 +731,13 @@ while (my $line = <FJ>) {
 
     ## report freq_violation
     $frq_diff = abs ($fr_bim - $fr_ref);
-    if ($frq_diff < $frq_th){
-	if ($nomatch == 0) {
+    if ($nomatch == 0) {
+	if ($frq_diff < $frq_th){
 	    push @snp_gf, sprintf "$snp\t$a1_bim\t$a2_bim\t$a1_ref\t$a2_ref\t%.4f\t%.4f\t%.4f\n",$fr_bim,$fr_ref,$frq_diff;
 	}
-    }
-    else {
-	push @snp_bf, sprintf "$snp\t$a1_bim\t$a2_bim\t$a1_ref\t$a2_ref\t%.4f\t%.4f\t%.4f\n",$fr_bim,$fr_ref,$frq_diff;
+	else {
+	    push @snp_bf, sprintf "$snp\t$a1_bim\t$a2_bim\t$a1_ref\t$a2_ref\t%.4f\t%.4f\t%.4f\n",$fr_bim,$fr_ref,$frq_diff;
+	}
     }
 
 
