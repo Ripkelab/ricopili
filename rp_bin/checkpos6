@@ -264,21 +264,35 @@ print "read bim-file\n";
 ### read all snp names
 ########################################################
 
+&mysystem("mv $bfile.bim $bfile.bim.orig");
+
 my %bim_hash;
-die "$bfile.bim".$! unless open FI , "< $bfile.bim";
+die "$bfile.bim.orig".$! unless open FI , "< $bfile.bim.orig";
+die "$bfile.bim".$! unless open OUT , "> $bfile.bim";
+die "$bfile.bim.multidet".$! unless open MU , "> $bfile.bim.multidet";
+my $nmult = 0;
 while (my $line = <FI>){
 
     my @cells = @{&split_line_ref(\$line)};
     my $snp = $cells[$scol-1];
-    if (exists $bim_hash{$snp}) {
-	print "double snp name entry: $snp\n";
-	exit;
+    while (exists $bim_hash{$snp}) {
+	print MU "$snp -> $snp.s\n";
+	$snp = $snp.".s";
+	$nmult++;
     }
+    $cells[$scol-1] = $snp;
     $bim_hash{$snp} = 1;
 
+    print OUT "@cells\n";
+    
 }
 close FI;
+close OUT;
+close MU;
 
+print "number of multisnp renamings: $nmult\n";
+#print "debug\n";
+#exit;
 
 
 
@@ -672,6 +686,7 @@ print "write files...\n";
 
 
 push @log_lines,  "\nsnp-name extractions:\n";
+push @log_lines,  "renamed multi SNP entries    :\t".$nmult."\t-> $bfile.bim.multidet\n";
 push @log_lines,  "rs_name extraction           :\t".$name_rs."\t-> $bfile.bim.ow.det\n";
 push @log_lines,  "rs_name extraction (not done):\t".$name_nrs."\t-> $bfile.bim.ow.det\n";
 push @log_lines,  "position extraction          :\t".$name_pos."\t-> $bfile.bim.ow.det\n";
@@ -744,7 +759,7 @@ push @log_lines, $cmd3;
 &mysystem ("mv $bfile_dbsnp.fam $rootdir/");
 
 
-&mysystem ("tar -cvzf $bfile_dbsnp.tar.gz $bim_xpos $bim_xchr $bim_xkb $bim_rpos $bim_npos $bim_xdup $bim_ukb $bim_uchr $bim_addpos.det $bfile.bim.ow.det");
+&mysystem ("tar -cvzf $bfile_dbsnp.tar.gz $bim_xpos $bim_xchr $bim_xkb $bim_rpos $bim_npos $bim_xdup $bim_ukb $bim_uchr $bim_addpos.det $bfile.bim.ow.det $bfile.bim.multidet");
 
 &mysystem ("mv $bfile_dbsnp.tar.gz $rootdir/");
 &mysystem ("mv $bim_log $rootdir/");
