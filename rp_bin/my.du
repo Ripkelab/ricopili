@@ -20,7 +20,7 @@ if ($sc == 0){
 }
 
 
-system ('tail -3 du_out_$date > du_out_$date.tail3");
+system ('tail -10 '."du_out_$date");
 
 
 
