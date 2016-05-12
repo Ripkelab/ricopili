@@ -2289,27 +2289,38 @@ if ($prephase_done == 0) {
 	# no multithread on broad makes another resub pointless, so fail here
 	if ($qloc eq "qsub_b") {
 
-	    $sjaname = "preph_mu1" ;
-	    my $err_message ;
-	    $err_message .= "##################################################################\n";
-	    $err_message .= "##### Error: \n";
-    	    $err_message .= "##### step $sjaname has been done repeatedly without any progress\n";
-    	    $err_message .= "##### imputation pipeline stopped: $command_line\n";
-    	    $err_message .= "##### $sjainfotxt\n";
-   	    $err_message .= "##### if reason does not appear obvious\n";
-    	    $err_message .= "##### have a look at the wiki page\n"; 
-    	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
-    	    $err_message .= "##### or contact the developers\n";
-    	    $err_message .= "##################################################################\n";
-    	    print "$err_message\n";
+	    $sjaname = "preph_mu2";
+	    if (@preph_arr_mu2 < 10) {
 
-    	    die $! unless open ERR, "> error_file";
-    	    print ERR $err_message."\n";
-    	    close ERR;
-
-    	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_pipeline_error '.$email) ;
-	    exit;
-
+		$sjadir = $impute_dir;
+		$sjatime = 30;
+		$sjamem = 16000;
+		@sjaarray = @preph_arr_mu2;
+		
+		&send_jobarray;
+	    }
+	    else {
+		    
+		my $err_message ;
+		$err_message .= "##################################################################\n";
+		$err_message .= "##### Error: \n";
+		$err_message .= "##### step $sjaname has been done repeatedly without any progress\n";
+		$err_message .= "##### imputation pipeline stopped: $command_line\n";
+		$err_message .= "##### $sjainfotxt\n";
+		$err_message .= "##### if reason does not appear obvious\n";
+		$err_message .= "##### have a look at the wiki page\n"; 
+		$err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
+		$err_message .= "##### or contact the developers\n";
+		$err_message .= "##################################################################\n";
+		print "$err_message\n";
+		
+		die $! unless open ERR, "> error_file";
+		print ERR $err_message."\n";
+		close ERR;
+		
+		&mysystem ('cat error_file | '.$mutt_script.' -s RP_pipeline_error '.$email) ;
+		exit;
+	    }
 	} else {
 
 	    $sjadir = $impute_dir;
