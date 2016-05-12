@@ -20,6 +20,7 @@ if ($sc == 0){
 }
 
 
+system ('tail -10 '."du_out_$date");
 
 
 
