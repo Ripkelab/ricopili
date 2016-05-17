@@ -8,17 +8,22 @@ use strict;
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
+use Cwd;
+use File::Path;
+
 
 #############################
 # read config file
 #############################
 
 my $rloc = &trans("rloc");
+my $sloc = &trans("sloc");
 #my $r3loc = &trans("r3loc");
 
 
 #############################
 my $r_sys = "$rloc/R";
+
 if ($rloc eq "broadinstitute") {
     $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
 }
@@ -42,6 +47,8 @@ Usage : $progname [options] mds_file
 
    --quan            quantitative pt
 
+   --tarball STRING  directly from tarball, does not need profiles files.
+
   mdsfile and out is mandatory
 
 version: $version
@@ -51,16 +58,19 @@ version: $version
 ";
 
 my $nref = 288;
+my $prevalence = 0.01;
 #### evaluate options
 use Getopt::Long;
 GetOptions(     
-  "help" => \my $help,
-  "mds=s" => \my $mdsfile,
-  "trio" => \my $trio,
-  "covall" => \my $covall,
-  "out=s" => \my $out,
-  "quan" => \my $quan,
-  "nref=i" => \$nref,
+    "help" => \my $help,
+    "mds=s" => \my $mdsfile,
+    "trio" => \my $trio,
+    "covall" => \my $covall,
+    "out=s" => \my $out,
+    "quan" => \my $quan,
+    "tarball=s" => \my $tarball,
+    "nref=i" => \$nref,
+    "prev=f" => \$prevalence,
 );
 
 
@@ -155,35 +165,46 @@ my @p_th;
 my @dosfiles;
 my $famfile;
 
+
+
+## only used with --tarball
+my $rootdir = &Cwd::cwd();
+my $workdir = "$sloc/mPRS_$out";
+my @created = mkpath(   ## $created ?
+			$workdir,
+			{verbose => 0, mode => 0750},
+    );
+#print "workdir: $workdir\n";
+
 #####################################
 # read mds-file
 #####################################
+unless ($tarball) {
 
 
-
-my %amds = ();
-my %apt = ();
-
-if ($mdsfile) {
-    print "before\n";
-    unless ($trio) {
-	die "$mdsfile: ".$! unless open MDI, "< $mdsfile";
-	
-	while (my $line = <MDI>) {
-	    chomp($line);
-	    my @cells = &split_line ($line);
-	    foreach (2..$#cells) {
-		$amds{"$cells[0]\t$cells[1]"} .= "\t".$cells[$_];
+    my %amds = ();
+    my %apt = ();
+    
+    if ($mdsfile) {
+	print "before\n";
+	unless ($trio) {
+	    die "$mdsfile: ".$! unless open MDI, "< $mdsfile";
+	    
+	    while (my $line = <MDI>) {
+		chomp($line);
+		my @cells = &split_line ($line);
+		foreach (2..$#cells) {
+		    $amds{"$cells[0]\t$cells[1]"} .= "\t".$cells[$_];
+		}
 	    }
+	    close MDI;
+	    print "after: ".keys (%amds)."\n";
 	}
-	close MDI;
-	print "after: ".keys (%amds)."\n";
     }
-}
-#print "sleep\n";
-#sleep(5);
-#exit;
 
+
+
+    
 
 my @outfile_coll ;
 
@@ -309,8 +330,11 @@ foreach my $st (1..10) {
 	    }
 	}
 	if (keys %prof_count_collect > 1) {
-	    print "Error: different profile-counts for different individuals, something is seriously wrong\n";
-	    exit;
+	    print "Warning: different profile-counts for different individuals, please check if this happens only for distinct datasets\n";
+	    foreach my $_ (keys %prof_count_collect) {
+		print $_." ".$prof_count_collect{$_}."\n";
+	    }
+#	    exit;
 	}
 	close FILE;
 	&mysystem ("mds2cov $infile");
@@ -355,6 +379,32 @@ foreach my $st (1..10) {
 
 }
 
+
+}
+else {
+    
+
+    chdir ($workdir);
+
+    &mysystem("cp $rootdir/$tarball .");
+    &mysystem("tar -xvf $tarball");
+    my $intempl = $tarball;
+
+    $intempl =~ s/^danscore_//;
+    $intempl =~ s/.cov.tar.gz$//;
+
+    $out = $intempl;
+#    print "INTEMPL: $intempl\n";
+#    print "debug\n";
+#    exit;
+}
+
+
+
+
+
+
+### from here if tarball
 
 	my $R_rido = '
 
@@ -477,7 +527,7 @@ file=paste(FILE,j,".target.S",j,".sumprofile_cov",sep="")
 
 read.table(file,head=T)->ri
 
-K=0.01 # baseline disorder risk for schizophrenia
+K=PREVALENCE # baseline disorder risk for schizophrenia
 
 
 
@@ -817,6 +867,7 @@ if ($trio){
 
 
 	$R_rido =~ s/D10COV/$d10_cov/g;
+	$R_rido =~ s/PREVALENCE/$prevalence/g;
 
 
 #	$R_rido =~ s/COVSTR2/$cov_str_a/g;
@@ -851,6 +902,15 @@ $trio_sw = 1 if ($trio);
 	   &mysystem("touch $out.poly.success");
 
 print "end of danscore_result_3\n";
+
+if ($tarball) {
+    &mysystem("cp $out.pdf $rootdir");
+    &mysystem("cp $out.poly.out.txt $rootdir");
+    &mysystem("cp R.$out.hl_nw.Rin $rootdir");
+    chdir ($rootdir);
+    &mysystem("rm -r $workdir");
+
+}
 
 
 #my $sys = "danscore_plot2  --out plot.$out @outfile_coll";
