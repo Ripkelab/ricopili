@@ -20,7 +20,7 @@ use Compress::Zlib ;
 # read config file
 #############################
 
-my $ploc = &trans("ploc");
+my $ploc = &trans("p2loc");
 
 
 ###############################################
@@ -121,9 +121,10 @@ my $haps_file_gz = "$haps_file1.combined.gz";
 
 
 
+#print "merge files\n";
 my @filehandles_gz;
 
-################## create one thousand subdirs and thousand filehandles
+
 foreach my $infile (@haps_collection) {
 
     my $igz = gzopen("$infile", "rb")  or die "Cannot open file $infile: $gzerrno\n" ;
@@ -132,6 +133,7 @@ foreach my $infile (@haps_collection) {
 }
 
 
+print "open $haps_file_gz\n";
 
 my $ogz = gzopen("$haps_file_gz", "wb")  or die "Cannot open file $haps_file_gz: $gzerrno\n" ;
 
@@ -171,6 +173,10 @@ foreach my $igzn (1..$nf-1) {
 }
 $ogz->gzclose();
 
+print "close $haps_file_gz\n";
+
+#print "debug\n";
+#sleep(10);
 #exit;
 
 
@@ -242,7 +248,10 @@ close OF;
 my $twodos_tmp = "$haps_file1.combined.tmp2dos.gz";
 my $twodos_tmp_success = "$twodos_tmp.fini";
 my $imp_proc = "impprob_to_2dos $haps_file_gz $twodos_tmp";
-print "$imp_proc\n";
+print "improb script: $imp_proc\n";
+
+#print "debug\n";
+#    sleep(10);
 
 unless (-e $twodos_tmp_success) {
     &mysystem ($imp_proc);
@@ -252,18 +261,20 @@ unless (-e $twodos_tmp_success) {
 # if successful, remove $haps_file_gz now to save space
 
 
-if (-e $twodos_tmp_success) {
-    &mysystem("rm $haps_file_gz")
-} 
-else {
-    die "Failed to create $twodos_tmp from $haps_file_gz";
-}
+#if (-e $twodos_tmp_success) {
+#    &mysystem("rm $haps_file_gz")
+#} 
+#else {
+#    die "Failed to create $twodos_tmp from $haps_file_gz";
+#}
 
 
 #my $sys_loc = "$ploc/plink --dosage $haps_file_gz noheader skip0=1 skip1=1 format=3 Z --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
-my $sys_loc = "$ploc/plink --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2 Z --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
+my $sys_loc = "$ploc/plink --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
 print "$sys_loc\n";
 &mysystem ($sys_loc);
+
+
 
 #exit;
 
@@ -325,7 +336,7 @@ close BC;
 
 
 &mysystem ("touch $finiout");
-#&mysystem ("rm $haps_file_gz");
 &mysystem ("rm $twodos_tmp");
-
+&mysystem("rm $haps_file_gz");
+    
 print "done\n";
