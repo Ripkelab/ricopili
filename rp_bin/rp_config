@@ -962,7 +962,7 @@ elsif ($clusters{lisa}){
 		  "ldloc","/home/gwas/ldsc/",
 		  "eloc","/home/gwas/eigensoft",
 		  "rloc","/sara/sw/R-3.1.2/bin/",
-		  "rpac","NA",
+		  "rpac","/home/gwas/Rlibs",
 		  "hmloc","/home/gwas/pgc-samples/hapmap_ref/",
 		  "meloc","/home/gwas/metal",
 #		  "hvloc","./",
