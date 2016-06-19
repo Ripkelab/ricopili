@@ -594,7 +594,13 @@ foreach my $dfile (@ARGV) {
 		$neff_loc = (4*$nca_loc*$nco_loc/($nca_loc+$nco_loc))/2;
 	    }
 	}
-	
+
+#	if ($cells[$col{"OR"}] eq "NA"){
+#	if ($cells[$col{"OR"}]*1 !=  $cells[$col{"OR"}] || $cells[$col{"OR"}] <= 0){
+	if ($cells[$col{"OR"}] <= 0){
+	    print "Warning: invalid OR, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+	    next;
+	}
 	
 	$nca{$cells[$col{"SNP"}]} += $nca_loc;
 	$nco{$cells[$col{"SNP"}]} += $nco_loc;
