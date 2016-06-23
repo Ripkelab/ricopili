@@ -585,6 +585,11 @@ while (my $line = <FJ>) {
     my $fr_ref = $cells[6];
 
 
+#    if ($snp eq "chr5_172342029_I") {
+#	print "@cells\n";
+ #   }
+    
+
 
 #    if ($a1_bim ~= "I" || $a2_bim ~= "I") {
 #	if ($a1_ref ~= "I" || $a2_ref ~= "I") {
@@ -766,8 +771,9 @@ push @log_lines,  "not found:                 \t".@snp_nan."   \t-> $bim_nal\n";
 push @log_lines,  "ambiguous, insecure freq:  \t".@snp_uif."\t-> $bim_uif\n";
 push @log_lines,  "freq-diff > $frq_th   :       \t".$nsnp_bf."\t-> $bim_bf\n";
 
-push @log_lines,  "\nexclude:\n";
-push @log_lines,  "translated indels:       \t".@snp_inde."\t-> $bim_inde\n";
+
+
+push @log_lines,  "\ntranslated indels:       \t".@snp_inde."\t-> $bim_inde\n";
 
 push @log_lines,  "\n\n\nI would exclude unmatched, unfound, different and insecure unflippable SNPs:\n";
 push @log_lines,  "\nthese are roughly ".@snp_nan + @snp_xal + @snp_uif + $nsnp_bf." SNPs (multiple entries possible):\n";

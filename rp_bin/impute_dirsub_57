@@ -1680,7 +1680,7 @@ unless (-e "$rootdir/posing_done") {
 	if (-e $locref) {
 	    print "locref $locref is existing! safes some time\n";
 	    unless (exists $bimpos_array{$accfli}) {
-		push @chepos_arr, "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim" ;#
+		push @chepos_arr, "$checkpos_script --dbcol 1,2,3,4,5 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim" ;#
 #		print "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim\n" ;#
 
 	    }
@@ -1691,7 +1691,7 @@ unless (-e "$rootdir/posing_done") {
 	else {
 	    print "locref $locref is not existing! would be better if it did\n";
 	    unless (exists $bimpos_array{$accfli}) {
-		push @chepos_arr, "$checkpos_script --dbcol 1,8,9 --dbsnp $refdir/$suminfo_s $bfile.hg19.bim" ;#
+		push @chepos_arr, "$checkpos_script --dbcol 1,8,9,3,5 --dbsnp $refdir/$suminfo_s $bfile.hg19.bim" ;#
 	    }
 	    else {
 		$chepos_fini++;
@@ -1794,7 +1794,7 @@ my $chefli_fini = 0;
 
 
     
-exit;
+#exit;
 
 
 
