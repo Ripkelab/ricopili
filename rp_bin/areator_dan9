@@ -21,12 +21,12 @@ my $command_line = "$progname @ARGV";
 #############################
 ## log command
 
-my $past_file = $ENV{HOME}."/areator_info";
-my $pwd_loc = $ENV{PWD};
+#my $past_file = $ENV{HOME}."/areator_info";
+#my $pwd_loc = $ENV{PWD};
 
-die $! unless open FILE, ">> $past_file";
-print FILE "$pwd_loc\t$command_line\n";
-close FILE;
+#die $! unless open FILE, ">> $past_file";
+#print FILE "$pwd_loc\t$command_line\n";
+#close FILE;
 
 #############################
 # read config file
@@ -891,7 +891,7 @@ if ($pliclu) {
 
 	    }
 	    else {
-		&mysystem ("cp $out_name.clump.chr$chr.clumped $rootdir");
+#		&mysystem ("cp $out_name.clump.chr$chr.clumped $rootdir");
 		
 #	    &mysystem_nodie ("$ploc/plink --bfile $bfile_sc --clump $snpfile --clump-verbose --clump-p1 $pth --clump-p2 $pth --clump-r2 $r2th --clump-kb $window_size --out $out_name");
 		
@@ -1263,6 +1263,7 @@ if ($pliclu) {
     unless ($noxls) {
 	&mysystem ("txt2xls --pcol 3 --cogr 4,12,13,16 --txt $out_name.clump.areator.sorted.1mhc --xls $out_name.clump.areator.sorted.1mhc.xls");
     }
+    &mysystem ("rm -r $workdir");
     print "enough is enough\n";
     exit;
 }
