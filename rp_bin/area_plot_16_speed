@@ -67,7 +67,7 @@ my $areastr = "NOAREA";
 # read config file
 #############################
 
-my $ploc = &trans("ploc");
+my $ploc = &trans("p2loc");
 my $hapmap_ref_root = &trans("hmloc");
 my $homedir = &trans("home");
 my $sloc = &trans("sloc");
@@ -765,7 +765,7 @@ if ($dandir) {
     my @info_files ;
 
     if (-e "$refdir/infosum_pos.reffiles"){
-	print "read ifo_collection out of info-file\n";
+	print "read info_collection out of info-file...\n";
 	&error ("$refdir/infosum_pos.reffiles") unless open IF, "< $refdir/infosum_pos.reffiles";
 	while (my $line =<IF>){
 	    $line =~ s/^[\s]+//g;
@@ -774,6 +774,8 @@ if ($dandir) {
 	    push @info_files,$floc;
 	}
 	close IF;
+	print "...finished\n";
+	
     }
 
     ### if this didn't work out, but it really should
@@ -815,9 +817,11 @@ if ($dandir) {
     my $end_str =  sprintf "%d", ($end / 1000000);
     
     my @daner_files_loc ;
-    my @info_files_loc ;
+#    my @info_files_loc ;
     
-#    print "$chr\t$beg\t$end\t$beg_str\t$end_str\n";
+    #    print "$chr\t$beg\t$end\t$beg_str\t$end_str\n";
+    print "create daner collection.....\n";
+
     foreach my $df (@daner_files) {
 	chomp($df);
 	print "$df\n";
@@ -855,7 +859,12 @@ if ($dandir) {
     }
 #    exit;
 
+    my @pth_arr = qw/0.000001 0.001 0.01 0.02 0.03 0.04 0.05 0.1 0.2 0.5 1.0/;
     my $sc = 0;
+    my %pth_c;
+
+
+
     if (@daner_files_loc > 0 ) {
 	$pfile = "$out.dandir";
 	my $cc = 0;
@@ -880,6 +889,13 @@ if ($dandir) {
 		my @cells = @{&split_line_ref(\$line)};
 		if ($cells[2] >= $beg && $cells[2] <= $end){
 		    print PF "$line";
+		    foreach my $pth_loc (@pth_arr){
+			if ($cells[10] < $pth_loc){
+			    $pth_c{$pth_loc}++;
+			}
+		    }
+
+		    
 		    $sc++;
 		}
 	    }
@@ -900,7 +916,7 @@ if ($dandir) {
 	$noloc = 0;
     }
     else {
-	print "ici?";
+
 	&error ("specified region without data, please revisit");
 #	print "0 daner_loc\n";
 #	sleep(5);
@@ -911,34 +927,36 @@ if ($dandir) {
 #    sleep(5);
 
 
-    my @pth_arr = qw/0.000001 0.001 0.01 0.02 0.03 0.04 0.05 0.1 0.2 0.5 1.0/;
-
-    print "apply thresholds: $sc\n";
-#    if ($sc > $ths) {
-	foreach my $plot_th_loc (@pth_arr){
-#    while ($sc > $maxs) {
-	    
-	    &error ("$pfile file not existing") unless open PF, "< $pfile";
-	    my $line =<PF>;
-	    while (my $line =<PF>){
-		my @cells = @{&split_line_ref(\$line)};
-		$snps_loc{$cells[1]} =1 if ($cells[$pcol - 1] < $plot_th_loc);
-		$snps_loc{$cells[1]} =1 if (exists $prekno_hash{$cells[1]});
-	    }
-	    close PF;
-	    
-	    my $ns = keys %snps_loc;
-#	    print "update: with $ns SNPs left with $plot_th_loc\n";
-	    if ($ns >= $ths || $plot_th_loc == 1.0){
-		print "continue with $ns SNPs left with $plot_th_loc\n";
-		$plot_th = $plot_th_loc;
-		last;
-	    }
-
+    
+    foreach my $pth_loc (sort keys %pth_c) {
+	print "n_$pth_loc: $pth_c{$pth_loc}\n";
+	if ($pth_c{$pth_loc} > $ths) {
+	    print "continue with $pth_c{$pth_loc} SNPs left with $pth_loc\n";
+	    $plot_th = $pth_loc;
+	    last;
 	}
-#   }
+    }
 
 
+    
+	    
+    &error ("$pfile file not existing") unless open PF, "< $pfile";
+    &error ("$pfile file not existing") unless open PFS, "> $pfile.sub";
+    my $line =<PF>;
+    print PFS "$line";
+    while (my $line =<PF>){
+	my @cells = @{&split_line_ref(\$line)};
+	$snps_loc{$cells[1]} =1 if ($cells[$pcol - 1] < $plot_th);
+	$snps_loc{$cells[1]} =1 if (exists $prekno_hash{$cells[1]});
+	if ($snps_loc{$cells[1]} ==1){
+	    print PFS "$line";
+	}
+    }
+    close PF;
+    close PFS;
+
+
+    
 #	print "hier info: @info_files ...\n";
 #	sleep(10);
 #    exit;
@@ -1011,50 +1029,16 @@ if ($dandir) {
 	my $fam_loc = $df;
 	$tped_loc =~ s/info_pos$/tped/;
 	$tfam_loc =~ s/info_pos$/tfam/;
-	$fam_loc =~ s/info_pos$/fam/;
+#	$fam_loc =~ s/info_pos$/fam/;
 
 
-	print "read $refdir/$tped_loc...\n";
+#	print "read $refdir/$tped_loc...\n";
 #	sleep(10);
 	my $lc = 0;
-	## read tped in detail
-	&error ("$refdir/$tped_loc not existing") unless open TP, "< $refdir/$tped_loc";
-	&error ("$ref_tped_file not existing") unless open RT, ">> $ref_tped_file";
-	while (my $line =<TP>){
 
-#	    my @cells = @{&split_line_ref(\$line)};
-#	    print "end read line\n";
-#	    if (exists $frq_h{$cells[1]}){
-	    if (exists $line_hash{$lc}){
-#		if (exists $snps_loc{$lc}){
-#		print RT "@cells\n";
-		    print RT "$line";
-#		}
-	    }
-	    $lc++;
-	}
-	close TP;
-	close RT;
-	print "... finished\n";
 
 	### old clumsy way: &mysystem ("cat $refdir/$tped_loc >> $ref_tped_file");
-	unless (-e $ref_tfam_file) {
 
-	    print "cp $refdir/$tfam_loc $ref_tfam_file\n";
-	    if (-e "$refdir/$tfam_loc") {
-		&mysystem ("cp $refdir/$tfam_loc $ref_tfam_file");
-	    }
-	    else {
-		if (-e "$refdir/$fam_loc") {
-		    &mysystem ("cp $refdir/$fam_loc $ref_tfam_file");
-		}
-		else {
-		    print "Error: $refdir/$tfam_loc is not exisitng, neither is the famversion\n";
-		    exit;
-		}
-	    }
-	}
-#	    push @info_files_loc, $df;
 	$imatch++;
     }
     if ($imatch == 0) {
@@ -1172,7 +1156,7 @@ my $cwindow = sprintf "%i",($end - $beg)/1000;
 my $bfile_sc = `ls $refdir/*chr$chr.*bed`;
 if ($bfile_sc eq "") {
     my $chr_part = "$chr"."_";
-    $bfile_sc = `ls $refdir/*chr$chr_part*bed`;
+    $bfile_sc = `ls $refdir/*chr$chr_part*bed | head -1`;
 }
 if ($bfile_sc eq "") {
     &error ("no plink binary for this chromosome");
@@ -1191,7 +1175,7 @@ my $sc = 0;
 #my $found_s = 0;
 
 print "SNP-MARK: $snp_mark\n";
-&error ("$pfile not existing") unless open PF, "< $pfile";
+&error ("$pfile.sub not existing") unless open PF, "< $pfile.sub";
 &error ("$pfile.local not existing") unless open LO, "> $pfile.local";
 print P4 "SNP\tP\n";
 while (my $line =<PF>){
@@ -1218,7 +1202,7 @@ close LO;
 print "start plink\n";
 #my $cmd = "$ploc/plink --bfile $bfile_sc --extract $pfile.local --out $pfile.local.plink --make-bed";
 ## here speed up
-my $cmd = "$ploc/plink --tped  $ref_tped_file --tfam  $ref_tfam_file --extract $pfile.local --out $pfile.local.plink --make-bed > /dev/null";
+my $cmd = "$ploc/plink --bfile $bfile_sc --extract $pfile.local --out $pfile.local.plink --make-bed --silent";
     print "$cmd\n";
 #    sleep(5);
 &mysystem($cmd);
@@ -1238,7 +1222,7 @@ if ($clump && $nclump > 1) {
 
 
     my $sc = 0;
-    &error ("$pfile not existing") unless open PF, "< $pfile";
+    &error ("$pfile.sub not existing") unless open PF, "< $pfile.sub";
     &error ("$pfile.p4 not existing") unless open P4, "> $pfile.p4";
     print P4 "SNP\tP\n";
     while (my $line =<PF>){
@@ -1649,6 +1633,7 @@ if (1){
 		    $ldp = 1;
 		}
 	    }
+	    close BIM;
 #	    print "snp found: $ldp\n";
 #	    sleep (10);
 	    
@@ -3015,7 +3000,7 @@ else {
 
 print "pdfout: $pdfout.pdf\n";
 
-exit;
+
 
 &mysystem ("rm -rf $workdir");
 

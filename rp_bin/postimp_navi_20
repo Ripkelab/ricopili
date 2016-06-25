@@ -3952,6 +3952,7 @@ unless ($nohet_sw) {
 
 unless (-e "manhattan.daner_$outname.gz.nog.pdf.empty") {
     &mysystem ("$shrinkpdf_script manhattan.daner_$outname.gz.nog.pdf") unless (-e "orig.manhattan.daner_$outname.gz.nog.pdf");
+#    exit;
     &mysystem ("cp manhattan.daner_$outname.gz.nog.pdf $distdir/manhattan.nog.$outname.pdf") unless (-e "$distdir/manhattan.nog.$outname.pdf");
 }
 unless (-e "manhattan.daner_$outname.gz.nog2.pdf.empty") {
