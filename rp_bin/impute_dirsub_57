@@ -520,6 +520,7 @@ my $mystart_script = "my.start_job";       ### my.pipeline_tar
 my $mutt_script = "mutt";                  ### my.pipeline_tar
 my $du_script = "my.du";                  ### my.pipeline_tar
 my $blue_script = "blueprint";         ### my.pipeline_tar
+my $preploo_script = "my.preploo2";         ### my.pipeline_tar
 
 
 
@@ -548,6 +549,7 @@ push @test_scripts, $cleanerrandout_script ;
 push @test_scripts, $du_script ;
 push @test_scripts,  $mystart_script;
 push @test_scripts,  $blue_script;
+#push @test_scripts,  $preploo_script;
 
 #push @test_scripts, $mutt_script ;
 
