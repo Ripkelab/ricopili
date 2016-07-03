@@ -751,7 +751,7 @@ foreach my $snp_loc1 (@multiarea) {
 
 
 if ($dandir) {
-
+ 
     print "yes I a m here\n";
 #    sleep(3);
 
