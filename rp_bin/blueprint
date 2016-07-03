@@ -1098,7 +1098,7 @@ if ($job){
 
 
 	    my $qlong_str = "";
-	    if ($walltime > 2) {
+	    if ($walltime > 2 || $week > 0) {
 		$qlong_str = "-q long";
 #		$qlong_str = "-P sanctioned -q sanctioned";
 	    }
