@@ -101,6 +101,7 @@ version: $version
   --males          only use males, famfile needs to be right
   --females        only use females, famfile needs to be right
 
+  --bfile          input is binary plink file (e.g. whole genome best guess)
 
  batch_identifier: files matching this should all have no double id-entries
 
@@ -142,6 +143,7 @@ GetOptions(
     "famf=s"=> \my $famf_file,
     "mapf=s"=> \my $mapf_file,
     "ngtf=s"=> \my $ngtf_file,
+    "bfile=s"=> \my $bfile,
     "sout=s"=> \$sout,
     "range=s"=> \$range_file,
     );
@@ -247,6 +249,7 @@ else {
 
 my $workname = "$bind";
 $workname = "$addind.$bind" if ($addind);
+$workname = "score.$bfile" if ($bfile);
 
 
 my $scratchdir = $sloc;
@@ -281,6 +284,8 @@ my $dosfile = "dos_$bind.out.dosage.gz";
 my $emptyfile = "dos_$bind.out.dosage.gz.empty";
 my $ngtfile = "dos_$bind.out.dosage.ngt";
 
+#my $bfile = $bind;
+
 
 #my @infiles = `ls $indir/*$bind.*`;
 #print "@infiles\n";
@@ -295,25 +300,38 @@ my $ngtfile = "dos_$bind.out.dosage.ngt";
   #  exit;
 #}
 
-unless ($dosf_file) {
-#    &mysystem("cp $indir/*$bind.* .") unless (-e $famfile);
 
-    &mysystem("cp $indir/$dosfile .") unless (-e $dosfile);
-    &mysystem("cp $indir/$mapfile .") unless (-e $mapfile);
-    &mysystem("cp $indir/$famfile .") unless (-e $famfile);
-    &mysystem("cp $indir/$ngtfile .") unless (-e $ngtfile);
+if ($bfile) {
+
+    &mysystem("ln -s $indir/$bfile.fam .");
+    &mysystem("ln -s $indir/$bfile.bed .");
+    &mysystem("ln -s $indir/$bfile.bim .");
+    $famfile = "$bfile.fam";
+    $mapfile = "$bfile.bim";
 
 
 }
-else {
-    &mysystem("cp $rootdir/$dosf_file .") unless (-e $dosf_file);
-    &mysystem("cp $rootdir/$mapf_file .") unless (-e $mapf_file);
-    &mysystem("cp $rootdir/$famf_file .") unless (-e $famf_file);
-    &mysystem("cp $rootdir/$ngtf_file .") unless (-e $ngtf_file);
-    $famfile = $famf_file;
-    $mapfile = $mapf_file;
-    $dosfile = $dosf_file;
-    $ngtfile = $ngtf_file;
+else { 
+    unless ($dosf_file) {
+	#    &mysystem("cp $indir/*$bind.* .") unless (-e $famfile);
+	
+	&mysystem("cp $indir/$dosfile .") unless (-e $dosfile);
+	&mysystem("cp $indir/$mapfile .") unless (-e $mapfile);
+	&mysystem("cp $indir/$famfile .") unless (-e $famfile);
+	&mysystem("cp $indir/$ngtfile .") unless (-e $ngtfile);
+	
+	
+    }
+    else {
+	&mysystem("cp $rootdir/$dosf_file .") unless (-e $dosf_file);
+	&mysystem("cp $rootdir/$mapf_file .") unless (-e $mapf_file);
+	&mysystem("cp $rootdir/$famf_file .") unless (-e $famf_file);
+	&mysystem("cp $rootdir/$ngtf_file .") unless (-e $ngtf_file);
+	$famfile = $famf_file;
+	$mapfile = $mapf_file;
+	$dosfile = $dosf_file;
+	$ngtfile = $ngtf_file;
+    }
 }
 
 #exit;
@@ -352,13 +370,16 @@ if ($danscore_file) {
 	my $beta = 0;
 	print "read map\n";
 	my %snp_coll ;
-	die ":".$! unless open IFILE, "< $mapfile";
-	while (my $line = <IFILE>){
-	    my @cells = &split_line($line);
-	    my $snpname = $cells[1];
-	    $snp_coll{$snpname} = 1;
+
+	unless ($bfile) {
+	    die ":".$! unless open IFILE, "< $mapfile";
+	    while (my $line = <IFILE>){
+		my @cells = &split_line($line);
+		my $snpname = $cells[1];
+		$snp_coll{$snpname} = 1;
+	    }
+	    close IFILE;
 	}
-	close IFILE;
 
 	print "write score files\n";
 	die ":".$! unless open IFILE, "< $danscore_nogz";
@@ -407,7 +428,9 @@ if ($danscore_file) {
 #	    CHR     SNP     BP      A1      A2      FRQ_A_4450      FRQ_U_11169     INFO    OR      SE      P
 
 	    my $snpname = $cells[$scol];
-	    next unless (exists $snp_coll{$snpname});
+	    unless ($bfile) {
+		next unless (exists $snp_coll{$snpname});
+	    }
 	    $counts++;
 	    my $or = $cells[$ocol];
 #	    print "$or\n";
@@ -726,34 +749,47 @@ if ($mds_name){
 #  read NGT
 #################################################
 #print "hier ist noch alles in ordnung\n";
-unless (-e $ngtfile) {
-    
-    die "$workname.assoc.dosage.ngt:".$! unless open OFILE, "> dan_$workname.assoc.dosage.ngt";
-    print OFILE " CHR         SNP          BP  A1  A2   FRQ_A_000   FRQ_U_000    INFO      OR      SE       P   ngt\n";
-    close OFILE;
-    
-    &mysystem("gzip -f dan_$workname.assoc.dosage.ngt");
-    &mysystem("cp dan_$workname.assoc.dosage.ngt.gz $outdir");
-    
-    if ($danscore_file) {
-        &mysystem("touch $outdir/dan_$workname.profile.log");
-    }
-
-    chdir ($outdir);
-    &mysystem("rm -fr $workdir");
-
-    exit;
-}
-#print "und hier nicht mehr\n";
 
 my %ngt=();
-die "$ngtfile: ".$! unless open FILE, "< $ngtfile";
-while (<FILE>){
-    my @cells = &split_line($_);
-    $ngt{$cells[1]} = $cells[4];
-#    print "$cells[1]\t$cells[4]\n";
+unless ($danscore_file) {
+    unless (-e $ngtfile) {
+	
+	die "$workname.assoc.dosage.ngt:".$! unless open OFILE, "> dan_$workname.assoc.dosage.ngt";
+	print OFILE " CHR         SNP          BP  A1  A2   FRQ_A_000   FRQ_U_000    INFO      OR      SE       P   ngt\n";
+	close OFILE;
+	
+	&mysystem("gzip -f dan_$workname.assoc.dosage.ngt");
+	&mysystem("cp dan_$workname.assoc.dosage.ngt.gz $outdir");
+	
+#	if ($danscore_file) {
+#	    &mysystem("touch $outdir/dan_$workname.profile.log");
+#	}
+	
+	chdir ($outdir);
+	&mysystem("rm -fr $workdir");
+
+	print "no ngt file\n";
+	exit;
+	
+    }
+
+
+
+    die "$ngtfile: ".$! unless open FILE, "< $ngtfile";
+    while (<FILE>){
+	my @cells = &split_line($_);
+	$ngt{$cells[1]} = $cells[4];
+	#    print "$cells[1]\t$cells[4]\n";
+    }
+    close FILE;
+
+
 }
-close FILE;
+
+
+print "und hier nicht mehr\n";
+
+
 
 
 
@@ -923,7 +959,12 @@ unless ($danscore_file) {
 
 }
 else {
-    $sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $idex_str --q-score-range $range_file --q-score-file $score_p_file --score $score_w_file";
+    unless ($bfile) {
+	$sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $idex_str --q-score-range $range_file $score_p_file --score $score_w_file";
+    }
+    else {
+	$sys = "$p2loc/plink --memory 2000 --bfile $bfile --keep $bfile.fam.pt --allow-no-sex --out $workname $idex_str --q-score-range $range_file $score_p_file --score $score_w_file";
+    }
 }
 
 print "$sys\n";
@@ -1079,43 +1120,50 @@ foreach my $iperm (1..$permut) {
 #  add NGT information
 #################################################
 
+ 
+unless ($danscore_file) {   
+    die "$workname.assoc.dosage:".$! unless open IFILE, "< $workname.assoc.dosage";
+    die "$workname.assoc.dosage.ngt:".$! unless open OFILE, "> dan_$workname.assoc.dosage.ngt";
+    my $head = <IFILE>;
+    chomp ($head);
+    $head =~ s/FRQ_A/FRQ_A_$ncaco{2}/;
+    if ($ncaco{1}>0){
+	#    print "ncaco_1: $ncaco{1}\n";
+	#    sleep(5);
+	$head =~ s/FRQ_U/FRQ_U_$ncaco{1}/;
+    }
+    else {
+	$head =~ s/FRQ_U/FRQ_U_$Nall/;
+    }
+    print OFILE "$head   ngt\n";
+    while (my $line = <IFILE>){
+	chomp ($line);
+	my @cells = &split_line($line);
+	$ngt{$cells[1]} = 0 unless (exists $ngt{$cells[1]});
+	printf OFILE "%s %4s\n",$line,$ngt{$cells[1]};
+    }
+    close IFILE;
+    close OFILE;
+
+    &mysystem("gzip -f dan_$workname.assoc.dosage.ngt");
+    &mysystem("mv dan_$workname.assoc.dosage.ngt.gz $outdir/dan_$workname.assoc.dosage.ngt.gz.tmp");
+
+
+    &mysystem("mv $famfile.pt.ex $outdir") unless (-e "$outdir/$famfile.pt.ex");
+    &mysystem("mv $workname.log $outdir/dan_$workname.assoc.log");
     
-die "$workname.assoc.dosage:".$! unless open IFILE, "< $workname.assoc.dosage";
-die "$workname.assoc.dosage.ngt:".$! unless open OFILE, "> dan_$workname.assoc.dosage.ngt";
-my $head = <IFILE>;
-chomp ($head);
-$head =~ s/FRQ_A/FRQ_A_$ncaco{2}/;
-if ($ncaco{1}>0){
-#    print "ncaco_1: $ncaco{1}\n";
-#    sleep(5);
-    $head =~ s/FRQ_U/FRQ_U_$ncaco{1}/;
+    chdir ($outdir);
+    &mysystem("mv dan_$workname.assoc.dosage.ngt.gz.tmp dan_$workname.assoc.dosage.ngt.gz");
+    &mysystem("rm $outdir/dan_$workname.assoc.dosage.plink_started");
 }
-else {
-    $head =~ s/FRQ_U/FRQ_U_$Nall/;
-}
-print OFILE "$head   ngt\n";
-while (my $line = <IFILE>){
-    chomp ($line);
-    my @cells = &split_line($line);
-    $ngt{$cells[1]} = 0 unless (exists $ngt{$cells[1]});
-    printf OFILE "%s %4s\n",$line,$ngt{$cells[1]};
-}
-close IFILE;
-close OFILE;
-
-&mysystem("gzip -f dan_$workname.assoc.dosage.ngt");
-&mysystem("mv dan_$workname.assoc.dosage.ngt.gz $outdir/dan_$workname.assoc.dosage.ngt.gz.tmp");
 
 
-&mysystem("mv $famfile.pt.ex $outdir") unless (-e "$outdir/$famfile.pt.ex");
-&mysystem("mv $workname.log $outdir/dan_$workname.assoc.log");
-
-chdir ($outdir);
-&mysystem("mv dan_$workname.assoc.dosage.ngt.gz.tmp dan_$workname.assoc.dosage.ngt.gz");
-&mysystem("rm $outdir/dan_$workname.assoc.dosage.plink_started");
 
 
-#exit;
+
+
+
+exit;
 &mysystem("rm -fr $workdir");
 
 
