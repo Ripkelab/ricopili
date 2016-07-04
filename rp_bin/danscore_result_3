@@ -75,7 +75,7 @@ GetOptions(
 
 
 die "$usage" if ($help);
-die "$usage" unless ($out);
+die "$usage\n!!! please specify --out !!!!" unless ($out);
 
 
 

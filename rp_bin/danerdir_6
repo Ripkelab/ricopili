@@ -963,7 +963,7 @@ else {
 	$sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $idex_str --q-score-range $range_file $score_p_file --score $score_w_file";
     }
     else {
-	$sys = "$p2loc/plink --memory 2000 --bfile $bfile --keep $bfile.fam.pt --allow-no-sex --out $workname $idex_str --q-score-range $range_file $score_p_file --score $score_w_file";
+	$sys = "$p2loc/plink --memory 2000 --bfile $bfile --keep $bfile.fam.pt --allow-no-sex --out $workname $idex_str --q-score-range $range_file $score_p_file --score $score_w_file sum";
     }
 }
 
@@ -1021,6 +1021,30 @@ if ($danscore_file) {
 #    print "first file is fine\n";
 #    sleep(10);
 
+
+    if ($bfile) {
+
+	foreach my $nn (1..10) {
+	    die "$workname.S$nn.score:".$! unless open IFILE, "< $workname.S$nn.score";
+	    die "$famfile.pt.perm:".$! unless open PFILE, "> $famfile.pt.perm";
+	    while (my $line = <IFILE>){
+		my @cells = &split_line($line);
+		$cells[5] = int(rand(2)) + 1;
+		print PFILE "$cells[0]";
+		print PFILE "\t$cells[1]";
+		print PFILE "\t$cells[2]";
+		print PFILE "\t$cells[3]";
+		print PFILE "\t$cells[4]";
+		print PFILE "\t$cells[5]";
+		print PFILE "\n";
+		
+	    }
+	    close IFILE;
+	    close PFILE;
+	}
+
+    }
+    
     &mysystem("cp $workname.S* $outdir/");
     
     &mysystem("mv $famfile.pt.ex $outdir") unless (-e "$outdir/$famfile.pt.ex");
@@ -1028,6 +1052,10 @@ if ($danscore_file) {
     
     chdir ($outdir);
     &mysystem("mv dan_$workname.assoc.log.tmp dan_$workname.profile.log");
+
+
+
+    exit;
     &mysystem("rm -fr $workdir");
     exit;
 
