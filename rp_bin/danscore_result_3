@@ -392,6 +392,7 @@ else {
 
     $intempl =~ s/^danscore_//;
     $intempl =~ s/.cov.tar.gz$//;
+    $intempl =~ s/.tar.gz$//;
 
     $out = $intempl;
 #    print "INTEMPL: $intempl\n";

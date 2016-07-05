@@ -256,11 +256,11 @@ my $scratchdir = $sloc;
 my $workdir="$scratchdir/dan_$workname";
 
 
-if (1) {
+#unless ($bfile) {
     while (-e $workdir) {
 	$workdir .= ".d";
     }
-}
+#}
 
 print "workdir: $workdir\n";
 
@@ -303,9 +303,9 @@ my $ngtfile = "dos_$bind.out.dosage.ngt";
 
 if ($bfile) {
 
-    &mysystem("ln -s $indir/$bfile.fam .");
-    &mysystem("ln -s $indir/$bfile.bed .");
-    &mysystem("ln -s $indir/$bfile.bim .");
+    &mysystem("ln -s $indir/$bfile.fam .") unless (-e "$bfile.fam");
+    &mysystem("ln -s $indir/$bfile.bed .") unless (-e "$bfile.bed");
+    &mysystem("ln -s $indir/$bfile.bim .") unless (-e "$bfile.bim");
     $famfile = "$bfile.fam";
     $mapfile = "$bfile.bim";
 
@@ -649,6 +649,7 @@ my $Nall;
 my %alphe=();
 my $star = -1;
 my %mdsin = ();
+my %mdsvals = ();
 my %idex = ();
 my %idin = ();
 #my %addcov = ();
@@ -740,6 +741,11 @@ if ($mds_name){
     while (<FILE>){
 	my @cells = &split_line($_);
 	$mdsin{"$cells[0]\t$cells[1]"} = 1;
+	my $covstr = "";
+	foreach my $cc (@mcols) {
+	    $covstr .= " ".$cells[$cc+2];
+	}
+	$mdsvals{"$cells[0]\t$cells[1]"} = $covstr;
     }
     close FILE;
 }
@@ -787,7 +793,7 @@ unless ($danscore_file) {
 }
 
 
-print "und hier nicht mehr\n";
+#print "und hier nicht mehr\n";
 
 
 
@@ -952,28 +958,35 @@ if ($idin_name || $males || $females) {
 
 
 
-my $sys;
+my $sys = "nan";
+
+
 unless ($danscore_file) {
     $sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 case-control-freqs --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
 
 
 }
 else {
+
     unless ($bfile) {
 	$sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $idex_str --q-score-range $range_file $score_p_file --score $score_w_file";
     }
     else {
 	$sys = "$p2loc/plink --memory 2000 --bfile $bfile --keep $bfile.fam.pt --allow-no-sex --out $workname $idex_str --q-score-range $range_file $score_p_file --score $score_w_file sum";
     }
+
 }
+
 
 print "$sys\n";
 
 
 #sleep(10);
 
-&mysystem("touch $outdir/dan_$workname.assoc.dosage.plink_started");
-&mysystem($sys);
+if ($sys ne "nan") {
+    &mysystem("touch $outdir/dan_$workname.assoc.dosage.plink_started");
+    &mysystem($sys);
+}
 
 
 if ($danscore_file) {
@@ -1021,41 +1034,87 @@ if ($danscore_file) {
 #    print "first file is fine\n";
 #    sleep(10);
 
+    my @count_bin;
+    my @n_bin;
 
     if ($bfile) {
 
+	my @tarfiles;
 	foreach my $nn (1..10) {
-	    die "$workname.S$nn.score:".$! unless open IFILE, "< $workname.S$nn.score";
-	    die "$famfile.pt.perm:".$! unless open PFILE, "> $famfile.pt.perm";
-	    while (my $line = <IFILE>){
+	    my $outname_loc = "$workname.$nn.target.S$nn.sumprofile_cov";
+	    die "$workname.S$nn.profile:".$! unless open IFILE, "< $workname.S$nn.profile";
+	    die "$outname_loc:".$! unless open PFILE, "> $outname_loc";
+
+	    my $line = <IFILE>;
+
+	    print PFILE "FID\tIID\tCOUNT\tPHENO\tSCORE";
+	    print PFILE "\t".$mdsvals{"FID\tIID"};
+	    print PFILE "\n";
+	    
+	    while ($line = <IFILE>){
 		my @cells = &split_line($line);
-		$cells[5] = int(rand(2)) + 1;
+
 		print PFILE "$cells[0]";
 		print PFILE "\t$cells[1]";
-		print PFILE "\t$cells[2]";
 		print PFILE "\t$cells[3]";
-		print PFILE "\t$cells[4]";
+		print PFILE "\t$cells[2]";
 		print PFILE "\t$cells[5]";
+		print PFILE "\t".$mdsvals{"$cells[0]\t$cells[1]"};
 		print PFILE "\n";
+
+		$count_bin[$nn] += $cells[3];
+		$n_bin[$nn]++;
 		
 	    }
 	    close IFILE;
 	    close PFILE;
+	    push @tarfiles, $outname_loc; 
 	}
 
+
+
+	&mysystem("tar -cvzf $workname.tar.gz @tarfiles");
+	my $sys = "danscore_result_3 --out $workname --tarball $workname.tar.gz";
+	&mysystem($sys);	
+
+
+	## add first column to output file 
+	die "$workname.poly.out.txt:".$! unless open IFILE, "< $workname.poly.out.txt";
+	die "$workname.poly.out.txt.combined:".$! unless open PFILE, "> $workname.poly.out.txt.combined";
+	
+	my $line = <IFILE>;
+	print PFILE "NBIN\t$line";
+	my $nn=1;
+
+	while ($line = <IFILE>){
+	    my $mean_loc = int($count_bin[$nn]/$n_bin[$nn]/2 + 0.5);
+	    print PFILE "$mean_loc\t$line";
+	    $nn++;
+	}
+	close IFILE;
+	close PFILE;
+
+
+	
+	&mysystem("cp $workname.tar.gz $outdir/");
+	&mysystem("cp $workname.pdf $outdir/");
+	&mysystem("cp $workname.poly.out.txt.combined $outdir/");
+	&mysystem("cp R.$workname.hl_nw.Rin $outdir/");
+	
+    }
+ 
+    else {   
+	&mysystem("cp $workname.S* $outdir/");
+	&mysystem("mv $workname.log $outdir/dan_$workname.profile.log");
     }
     
-    &mysystem("cp $workname.S* $outdir/");
-    
     &mysystem("mv $famfile.pt.ex $outdir") unless (-e "$outdir/$famfile.pt.ex");
-    &mysystem("mv $workname.log $outdir/dan_$workname.assoc.log.tmp");
+
     
     chdir ($outdir);
-    &mysystem("mv dan_$workname.assoc.log.tmp dan_$workname.profile.log");
 
 
 
-    exit;
     &mysystem("rm -fr $workdir");
     exit;
 
