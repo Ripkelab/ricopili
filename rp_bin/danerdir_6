@@ -1042,33 +1042,40 @@ if ($danscore_file) {
 	my @tarfiles;
 	foreach my $nn (1..10) {
 	    my $outname_loc = "$workname.$nn.target.S$nn.sumprofile_cov";
-	    die "$workname.S$nn.profile:".$! unless open IFILE, "< $workname.S$nn.profile";
-	    die "$outname_loc:".$! unless open PFILE, "> $outname_loc";
-
-	    my $line = <IFILE>;
-
-	    print PFILE "FID\tIID\tCOUNT\tPHENO\tSCORE";
-	    print PFILE "\t".$mdsvals{"FID\tIID"};
-	    print PFILE "\n";
-	    
-	    while ($line = <IFILE>){
-		my @cells = &split_line($line);
-
-		print PFILE "$cells[0]";
-		print PFILE "\t$cells[1]";
-		print PFILE "\t$cells[3]";
-		print PFILE "\t$cells[2]";
-		print PFILE "\t$cells[5]";
-		print PFILE "\t".$mdsvals{"$cells[0]\t$cells[1]"};
-		print PFILE "\n";
-
-		$count_bin[$nn] += $cells[3];
-		$n_bin[$nn]++;
+	    my $inname_loc = "$workname.S$nn.profile";
+	    if (-e $inname_loc) {
+		die "$inname_loc:".$! unless open IFILE, "< $inname_loc";
+		die "$outname_loc:".$! unless open PFILE, "> $outname_loc";
 		
+		my $line = <IFILE>;
+		
+		print PFILE "FID\tIID\tCOUNT\tPHENO\tSCORE";
+		print PFILE "\t".$mdsvals{"FID\tIID"};
+		print PFILE "\n";
+		
+		while ($line = <IFILE>){
+		    my @cells = &split_line($line);
+		    
+		    print PFILE "$cells[0]";
+		    print PFILE "\t$cells[1]";
+		    print PFILE "\t$cells[3]";
+		    print PFILE "\t$cells[2]";
+		    print PFILE "\t$cells[5]";
+		    print PFILE "\t".$mdsvals{"$cells[0]\t$cells[1]"};
+		    print PFILE "\n";
+		    
+		    $count_bin[$nn] += $cells[3];
+		    $n_bin[$nn]++;
+		    
+		}
+		close IFILE;
+		close PFILE;
+		push @tarfiles, $outname_loc;
 	    }
-	    close IFILE;
-	    close PFILE;
-	    push @tarfiles, $outname_loc; 
+	    else {
+		$count_bin[$nn] = 0;
+		$n_bin[$nn] = 1;
+	    }
 	}
 
 
@@ -1087,7 +1094,10 @@ if ($danscore_file) {
 	my $nn=1;
 
 	while ($line = <IFILE>){
-	    my $mean_loc = int($count_bin[$nn]/$n_bin[$nn]/2 + 0.5);
+	    print "nn:    $nn\n";
+	    print "count: $count_bin[$nn]\n";
+	    print "nbin:  $n_bin[$nn]\n";
+	    my $mean_loc = int(($count_bin[$nn]/$n_bin[$nn])/2 + 0.5);
 	    print PFILE "$mean_loc\t$line";
 	    $nn++;
 	}
