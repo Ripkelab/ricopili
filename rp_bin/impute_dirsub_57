@@ -267,6 +267,12 @@ version: $version
 
 
 
+## differen prephasing algorithm
+
+ --eagle           use eagle for prephasing: https://data.broadinstitute.org/alkesgroup/Eagle/
+
+
+
 #### for trio datasets
 
  --triset STRING  for subset of trio datasets (can contain bimfiles)
@@ -469,6 +475,7 @@ GetOptions(
     "spliha_n=i"=> \$spliha_n,
     "noclean"=> \my $noclean,
     "force1"=> \my $force1,
+    "eagle"=> \my $eagle_sw,
 
 
     "popname=s"=> \$popname,
@@ -2216,6 +2223,9 @@ if ($prephase_done == 0) {
 #		}
 		################################## work on this here!!!!!
 		    my $backbone = "$preph_script $xtxt --spliha $spliha_n_2 --out $haps_ch_out --in $plink_ch_out --fam $famfile --gema $gema_file";
+		    if ($eagle_sw) { 
+			$backbone .= " --eagle";
+		    }
 		    if ($multi_sw == 0) {
 			push @preph_arr, $backbone;
 		    }

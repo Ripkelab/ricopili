@@ -17,6 +17,8 @@ use Ricopili::Utils qw(trans);
 
 my $shloc = &trans("shloc");
 my $p2loc = &trans("p2loc");
+my $ealoc = "";
+
 
 ###########################################
 ##### help message
@@ -30,6 +32,7 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --multi INT       multithreading
  --chrX            for X chromosome
  --spliha INT      for splitter
+ --eagle           use eagle instead of shapeit
 
 ";
 
@@ -50,6 +53,7 @@ GetOptions(
     "multi=i"=> \ $multi,
     "spliha=i"=> \ $spliha,
     "chrX"=> \my $chrx,
+    "eagle"=> \my $eagle_sw,
     );
 
 if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $famfile eq "" || $spliha == 0){
@@ -57,6 +61,9 @@ if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $famfile eq "" || $sp
     die;
 }
 
+if ($eagle_sw) {
+    $ealoc = &trans("ealoc");
+}
 
 unless (-e "$inname.bim") {
     print "error: no $inname.bim\n";
@@ -65,6 +72,7 @@ unless (-e "$inname.bim") {
 
 #my $shapeit_bin = "shapeit.v2.r644.linux.x86_64";
 my $shapeit_bin = "shapeit.v2.r837.linux.x86_64";
+my $eagle_bin = "eagle";
 
 my $xtxt = "";
 if ($chrx) {
@@ -99,15 +107,25 @@ sub split_line_ref {
 # BEGIN
 ##############################
 
-die $!."$outname.shapeit.cmd" unless open BC, "> $outname.shapeit.cmd";
+die $!."$outname.phase.cmd" unless open BC, "> $outname.phase.cmd";
 
 
 my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $inname.bim $famfile --output-max $outname.haps $outname.sample --output-log $outname.shape.log --input-map $gemafile $multi_txt > /dev/null";
+
+if ($eagle_sw) {
+    $gemafile =~ s/.txt$/.chr.txt/;
+    $sys_loc = "$ealoc/$eagle_bin --bfile=$inname --geneticMapFile=$gemafile --outPrefix=$outname";
+}
 
 my $sc = 0;
 unless (-e "$outname.first.fini"){
     $sc = system ($sys_loc) ;
     print BC "$sys_loc\n";
+}
+
+if ($eagle_sw) {
+    $sys_loc = "gunzip -c $outname.haps.gz > $outname.haps";
+    $sc = system ($sys_loc) ;
 }
 
 close BC;

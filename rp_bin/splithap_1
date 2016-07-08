@@ -13,6 +13,7 @@ my $version = "1.3.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 
+use Compress::Zlib ;
 
 
 #  sripke@tin.broadinstitute.org:/psych/genetics_data/ripke/clozuk/combine_0812/verystric_qc_CLOZUK_co1m_full.no_clzo/imputation/pi_sub/test_hap$ splithap_1 plink.CLOZUK_co1m_full-no_clzo-qc2.ch.fl.chr12_021_024.haps.h100 
