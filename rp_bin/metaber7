@@ -117,6 +117,20 @@ sub split_line {
     my @cols=  split /\s+/, $line;
 }
 
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
 
 #####################################
 # print array to file
@@ -133,17 +147,36 @@ sub a2file {
 
 
 
-########################################
-# test plink and beagle
-###################################
+
+use File::Path;
+use File::Copy;
+use Cwd;
 
 
-#unless (-e "$ploc/plink" ){
- #   print "\n***** Error: couldn't find the following:\n";
-  #  print "$ploc/plink\n";
-   # exit;
-#}
 
+my $out_short = $out_name;
+$out_short =~ s!.*/!!;
+#print "$out_name\n";
+#print "$out_short\n";
+
+#exit;
+
+
+my $scratchdir = $sloc;
+my $workdir="$scratchdir/dameta_$out_short";
+
+
+
+while (-e $workdir) {
+    $workdir .= ".d";
+}
+print "workdir: $workdir\n";
+
+sleep(4);
+my @created_work = mkpath(   ## $created ?
+			"$workdir",
+			{verbose => 0, mode => 0750},
+    );
 
 
 #####################################
@@ -180,15 +213,21 @@ my $die = 0;
 
 foreach my $file (@ARGV) {
 
+
+    my $dfile_short = $file;
+    $dfile_short =~ s!.*/!!;
+    print  "check header of: $dfile_short\n";
+
+    $or_txt = "";
+    
     my $df = gzopen("$file", "rb")  or die "Cannot open $file: $gzerrno\n" ;
     $df->gzreadline(my $line);
-    my @cells = &split_line($line);
+    my @cells = @{&split_line_ref(\$line)};
+
 
     my $sollc = @cells;
     my $ld_sw = 0;
 
-# CHR         SNP          BP  A1  A2     FRQ    INFO      OR      SE       P
-# CHR         SNP          BP  A1  A2   FRQ_A_276   FRQ_U_521    INFO      OR      SE       P   ngt
 
     foreach (@cells) {
 	### check for OR column, but also for the first file
@@ -208,29 +247,31 @@ foreach my $file (@ARGV) {
 
     my $cc = 0;
     my $line = "ha";
-#    print "new gfil\n";
-    while ($df->gzreadline(my $line_loc)){
-	$cc++;
-	chomp($line_loc);
-#	print "rig: ->$line_loc<-\n";
-	unless ($line_loc eq "") {
-	    $line = $line_loc;
-	}
-    }
-#    print "file: $file: $cc\n";
-#    print "line: <$line>: $cc\n";
+    #    print "new gfil\n";
 
-    my @cells = &split_line($line);
-    if ($sollc != @cells && $line ne "ha") {
-#	print @cells." ncells\n";
-#	print "->".$line."<- line\n";
-#	exit;
+
+    if (0) {    
+	while ($df->gzreadline(my $line_loc)){
+	    $cc++;
+	    chomp($line_loc);
+	    unless ($line_loc eq "") {
+		$line = $line_loc;
+	    }
+	}
+
+
+    my @cells = @{&split_line_ref(\$line)};
+
+
+	if ($sollc != @cells && $line ne "ha") {
 	my $cc_loc = @cells;
-#	&mysystem ("rm $file");
 	print "Warning: column count problem in $file, $sollc, $cc_loc,\n@cells\n" ;
 	$die = 1;
-
+	
+	}
     }
+
+
     
     $df -> gzclose();
 
@@ -242,7 +283,7 @@ foreach my $file (@ARGV) {
 	$filtertxt = "";
     }
 
-my $process_templ ="
+    my $process_templ ="
 MARKER   SNP
 WEIGHT   N
 ALLELE   A1 A2
@@ -252,10 +293,11 @@ STDERR   SE
 PVAL     P
 $filtertxt
 
-PROCESS $file.clean.gz
+PROCESS $workdir/$dfile_short.clean.gz
 ";
-
-$metal_script .= $process_templ;
+    
+    $metal_script .= $process_templ;
+    
 }
 
 #if ($die == 1){
@@ -317,7 +359,8 @@ foreach my $dfile (@ARGV) {
 
     my $df = gzopen("$dfile", "rb")  or die "Cannot open $dfile: $gzerrno\n" ;
     $df->gzreadline(my $line);
-    my @cells = &split_line($line);
+    my @cells = @{&split_line_ref(\$line)};
+
 
 #    print "read $dfile\n";
 
@@ -475,7 +518,10 @@ foreach my $dfile (@ARGV) {
 
     while ($df->gzreadline(my $line)){
 	chomp($line);
-	my @cells = &split_line($line);
+
+
+	my @cells = @{&split_line_ref(\$line)};
+
 #	print $cells[1]."\n";
 	## read basic information
 #	if ($fc == 1) {
@@ -643,18 +689,26 @@ my $die = 0;
 
 foreach my $dfile (@ARGV) {
 
+
+    my $dfile_short = $dfile;
+    $dfile_short =~ s!.*/!!;
+#    print  "$dfile\n";
+#    print  "$dfile_short\n";
+#    exit;
+
     my $df = gzopen("$dfile", "rb")  or die "Cannot open $dfile: $gzerrno\n" ;
-    my $dfo = gzopen("$dfile.clean.gz", "wb")  or die "Cannot open $dfile.clean.gz: $gzerrno\n" ;
+    my $dfo = gzopen("$workdir/$dfile_short.clean.gz", "wb")  or die "Cannot open $workdir/$dfile_short.clean.gz: $gzerrno\n" ;
     $df->gzreadline(my $line);
     $dfo->gzwrite($line);
     
     
     while ($df->gzreadline(my $line)){
 	chomp($line);
-	my @cells = &split_line($line);
+	my @cells = @{&split_line_ref(\$line)};
+
 
 	if (@cells < 11) {	
-	    print "Warning: not enough cells in $dfile\n" ;
+	    print "Error: not enough cells in $dfile\n" ;
 	    $die = 1;
 	}
 
@@ -691,17 +745,19 @@ $metal_script .= "ANALYZE HETEROGENEITY";
 
 
 
+#print "debug\n";
+#exit;
 
     ###################
     ## remove cleaned file
     ####
 
-foreach my $dfile (@ARGV) {
+#foreach my $dfile (@ARGV) {
     
-    print "remove $dfile.clean.gz\n" ;
-    &mysystem ("rm $dfile.clean.gz") ;
+#    print "remove $dfile.clean.gz\n" ;
+#    &mysystem ("rm $dfile.clean.gz") ;
     
-}
+#}
 
 
 ## print out SNPex list
@@ -850,7 +906,9 @@ print DANER "\n";
 
 while (<META>){
     chomp;
-    my @cells = &split_line($_);
+    my @cells = @{&split_line_ref(\$_)};
+
+
 #    my $snp_name = $cells[2];
     my $snp_name = $cells[0];
     my $a1_name = $cells[1];
@@ -972,4 +1030,7 @@ close DANER;
 &mysystem ("gzip -f $out_name.metadaner.tmp");
 &mysystem ("mv $out_name.metadaner.tmp.gz $out_name.metadaner.gz");
 &mysystem ("rm $out_name.meta1.tbl");
+
+print "cleaning up\n";
+&mysystem ("rm -rf $workdir");
 
