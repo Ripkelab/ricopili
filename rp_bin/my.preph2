@@ -72,7 +72,7 @@ unless (-e "$inname.bim") {
 
 #my $shapeit_bin = "shapeit.v2.r644.linux.x86_64";
 my $shapeit_bin = "shapeit.v2.r837.linux.x86_64";
-my $eagle_bin = "eagle";
+my $eagle_bin = "eagle_v2.1.1a";
 
 my $xtxt = "";
 if ($chrx) {
@@ -114,7 +114,7 @@ my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $
 
 if ($eagle_sw) {
     $gemafile =~ s/.txt$/.chr.txt/;
-    $sys_loc = "$ealoc/$eagle_bin --bfile=$inname --geneticMapFile=$gemafile --outPrefix=$outname";
+    $sys_loc = "$ealoc/$eagle_bin --bfile=$inname --geneticMapFile=$gemafile --outPrefix=$outname --runStep2=0";
 }
 
 my $sc = 0;
@@ -123,10 +123,6 @@ unless (-e "$outname.first.fini"){
     print BC "$sys_loc\n";
 }
 
-if ($eagle_sw) {
-    $sys_loc = "gunzip -c $outname.haps.gz > $outname.haps";
-    $sc = system ($sys_loc) ;
-}
 
 close BC;
 ### right now I don't check why it fails
@@ -155,7 +151,12 @@ if (0) {
 }
 
 
-if ($sc == 0 ) { 
+if ($sc == 0 ) {
+    
+    if ($eagle_sw) {
+	$sys_loc = "gunzip -c $outname.haps.gz > $outname.haps";
+	$sc = system ($sys_loc) ;
+    }
     system ("touch $outname.first.fini");
     my $sys_loc2 = "splithap_1 --nhaps $spliha $outname.haps";
 
