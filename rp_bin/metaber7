@@ -712,6 +712,10 @@ foreach my $dfile (@ARGV) {
 	    $die = 1;
 	}
 
+	## remove OR lower than 1.0e-04 or bigger than 1.0e04)
+	if ($cells[8] <0.0001 || $cells[8]>10000) {
+	    next;
+	}
 	
 	if (exists $snpex{$cells[$col{"SNP"}]}) {
 	    next;
@@ -741,10 +745,11 @@ if ($die == 1){
 $metal_script .= "OUTFILE $out_name.meta .tbl\n";
 $metal_script .= "ANALYZE HETEROGENEITY";
 &a2file ($metal_script_name,$metal_script);
-&mysystem ("$meloc/metal < $metal_script_name");
+&mysystem ("$meloc/metal < $metal_script_name > $out_name.log");
 
 
 
+#print "debug\n";
 #print "debug\n";
 #exit;
 
@@ -1031,6 +1036,6 @@ close DANER;
 &mysystem ("mv $out_name.metadaner.tmp.gz $out_name.metadaner.gz");
 &mysystem ("rm $out_name.meta1.tbl");
 
-print "cleaning up\n";
-&mysystem ("rm -rf $workdir");
+#print "cleaning up\n";
+#&mysystem ("rm -rf $workdir");
 
