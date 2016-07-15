@@ -654,15 +654,15 @@ version: $version
  --out is mandatory
 
 
-you can use this as reference
- $hm3_ceu
+#you can use this as reference
+# $hm3_ceu
 
 
-even better four 1KG populations:
-ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_4pop_mix_SEQ.bed/bim/fam .
+## world wide 1KG populations:
+ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_4pop_mix_SEQ.* .
 
 
-only euros:
+## european 1KG countries:
 ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_euro_eur_SEQ.det.* .
 
 
