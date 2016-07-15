@@ -72,7 +72,8 @@ unless (-e "$inname.bim") {
 
 #my $shapeit_bin = "shapeit.v2.r644.linux.x86_64";
 my $shapeit_bin = "shapeit.v2.r837.linux.x86_64";
-my $eagle_bin = "eagle_v2.1.1a";
+my $eagle_bin = "eagle_v2.2a";
+my $eagle_bin = "eagle";
 
 my $xtxt = "";
 if ($chrx) {
@@ -119,6 +120,7 @@ if ($eagle_sw) {
 
 my $sc = 0;
 unless (-e "$outname.first.fini"){
+    print "$sys_loc\n";
     $sc = system ($sys_loc) ;
     print BC "$sys_loc\n";
 }

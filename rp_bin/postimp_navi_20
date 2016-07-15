@@ -4531,7 +4531,7 @@ unless (-e "replic/README") {
     &mysystem ("$linksub_script $distdir/$areator_all") ;
     &mysystem ("$linksub_script $distdir/$daner_all.p3.gz") ;
 
-    my $repl_txt = "replicator11 --dan --areator $areator_all --gwas $daner_all.p3.gz --format 7 --refdir $areat_refdir --index --trust --rep REPFILE";
+    my $repl_txt = "$replicator_script --dan --areator $areator_all --gwas $daner_all.p3.gz --format 7 --refdir $areat_refdir --index --trust --rep REPFILE";
 
     &mysystem ("echo $repl_txt > README") ;
 }
