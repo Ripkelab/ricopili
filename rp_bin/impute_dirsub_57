@@ -2635,7 +2635,7 @@ if ($imp2_done == 0) {
 	$sjatime = 2;
 	$sjamem = 8000;
 	if ($imp2_fini > 0) {
-	    $sjamem = 14000;
+	    $sjamem = 16000;
 #	    $sjatime = 4;
 	}
 	@sjaarray = @imp2_arr;

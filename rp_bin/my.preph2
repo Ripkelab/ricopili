@@ -72,7 +72,7 @@ unless (-e "$inname.bim") {
 
 #my $shapeit_bin = "shapeit.v2.r644.linux.x86_64";
 my $shapeit_bin = "shapeit.v2.r837.linux.x86_64";
-my $eagle_bin = "eagle_v2.2a";
+#my $eagle_bin = "eagle_v2.2a";
 my $eagle_bin = "eagle";
 
 my $xtxt = "";
