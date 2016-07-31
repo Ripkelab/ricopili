@@ -137,7 +137,7 @@ my @test_scripts;
 
 my $mach2impute_script = "mach2impute";               ### my.pipeline_tar
 my $preprefgene_script = "prepare_refGene";           ### my.pipeline_tar
-my $wget_script = "my.get";                           ### my.pipeline_tar
+my $wget_script = "my.wget";                           ### my.pipeline_tar
 my $vcf_script = "$vloc/vcftools";                    ### 
 my $annot_hg19pos_script = "annot_hg19pos";           ### 
 my $impute2beagle_script = "impute2beagle2";          ### my.pipeline_tar
