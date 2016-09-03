@@ -25,7 +25,7 @@ my $ploc = &trans("p2loc");
 
 ###############################################
 
-
+my $plinkmem = 2000;
 
 ##### help message
 my $usage = "
@@ -38,6 +38,7 @@ version: $version
   --fam STRING        fam-file, mandatory
   --bim STRING        bim-file, mandatory
   --chr INT           chromosome
+  --plinkmem INT      memory for plink --dosage (in MB), default $plinkmem
   --help              print this message and exit
 
   --prefix STRING     prefix into famfile
@@ -60,6 +61,7 @@ GetOptions(
     "fam=s"=> \my $famname,
     "bim=s"=> \my $bimname,
     "chr=i"=> \my $chr,
+    "plinkmem=i" => \$plinkmem,
 
     );
 
@@ -270,7 +272,7 @@ unless (-e $twodos_tmp_success) {
 
 
 #my $sys_loc = "$ploc/plink --dosage $haps_file_gz noheader skip0=1 skip1=1 format=3 Z --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
-my $sys_loc = "$ploc/plink --threads 1 --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
+my $sys_loc = "$ploc/plink --threads 1 --memory $plinkmem --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
 print "$sys_loc\n";
 &mysystem ($sys_loc);
 
