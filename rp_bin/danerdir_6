@@ -338,6 +338,28 @@ else {
 
 
 
+my %snpin;
+my $mapfile_nodup = $mapfile.".nodup";
+die ":".$! unless open IFILE, "< $mapfile";
+die ":".$! unless open OFILE, "> $mapfile_nodup";
+while (my $line = <IFILE>){
+    my @cells = &split_line($line);
+    my $snpname = $cells[1];
+
+    unless (exists $snpin{$snpname}) {
+	print OFILE "@cells\n";
+    }
+    $snpin{$snpname} = 1;
+}
+close IFILE;
+close OFILE;
+%snpin= ();
+
+$mapfile = $mapfile_nodup;
+
+
+
+
 
 &mysystem("cp $rootdir/$pheno .") if ($pheno);
 &mysystem("cp $rootdir/$idex_name .") if ($idex_name);

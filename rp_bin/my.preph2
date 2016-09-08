@@ -33,6 +33,7 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --chrX            for X chromosome
  --spliha INT      for splitter
  --eagle           use eagle instead of shapeit
+ --nospli          do not perform second task (splitting into smaller chunks)
 
 ";
 
@@ -54,6 +55,7 @@ GetOptions(
     "spliha=i"=> \ $spliha,
     "chrX"=> \my $chrx,
     "eagle"=> \my $eagle_sw,
+    "nospli"=> \my $nospli,
     );
 
 if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $famfile eq "" || $spliha == 0){
@@ -83,7 +85,11 @@ if ($chrx) {
 my $multi_txt = "";
 if ($multi > 1 ) {
     $multi_txt = "--thread $multi";
+    if ($eagle_sw) {
+	$multi_txt = "--numThreads=$multi";
+    }
 }
+
 
 
 system ("touch $outname.multi.$multi");
@@ -115,7 +121,7 @@ my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $
 
 if ($eagle_sw) {
     $gemafile =~ s/.txt$/.chr.txt/;
-    $sys_loc = "$ealoc/$eagle_bin --bfile=$inname --geneticMapFile=$gemafile --outPrefix=$outname --runStep2=0";
+    $sys_loc = "$ealoc/$eagle_bin --bfile=$inname --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt > $outname.log 2> $outname.loge";
 }
 
 my $sc = 0;
@@ -154,26 +160,33 @@ if (0) {
 
 
 if ($sc == 0 ) {
+
+
+
+    unless ($nospli) {    
+	if ($eagle_sw) {
+	    $sys_loc = "gunzip -c $outname.haps.gz > $outname.haps";
+	    $sc = system ($sys_loc) ;
+	}
+	system ("touch $outname.first.fini");
+	my $sys_loc2 = "splithap_1 --nhaps $spliha $outname.haps";
+	
+	
+	
+	die $!."$outname.split.cmd" unless open BC, "> $outname.split.cmd";
+	print BC "$sys_loc2\n";
+	close BC;
     
-    if ($eagle_sw) {
-	$sys_loc = "gunzip -c $outname.haps.gz > $outname.haps";
-	$sc = system ($sys_loc) ;
+
+    
+	print "$sys_loc2\n";
+	#    exit;
+	my $sc2 = system ($sys_loc2);
+	if ($sc2 == 0 ) { 
+	    system ("touch $outname.fini");
+	}
     }
-    system ("touch $outname.first.fini");
-    my $sys_loc2 = "splithap_1 --nhaps $spliha $outname.haps";
-
-
-    
-    die $!."$outname.split.cmd" unless open BC, "> $outname.split.cmd";
-    print BC "$sys_loc2\n";
-    close BC;
-
-
-    
-    print "$sys_loc2\n";
-#    exit;
-    my $sc2 = system ($sys_loc2);
-    if ($sc2 == 0 ) { 
+    else {
 	system ("touch $outname.fini");
     }
     

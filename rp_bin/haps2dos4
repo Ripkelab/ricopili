@@ -125,55 +125,62 @@ my $haps_file_gz = "$haps_file1.combined.gz";
 my @filehandles_gz;
 
 
-foreach my $infile (@haps_collection) {
-
-    my $igz = gzopen("$infile", "rb")  or die "Cannot open file $infile: $gzerrno\n" ;
-    push(@filehandles_gz, $igz);
-
-}
-
-
-print "open $haps_file_gz\n";
-
-my $ogz = gzopen("$haps_file_gz", "wb")  or die "Cannot open file $haps_file_gz: $gzerrno\n" ;
-
-
-#$ogz->gzwrite($header) ;
-
-my $igz = $filehandles_gz[0];
-
-
-while ($igz->gzreadline(my $line)){
-    chomp($line);
-    my @cells = @{&split_line_ref(\$line)};
-
-    if ($nf > 0) {
-	foreach my $igzn (1..$nf) {
-	    my $igz_add = $filehandles_gz[$igzn];
-	    $igz_add->gzreadline(my $line);
-	    chomp($line);
-	    my @cells_add = @{&split_line_ref(\$line)};
-
-
-	    foreach (1..5) {
-		shift (@cells_add);
-	    }
-
-	    @cells = (@cells,@cells_add);
-	    
-	}
+if ($nf > 0) {
+    
+    foreach my $infile (@haps_collection) {
+	
+	my $igz = gzopen("$infile", "rb")  or die "Cannot open file $infile: $gzerrno\n" ;
+	push(@filehandles_gz, $igz);
+	
     }
-    $ogz->gzwrite("@cells\n");
+    
+    
+    print "open $haps_file_gz\n";
+    
+    my $ogz = gzopen("$haps_file_gz", "wb")  or die "Cannot open file $haps_file_gz: $gzerrno\n" ;
+    
+    
+    #$ogz->gzwrite($header) ;
+    
+    my $igz = $filehandles_gz[0];
+    
+    
+    while ($igz->gzreadline(my $line)){
+	chomp($line);
+	my @cells = @{&split_line_ref(\$line)};
+	
+#	if ($nf > 0) {
+	    foreach my $igzn (1..$nf) {
+		my $igz_add = $filehandles_gz[$igzn];
+		$igz_add->gzreadline(my $line);
+		chomp($line);
+		my @cells_add = @{&split_line_ref(\$line)};
+		
+		
+		foreach (1..5) {
+		    shift (@cells_add);
+		}
+		
+		@cells = (@cells,@cells_add);
+		
+	    }
+#	}
+	$ogz->gzwrite("@cells\n");
+	
+    }
+    
+    foreach my $igzn (1..$nf-1) {
+	my $igz_add = $filehandles_gz[$igzn];
+	$igz->gzclose();
+    }
+    $ogz->gzclose();
+    
+    print "close $haps_file_gz\n";
+}
+else {
+    $haps_file_gz = $haps_collection[0];
 
 }
-
-foreach my $igzn (1..$nf-1) {
-    my $igz_add = $filehandles_gz[$igzn];
-    $igz->gzclose();
-}
-$ogz->gzclose();
-
-print "close $haps_file_gz\n";
 
 #print "debug\n";
 #sleep(10);

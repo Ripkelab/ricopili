@@ -111,6 +111,7 @@ my $iname = "" ;
 
 my $suminfo = "infosum_pos";
 my $suminfo_n = "$suminfo.nsnps";
+my $suminfo_c = "$suminfo.chunks";
 my $suminfo_r = "$suminfo.reffiles";
 #my $suminfo_s = "$suminfo.sorted";
 my $suminfo_s = "NAN";
@@ -234,6 +235,7 @@ my $sjamem_incr = 0;
 
 my $multithread1 = 4;
 my $multithread2 = 8;
+my $multithread_v2 = 16;
 if ($qloc eq "qsub_b"){
     $multithread1 = 1;
 }
@@ -270,7 +272,6 @@ version: $version
 ## differen prephasing algorithm
 
  --eagle           use eagle for prephasing: https://data.broadinstitute.org/alkesgroup/Eagle/
-
 
 
 #### for trio datasets
@@ -957,9 +958,9 @@ sub send_jobarray {
     my $jobfile = "$sjaname.job_list";
     while (-e $jobfile) {
 	$jobfile .= ".s";
-	if (@sjaarray < 200) {
-	    $sjatime = 4;
-	}
+#	if (@sjaarray < 200) {
+#	    $sjatime = 4;
+#	}
     }
 
 
@@ -967,6 +968,9 @@ sub send_jobarray {
     &a2filenew ($jobfile, @sjaarray);
 
 #    print "$jobfile\n";
+#    print "sleep\n";
+#    sleep(10);
+
 #    exit;
 
     my $nsja = @sjaarray;
@@ -1213,22 +1217,39 @@ unless (-e $pcaer_dir){
 #    chdir ($rootdir);
 #}
 
+
 #####################################
 ## if new frequency file is existing
 ###################################
-if (-e "$refdir/sumfrq.$popname") {
-    $suminfo_s = "sumfrq.$popname";
+my $suminfo_s_v2 = "";
+my $suminfo_s_v2_sw = 0;
+if (-e "$refdir/reference_templ") {
+    die unless open IN, "< $refdir/reference_templ";
+    $suminfo_s_v2 = <IN>;
+    chomp($suminfo_s_v2);
+    close IN;
+    $suminfo_s_v2_sw = 1;
 }
-else {
 
-    my $popname_uc = uc($popname);
-    if (-e "$refdir/sumfrq.$popname_uc") {
-	$suminfo_s = "sumfrq.$popname_uc";
+print "reference_v2: $suminfo_s_v2\n";
+#####################################
+## if new frequency file is existing
+###################################
+my $popname_uc = uc($popname);
+
+if ($suminfo_s_v2_sw ==0) {
+    if (-e "$refdir/sumfrq.$popname") {
+	$suminfo_s = "sumfrq.$popname";
     }
     else {
-	print "$refdir/sumfrq.$popname_uc in refdir is not existing!!!\n";
-	die;
-#	sleep(10);
+	if (-e "$refdir/sumfrq.$popname_uc") {
+	    $suminfo_s = "sumfrq.$popname_uc";
+	}
+	else {
+	    print "$refdir/sumfrq.$popname_uc in refdir is not existing!!!\n";
+	    die;
+	    #	sleep(10);
+	}
     }
 }
 
@@ -1238,8 +1259,8 @@ else {
 
 
 unless (-e "$refdir/$suminfo_n"){
-    print "ERROR: $refdir/$suminfo_n not existing\n";
-
+    print "Error: $refdir/$suminfo_n not existing\n";
+    exit;
 #    chdir ($refdir);
 #    &mysystem ("wc -l *.info_pos > $suminfo_n");
 #    chdir ($rootdir);
@@ -1247,8 +1268,8 @@ unless (-e "$refdir/$suminfo_n"){
 
 
 unless (-e "$refdir/$suminfo_r"){
-    print "ERROR: $refdir/$suminfo_r not existing\n";
-    die;
+    print "Warning: $refdir/$suminfo_r not existing\n";
+#    die;
 #    chdir ($refdir);
 #    &mysystem ("ls sc_*.bgl > $suminfo_r");
 #    chdir ($rootdir);
@@ -1271,7 +1292,7 @@ if ($refiex_file) {
     while (my $line = <IN>){
 	chomp($line);
 	$refiex{$line} = 1;
-	print "$line\n";
+#	print "$line\n";
     }
     close IN;
 
@@ -1284,40 +1305,56 @@ if ($refiex_file) {
 
 
 my @reffiles;
-print "read $refdir/$suminfo_n....\n";
-die $!." <$refdir/$suminfo_n>" unless open IN, "< $refdir/$suminfo_n";
-while (my $line = <IN>){
-    my @cells = &split_line($line);
-    die "problem with $refdir/$suminfo_n" if (@cells < 2);
-    my $bgl_file = $cells[1];
-    $bgl_file =~ s/.info_pos$//;
 
-    if ($refiex_file) {
 
-	my $refind = $bgl_file;
-	if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
-	    $refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
+
+#if ($suminfo_s_v2 eq "") {
+    print "read $refdir/$suminfo_n....\n";
+    die $!." <$refdir/$suminfo_n>" unless open IN, "< $refdir/$suminfo_n";
+    while (my $line = <IN>){
+	my @cells = &split_line($line);
+	die "problem with $refdir/$suminfo_n" if (@cells < 2);
+	my $bgl_file = $cells[1];
+	$bgl_file =~ s/.info_pos$//;
+
+	if ($refiex_file) {
+
+	    my $refind = $bgl_file;
+	    if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
+		$refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
+	    }
+	    else {
+		$refind =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
+	    }
+
+	    if (exists $refiex{$refind}){
+		print "exclude: $bgl_file\n" ;
+		next;
+	    }
+
 	}
-	else {
-	    $refind =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
-	}
 
-	if (exists $refiex{$refind}){
-	    print "exclude: $bgl_file\n" ;
-	    next;
-	}
+	next if ($bgl_file eq "total");
 
+#	print "reffile: $bgl_file\n";
+	push @reffiles, $bgl_file;
+	$cc++;
     }
+    close IN;
+    die "reference directory <$refdir> empty (no sc.*bgl)" if (@reffiles == 0);
+#}
 
-    next if ($bgl_file eq "total");
 
-#    print "$bgl_file\n";
-    push @reffiles, $bgl_file;
-    $cc++;
-}
-close IN;
+
+
+
+
+
+
+
+
 #print "finished reading $refdir/$suminfo_n\n";
-die "reference directory <$refdir> empty (no sc.*bgl)" if (@reffiles == 0);
+
 
 
 
@@ -1371,6 +1408,7 @@ my @bimfli_files = grep {/.ch.fl.bim$/} @pi_files;
 my @bimpos_files = grep {/.ch.bim$/} @pi_files;
 my @bimref_files = grep {/.bim.ref/} @pi_files;
 my @bimhg19_files = grep {/.hg19.bim$/} @pi_files;
+my @fini_files = grep {/.fini$/} @pi_files;
 if (-e "$rootdir/puting_done") {
 #if (@bimfli_files == 0) {
     foreach (@bim_files) {
@@ -1412,7 +1450,11 @@ foreach (@bimhg19_files) {
     $bimhg19_array{$_} = 1;
 }
 
-
+### read flipped bim-files
+my %fini_array = ();
+foreach (@fini_files) {
+    $fini_array{$_} = 1;
+}
 
 ## name for log-files
 $iname = $bimfli_files[0];
@@ -1495,14 +1537,23 @@ $info_txt = "command:\t\"$command_line\"\tdir:\t$rootdir";
 
 my $readref_sw = 1;
 
+
 foreach my $chrloc(1..22) {
     my $reffi ="$refdir/$suminfo_s.$chrloc.gz";
+
+    if ($suminfo_s_v2_sw == 1) {
+	$reffi ="$refdir/$suminfo_s_v2.impute.plink.$popname_uc.frq2.gz";
+	$reffi =~ s/XXX/$chrloc/;
+    }
+    
     unless (-e $reffi) {
 	print "Warning: $reffi is not existing, it's ok if using older reference\n";
 	$readref_sw = 0;
 	last;
     }
 }
+
+
 
 if ($readref_sw == 1) {
     print "efficient reference alignment switched on\n";
@@ -1523,15 +1574,15 @@ else {
 my @buigue_arr = ();
 my $buigue_fini = 0;
 
-    unless (-e "$rootdir/buigue_done") {
+unless (-e "$rootdir/buigue_done") {
     unless (-e "$rootdir/posing_done") {
 	foreach (@bim_files) {
 	    my $bfile = $_;
 	    $bfile =~ s/.bim$//;
-	    my $accfli ="$bfile".".hg19.bim";
-#	    print "he: $accfli\n";
+	    my $fini ="$bfile".".bim.fini";
+	    print "he: $fini\n";
 #	    exit;
-	    unless (exists $bimhg19_array{$accfli}) {
+	    unless (exists $fini_array{$fini}) {
 		push @buigue_arr, "$buigue_script --lift19 $bfile.bim" ;#
 	    }
 	    else {
@@ -1557,7 +1608,7 @@ my $buigue_fini = 0;
 	    print "build_guess done\n";
 	}
     }
-    }
+}
 
 
 ###################################
@@ -1581,6 +1632,14 @@ if ($readref_sw == 1) {
 	    foreach my $chrloc(1..22) {
 		my $bimref ="$accfli".".ref.chr$chrloc";
 		my $reffi ="$refdir/$suminfo_s.$chrloc.gz";
+
+		if ($suminfo_s_v2_sw == 1) {
+		    $popname = uc $popname;
+		    $reffi ="$refdir/$suminfo_s_v2.impute.plink.$popname_uc.frq2.gz";
+		    $reffi =~ s/XXX/$chrloc/;
+		}
+#		print "reffi: $reffi\n";
+		
 		unless (exists $bimref_array{$bimref}) {
 		    push @readref_arr, "$readref_script --chr $chrloc --ref $reffi $accfli" ;#
 #		print "$readref_script --chr $chrloc --ref $reffi $bimfile\n" ;#
@@ -1661,7 +1720,7 @@ if ($readref_sw == 1) {
     }
 }
 
-
+#print "debug\n";
 #exit;
 
 
@@ -1802,7 +1861,7 @@ my $chefli_fini = 0;
 
 
 
-    
+#print "debug\n" ;  
 #exit;
 
 
@@ -1922,6 +1981,9 @@ my @refend_arr;
 
 my @refchr_arr; ## safes the chromosomes in same order
 my @gema_arr; ## safes the gema_files in same order
+
+
+
 my %gema_hash; ## contains the gema-files for each chromosome
 
 foreach my $rf (@reffiles) {
@@ -1935,7 +1997,7 @@ foreach my $rf (@reffiles) {
     }
 
     push @refind_arr, $refind;
-#    print "$refind\n";
+#    print "refind: $refind\n";
 
 
 #    my $chrind = $rf;
@@ -1948,6 +2010,7 @@ foreach my $rf (@reffiles) {
 
     my $chrind = $tcells[0];
     $chrind =~ s/chr//;
+#    print "chrind: $chrind\n";
 
     push @refchr_arr, $chrind;
     push @refstart_arr, $mega_start;
@@ -1965,19 +2028,74 @@ foreach my $rf (@reffiles) {
 }
 
 
+my @refind_arr_v2;
+my @refstart_arr_v2;
+my @refend_arr_v2;
+
+my @refchr_arr_v2; ## safes the chromosomes in same order
+my @gema_arr_v2; ## safes the gema_files in same order
+
+if ($suminfo_s_v2_sw == 1) {
+
+    	die $!." <$refdir/$suminfo_c>" unless open IN, "< $refdir/$suminfo_c";
+	while (my $line = <IN>){
+	    my @cells = &split_line($line);
+	    push  @refind_arr_v2, "chr$cells[0]"."_".$cells[1]."_".$cells[2];
+	    push  @refstart_arr_v2, $cells[1];
+	    push  @refend_arr_v2, $cells[2];
+	    push  @refchr_arr_v2, $cells[0];
+	    my $gema_file = "$refdir/genetic_map_chr$cells[0]"."_combined_b37.txt";
+	    push @gema_arr_v2, $gema_file;
+	    
+	    ### test existence once per chromosome
+	    unless (exists $gema_hash{$cells[0]}) {
+		$gema_hash{$cells[0]} = 1;
+		die "$gema_file not existent" unless (-e $gema_file);
+	    }
+	}
+	close IN;
+
+
+}
+
+
+#print "debug2\n";
+#exit;
+
 #############################################
 ### write out files for postimp
 #############################################
 
 unless (-e "$rootdir/reference_info") {
+
+    print "write reference_info\n";
+    
     die $! unless open REF, "> reference_info.tmp";
     print REF "$refdir\n";
-    foreach (@refind_arr) {
-	print REF "$_\n";
+
+
+    if ($suminfo_s_v2_sw ==1) {
+
+	die $!." <$refdir/$suminfo_c>" unless open IN, "< $refdir/$suminfo_c";
+	while (my $line = <IN>){
+	    my @cells = &split_line($line);
+	    print REF "chr$cells[0]"."_".$cells[1]."_".$cells[2]."\n";
+	}
+	close IN;
+
+
     }
+    else {
+	foreach (@refind_arr) {
+	    print REF "$_\n";
+	}
+    }
+
+    
     close REF;
     &mysystem ("mv reference_info.tmp $rootdir/reference_info");
 }
+
 
 
 
@@ -1990,7 +2108,11 @@ unless (-e "$rootdir/reference_info") {
 #	&mysystem ("mv datasets_info.tmp $rootdir/datasets_info");
  #   }
 
-
+#foreach my $ccc (0..$#refind_arr) {
+#    print "$ccc\n";
+#}
+#print "debug\n";
+#exit;
 
 
 ############################################################
@@ -2041,13 +2163,29 @@ if ($chucking_done == 0) {
 	foreach my $ccc (0..$#refind_arr) {
 
 	    my $refind = $refind_arr[$ccc];
+	    my $chrind = $refchr_arr[$ccc];
+#	    print "chuck $chrind\n";
 	    my $rf = $reffiles[$ccc];
 
+
+
+	    my $snps_extract = "$refdir/$rf.info_pos";
+
+	    if ($suminfo_s_v2_sw ==1) {
+#		print "version2\n";
+#		print "rf: $rf\n";
+#		print "snps_extract: $refdir/$rf\n";
+		    
+		$refind = $chrind;
+		$snps_extract = "$refdir/$rf";
+		
+
+	    }
 	    my $plink_ch_out = "$subdir/plink.$bprefix.$refind";
 	    my $plink_ch_out_fini = "plink.$bprefix.$refind.fini";
 	    my $empty_ch_out = "$subdir_empty/$bprefix.$refind";
-	    my $snps_extract = "$refdir/$rf.info_pos";
-
+	    
+	    
 	    my $mendel_sw = "";
 	    if ($trio_sw ==1) {
 		$mendel_sw = "--mendel";
@@ -2061,6 +2199,7 @@ if ($chucking_done == 0) {
 	    
 	}
     }
+
 
     
 
@@ -2087,7 +2226,8 @@ if ($chucking_done == 0) {
     }
 }
 # die "debug_chuck";
-
+#    print "debug\n";
+#    exit;
 
 
 ############################################################
@@ -2107,6 +2247,7 @@ my @preph_arr = ();
 my $preph_fini = 0;
 my @preph_arr_mu1 = ();
 my @preph_arr_mu2 = ();
+my @preph_arr_mu_v2 = ();
 
 if ($prephase_done == 0) {
     ### loop for datasets
@@ -2181,8 +2322,21 @@ if ($prephase_done == 0) {
 	foreach my $ccc (0..$#refind_arr) {
 
 	    my $refind = $refind_arr[$ccc];
+	    my $chrind = $refchr_arr[$ccc];
 	    my $rf = $reffiles[$ccc];
 	    my $gema_file = $gema_arr[$ccc];
+
+
+	    my $multi_txt = "";
+	    my $multi_sw = 0;
+	    
+	    if ($suminfo_s_v2_sw ==1) {
+		$refind = $chrind;
+		$multi_txt = "--multi $multithread_v2";
+		$multi_sw = 3;
+	    }
+#	    print "$gema_file\n";
+#	    exit;
 
 	    my $plink_ch_out = "$subdir_in/plink.$bprefix.$refind";
 	    my $empty_ch_out = "$bprefix.$refind.empty";
@@ -2200,8 +2354,7 @@ if ($prephase_done == 0) {
 	    if ($phas == 923 || $phas == 9123 || $phas == 91231) {
 		$xtxt = "--chrX";
 	    }
-	    my $multi_txt = "";
-	    my $multi_sw = 0;
+
 	    if (exists $finifiles_hash{$haps_ch_out_mu0} ) {
 		$multi_txt = "--multi $multithread1";
 		$multi_sw = 1;
@@ -2213,11 +2366,14 @@ if ($prephase_done == 0) {
 
 
 	    if (exists $indirempty_hash{$empty_ch_out} ) {
+		print "really existing: \n"
 #		print "$bprefix.$refind.empty\n";
 	    }
 	    else {
+		
 		unless (exists $finifiles_hash{$haps_ch_out_fini} ) {
 
+		    print "didnt find this one: $haps_ch_out_fini\n";
 #		if (exists $finifiles_hash{$haps_ch_out_fini} ) {
 #
 #		}
@@ -2226,13 +2382,23 @@ if ($prephase_done == 0) {
 		    if ($eagle_sw) { 
 			$backbone .= " --eagle";
 		    }
+
+		    if ($suminfo_s_v2_sw == 1) {
+			$backbone .= " --nospli";
+#			print "v2 found\n";
+#			print "$multi_sw\n";
+		    }
 		    if ($multi_sw == 0) {
 			push @preph_arr, $backbone;
 		    }
 		    if ($multi_sw == 1) {
 		    	push @preph_arr_mu1, $backbone." $multi_txt";
 		    }
-		    print "multi: $multi_sw\n";
+		    if ($multi_sw == 3) {
+#			print "gets into queue\n";
+		    	push @preph_arr_mu_v2, $backbone." $multi_txt";
+		    }
+#		    print "multi: $multi_sw\n";
 		    if ($multi_sw == 2) {
 			my $lastlog = `tail -1 $haps_ch_out.shape.log`;
 
@@ -2254,18 +2420,20 @@ if ($prephase_done == 0) {
 			    push @preph_arr_mu2, $backbone." $multi_txt";
 			}
 		    }
+
+		    
 #		    print "$backbone\n";
 #		    exit;
 		}
 		else {
+		    print "found this one: $haps_ch_out_fini\n";
 		    $preph_fini++;
 		}
 	    }
 	}
     }
 
-#    print "stop after preph\n";
-#    exit;
+
 
 
 ###################################
@@ -2301,7 +2469,27 @@ if ($prephase_done == 0) {
 
     }
 
+    if (@preph_arr_mu_v2 > 0) {
 
+	$sjadir = $impute_dir;
+	$sjaname = "preph_mu_v2";
+	$sjatime = 2;
+	$sjamulti = $multithread_v2;
+
+	if ($preph_fini > 0) {
+	    $sjaweek = 1;
+	}
+	$sjamem = 12000;
+	@sjaarray = @preph_arr_mu_v2;
+
+	&send_jobarray;
+
+    }
+
+#    print "full stop after preph_v2\n";
+#    exit;
+
+    
     if (@preph_arr_mu2 > 0) {
 
 	# no multithread on broad makes another resub pointless, so fail here
@@ -2514,6 +2702,16 @@ if ($pseudo_done == 0) {
 #############################################################
 
 
+if ($suminfo_s_v2_sw == 1) {
+
+    @refind_arr = @refind_arr_v2;
+    @refstart_arr = @refstart_arr_v2;
+    @refend_arr = @refend_arr_v2;
+    @refchr_arr = @refchr_arr_v2;
+    @gema_arr = @gema_arr_v2;
+    
+}
+
 my $imp2_done = 0;
 if (-e "$rootdir/imp2_done") {
     $imp2_done = 1;
@@ -2524,8 +2722,12 @@ my @imp2_arr = ();
 my $imp2_fini = 0;
 if ($imp2_done == 0) {
 
+
+
+
     ### loop for datasets
     foreach (@bimfli_files) {
+
 	my $bprefix = $_;
 	$bprefix =~ s/.bim$//;
 
@@ -2559,68 +2761,152 @@ if ($imp2_done == 0) {
 
 	my @dirfiles = ();
 	my @finifiles = ();
+	my @sumfiles = ();
 
 	print "read outdir....\n";
 	opendir(DIR, $subdir) || die "can't opendir .: $!";
 	@dirfiles = readdir(DIR);
 	@finifiles = grep {/\.fini$/} @dirfiles;
+	@sumfiles = grep {/\_summary$/} @dirfiles;
 	closedir DIR;
 
 	my %finifiles_hash = map { $_ => 1 } @finifiles;
+	my %sumfiles_hash = map { $_ => 1 } @sumfiles;
 
 	print "start imp2 refdirloop....\n";
 	#### loop for reference chunks
+
+
+
+
+	
 	foreach my $ccc (0..$#refind_arr) {
 
 
 	    my $refind = $refind_arr[$ccc];
+	    my $refchr = $refchr_arr[$ccc];
 	    my $refstart = $refstart_arr[$ccc];
 	    my $refend = $refend_arr[$ccc];
-	    my $rf = $reffiles[$ccc];
 	    my $gema_file = $gema_arr[$ccc];
-	    my $haps_ch_out = "$subdir_in/plink.$bprefix.$refind";
-	    my $empty_ch_out = "$bprefix.$refind.empty";
+
+	    my $rf = $reffiles[$ccc];
 	    my $refchunk = "$refdir/$rf";
+	    my $buffer = 1000;
+
+	    
+	    
+
+	    my $haps_ch_out = "$subdir_in/plink.$bprefix.$refind";
+	    if ($suminfo_s_v2_sw == 1) {
+		$haps_ch_out = "$subdir_in/plink.$bprefix.$refchr";
+		$refchunk = "$refdir/$suminfo_s_v2.impute";
+		$refchunk =~ s/XXX/$refchr/;
+		$buffer = 250;
+	    }
+
+	    
+
+	    my $empty_ch_out = "$bprefix.$refind.empty";
+
+
 
 	    if (exists $indirempty_hash{$empty_ch_out} ) {
 		print "$bprefix.$refind.empty\n";
 	    }
 	    else {
-#		print "N:$splitn\n";
-		foreach my $spn (1..$splitn) {
-		    
-		    my $haps_file_loc = "$haps_ch_out.haps.spli$spn";
-		    my $haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.sample";
 
-		    if ($trio_sw) {
-			$haps_file_loc = "$haps_ch_out.haps.spli$spn.trio.haps";
-			$haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.trio.sample";
-		    }
+		if ($suminfo_s_v2_sw == 1) {
 
-		    my $pi_ch_out = "$subdir/plink.$bprefix.$refind.haps.spli$spn";
-		    my $pi_ch_out_fini = "plink.$bprefix.$refind.haps.spli$spn.fini";
+		    my $haps_file_loc = "$haps_ch_out.haps.gz";
+		    my $haps_file_loc_sample = "$haps_ch_out.sample";
+
+#		    if ($trio_sw) {
+#			$haps_file_loc = "$haps_ch_out.haps.spli$spn.trio.haps";
+#			$haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.trio.sample";
+#		    }
+
+		    my $pi_ch_out = "$subdir/plink.$bprefix.$refind.imp2";
+		    my $pi_ch_out_fini = "plink.$bprefix.$refind.imp2.fini";
+		    my $pi_ch_out_summary = "plink.$bprefix.$refind.imp2_summary";
 
 		    my $xtxt = "";
-
+		    
 		    if ($phas == 923 || $phas == 9123 || $phas == 91231) {
 			$xtxt = "--chrX $haps_file_loc_sample";
 		    }
-		   		    
+
+		    
 		    unless (exists $finifiles_hash{$pi_ch_out_fini} ) {
-			my $sys_loc = "$imp2_script $xtxt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk  --gema $gema_file";
-#			print "$sys_loc\n";
-			push @imp2_arr, $sys_loc;
+
+#			print "no fini: $pi_ch_out_fini\n";
+			#			print "no syumary?: $pi_ch_out_summary\n";
+			my $empty = 0;
+			if (exists $sumfiles_hash{ $pi_ch_out_summary }) {
+			    my @errlog = `grep ERROR $subdir/$pi_ch_out_summary`;
+			    if ($errlog[0] =~ /^ERROR: There are no type 2 SNPs/) {
+				$empty = 1;
+				print "empty: $pi_ch_out_summary\n";
+			    }
+#			    print "$errlog[0]\n";
+#			    exit;
+			}
+
+			if ($empty) {
+			    &mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
+			}
+			else {
+			    my $sys_loc = "$imp2_script $xtxt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk --buff $buffer --gema $gema_file";
+			    #			print "$sys_loc\n";
+			    push @imp2_arr, $sys_loc;
+			}
 #			exit;
 		    }
 		    else {
 			$imp2_fini++;
 			$n_imp2_done++;
 		    }
+
+		    
+		}
+		else {
+		    #		print "N:$splitn\n";
+		    foreach my $spn (1..$splitn) {
+			
+			my $haps_file_loc = "$haps_ch_out.haps.spli$spn";
+			my $haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.sample";
+			
+			if ($trio_sw) {
+			    $haps_file_loc = "$haps_ch_out.haps.spli$spn.trio.haps";
+			    $haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.trio.sample";
+			}
+			
+			my $pi_ch_out = "$subdir/plink.$bprefix.$refind.haps.spli$spn";
+			my $pi_ch_out_fini = "plink.$bprefix.$refind.haps.spli$spn.fini";
+			
+			my $xtxt = "";
+			
+			if ($phas == 923 || $phas == 9123 || $phas == 91231) {
+			    $xtxt = "--chrX $haps_file_loc_sample";
+			}
+			
+			unless (exists $finifiles_hash{$pi_ch_out_fini} ) {
+			    my $sys_loc = "$imp2_script $xtxt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk  --gema $gema_file";
+#			    print "$sys_loc\n";
+			    push @imp2_arr, $sys_loc;
+			    #			exit;
+			}
+			else {
+			    $imp2_fini++;
+			    $n_imp2_done++;
+			}
+		    }
 		}
 	    }
 	}
     }
 
+#    print "debug2\n";
+#    exit;
     
 
 
@@ -2633,11 +2919,11 @@ if ($imp2_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "imp2";
 	$sjatime = 2;
-	$sjamem = 8000;
-	if ($imp2_fini > 0) {
-	    $sjamem = 16000;
+	$sjamem = 16000;
+#	if ($imp2_fini > 0) {
+#	    $sjamem = 16000;
 #	    $sjatime = 4;
-	}
+#	}
 	@sjaarray = @imp2_arr;
 	
 #	print "$sjaarray[0]\n";
@@ -2653,8 +2939,7 @@ if ($imp2_done == 0) {
 
 }
 
-
-
+#print "debug3\n";
 #exit;
 
 ############################################################
@@ -2766,6 +3051,13 @@ if ($dos_done == 0) {
 		foreach my $spn (1..$splitn) {
 		    my $pi_ch_out = "$subdir_in/plink.$bprefix.$refind.haps.spli$spn.gz";
 		    $puter_out_arr .= " $pi_ch_out";
+		}
+
+
+		if ($suminfo_s_v2_sw == 1) {
+		    $plink_ch_out = "subbfile_$bprefix/plink.$bprefix.$refchr";
+		    $famname_loc = "$plink_ch_out.fam";
+		    $puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp2.gz";
 		}
 
 		   		    

@@ -16,6 +16,13 @@ srand(0);
 #print "********************************\n";
 #sleep(1);
 
+
+
+## fasta file (used from HRC)
+## ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v37.fasta.gz
+
+
+
 #############################
 # read config file
 #############################
@@ -69,14 +76,16 @@ my $vcf_templ ="";
 my $mach_templ ="";
 my $imp2_templ ="";
 my $hm3_templ ="";
+my $gm_template = "genetic_map_chrXXX_combined_b37.txt";
 
 my $vcf_site = "";
+my $gm_site = "http://mathgen.stats.ox.ac.uk/impute/ALL_1000G_phase1integrated_feb2012_impute/";
 
 my $walltime = 4;
 
 my $scsize = 5;
 
-my $mac_th = 0;
+my $mac_th = 4;
 
 my $sample_root = "";
 
@@ -96,10 +105,12 @@ my $mhc_head =5;
 my $q16_head =1;
 
 my $job_bn_th = 1000;
+my $chunksnps = 50000; ## min number of SNPs in each chunk
 
 use Getopt::Long;
 GetOptions( 
     "out_templ=s"=> \$out_templ,
+    "chunksnps=i"=> \$chunksnps,
     "sample_root=s"=> \$sample_root,
     "outname=s"=> \my $outname,
     "bn_job=i"=> \$job_bn_th,
@@ -135,14 +146,18 @@ unless ($outname) {
 my @test_scripts;
 
 
-my $mach2impute_script = "mach2impute";               ### my.pipeline_tar
+my $mach2impute_script = "mach2impute";               ### not needed for now
 my $preprefgene_script = "prepare_refGene";           ### my.pipeline_tar
-my $wget_script = "my.wget";                           ### my.pipeline_tar
+my $vcf2plink_script = "vcf2plink";                 ### my.pipeline_tar
+my $refformat_script = "refformat_legend_bim";        ### my.pipeline_tar
+my $plinkanc_script = "plink_anc";                    ### my.pipeline_tar
+my $wget_script = "my.wget";                          ### my.pipeline_tar
+my $prepvcf_script = "my.prepvcf";                    ### my.pipeline_tar
 my $vcf_script = "$vloc/vcftools";                    ### 
 my $annot_hg19pos_script = "annot_hg19pos";           ### 
-my $impute2beagle_script = "impute2beagle2";          ### my.pipeline_tar
+my $impute2beagle_script = "impute2beagle2";          ### not needed for now
 my $prepare_hm_ref_2_script = "prepare_hm_ref_2";     ### my.pipeline_tar
-my $beagle2plink_script = "beagle2plink";             ### my.pipeline_tar
+my $beagle2plink_script = "beagle2plink";             ### not needed for now
 my $plink_script = "$ploc/plink";                     ### 
 my $ref2subchr2_script = "ref2subchr2";               ### my.pipeline_tar
 my $beagle2impute_script = "beagle2impute";           ### my.pipeline_tar
@@ -152,15 +167,18 @@ my $refinfo_script = "refinfo";                       ### my.pipeline_tar
 my $mutt_script = "mutt";                             ### my.pipeline_tar
 my $blue_script = "blueprint";                        ### my.pipeline_tar
 
-push @test_scripts, $mach2impute_script ;
+#push @test_scripts, $mach2impute_script ;
 #push @test_scripts, $vcf_script ;
 #push @test_scripts, $annot_hg19pos_script ;
-push @test_scripts, $impute2beagle_script ;
+#push @test_scripts, $impute2beagle_script ;
 push @test_scripts, $prepare_hm_ref_2_script ;
-push @test_scripts, $beagle2plink_script ;
+push @test_scripts, $refformat_script ;
+push @test_scripts, $vcf2plink_script ;
+push @test_scripts, $plinkanc_script ;
+#push @test_scripts, $beagle2plink_script ;
 #push @test_scripts, $plink_script ;
 push @test_scripts, $ref2subchr2_script ;
-push @test_scripts, $beagle2impute_script ;
+#push @test_scripts, $beagle2impute_script ;
 push @test_scripts, $floc2sumfrq_script ;
 push @test_scripts, $floc2sumfrq_script2 ;
 push @test_scripts, $refinfo_script ;
@@ -273,7 +291,7 @@ version: $version
 
         --noprio          no priority queue (for testing sets)
 
-        --mac_th INT     max minor-allele-count to include
+        --mac_th INT     include only variants with more than this minor-allele-count (default: $mac_th)
 
         --subname STRING  subchr_postfix
 
@@ -289,7 +307,9 @@ version: $version
 
         --bn_job INT        submit INT jobs at a time
         --force1            do not exit if same fail, but do this only once
-  
+     
+        --chunksnps INT    minimum number of SNPs in each chunk (default: $chunksnps) 
+
 
  --out_templ is mandatory
  --outname is mandatory
@@ -515,9 +535,10 @@ sub send_jobarray {
     &a2filenew ($jobfile, @sjaarray);
 
 
-    print "sleep, see $sjaname.job_list\n";
-    sleep (5);
-#    $walltime = $sjatime;
+#    print "sleep, see $sjaname.job_list\n";
+#    sleep (5);
+
+    $walltime = $sjatime;
     my $nsja = @sjaarray;
 
     my $nsja_loc = $nsja;
@@ -660,14 +681,18 @@ $sjainfotxt = "$rootdir\t$command_line";
 ######################################################
 ######################################################
 
-my @job_tools = ();
+my @job_vtools = ();
+my @job_btools1 = ();
+my @job_btools2 = ();
 my @job_count = ();
 my @job_soll = ();
 my @job_cpgz = ();
 my @job_vcf_dl = ();
+my @job_gm_dl = ();
 my @job_phased = ();
 my @job_bgl = ();
 my @job_plink = ();
+my @job_refformat = ();
 my @job_frq = ();
 my @job_pobed = ();
 my @job_sumfrq = ();
@@ -694,7 +719,8 @@ my @created = mkpath(
 ##################################################################################
 
 
-my @refgene_files = `ls $subchr_dir/refGene*`;
+#my @refgene_files = `ls $subchr_dir/refGene*`;
+my @refgene_files = `ls refGene*`;
 if (@refgene_files == 0) {
     
     print "********************************\n";
@@ -704,13 +730,14 @@ if (@refgene_files == 0) {
     print "********************************\n";
     print "\its better to create an updated one yourself:\n";
     print "********************************\n";
-    print "cd $subchr_dir\n";
+#    print "cd $subchr_dir\n";
+
     print "wget http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz\n";
     print "zcat refGene.txt.gz > refGene_1114.txt\n";
     print "$preprefgene_script refGene_1114.txt\n";
     print "mv refGene.txt.gz sich.refGene.txt.gz\n";
     print "rm refGene_1114.txt\n";
-    print "cd $rootdir\n";
+#    print "cd $rootdir\n";
     print "********************************\n";
 
 
@@ -730,7 +757,7 @@ if (@refgene_files == 0) {
 	
 
 	print "downloading most recent file...\n";
-	chdir $subchr_dir;
+#	chdir $subchr_dir;
 	my $sys = "wget http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz > /dev/null";
 	&mysystem ($sys);
 	
@@ -757,7 +784,7 @@ if (@refgene_files == 0) {
 
 	
 	print "success with refGene file...\n";
-	print "press any key to continue\n";
+	print "press any key and <return> to continue\n";
 
 
 
@@ -769,6 +796,109 @@ if (@refgene_files == 0) {
 
 
 
+	
+    }
+    else {
+	print "go ahead and then restart the pipeline\n";
+	exit;
+    }
+	    
+
+}
+
+
+
+
+##############################################################################
+## check if gwas catalog is present
+##################################################################################
+
+
+#my @refgene_files = `ls $subchr_dir/refGene*`;
+my @cat_files = `ls gwascatalog.rp.txt`;
+if (@cat_files == 0) {
+    
+    print "********************************\n";
+    print "no gwascatalog.txt file found\n";
+    print "********************************\n";
+    print "pleas create one yourself\n";
+    print "********************************\n";
+#    print "cd $subchr_dir\n";
+
+    print "wget http://www.ebi.ac.uk/gwas/api/search/downloads/full\n";
+    print 'tr " " "_" < full > gwascatalog.txt.ow'."\n";
+    print 'cat gwascatalog.txt.ow | cut -f2,8,12,13,21,22,28 > gwascatalog.txt.ow.short'."\n";
+    print 'awk \'$7<5.0e-08{if (length($2)> 25 ) {$2 = substr($2,1,15)"..."}; print $6,$3,$4,$4,$7,$2"("$1")"}\' gwascatalog.txt.ow.short | awk \'NF > 5\' > gwascatalog.txt.ow.short.ow'."\n";
+    print 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short.ow > gwascatalog.rp.txt'."\n";
+#    print ''."\n";
+ #   print ''."\n";
+    print "********************************\n";
+
+
+    print "You can do that yourself or let this pipeline do it.\n";
+    print "Do you want to have that done right now (y/n)?\n";
+
+
+
+    my $answer = lc <>;
+    chomp $answer;
+    if ($answer eq "y" || $answer eq "Y"){
+
+	my $now = localtime time;
+	
+	my @cells = split /\s+/, $now;
+	my $date = "$cells[1]"."_"."$cells[4]";
+
+	my $sys = "rm -f full";
+	&mysystem ($sys);
+
+	print "downloading most recent file...\n";
+#	chdir $subchr_dir;
+	my $sys = "wget http://www.ebi.ac.uk/gwas/api/search/downloads/full > /dev/null";
+	&mysystem ($sys);
+	
+#	print "replace space...\n";
+#	$sys = 'tr " " "_" < full > gwascatalog.txt.ow';	
+#	&mysystem ($sys);
+
+
+	
+	print "reformat...\n";
+	die $!."(full)" unless open IN, "< full";
+	die $!."(gwascatalog.txt.ow.short)" unless open OUT, "> gwascatalog.txt.ow.short";
+	while (my $line = <IN>) {
+	    $line =~ s/ /_/g;
+	    my @cells = split /\t/, $line;
+	    if ($cells[27] < 5.0e-08) {
+		if ($cells[21] ne "" && $cells[21] ne "" && $cells[11] ne "" && $cells[27] ne "") {
+		    if (length ($cells[7]) > 25) {
+			$cells[7] = substr($cells[7],0,15);
+			$cells[7] .= "...";
+		    }
+		    print OUT $cells[21];
+		    print OUT "\t".$cells[11];
+		    print OUT "\t".$cells[12];
+		    print OUT "\t".$cells[12];
+		    print OUT "\t".$cells[27];
+		    print OUT "\t".$cells[7];
+		    print OUT "(".$cells[1].")";
+		    print OUT "\n";
+		}
+	    }
+	}
+
+	print "sort...\n";
+	$sys = 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short > gwascatalog.rp.txt';	
+	&mysystem ($sys);
+	
+	
+#	print "debug gwascatalog.rp.txt\n";	
+#	exit;
+
+
+	print "********************************\n";
+	print "********************************\n";
+	
 	
     }
     else {
@@ -845,7 +975,19 @@ unless (-e "$sample_root") {
     print "Error: --sample_root ($sample_root) not found\n";
     exit;
 }
-    
+
+
+
+################################################
+## out_templ
+################################################
+
+unless (-e "reference_templ") {
+    print "create file reference_templ\n";
+    die $! unless open RT, "> reference_templ";
+    print RT "$out_templ\n";
+    close RT;
+}    
 #print "debug\n";
 #exit;
 
@@ -956,331 +1098,368 @@ unless (-e $sample_fini) {
 #exit;
 
 my $answer = "";
+my $answer_gm = "";
 my $exit = 0;
+my @plink_collection;
+my @chunks_collection;
+my $gm_name;
 unless (-e "$rootdir/rootdir_done"){
     foreach my $chr ($chr_start..$chr_end){
-	
+
+#
         ###################################
         # copy here
         ####################################
 	
-	if ($mach_templ ne "") {
-
-	    my $mach_name = $mach_templ.".hap";
-	    $mach_name =~ s/XXX/$chr/g;
-
-
-#	    print "phased: $out_templ$imp_phased_postfix\n";
-	    
-	    unless (-e $mach_name) {
-#		print "mach_name: $mach_name\n";
-		die unless ("$mach_name.gz");
-		push @job_cpgz, "zcat $mach_name.gz > $mach_name.tmp; mv $mach_name.tmp $mach_name";
-	    }
-
-	    
-	    ###################################
-	    # create impute-format with mach2impute
-	    ####################################
-	    
-	    $hapout_name = "$mach_name.hap";
-	    my $map_name = $mach_templ.".map";
-	    $map_name =~ s/XXX/$chr/g;
-	    my $anno_name = "chrXXX.annotation.txt";
-	    $anno_name =~ s/XXX/$chr/g;
-
-
-	    
-	    unless (-e $hapout_name) {
-#		print "hapout: $hapout_name\n";
-		push @job_tools, "$mach2impute_script --hap $mach_name --anno $anno_name --map $map_name"
-	    }
-
-	}
-	elsif ($vcf_templ ne "") {
+	$hapout_name = $out_templ.".impute";
+	$hapout_name =~ s/XXX/$chr/g;
+	my $vcf_name_loc_filtnorm ;
+	
+	if ($vcf_templ ne "") {
 
 
 	    my $vcf_name = $vcf_templ;
 	    $vcf_name =~ s/XXX/$chr/g;
-	    my $vcf_target =~ s/XXX/$chr/g;
+	    my $vcf_name_loc = "loc.".$vcf_name;
+
 
 	    my $vcf_name_remote = $vcf_templ;
-	    unless (-e $vcf_name) {
-
-		    print "********************************\n";
-		    print "vcf-file ($vcf_name) not found, should I try to download(y/n)?\n";
-		    
-		    my $sys = "wget $vcf_site/$vcf_name; mv ";
-
-		    if ($answer eq "") {
-			$answer = lc <>;
-			chomp $answer;
-		    }
-
-
-		    if ($answer eq "y" || $answer eq "Y"){
-			
-			print "will put this into parallel jobs:\n$sys\n";
-			push @job_vcf_dl, $sys;
-
-			
-		    }
-		    else {
-			$exit = 1;
-			print "I would suggest this:\n";
-			print "$sys\n";
-#			print "exit now\n";
-#			exit;
-		    }
-	    }
-	    else {
 	    
-		$vcf_name_remote = $vcf_templ;
-		$vcf_name_remote =~ s/XXX/$chr/g;
-		$vcf_name =~ s/XXX/$chr/g;
+	    $vcf_name_loc_filtnorm = $vcf_name_loc.".filtnorm.gz";
+	    my $vcf_name_loc_filtnorm_fini = $vcf_name_loc_filtnorm.".fini";
+	    
+
+	    
+	    ###################################
+	    # download vcf files
+	    ####################################
+
+	    
+	    unless (-e $vcf_name_loc) {
+
+		unless ($answer eq "y" || $answer eq "Y"){
+		    print "********************************\n";
+		    print "vcf-file ($vcf_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
+		}
 		
-		my $vcf_name_remote_short = $vcf_name_remote;
-		$vcf_name_remote_short =~ s!.*\/!!g;
-		
-		unless (-e $vcf_name) {
-		    #		print "vcf_name: $vcf_name\n";
-		    #		print "vcf_name_remote: $vcf_name_remote\n";
+		my $sys = "my.wget $vcf_site $vcf_name ";
+
+		if ($answer eq "") {
+		    $answer = lc <>;
+		    chomp $answer;
+		}
+
+
+		if ($answer eq "y" || $answer eq "Y"){
 		    
-		    my $vcf_name_tmp = "$vcf_name.tmp";
+		    print "will put this into parallel jobs:\t$sys\n";
+		    push @job_vcf_dl, $sys;
+
 		    
-		    if ($vcf_name_remote =~ /.gz$/){
+		}
+		else {
+		    $exit = 1;
+		    print "I would suggest this:\n";
+		    print "$sys\n";
+		    #			print "exit now\n";
+		    #			exit;
+		}
+	    }
+
+
+
+
+	    ###################################
+	    # download genetic map files.
+	    ####################################
+
+	    $gm_name = $gm_template;
+	    $gm_name =~ s/XXX/$chr/g;
+	    my $gm_name_loc = "loc.".$gm_name;
+	    my $gm_name_fini = $gm_name.".fini";
+
+#	    print "$gm_name_loc now2\n";	    
+	    unless (-e $gm_name_fini) {
+
+		if (-e $gm_name_loc) {
+		    &mysystem ("mv $gm_name_loc $gm_name");
+		    &mysystem ("touch $gm_name_fini");
+
+		}
+		else {
+
+		    print "$gm_name_loc not exsiting\n";
+		    #		    if (-e $vcf_name_loc) {
+
+		    unless ($answer_gm eq "y" || $answer_gm eq "Y"){
+			print "********************************\n";
+			print "gm-file ($gm_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
+		    }
+			my $sys = "my.wget $gm_site $gm_name ";
 			
-			if ($vcf_name_remote =~ /^ftp/){
-			    my $wget_txt = "";
-			    unless (-e $vcf_name_remote_short) {
-				$wget_txt .= "wget $vcf_name_remote; ";
-			    }
-			    push @job_cpgz, "$wget_txt gunzip -c $vcf_name_remote_short > $vcf_name_tmp ; mv $vcf_name_tmp $vcf_name;";
+			if ($answer_gm eq "") {
+			    $answer_gm = lc <>;
+			    chomp $answer_gm;
+			}
+			
+			
+			if ($answer_gm eq "y" || $answer_gm eq "Y"){
+			    
+			    print "will put this into parallel jobs:\t$sys\n";
+			    push @job_vcf_dl, $sys;
+			    
+			    
 			}
 			else {
-			    push @job_cpgz, "cp $vcf_name_remote ./$vcf_name.tmp.gz; gunzip $vcf_name.tmp.gz ; mv $vcf_name.tmp $vcf_name;";
+			    $exit = 1;
+			    print "I would suggest this:\n";
+			    print "$sys\n";
+			    #			print "exit now\n";
+			    #			exit;
 			}
-			
-			#		    print "nicht wirlich?\n";
-		    }
-		    else {
-			push @job_cpgz, "cp $vcf_name_remote ./$vcf_name.tmp; mv $vcf_name.tmp $vcf_name";
-		    }
-		    
-		    #		print "sleep\n";
-		    #		sleep(5);
+#		    }
 		}
 	    }
 
 
 
 	    ###################################
-	    # count original SNPs
+	    # filter and convert vcf with bcftools
 	    ####################################
-	    
-	    my $soll_name = $vcf_name.".soll";
-	    
-	    unless (-e $soll_name) {
-		push @job_soll, "gunzip -c $vcf_name_remote | wc -l  > $soll_name";
+
+	    unless (-e $vcf_name_loc_filtnorm_fini) {
+		push @job_btools1, "$prepvcf_script --filtnorm --vcf $vcf_name_loc --mac_th $mac_th";
 	    }
 
 
-	    ###################################
-	    # count unzipped
-	    ####################################
 	    
-	    my $count_name = $vcf_name.".count";
+
 	    
-	    unless (-e $count_name) {
-		push @job_count, "wc -l $vcf_name  > $count_name";
-	    }
-
-
 
 	    
 	    ###################################
-	    # create impute-format with vcftools
+	    # create impute-format with bcftools
 	    ####################################
 	    
-	    $hapout_name = $out_templ.".impute.hap";
-	    my $hap_name = $out_templ;
-	    $hapout_name =~ s/XXX/$chr/g;
-	    $hap_name =~ s/XXX/$chr/g;
+
+	    my $hapout_name_fini = $hapout_name.".fini";
 	    
-	    unless (-e $hapout_name) {
-#		print "hapout: $hapout_name\n";
-		push @job_tools, "$vcf_script --vcf $vcf_name --IMPUTE --out $hap_name";
+	    unless (-e $hapout_name_fini) {
+		#		print "hapout: $hapout_name\n";
+		push @job_btools2, "$prepvcf_script --vcf $vcf_name_loc_filtnorm --out $hapout_name";
+#		push @job_vtools, "$vcf_script --mac $mac_th --gzvcf $vcf_name_loc --IMPUTE --out $hap_name";
 	    }
-	    else {
-		### control log-file
-		die $!."($hap_name.log)" unless open LOG, "< $hap_name.log";
-		my $line;
-		my $last;
-		while ($line = <LOG>){
-		    $last = $line;
+
+	    
+#	    else {#
+#		### control log-file
+#		die $!."($hap_name.log)" unless open LOG, "< $hap_name.log";
+#		my $line;
+#		my $last;
+#		while ($line = <LOG>){
+#		    $last = $line;
+#		    chomp($last);
+#		}
+#		unless ($last =~ /^Run Time/){
+#		    print "********************************\n";
+#		    print "Error: check log (did not finish): $hap_name.log\nplease remove $hapout_name\n";
+#		    exit;
+#		}
+#		close LOG;
+#	    }
+
+
+	    
+
+	}
+
+	else {
+	    print "right now only starting from vcffiles\n";
+	    exit;
+	}
+
+	if (0) {
+	    if ($mach_templ ne "") {
+
+		my $mach_name = $mach_templ.".hap";
+		$mach_name =~ s/XXX/$chr/g;
+
+
+		#	    print "phased: $out_templ$imp_phased_postfix\n";
+		
+		unless (-e $mach_name) {
+		    #		print "mach_name: $mach_name\n";
+		    die unless ("$mach_name.gz");
+		    push @job_cpgz, "zcat $mach_name.gz > $mach_name.tmp; mv $mach_name.tmp $mach_name";
 		}
-		die "check log: $hap_name.log <$last>" unless ($last =~ /^Run Time/);
-		close LOG;
-	    }
 
-
-	    if (0) {
+		
 		###################################
-		# annotate legend
+		# create impute-format with mach2impute
 		####################################
 		
-		my $legend_name = $hap_name.".impute.legend";
-		my $legend_name_pos = $legend_name.".pos";
-		my $legend_name_update = $legend_name.".pos.update";
-		unless (-e $legend_name_pos) {
-		    print "create $legend_name_pos\n";
-		    die $!."($legend_name)" unless open LE, "< $legend_name";
-		    die $!."($legend_name_pos)" unless open POS, "> $legend_name_pos";
-		    while (my $line = <LE>){
-			my @cells = split /\s+/, $line;
-			print POS "$chr:$cells[1]";
-			print POS "\t$cells[1]";
-			print POS "\t$cells[2]";
-			print POS "\t$cells[3]";
-			print POS "\n";
-		    }
-		    close LE;
-		    close POS;
-		}
+		$hapout_name = "$mach_name.hap";
+		my $map_name = $mach_templ.".map";
+		$map_name =~ s/XXX/$chr/g;
+		my $anno_name = "chrXXX.annotation.txt";
+		$anno_name =~ s/XXX/$chr/g;
+
+
 		
-		unless (-e $legend_name_update) {
-		    push @job_annot, "$annot_hg19pos_script $legend_name_pos";
+		unless (-e $hapout_name) {
+		    #		print "hapout: $hapout_name\n";
+		    push @job_vtools, "$mach2impute_script --hap $mach_name --anno $anno_name --map $map_name"
+		}
+
+	    }
+
+
+
+	    if ($imp2_templ ne "") {
+
+		my $imp2_name = $imp2_templ.".hap";
+		$imp2_name =~ s/XXX/$chr/g;
+
+		$hapout_name = "$imp2_name";
+
+		unless (-e $imp2_name) {
+		    die unless ("$imp2_name.gz");
+		    push @job_cpgz, "zcat $imp2_name.gz > $imp2_name.tmp; mv $imp2_name.tmp $imp2_name";
+		}
+
+		my $imp2_lname = $imp2_templ.".legend";
+		$imp2_lname =~ s/XXX/$chr/g;
+
+
+		unless (-e $imp2_lname) {
+		    die unless ("$imp2_lname.gz");
+		    push @job_cpgz, "zcat $imp2_lname.gz > $imp2_lname.tmp; mv $imp2_lname.tmp $imp2_lname";
+		}
+
+
+
+
+	    }
+	}
+	
+
+	if (0) {
+	    ###################################
+	    # create beagle - format (not done any more)
+	    ####################################
+	    
+
+	    my $phased_name = $out_templ.$imp_phased_postfix;
+	    $phased_name =~ s/XXX/$chr/g;
+	    my $phased_name_count = $phased_name.".count";
+
+	    #	print "$phased_name\n";
+	    #	print "$hapout_name\n";
+
+	    unless (-e $phased_name) {
+		#	    print "phased_name: $phased_name\n";
+		push @job_phased, "$impute2beagle_script --out $phased_name --chr $chr $hapout_name";
+		#	    print "$impute2beagle_script --out $phased_name --chr $chr $hapout_name\n";
+		#	    push @job_phased, "impute2beagle --exclude $multi_name $hapout_name\n";
+	    }
+	    else {
+		unless (-e $phased_name_count) {
+		    my $sys = "wc -l $phased_name > $phased_name_count";
+		    print "$sys\n";
+		    &mysystem ($sys);
 		}
 	    }
 
-
-	}
-	elsif ($imp2_templ ne "") {
-
-	    my $imp2_name = $imp2_templ.".hap";
-	    $imp2_name =~ s/XXX/$chr/g;
-
-	    $hapout_name = "$imp2_name";
-
-	    unless (-e $imp2_name) {
-		die unless ("$imp2_name.gz");
-		push @job_cpgz, "zcat $imp2_name.gz > $imp2_name.tmp; mv $imp2_name.tmp $imp2_name";
+	    
+	    
+	    my $infopos_name = $out_templ.$imp_phased_postfix.".bgl.info_pos";
+	    $infopos_name =~ s/XXX/$chr/g;
+	    my $bgl_name_count = $out_templ.$imp_phased_postfix.".bgl.count";
+	    $bgl_name_count =~ s/XXX/$chr/g;
+	    unless (-e $infopos_name) {
+		#	    print "infopos: $infopos_name\n";
+		#	    push @job_bgl, "$prepare_hm_ref_2_script --mac_th $mac_th --not --noaffy $phased_name";
+		push @job_bgl, "$prepare_hm_ref_2_script --not --noaffy $phased_name";
 	    }
-
-	    my $imp2_lname = $imp2_templ.".legend";
-	    $imp2_lname =~ s/XXX/$chr/g;
-
-
-	    unless (-e $imp2_lname) {
-		die unless ("$imp2_lname.gz");
-		push @job_cpgz, "zcat $imp2_lname.gz > $imp2_lname.tmp; mv $imp2_lname.tmp $imp2_lname";
-	    }
-#	    push @job_tools, "mach2impute --hap $mach_name --anno $anno_name --map $map_name\n"
-
-
-
-	}
-	else {
-	    print "either beagle, mach or impute2";
-	    die;
-	}
-
-
-
-#MERGED_DEL_2_105215
-
-        ###################################
-        # create beagle - format
-        ####################################
-	
-
-	my $phased_name = $out_templ.$imp_phased_postfix;
-	$phased_name =~ s/XXX/$chr/g;
-	my $phased_name_count = $phased_name.".count";
-
-#	print "$phased_name\n";
-#	print "$hapout_name\n";
-
-	unless (-e $phased_name) {
-#	    print "phased_name: $phased_name\n";
-	    push @job_phased, "$impute2beagle_script --out $phased_name --chr $chr $hapout_name";
-#	    print "$impute2beagle_script --out $phased_name --chr $chr $hapout_name\n";
-#	    push @job_phased, "impute2beagle --exclude $multi_name $hapout_name\n";
-	}
-	else {
-	    unless (-e $phased_name_count) {
-		my $sys = "wc -l $phased_name > $phased_name_count";
-		print "$sys\n";
-		&mysystem ($sys);
-	    }
-	}
-
-	
-	
-	my $infopos_name = $out_templ.$imp_phased_postfix.".bgl.info_pos";
-	$infopos_name =~ s/XXX/$chr/g;
-	my $bgl_name_count = $out_templ.$imp_phased_postfix.".bgl.count";
-	$bgl_name_count =~ s/XXX/$chr/g;
-	unless (-e $infopos_name) {
-#	    print "infopos: $infopos_name\n";
-	    push @job_bgl, "$prepare_hm_ref_2_script --mac_th $mac_th --not --noaffy $phased_name"
-	}
-	else {
-	    unless (-e $phased_name_count) {
-		my $sys = "wc -l $phased_name.annot.markers $phased_name.mono $phased_name.multi > $bgl_name_count";
-		print "$sys\n";
-		&mysystem ($sys);
+	    else {
+		unless (-e $phased_name_count) {
+		    my $sys = "wc -l $phased_name.annot.markers $phased_name.mono $phased_name.multi > $bgl_name_count";
+		    print "$sys\n";
+		    &mysystem ($sys);
+		}
 	    }
 	}
 
 
-	my $plink_name = $out_templ.$imp_phased_postfix.".bgl.bim";
-	$plink_name =~ s/XXX/$chr/g;
-	my $bgl_name = $out_templ."$imp_phased_postfix.bgl";
-	$bgl_name =~ s/XXX/$chr/g;
+	my $plink_name = $hapout_name.".plink";
+	push @plink_collection, $plink_name;
+	my $plink_name_fini = $plink_name.".fini";
 
-	unless (-e $plink_name) {
+
+#	my $bgl_name = $out_templ."$imp_phased_postfix.bgl";
+#	$bgl_name =~ s/XXX/$chr/g;
+
+	unless (-e $plink_name_fini) {
 #	    print "plink: $plink_name\n";
-	    push @job_plink, "$beagle2plink_script --fam $sample_fam $bgl_name"
+	    push @job_plink, "$vcf2plink_script --vcf $vcf_name_loc_filtnorm --out $plink_name";
 	}
+
+
+	my $refformat_fini = $hapout_name.".rf.fini";
+	push @chunks_collection, "$hapout_name.legend.gz.chunks";
+	unless (-e $refformat_fini) {
+#	    print "plink: $plink_name\n";
+	    push @job_refformat, "$refformat_script --nsnps $chunksnps --root $hapout_name --sample $sample_root --gm $gm_name";
+	}
+
+
+
 
 	if (1) {
 	    foreach my $pf_loc (@pop_fams) {
-		my $freq_root = "$out_templ.$pf_loc";
-		$freq_root =~ s/XXX/$chr/g;
-
+		
+		my $freq_root = "$plink_name.freq.$pf_loc";
 		my $keep_file = "$sample_fam.$pf_loc";
 
-		unless (-e "$freq_root.frq"){
+		my $bfile_pf = "$plink_name.$pf_loc";
 
-		    if (0) {
-			unless (-e "$keep_file.sex") {
-			    print "create $keep_file.sex\n";
-			    die $!."($keep_file)" unless open KI, "< $keep_file";
-			    die $!."($keep_file.sex)" unless open KO, "> $keep_file.sex";
-			    while (my $line = <KI>){
-				my @cells = split /\s+/, $line;
-				print KO "$cells[0]";
-			    print KO "\t$cells[1]";
-				print KO "\t$cells[9]";
-				print KO "\n";
-			    }
-			    close KI;
-			    close KO;
-			}
+		unless (-e "$bfile_pf.fini"){
+#		    push @job_pobed, "$plink_script --bfile $plink_name --out $bfile_pf --keep $keep_file --make-bed --freq";
+		    push @job_pobed, "$plinkanc_script --bfile $plink_name --out $bfile_pf --keep $keep_file";
+		}
+		
+
+
+#		unless (-e "$freq_root.frq"){
+
+#		    my $sys_f = "$plink_script --bfile $bfile_pf --out $freq_root --freq";
+#		    push @job_frq, "$sys_f";
+		    
+#		    if (0) {
+#			unless (-e "$keep_file.sex") {
+#			    print "create $keep_file.sex\n";
+#			    die $!."($keep_file)" unless open KI, "< $keep_file";
+#			    die $!."($keep_file.sex)" unless open KO, "> $keep_file.sex";
+#			    while (my $line = <KI>){
+#				my @cells = split /\s+/, $line;
+#				print KO "$cells[0]";
+#			    print KO "\t$cells[1]";
+#				print KO "\t$cells[9]";
+#				print KO "\n";
+#			    }
+#			    close KI;
+#			    close KO;
+#			}
 			
-			my $sys_f = "$plink_script --bfile $bgl_name --out $freq_root --keep $keep_file --freq --update-sex $keep_file.sex";
-			push @job_frq, "$sys_f";
-		    }
-		    else {
-			my $sys_f = "$plink_script --bfile $bgl_name --out $freq_root --keep $keep_file --freq";
-			push @job_frq, "$sys_f";
-		    }
-		}
+#			my $sys_f = "$plink_script --bfile $bgl_name --out $freq_root --keep $keep_file --freq --update-sex $keep_file.sex";
+#			push @job_frq, "$sys_f";
+#		    }
+#		    else {
 
-		unless (-e "$freq_root.bfile.bed"){
-		    push @job_pobed, "$plink_script --bfile $bgl_name --out $freq_root.bfile --keep $keep_file --make-bed"
-		}
+#		    }
+#		}
+
+
 
 
 	    }
@@ -1308,7 +1487,20 @@ unless (-e "$rootdir/rootdir_done"){
 
 
     }
+
+#    if (@job_gm_dl > 0 ) {
+
+
+#	$sjadir = $rootdir;
+#	$sjaname = "gm_download";
+#	$sjatime = 1;
+#	$sjamem = 1000;
+#	@sjaarray = @job_gm_dl;
 	
+#	&send_jobarray;
+
+
+ #   }	
 
     if (@job_cpgz > 0 ) {
 
@@ -1325,147 +1517,168 @@ unless (-e "$rootdir/rootdir_done"){
 
     }
 
-#    exit;
-
-    if (@job_soll > 0 ) {
-
-#	print "starting wordcount2 jobs\n";
-
-	$sjadir = $rootdir;
-	$sjaname = "count2";
-	$sjatime = 1;
-	$sjamem = 1000;
-	@sjaarray = @job_soll;
-	
-	&send_jobarray;
 
 
-
-    }
-
-
-    if (@job_count > 0 ) {
-
-
-#	print "starting wordcount1 jobs\n";
-
-	$sjadir = $rootdir;
-	$sjaname = "count1";
-	$sjatime = 1;
-	$sjamem = 1000;
-	@sjaarray = @job_count;
-	
-	&send_jobarray;
-
-    }
-
-
-
-
-    if (@job_tools > 0 ) {
+    if (@job_vtools > 0 ) {
 
 #	print "starting 2impute jobs\n";
 
 	$sjadir = $rootdir;
-	$sjaname = "2impute";
+	$sjaname = "vcftools";
 	$sjatime = 2;
 	$sjamem = 4000;
-	@sjaarray = @job_tools;
-	
-	&send_jobarray;
-
-
-
-
-
-    }
-
-
-
-
-    if (@job_phased > 0 ) {
-
-#	print "debig\n";
-#	exit;
-
-	$sjaweek = 1;
-	$sjadir = $rootdir;
-	$sjaname = "phased";
-	$sjatime = 2;
-	$sjamem = 2000;
-	@sjaarray = @job_phased;
+	@sjaarray = @job_vtools;
 	
 	&send_jobarray;
 
 
     }
-    
 
-    if (@job_bgl > 0 ) {
+    if (@job_btools1 > 0 ) {
 
-	$sjaweek = 1;
+#	print "starting 2impute jobs\n";
+
 	$sjadir = $rootdir;
-	$sjaname = "beagle";
+	$sjaname = "bcftools_filtnorm";
 	$sjatime = 2;
 	$sjamem = 4000;
-	@sjaarray = @job_bgl;
+	@sjaarray = @job_btools1;
 	
-
 	&send_jobarray;
 
 
+    }
+
+    if (@job_btools2 > 0 ) {
+
+#	print "starting 2impute jobs\n";
+
+	$sjadir = $rootdir;
+	$sjaname = "bcftools_impute2";
+	$sjatime = 2;
+	$sjamem = 4000;
+	@sjaarray = @job_btools2;
+	
+	&send_jobarray;
+
+
+    }  
+
+#    exit;
+
+
+    if (0) {
+	if (@job_phased > 0 ) {
+	    $sjadir = $rootdir;
+	    $sjaname = "phased";
+	    $sjatime = 2;
+	    $sjamem = 2000;
+	    @sjaarray = @job_phased;
+	    
+	    &send_jobarray;
+	}
+	if (@job_bgl > 0 ) {
+	    $sjadir = $rootdir;
+	    $sjaname = "beagle";
+	    $sjatime = 2;
+	    $sjamem = 4000;
+	    @sjaarray = @job_bgl;
+	    
+	    &send_jobarray;
+	}
     }
 
 
     if (@job_plink > 0 ) {
-
-
-	$sjaweek = 1;
 	$sjadir = $rootdir;
-	$sjaname = "plink";
+	$sjaname = "vcf2plink";
 	$sjatime = 2;
 	$sjamem = 4000;
 	@sjaarray = @job_plink;
 	
 	&send_jobarray;
-
-
-
     }
 
 
-	if (@job_frq > 0 ) {
+    if (@job_refformat > 0 ) {
 
 
-	    $sjaweek = 1;
-	    $sjadir = $rootdir;
-	    $sjaname = "freq";
-	    $sjatime = 2;
-	    $sjamem = 4000;
-	    @sjaarray = @job_frq;
-	    
-	    &send_jobarray;
+	$sjadir = $rootdir;
+	$sjaname = "refformat";
+	$sjatime = 2;
+	$sjamem = 4000;
+	@sjaarray = @job_refformat;
+	
+	&send_jobarray;
+
+    }    
+
+    
+
+    if (@job_pobed > 0 ) {
+	
+	$sjadir = $rootdir;
+	$sjaname = "pobed";
+	$sjatime = 2;
+	$sjamem = 4000;
+	@sjaarray = @job_pobed;
+	
+	&send_jobarray;
+	
+	
+    }
+
+#    if (@job_frq > 0 ) {
+	
+	
+#	$sjadir = $rootdir;
+#	$sjaname = "freq";
+#	$sjatime = 2;
+#	$sjamem = 4000;
+#	@sjaarray = @job_frq;
+	
+#	&send_jobarray;
+	
+
+	
+    #   }
 
 
+    unless (-e "infosum_pos.nsnps") {
+	print "write infosum_pos.nsnps\n";
 
+	if (-e "infosum_pos.nsnps.tmp") {
+	    &mysystem ("rm infosum_pos.nsnps.tmp");
 	}
-
-	if (@job_pobed > 0 ) {
-
-	    $sjaweek = 1;
-	    $sjadir = $rootdir;
-	    $sjaname = "pobed";
-	    $sjatime = 2;
-	    $sjamem = 4000;
-	    @sjaarray = @job_pobed;
-	    
-	    &send_jobarray;
-
-
+	&mysystem ("touch infosum_pos.nsnps.tmp");
+	
+	foreach my $p (@plink_collection) {
+	    &mysystem ("wc -l  $p.bim >> infosum_pos.nsnps.tmp");
+#	    print "$p\n";
 	}
+	&mysystem ("mv infosum_pos.nsnps.tmp infosum_pos.nsnps");
+    }
+
+    unless (-e "infosum_pos.chunks") {
+	print "write infosum_pos.chunks\n";
+	if (-e "infosum_pos.chunks.tmp") {
+	    &mysystem ("rm infosum_pos.chunks.tmp");
+	}
+	&mysystem ("touch infosum_pos.chunks.tmp");
+
+	foreach my $c (@chunks_collection) {
+#	    print "$c\n";
+	    &mysystem ("cat  $c >> infosum_pos.chunks.tmp");
+#	    print "$p\n";
+	}
+	&mysystem ("mv infosum_pos.chunks.tmp infosum_pos.chunks");
+    }
 
 
+    
 
+    print "debug\n";
+    exit;
 
     foreach my $pf_loc (@pop_fams) {
 	
@@ -1795,7 +2008,7 @@ foreach my $chr ($chr_start..$chr_end){
 	chomp ($scf);
 	my $infopos_file = "$scf.bgl.info_pos";
 	unless (-e $infopos_file) {
-	    push @job_preps, "$prepare_hm_ref_2_script --mac_th $mac_th --not --noaffy $scf";
+	    push @job_preps, "$prepare_hm_ref_2_script --not --noaffy $scf";
 	}
 
     }

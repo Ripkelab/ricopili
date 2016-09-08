@@ -5,8 +5,14 @@ use Cwd;
 use Data::Dumper;
 
 ### Script to configure settings for ricopili pipeline
-### Jackie Goldstein, Jan 2014
+### Jackie Goldstein, Jan 2014 & stephan ripke 2016
 
+
+
+print "fasta file to bcftools directory:\n";
+print "/psych/genetics_data/ripke/rp_bins/bcftools/bcftools-1.3.1/resources/human_g1k_v37.fasta:\n";
+print "## ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v37.fasta.gz\n";
+exit;
 
 
 
@@ -944,7 +950,7 @@ if ($clusters{broad}){
 		  "p2loc","/home/unix/sripke/plink_src/plink_1.9_newest/",
 		  "shloc","/home/unix/sripke/shapeit/",
 		  "ealoc","/psych/genetics_data/ripke/rp_bins/Eagle_v2.2/",
-		  "i2loc","/psych/genetics_data/ripke/references_from_debakkerscratch/impute_v2/impute_v2/impute_2.2.7_beta/",
+		  "i2loc","/psych/genetics_data/ripke/references_from_debakkerscratch/impute_v2/impute_v2/impute_v2.3.2_x86_64_static/",
 		  "liloc","/home/unix/sripke/liftover/",
 		  "eloc","/home/unix/sripke/eigensoft/bin",
 		  "ldloc","/psych/genetics_data/ripke/ldsc/",

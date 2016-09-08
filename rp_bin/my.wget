@@ -4,35 +4,24 @@ use strict;
 use warnings;
 
 my @opt = @ARGV;
-my $workdir = shift(@opt);
-my $outname = shift(@opt);
+my $vcf_name = $opt[1];
+my $ftp_name = $opt[0];
+my $vcf_loc = "loc.".$vcf_name;
 
-if (@ARGV < 2) {
-    print "error: at least two ARGV\n";
+if (@ARGV != 2) {
+    print "error: only one argument please\n";
     exit;
 }
 
-chdir ($workdir);
 
 # only header from first file (and check success)
-my $sc =system ("gunzip -c $opt[0] | head -n 1 | gzip -c > $outname.tmp");
+my $sc =system ("wget $ftp_name/$vcf_name");
 if ($sc != 0){
     print "systemcode: $sc\n";
     exit;
 }
 
-# rest of files, stripping header row
-for (my $i=0; $i <= $#opt; $i++) {
-    $sc =system ("gunzip -c $opt[$i] | tail -n +2 | gzip -c >> $outname.tmp");
-    if ($sc != 0){
-        print "systemcode: $sc\n";
-	exit;
-    }
-}
+$sc =system ("mv $vcf_name $vcf_loc");
 
-$sc =system ("mv $outname.tmp $outname");
-
-
-print "success2\n";
 
 

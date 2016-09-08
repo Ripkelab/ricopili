@@ -882,6 +882,11 @@ sub send_jobarray {
     }
     &a2filenew ($jobfile, @sjaarray);
 
+
+#    print "$jobfile\n";
+#    print "sleep\n";
+#    sleep(10);
+
     $walltime = $sjatime;
     my $nsja = @sjaarray;
 
@@ -1992,7 +1997,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 	    my @dasifiles = ();
 
 #	print @bimfli_files."\n";
-#	print "debug\n";
+#	print "$refind\n";
 #	exit;
 
 	    foreach (@bimfli_files) {
@@ -2239,7 +2244,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 
 
-#print "debug";
+#print "debug\n";
 #exit;
 
 
@@ -3464,8 +3469,11 @@ foreach my $dc_loc (@daner_allcoll) {
 	    close FILE;
 	}
 	push @areat_arr, "$areator_script $prekno_txt $Xchr_txt --r2th $r2th --plink --pth $pth_loc --best $infile --out $dc_loc.p4 --refdir $areat_refdir";
+#	print  "$areator_script $prekno_txt $Xchr_txt --r2th $r2th --plink --pth $pth_loc --best $infile --out $dc_loc.p4 --refdir $areat_refdir\n";
     }
 }
+#print "$prekno_txt\n";
+#exit;
 
 
 

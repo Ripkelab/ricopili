@@ -545,10 +545,14 @@ while (my $line = <FILE>){
 	my $bim_indel = 0;
 	$bim_indel = 1 if ($length_bim_gt > 2);
 	$bim_indel = 1 if ($gt_hash{$info_loc} =~ /-/);
+	$bim_indel = 1 if ($gt_hash{$info_loc} eq "ID");
+	$bim_indel = 1 if ($gt_hash{$info_loc} eq "DI");
 	
 	my $ref_indel = 0;
 	$ref_indel = 1 if ($length_ref1 > 2);
 	$ref_indel = 1 if ($ref1_gt =~ /-/);
+	$ref_indel = 1 if ($ref1_gt eq "ID");
+	$ref_indel = 1 if ($ref1_gt eq "DI");
 
 	my $replace = 0;
 	if ($bim_indel && $ref_indel) {
@@ -563,7 +567,7 @@ while (my $line = <FILE>){
 	}
 	else {
 #	    print "not replacing snpname with same position for an indel / non-indel: $info_loc\n";
-	    push @notrans_variant,  "not_replacing variant with reference based on position: $loc_info{$info_loc} $cells[$dscol-1] $info_loc\n";
+	    push @notrans_variant,  "not_replacing variant with reference based on position: $loc_info{$info_loc} $cells[$dscol-1] $info_loc bim: $bim_indel ref: $ref_indel\n";
 	}
 
 
