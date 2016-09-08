@@ -2804,15 +2804,12 @@ if ($dos_done == 0) {
 	$sjamaxpar = 100;
 
 	# pass memory spec to haps2dos4 to manage plink --dosage
-	my @sjaarray = ();
 	my $dosmem = $sjamem + $sjamem_incr ;
-	foreach (@dos_arr){
-	    my $dosjob = $_;
-	    $dosjob .= "--plinkmem $dosmem";
-	    push @sjaarray, $dosjob;
+	foreach my $dosjob (@dos_arr){
+	    $dosjob .= " --plinkmem $dosmem";
 	}
 
-#	@sjaarray = @dos_arr;
+	@sjaarray = @dos_arr;
 	
 	&send_jobarray;
 	
