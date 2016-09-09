@@ -346,6 +346,6 @@ if (-e $outdosgz) {
     
     print "done\n";
 }else{
-    die "Error: completed haps2dos4 without creating $dosoutgz. Something strange is wrong.\n"
+    die "Error: completed haps2dos4 without creating $outdosgz. Something strange is wrong.\n";
 }
 
