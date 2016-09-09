@@ -336,7 +336,8 @@ foreach (@cmd_collect) {
 close BC;
 
 
-my $outdosgz = "$dosout.out.dosage.gz"
+my $outdosgz = "$dosout.out.dosage.gz";
+
 if (-e $outdosgz) {
     &mysystem ("touch $finiout");
     &mysystem ("rm $twodos_tmp_success");
