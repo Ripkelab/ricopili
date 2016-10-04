@@ -28,6 +28,7 @@ Usage : my.imp2 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
  --reffile STRING  name of ref file
  --refstart INT    Mb of start
  --refend INT      Mb of end
+ --ne INT          effective population size
  --chrX STRING     for X chromosome, noting sample-file
 
 ";
@@ -38,6 +39,7 @@ my $gemafile = "";
 my $reffile = "";
 my $refstart = "";
 my $refend = "";
+my $ne = 20000;
 
 use Getopt::Long;
 GetOptions( 
@@ -49,6 +51,7 @@ GetOptions(
     "refstart=s"=> \ $refstart,
     "refend=s"=> \ $refend,
     "chrX=s"=> \my $chrx,
+    "ne=i"=> \$ne,
     );
 
 if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $reffile eq "" || $refstart eq ""|| $refend eq ""){
@@ -106,7 +109,7 @@ if ($refend - $refstart > 6) {
 }
 
 
-my $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer 1000 -o $outname $allow_str";
+my $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne $ne -buffer 1000 -o $outname $allow_str";
 
 ## for now without best guess
 #my $sys_loc = "$i2loc/$imp2_bin -phase -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer 1000 -o $outname $allow_str";
