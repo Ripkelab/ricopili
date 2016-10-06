@@ -115,7 +115,7 @@ my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $
 
 if ($eagle_sw) {
     $gemafile =~ s/.txt$/.chr.txt/;
-    $sys_loc = "$ealoc/$eagle_bin --bfile=$inname --geneticMapFile=$gemafile --outPrefix=$outname --runStep2=0";
+    $sys_loc = "$ealoc/$eagle_bin --bfile=$inname --geneticMapFile=$gemafile --outPrefix=$outname --runStep2=0 --maxMissingPerIndiv=1";
 }
 
 my $sc = 0;
