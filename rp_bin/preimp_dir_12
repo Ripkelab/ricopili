@@ -149,6 +149,7 @@ GetOptions(
     "imend=i"=> \$imend_th,  # mendel per ID threshhold
     "lmend=i"=> \$mend_th,  # mendel per SNP threshhold
     "Fhet_th=f"=> \$Fhet_th,  # Fhet threshold
+    "sexmin=i"=> \$sexcheck_min,
     "hwe_th_co=f"=> \$hwe_th,
     "hwe_th_ca=f"=> \$hwe_th_ca,
     "withpna=i"=> \$withpna, # mono threshold
