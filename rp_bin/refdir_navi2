@@ -153,6 +153,7 @@ my $refformat_script = "refformat_legend_bim";        ### my.pipeline_tar
 my $plinkanc_script = "plink_anc";                    ### my.pipeline_tar
 my $wget_script = "my.wget";                          ### my.pipeline_tar
 my $prepvcf_script = "my.prepvcf";                    ### my.pipeline_tar
+my $prepmm_script = "prepare_ref_mm";                ### my.pipeline_tar
 my $vcf_script = "$vloc/vcftools";                    ### 
 my $annot_hg19pos_script = "annot_hg19pos";           ### 
 my $impute2beagle_script = "impute2beagle2";          ### not needed for now
@@ -683,6 +684,7 @@ $sjainfotxt = "$rootdir\t$command_line";
 
 my @job_vtools = ();
 my @job_btools1 = ();
+my @job_prepmm = ();
 my @job_btools2 = ();
 my @job_count = ();
 my @job_soll = ();
@@ -982,14 +984,19 @@ unless (-e "$sample_root") {
 ## out_templ
 ################################################
 
+print "put in the vcf template into reference_templ\n";
+exit;
+
+
 unless (-e "reference_templ") {
     print "create file reference_templ\n";
     die $! unless open RT, "> reference_templ";
     print RT "$out_templ\n";
     close RT;
-}    
-#print "debug\n";
-#exit;
+}
+
+    
+
 
 
 
@@ -1129,6 +1136,9 @@ unless (-e "$rootdir/rootdir_done"){
 	    my $vcf_name_loc_filtnorm_fini = $vcf_name_loc_filtnorm.".fini";
 	    
 
+
+	    my $vcf_name_loc_filtnorm_prep_fini = $vcf_name_loc_filtnorm.".prep.fini";	    
+
 	    
 	    ###################################
 	    # download vcf files
@@ -1232,7 +1242,16 @@ unless (-e "$rootdir/rootdir_done"){
 	    }
 
 
-	    
+
+
+	    ###################################
+	    # filter and convert vcf with bcftools
+	    ####################################
+
+	    unless (-e $vcf_name_loc_filtnorm_prep_fini) {
+		push @job_prepmm, "$prepmm_script --cpus 4 $vcf_name_loc_filtnorm";
+	    }
+
 
 	    
 
@@ -1548,6 +1567,25 @@ unless (-e "$rootdir/rootdir_done"){
 
 
     }
+
+    if (@job_prepmm > 0 ) {
+
+	
+	$sjaweek = 1;
+	$sjadir = $rootdir;
+	$sjaname = "prep_minnimac";
+	$sjatime = 2;
+	$sjamulti = 4;
+	$sjamem = 12000;
+	@sjaarray = @job_prepmm;
+	
+	&send_jobarray;
+
+
+    }
+
+
+    
 
     if (@job_btools2 > 0 ) {
 

@@ -272,6 +272,7 @@ version: $version
 ## differen prephasing algorithm
 
  --eagle           use eagle for prephasing: https://data.broadinstitute.org/alkesgroup/Eagle/
+ --eaglvcf         use eagle for prephasing with vcf_output (for minimac)
 
 
 #### for trio datasets
@@ -477,6 +478,7 @@ GetOptions(
     "noclean"=> \my $noclean,
     "force1"=> \my $force1,
     "eagle"=> \my $eagle_sw,
+    "eaglvcf"=> \my $eagle_vcf_sw,
 
 
     "popname=s"=> \$popname,
@@ -508,7 +510,7 @@ my $buigue_script = "buigue";              ### my.pipeline_tar
 my $checkpos_script = "checkpos6";         ### my.pipeline_tar
 my $checkflip_script = "checkflip4";       ### my.pipeline_tar
 my $chuck_script = "my.chuck2";            ### my.pipeline_tar
-my $preph_script = "my.preph2";             ### my.pipeline_tar
+my $preph_script = "my.preph3";             ### my.pipeline_tar
 my $imp2_script = "my.imp2.3";             ### my.pipeline_tar
 my $dos_script = "haps2dos4";              ### my.pipeline_tar
 my $impprob_script = "impprob_to_2dos";    ### my.pipeline_tar
@@ -1222,16 +1224,21 @@ unless (-e $pcaer_dir){
 ## if new frequency file is existing
 ###################################
 my $suminfo_s_v2 = "";
+my $refvcf_s_v2 = "";
 my $suminfo_s_v2_sw = 0;
 if (-e "$refdir/reference_templ") {
     die unless open IN, "< $refdir/reference_templ";
     $suminfo_s_v2 = <IN>;
+    $refvcf_s_v2 = <IN>;
     chomp($suminfo_s_v2);
+    chomp($refvcf_s_v2);
     close IN;
     $suminfo_s_v2_sw = 1;
 }
 
 print "reference_v2: $suminfo_s_v2\n";
+print "refvcf_v2: $refvcf_s_v2\n";
+#exit;
 #####################################
 ## if new frequency file is existing
 ###################################
@@ -1982,6 +1989,7 @@ my @refend_arr;
 my @refchr_arr; ## safes the chromosomes in same order
 my @gema_arr; ## safes the gema_files in same order
 
+my @bgz_arr; ## safes the bgz files in same order
 
 
 my %gema_hash; ## contains the gema-files for each chromosome
@@ -1997,7 +2005,7 @@ foreach my $rf (@reffiles) {
     }
 
     push @refind_arr, $refind;
-#    print "refind: $refind\n";
+    print "refind: $refind\n";
 
 
 #    my $chrind = $rf;
@@ -2019,6 +2027,13 @@ foreach my $rf (@reffiles) {
     my $gema_file = "$refdir/genetic_map_chr$chrind"."_combined_b37.txt";
     push @gema_arr, $gema_file;
 
+
+    my $bgz_file = "$refdir/$refvcf_s_v2";
+    $bgz_file =~ s/XXX/$chrind/;
+    push @bgz_arr, $bgz_file;
+#    print $bgz_file."\n";
+    
+
     ### test existence once per chromosome
     unless (exists $gema_hash{$chrind}) {
 	$gema_hash{$chrind} = 1;
@@ -2028,12 +2043,17 @@ foreach my $rf (@reffiles) {
 }
 
 
+#print "debug2\n";
+#exit;
+
+
 my @refind_arr_v2;
 my @refstart_arr_v2;
 my @refend_arr_v2;
 
 my @refchr_arr_v2; ## safes the chromosomes in same order
 my @gema_arr_v2; ## safes the gema_files in same order
+my @bgz_arr_v2; ## safes the gema_files in same order
 
 if ($suminfo_s_v2_sw == 1) {
 
@@ -2045,6 +2065,7 @@ if ($suminfo_s_v2_sw == 1) {
 	    push  @refend_arr_v2, $cells[2];
 	    push  @refchr_arr_v2, $cells[0];
 	    my $gema_file = "$refdir/genetic_map_chr$cells[0]"."_combined_b37.txt";
+#	    print $gema_file."\n";
 	    push @gema_arr_v2, $gema_file;
 	    
 	    ### test existence once per chromosome
@@ -2321,12 +2342,21 @@ if ($prephase_done == 0) {
 	#### loop for reference chunks
 	foreach my $ccc (0..$#refind_arr) {
 
+
+
 	    my $refind = $refind_arr[$ccc];
 	    my $chrind = $refchr_arr[$ccc];
 	    my $rf = $reffiles[$ccc];
 	    my $gema_file = $gema_arr[$ccc];
+	    my $bgz_file = $bgz_arr[$ccc];
 
 
+#	    print "bgz_file: $bgz_file\n";
+#	    print "chrind: $chrind\n";
+#	    print "$gema_file\n";
+#	    print "$rf\n";
+
+	    
 	    my $multi_txt = "";
 	    my $multi_sw = 0;
 	    
@@ -2373,7 +2403,7 @@ if ($prephase_done == 0) {
 		
 		unless (exists $finifiles_hash{$haps_ch_out_fini} ) {
 
-		    print "didnt find this one: $haps_ch_out_fini\n";
+#		    print "didnt find this one: $haps_ch_out_fini\n";
 #		if (exists $finifiles_hash{$haps_ch_out_fini} ) {
 #
 #		}
@@ -2382,12 +2412,22 @@ if ($prephase_done == 0) {
 		    if ($eagle_sw) { 
 			$backbone .= " --eagle";
 		    }
+		    
+		    if ($eagle_vcf_sw) { 
+			$backbone .= " --eaglvcf";
+			$backbone .= " --ref $bgz_file";
+		    }
+
+		    
 
 		    if ($suminfo_s_v2_sw == 1) {
 			$backbone .= " --nospli";
 #			print "v2 found\n";
-#			print "$multi_sw\n";
+			print "$multi_sw\n";
 		    }
+
+#		    print "$backbone\n";
+#		    print "$multi_sw\n";
 		    if ($multi_sw == 0) {
 			push @preph_arr, $backbone;
 		    }
@@ -2435,6 +2475,8 @@ if ($prephase_done == 0) {
 
 
 
+#    print "debug\n";
+#    exit;
 
 ###################################
 ### send prephase jobs
@@ -2449,11 +2491,26 @@ if ($prephase_done == 0) {
 	$sjamem = 4000;
 	@sjaarray = @preph_arr;
 
+
+
+	print "here?\n";
+	exit;
+
+
+	    
 	&send_jobarray;
 
     }
 
 
+    
+    
+#    print "debug2\n";
+#    exit;
+
+
+
+    
     if (@preph_arr_mu1 > 0) {
 
 	$sjadir = $impute_dir;
@@ -2546,8 +2603,8 @@ if ($prephase_done == 0) {
 	print "prephasing done\n";
     }
 }
-#print "debug\n";
-#exit;
+print "debug\n";
+exit;
 
 
 ############################################################
