@@ -249,16 +249,20 @@ sub split_line_ref {
 
 sub excaco {
     my ($line)=@_;
-    my ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol);
+    my ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol,$ncacol,$ncocol,$neffcol);
     $nocc = 0;
     $nca = 0;
     $nco = 0;
+    $ncacol = 0;
+    $ncocol = 0;
+    $neffcol = 0;
     chomp($line);
     $line =~ s/^[\s]+//g;
     my @cols=  split /\s+/, $line;
     $beta = 0;
     my $cc = 0;
     $ngtcol = -1;
+#    print "start: $ncacol\n";
     foreach (@cols){
 	if ($_ =~ /^FRQ_A_/){
 	    $nca = $_;
@@ -294,16 +298,30 @@ sub excaco {
 	if ($_ eq "SE") {
 	    $secol = $cc;
 	}
+	if ($_ eq "Nca") {
+	    $ncacol = $cc;
+	}
+	if ($_ eq "Nco") {
+	    $ncocol = $cc;
+	}
+	if ($_ eq "Neff") {
+	    $neffcol = $cc;
+	}
+
+
+	
+	
 	$cc++;
-	last if ($cc > 15);
+#	last if ($cc > 15);
     }
+#    print "stop: $ncacol\n";
 
     $nocc = 1 if ($nca==0 && $nco ==0);
 #    print "@cols\n";
 #    print "nocc,nca,nco,beta: $nocc, $nca, $nco, $beta\n";
 #    print "nca,nco,beta,nocc,ngtcol,infocol,pcol,a1col,a2col,orcol,secol\n";
 #    print "$nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol\n";
-    ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol);
+    ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol,$ncacol,$ncocol,$neffcol);
 }
 
 
@@ -518,7 +536,7 @@ my $tmp = keys %head_files;
 
 #my $hh1 = `zcat $rootdir/$file_list[0] | head -1`;
 #print "mion: $file_list[0]\n";
-my $hh1 = `gunzip -c $file_list[0] | head -1`;
+#my $hh1 = `gunzip -c $file_list[0] | head -1`;
 foreach my $c (0..$#file_list) {
 #    print "mion: $file_list[$c]\n";
 #    $hh{$file_list[$c]} = `zcat $rootdir/$file_list[$c] | head -1`;
@@ -645,6 +663,8 @@ my $oline = "";
 
 
 
+#print "debug\n";
+#sleep(5);
 
 foreach my $study (sort keys %finfo){
     my $rep_sw =0;
@@ -668,9 +688,15 @@ foreach my $study (sort keys %finfo){
     $direc = $direc * $mafdir;
 
     my $st_str = $study;
-    my ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol) = &excaco($hh{$study});
+    my ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol,$ncacol,$ncocol,$neffcol) = &excaco($hh{$study});
 
     print "hh_st($study): $hh{study}\n";
+#    print "Nca: $nca\n";
+#    print "Nco: $nco\n";
+#    print "ncacol: $ncacol\n";
+#    print "ncocol: $ncocol\n";
+#    print "neffcol: $neffcol\n";
+
 #    sleep(2);
 
     $st_str =~ s/^.*\///;
@@ -703,14 +729,14 @@ foreach my $study (sort keys %finfo){
 
     $rep_sw = 1 if ($st_str =~ /^replication/);
 
-    print "###################################\n";
-    print "STR: <$st_str>\n";
+#    print "###################################\n";
+#    print "STR: <$st_str>\n";
     if (exists $st_names{$st_str}) {
 	$st_str = $st_names{$st_str}; 
-	print "is existing\n";
+#	print "is existing\n";
     }
-    print "STR: <$st_str>\n";
-    print "###################################\n"; 
+#    print "STR: <$st_str>\n";
+#    print "###################################\n"; 
 
     
 
@@ -767,7 +793,17 @@ foreach my $study (sort keys %finfo){
     }
 	    
 
+    if ($neffcol != 0 ){
+	$nca = $cells[$ncacol];
+	$nco = $cells[$ncocol];
+    }
 
+#    print "Nca: $nca\n";
+#    print "Nco: $nco\n";
+#    sleep(2);
+
+
+    
     if ($short == 1) {
 	$oline .= "\t-";
 	$oline .= "\t-";
