@@ -1096,6 +1096,21 @@ if ($job){
 	    
 	    print "starting job_array, $jobname\n";
 
+	    my $maxpar_txt = "";
+	    if ($maxpar > 0) {
+		$maxpar_txt = "-tc $maxpar";
+	    }
+
+	    my $multi_txt = "";
+	    my $threads_half = int ($threads / 2);
+	    if ($threads > 1) {
+		$multi_txt = "-pe smp $threads_half -binding linear:$threads_half ";
+	    }
+	    if ($threads > 8) {
+		$multi_txt .= "-R y ";
+	    }
+	    
+	    
 
 	    my $qlong_str = "";
 	    if ($walltime > 2 || $week > 0) {
@@ -1105,13 +1120,14 @@ if ($job){
 	    die "$! ($jobname)" unless open JOB, "> $jobname";
 
 
-	    print JOB "#PBS -lnodes=1:ppn=1\n";
-	    print JOB "#PBS -lwalltime=$wallstr\n";
+#	    print JOB "#PBS -lnodes=1:ppn=1\n";#
+#	    print JOB "#PBS -lwalltime=$wallstr\n";
 	    print JOB "cd $rootdir\n";
 	    print JOB "my.start_job -n ".'$SGE_TASK_ID'." --jobfile $jobarray\n";
 	    close JOB;
-	    
-	    my $qsub_cmd = "qsub -l m_mem_free=".$mem_str."g $qlong_str -v PATH,rp_perlpackages -t 1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job $hhmm $jobname";
+
+	    my $qsub_cmd = "qsub $multi_txt $maxpar_txt -l m_mem_free=".$mem_str."g,h_vmem=".$mem_str."g,m_mem_free=".$mem_str."g $qlong_str -v PATH,rp_perlpackages -t 1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job $hhmm $jobname";
+#	    my $qsub_cmd = "qsub -l m_mem_free=".$mem_str."g $qlong_str -v PATH,rp_perlpackages -t 1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job $hhmm $jobname";
 	    my $qsub_txt = "$qsub_cmd > $jobname.id";
 	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
 	    
@@ -1144,8 +1160,9 @@ if ($job){
 	    print JOB "cd $ENV{PWD}\n";
 	    print JOB "$bp\n";
 	    close JOB;
-	    
-	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages -l m_mem_free=".$mem_str."g  -hold_jid $id_str -e $ENV{PWD}/$errname/ -o $ENV{PWD}/$errname/ $name_of_job $hhmm $jobname";
+
+	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages -l m_mem_free=".$mem_str."g,h_vmem=".$mem_str."g  -hold_jid $id_str -e $ENV{PWD}/$errname/ -o $ENV{PWD}/$errname/ $name_of_job $hhmm $jobname";
+#	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages -l m_mem_free=".$mem_str."g  -hold_jid $id_str -e $ENV{PWD}/$errname/ -o $ENV{PWD}/$errname/ $name_of_job $hhmm $jobname";
 	    my $qsub_txt = "$qsub_cmd > $jobname.id";
 	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
 

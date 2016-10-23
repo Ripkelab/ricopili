@@ -516,6 +516,7 @@ foreach my $dfile (@ARGV) {
     my $ngt_sw = 1;
     $ngt_sw = 0 unless (exists $col{"ngt"});
 
+    my $nwarnings=0;
     while ($df->gzreadline(my $line)){
 	chomp($line);
 
@@ -644,7 +645,14 @@ foreach my $dfile (@ARGV) {
 #	if ($cells[$col{"OR"}] eq "NA"){
 #	if ($cells[$col{"OR"}]*1 !=  $cells[$col{"OR"}] || $cells[$col{"OR"}] <= 0){
 	if ($cells[$col{"OR"}] <= 0){
-	    print "Warning: invalid OR, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+	    if ($nwarnings < 10) {
+		print "Warning: invalid OR, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+	    }
+	    if ($nwarnings == 10) {
+		print "more than 10 warnings, not printing out more....\n";
+	    }
+	    $nwarnings++;
+	    
 	    next;
 	}
 	
@@ -708,7 +716,7 @@ foreach my $dfile (@ARGV) {
 
 
 	if (@cells < 11) {	
-	    print "Error: not enough cells in $dfile\n" ;
+	    print "Warning: ".$cells[$col{"SNP"}]." does not have enough cells in $dfile\n" ;
 	    $die = 1;
 	}
 
