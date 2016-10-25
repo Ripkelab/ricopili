@@ -94,6 +94,7 @@ GetOptions( "outname=s"=> \$outname,
 
 	    "force1"=> \my $force1,
 	    "serial"=> \my $serial,
+	    "noclean"=> \my $noclean,
 	    "bn_job=i"=> \$job_bn_th,
 	    
     );
@@ -132,6 +133,7 @@ version: $version
 
         --grange INT    for clumping in kb
 
+        --noclean       do not remove temp subdir
 
   --force1           do not exit if same fail, but do this only once
 
@@ -593,6 +595,9 @@ use Compress::Zlib ;
 
 
 
+
+
+
 $rootdir = &Cwd::cwd();
 $info_txt = "command:\t\"$command_line\"\tdir:\t$rootdir";
 
@@ -608,6 +613,11 @@ my @created = mkpath(   ## $created ?
 # split pfile
 #####################################
 
+
+if (-e "$outname.clumped.xmhc.gz") {
+    print "output files is already existing\n";
+#    exit;
+}
 
 my %ccount ;
 
@@ -1231,7 +1241,7 @@ if ($prekno_file){
 #####################################
 
 
-unless (-e "$outname.xmhc.xls"){
+unless (-e "$outname.clumped.xmhc.p2.xls"){
 
 
     die $! unless open LDI, "< $outname.clumped.xmhc";
@@ -1251,7 +1261,7 @@ unless (-e "$outname.xmhc.xls"){
 
 
        
-    my $cmd = "txt2xls --txt $outname.clumped.xmhc.p2 --xls $outname.mhc.p2.xls --pcol 10,16 --cogr 5,8,12,17,18";
+    my $cmd = "txt2xls --txt $outname.clumped.xmhc.p2 --xls $outname.clumped.xmhc.p2.xls --pcol 10,16 --cogr 5,8,12,17,18";
     &mysystem ($cmd);
 
 }
@@ -1275,6 +1285,21 @@ if ($reinvo_file) {
 
 
 
+unless ($noclean) {
+    print "remove tmp filies, if not wished use --noclean\n";
+    &mysystem ("rm -fr $chr_subdir");
+    &mysystem ("rm -f $outname.sum.clumped");
+    &mysystem ("rm -f $outname.clumped.xmhc.start.prekno");
+
+}
+
+&mysystem ("rm -f $outname.clumped.xmhc.p2");
+&mysystem ("rm -f $outname.clumped.xmhc");
+&mysystem ("rm -f $outname.clumped");
+&mysystem ("rm -f $outname.cfiles");
+
+
+
 #############################################################
 ## SUCCESSSS
 #############################################################
@@ -1287,6 +1312,8 @@ $sjamem = 1000;
 
     
 &send_jobarray;
+
+
 
 
 

@@ -571,15 +571,39 @@ my $meta_d;
 my $meta_i;
 my $meta_f;
 
+my $hetp_col = 16 ;
+
 my $meta_line = `zgrep -m 1 -w $gsnp $metafile`;
+my $meta_hline = `gunzip -c $metafile | head -1`;
 #my $meta_line = `zgrep -m 1 -w $gsnp $rootdir/$metafile`;
 #    print $meta_line."\n";
 #    exit;
+
+my @cells_h = &split_line($meta_hline);
+my $cc = 0;
+foreach (@cells_h){
+    if ($_ eq "HetPVa"){
+	$hetp_col = $cc;
+	print "found\n";
+    }
+    $cc++;
+}
+#print "head1: $meta_hline\n";
+#print "hetpcol: $hetp_col\n";
+#sleep(10);
+
+
 my @cells_m = &split_line($meta_line);
-$meta_p = $cells_m[16];
+
+
+
+$meta_p = $cells_m[$hetp_col];
 $meta_i = $cells_m[13];
 $meta_d = $cells_m[12];
 $meta_f = $cells_m[6];
+
+
+
 
 my $mafdir = 1;
 if ($maf){
@@ -1017,7 +1041,7 @@ unless ($short == 2) {
     $for_head .= "NA";
     $for_head .= "\t\t$meta_d";
     $for_head .= "\tNA\thet_P:\t";
-    $for_head .= sprintf "%.2f",$meta_p;
+    $for_head .= sprintf "%.3g",$meta_p;
     $for_head .= "\thet_I:\t$meta_i";
     
     

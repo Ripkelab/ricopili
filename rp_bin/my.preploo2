@@ -1,0 +1,469 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+### clean directory
+
+# sripke@gold.broadinstitute.org:/psych/genetics_data/ripke/pgc/mdd/imputation_collect_0515a/results_MDD29.0515a_mds6 rm -r *.cmd *.pt results_MDD29.0515a_mds6/
+
+
+
+
+### start it
+# sripke@gold.broadinstitute.org:/psych/genetics_data/ripke/pgc/mdd/imputation_collect_0515a my.preploo2 --postimp postimp_navi_15 --mds MDD29.0515.nproj.menv.mds_cov --coco 1,2,3,4,5,6 MDD29.0515a_mds6
+
+
+### for BIP, see README here: /psych/genetics_data/ripke/pgc/bip/rework_0914/collect_qc_0215b
+
+
+
+######## newest run
+
+## sripke@gold.broadinstitute.org:/psych/genetics_data/ripke/pgc/cdg/bip_scz/0215a/bip_vs_scz/preimp/qc/imputation_2nd my.preploo2 --mds cobg_gw.BAS14b.menv.mds_cov --postimp postimp_navi_16 --coco 1,2,3,4,5,6,7,8,9,10,12,19 PGC_BAS14b_mds12
+
+
+##### just a plain run:
+# my.preploo2 --resultfile results_PGC_MDD35.0516a.23amx
+# here: /psych/genetics_data/ripke/pgc/mdd/imputation_collect_0515a/results_MDD29.0515a_mds6/meta_0216_with_single
+
+
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+#my $hmloc = &trans("hmloc");
+
+
+##########################################
+
+
+my $usage = "
+
+COMAND IDENTIFIER
+
+  --help              print help massage and exits
+
+  --mds STRING        mdsfile from original postimp command
+  --postimp STRING    postimp-command from original postimp command
+  --coco STRING       COCOSTRING from original postimp command
+
+  --resultfile STRING directly start from resultfiles
+
+
+#  --out STRING        other out than identifier
+#  --excl FILE         exclusion file of datasets
+
+
+
+
+  IDENTIFIER comes from a postimp_navi_run
+
+
+ created by Stephan Ripke 2015 at MGH, Boston, MA
+
+
+prepares a directory for a leave one out polygenetic scoring experiment
+
+
+## newest run:
+## /psych/genetics_data/ripke/pgc/cdg/bip_scz/0215a/bip_vs_scz/preimp/qc/imputation_2nd my.preploo2 --mds cobg_gw.BAS14b.menv.mds_cov --postimp postimp_navi_16 --coco 1,2,3,4,5,6,7,8,9,10,12,19 PGC_BAS14b_mds12
+
+";
+
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+###################################################
+###  soft link to here 
+###################################################
+sub mylink(){
+    my $source = "@_";
+    unless (-e $source) {
+	print "could not find source data ($source) please check your specified directories\n";
+	exit;
+    }
+    &mysystem("ln -s $source .");
+}
+
+
+
+#my $out = "";
+
+use Getopt::Long;
+GetOptions(
+    "mds=s"=> \my $mds_name,
+    "postimp=s"=> \my $postimp_name,
+    "excl=s"=> \my $excl_name,
+    "out=s"=> \my $out_name,
+    "coco=s"=> \my $cocostr,
+    "resultfile=s"=> \my $resultfile,
+    "help"=> \my $help );
+
+
+die "$usage" if $help;
+#die "$usage" if $out eq "";
+
+
+####################################
+## just processing resultfiles
+#######################################
+
+if ($resultfile) {
+
+    my @single_ds_files;
+    
+    die $!." <$resultfile>" unless open RF, "< $resultfile";
+    
+    while (my $line = <RF>){
+	chomp ($line);
+	push @single_ds_files, $line;
+#	print "$line\n";
+    }
+
+    close RF;
+
+    ############## output files
+
+    my $cmd_loc = "commands.$resultfile";
+    die $!."($cmd_loc)" unless open CMD, "> $cmd_loc";
+
+    foreach my $loo (@single_ds_files) {
+	my @loof_sub_arr = split /_/,$loo;
+	my $loof_sub = @loof_sub_arr[2];
+#	print $loof_sub."\t".$loo."\n";
+
+	my $rfile_loc = "$resultfile.no.$loof_sub";
+
+	## write loo files 
+	unless (-e $rfile_loc) {
+	    die $!."($rfile_loc)" unless open OUT, "> $rfile_loc";
+	    foreach my $loo2 (@single_ds_files) {
+		print OUT "$loo2\n" if ($loo2 ne $loo);
+	    }
+	    close OUT;
+	}
+
+	## write commands
+
+	print CMD "postimp_navi_20 --out PGC_MDD35.0516a.23amx.no.$loof_sub --result $rfile_loc --nohet --noldsc --nolahunt --gwclump\n"
+
+	
+    }
+    close CMD;
+    
+    
+    exit;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+####################################
+## BEGIN
+#######################################
+
+
+use File::Path;
+use Cwd;
+
+my $root = &Cwd::cwd();
+
+my %excl_hash;
+if ($excl_name) {
+    die $!." <$excl_name>" unless open IN, "< $excl_name";
+    while (my $line = <IN>){
+	#	my @cells = @{&split_line_ref(\$line)};
+	chomp($line);
+	$line =~ s/^daner_//;
+	$line =~ s/.ch.fl.gz$//;
+	$line =~ s/.hg19$//;
+	print "ex: ".$line."\n";
+	$excl_hash{$line} = 1;
+    }
+    close IN;
+}
+#exit;
+
+my $identifier = $ARGV[0];
+
+my $report_dir = "report_$identifier";
+my $results_dir = "results_$identifier";
+
+opendir(DIR, "$report_dir") || die "can't opendir .: $report_dir";
+my @single_ds_files = readdir(DIR);
+closedir DIR;
+
+opendir(DIR, "$root") || die "can't opendir .: $root";
+my @root_files = readdir(DIR);
+closedir DIR;
+
+my @fam_files = grep {/.fam$/} @root_files;
+@single_ds_files = grep {/^daner/} @single_ds_files;
+@single_ds_files = grep {/.fl.gz$/} @single_ds_files;
+
+my @single_ds_files_tmp;
+foreach (@single_ds_files) {
+    my $ex = $_;
+    $ex =~ s/^daner_//;
+    $ex =~ s/.ch.fl.gz$//;
+    $ex =~ s/.hg19$//;
+#    my $ex = "daner_".$_.".hg19.ch.fl.gz";
+    print "$ex\n";
+    unless (exists $excl_hash{$ex}) {
+	push @single_ds_files_tmp, $_;
+	print "-> found $_\n";
+    }
+}
+@single_ds_files = @single_ds_files_tmp;
+
+
+my @fam_files_tmp;
+foreach (@fam_files) {
+    my $ex = $_;
+    $ex =~ s/.fam$//;
+    
+    unless (exists $excl_hash{$ex}) {
+	push @fam_files_tmp, $_;
+	print "-> found fam $_\n";
+    }
+}
+@fam_files = @fam_files_tmp;
+
+
+
+print "-> found ".@single_ds_files." daner files\n";
+print "-> found ".@fam_files." fam files\n";
+
+#exit;
+
+#print "check the content of famfiles with the famfilename to get loo_sub\n";
+#print "because of this:\n".'sripke@gold.broadinstitute.org:/psych/genetics_data/ripke/pgc/mdd/imputation_collect_0515a wl *.pt'."\n";
+#exit;
+
+if (-e $results_dir) {
+    print "Error: $results_dir existing, it seems this is not the first try.\n";
+    exit
+}
+
+&mysystem("mkdir $results_dir");
+chdir "$results_dir";
+
+
+########################################
+## full meta-analysis
+#######################################
+
+my $nst = @single_ds_files;
+die $!."(results_$identifier)" unless open OUT, "> results_$identifier";
+foreach (@single_ds_files) {
+    print OUT "$_\n";
+    &mysystem ("ln -s $root/report_$identifier/$_ .");
+}
+&mysystem ("ln -s $root/reference_info .");
+close OUT;
+
+
+
+
+
+##############################################
+## leave one out
+##################################################
+die $!."(start_loo_weights.cmd)" unless open CMD, "> start_loo_weights.cmd";
+die $!."($root/start_loo_scores.cmd)" unless open SCO, "> $root/start_loo_scores.cmd";
+
+
+#print CMD "$postimp_name --out $identifier --result results_$identifier --only-meta\n";
+
+#foreach my $loo (@single_ds_files) {
+foreach my $loof (@fam_files) {
+
+    
+    my @loof_cells = split "_", $loof;
+    my $loof_sub = $loof_cells[1];
+    
+    ############## phenoe files
+    
+    
+    die $!." <$root/$loof>" unless open FAMI, "< $root/$loof";
+    die $! unless open FAMO, "> $root/$loof.pt";
+    
+    while (my $line = <FAMI>){
+	my @cells = @{&split_line_ref(\$line)};
+	print FAMO "$cells[0]";
+	print FAMO "\t$cells[1]";
+	print FAMO "\t$cells[5]";
+	print FAMO "\n";
+    }
+
+    close FAMI;
+    close FAMO;
+
+
+  
+    ############## result files
+    die $!."(results_$identifier.loo.no.$loof_sub)" unless open OUT, "> results_$identifier.loo.no.$loof_sub";
+    
+    foreach my $loo (@single_ds_files) {
+	my @loo_cells = split "_", $loo;
+	my $loo_sub = $loo_cells[2];
+	print OUT "$loo\n" if ($loof_sub ne $loo_sub);
+    }
+    close OUT;
+
+    
+    ########### comands for weights
+    print CMD "$postimp_name --out $identifier.loo.no.$loof_sub --result results_$identifier.loo.no.$loof_sub --nolahunt --noldsc --gwclump\n";
+
+    ###########  commands for scores
+    print SCO "$postimp_name --out $identifier.loo.no.$loof_sub --score daner_$identifier.loo.no.$loof_sub.gz.clumped.xmhc.gz --pheno $loof.pt --mds $mds_name --coco $cocostr\n";
+
+
+
+    
+}
+close CMD;
+close SCO;
+
+
+
+#print "debug\n";
+#exit;
+
+
+
+my $path = &Cwd::cwd();
+
+
+die $!."(README.loo.txt)" unless open OUT, "> README.loo.txt";
+print OUT "instructions for getting the genome - wide leave one out weights\n";
+
+print OUT "----------------------------------------------------------------\n";
+print OUT "cd $path\n";
+print OUT "----------------------------------------------------------------\n";
+
+print OUT "change executing permissions:\n";
+print OUT "chmod a+x start_loo_weights.cmd\n";
+print OUT "chmod a+x $root/start_loo_scores.cmd\n";
+print OUT "-----------------------------------------------------------------------\n";
+
+print OUT "----------------------------------------------------------------\n";
+print OUT "start the whole meta-result once (splitting up the single datasets into smaller chunks)\n";
+print OUT "cd $path\n";
+print OUT "$postimp_name --out $identifier --result results_$identifier --nolahunt --noldsc --gwclump\n";
+
+print OUT "\n\n";
+print OUT "please continue only after the last step has been successfully finished\n";
+print OUT "-----------------------------------------------------------------------\n";
+print OUT "\n\n";
+print OUT "then start $nst runs of leave one out meta-analyses\n";
+print OUT "cd $path\n";
+print OUT "./start_loo_weights.cmd\n";
+
+print OUT "\n\n";
+print OUT "please continue only after the last step has been successfully finished\n";
+print OUT "-----------------------------------------------------------------------\n";
+print OUT "\n\n";
+print OUT "then start $nst runs of scorings\n";
+print OUT "cd $root\n";
+print OUT "ln -s results_$identifier/distribution/*/*clumped*.gz .\n";
+
+print OUT "./start_loo_scores.cmd\n";
+
+print OUT "\n\n";
+print OUT "please continue only after the last step has been successfully finished\n";
+print OUT "-----------------------------------------------------------------------\n";
+print OUT "\n\n";
+print OUT "then start plotting the results\n";
+print OUT "cd $root/distribution\n";
+print OUT "danscrore_multiplot COMBINEDSTR\n\n\n";
+close OUT;
+
+
+
+
+
+
+
+
+
+
+
+
+
+print "--------------------------------------\n";
+print "Success: prepared a subdir for $nst single datasets\n";
+print "see $path/README.loo.txt for detailed instructions\n";
+print "--------------------------------------------------------\n";
+
+#die $!." <$deffile>" unless open IN, "< $deffile";
+#while (my $line = <IN>){
+#    my @cells = @{&split_line_ref(\$line)};
+#    $trans{$cells[0]} = $cells[7];
+#    print "$cells[7]\n";
+
+#}
+
+
+
+
+#########################################
+exit
+########################################
+
+
+

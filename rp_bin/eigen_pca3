@@ -180,9 +180,16 @@ $long = $keep if ($keep);
 my $subdir_eigen="$sloc/eigen_pca.$dat_bfile.$ref_bfile.".$long;
 print "workdir: $subdir_eigen\n";
 
+
+
+while (-e $subdir_eigen) {
+    $subdir_eigen .= ".e";
+}
+
+
 use File::Path;
 
-&mysystem ("rm -rf $subdir_eigen");
+#&mysystem ("rm -rf $subdir_eigen");
 
 my @created = mkpath(
     "$subdir_eigen",
@@ -519,5 +526,8 @@ copy ("$dat_bfile.emds","$rootdir/$out_file") or print "no emds\n";
 copy ("$dat_bfile.full.emds","$rootdir/$outf_file") or print "no full_emds\n";
 copy ("$merge_name.eval","$rootdir/") or print "no eval\n";
 
+
+&mysystem("rm -rf $subdir_eigen");
+
+
 exit;
-#&mysystem("rm -rf $subdir_eigen");

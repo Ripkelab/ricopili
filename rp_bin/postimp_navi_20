@@ -277,8 +277,11 @@ version: $version
 
   --polyfrom STRING   ID-pt-file containing training set, creates then a danscore-file.
   --polyto STRING     ID-pt-file containing target set
-  --danscore STRING   score - file
+  --score STRING      score - file
   --range STRING      range - file
+
+
+  --bgscore           use best guess for scoring (way faster)
 
   --minthread INT     minimum multithreading
 
@@ -376,6 +379,7 @@ GetOptions(
     "popname=s"=> \$popname,
     "refiex=s"=> \my $refiex_file,
     "score=s"=> \$danscore_file,
+    "bgscore"=> \my $bgscore,
     "range=s"=> \$range_file,
     "polyfrom=s"=> \$polyfrom_file,
     "polyto=s"=> \$polyto_file,
@@ -1150,6 +1154,12 @@ my @bimfli_files;
 my $dasudir = "$rootdir/dasu";
 
 
+my $bgdir = "$rootdir/cobg_dir_genome_wide";
+
+
+
+
+
 unless (-e "datasets_info") {
     print "warning: no datasets_info, create one with all datasets\n";
     my @files = ();
@@ -1467,10 +1477,16 @@ unless ($danscore_file ne "") {
 }
 
 if ($danscore_file ne "") {
-my @created = mkpath(   ## $created ?
-			$danscoredir,
-			{verbose => 0, mode => 0750},
-    );
+    my @created = mkpath(   ## $created ?
+			    $danscoredir,
+			    {verbose => 0, mode => 0750},
+	);
+    if ($bgscore) {
+	unless (-e $bgdir) {
+	    print "Error: no best guess directory ($bgdir) found\n";
+	    exit;
+	}
+    }
 }
 
 if ($danscore_file ne "") {
@@ -1971,6 +1987,9 @@ $danscore_neg = 1 if (-e "$rootdir/danscore_$outname"."_done");
 
 my $n_old_format = 0;
 my $n_nomap = 0;
+
+my %bg_in;
+
 unless (-e "$rootdir/daner_$outname.done") {
     unless ($result_name){
 	foreach my $refind (@refind_arr) {
@@ -2098,7 +2117,9 @@ unless (-e "$rootdir/daner_$outname.done") {
 			    }
 			    else {
 				if ($n_nomap < 100) {
-				    print "no map file ($mapfile)\n";
+				    unless ($bgscore) {
+					print "Warning: no map file ($mapfile)\n";
+				    }
 				}
 				$n_nomap++;
 
@@ -2109,56 +2130,63 @@ unless (-e "$rootdir/daner_$outname.done") {
 		    }
 		}
 
+
+
+
 		if ($danscore_neg == 0) {
-
+#		    print "score bfile: $_, $refind\n";		
 		    if ($danscore_file ne "") {
-#		    if (-e $dasudir_loc_qc1) {
-#			$dasudir_loc = "$dasudir_loc_qc1/qc1";
-#		    }	
-#		    print "$dasudir_loc\n$dasudir_loc_qc1\n";	
-#		    sleep(2);
-
+			
 			my $danscoredir_loc = "$danscoredir/dsc_$bfile";
-#			my $danscoredir_map = "$danscoredir/dsc._$bfile.map";
-			my $ident = "$bfile.$refind";
-			if ($hg19_remove) {
-			    $ident =~ s/.hg19.ch.fl/.ch.fl/;
-			}
-
-
-#			print "cat $dasudir_loc/dos_$ident.out.dosage.map >> dsc._$bfile.map\n";
-## ident = scz_swe1_eur-qc.ch.fl.chr13_080_085
-
-##     dos_scz_port_eur-qc.ch.fl.chr9_030_035.out.dosage.map
-#		    print "ident: $danscoredir_loc/dan_$ident.profile.log\n";
-			unless (-e "$danscoredir_loc/dan_$ident.profile.log"){
-#			print "not yet her: $danscoredir_loc/dan_$ident.profile.log\n";
-#			print "not yet her: $bfile\n";
-			    my $take = 1;
-			    if ($trioset_file){
-				unless (exists $trioset{$bfile}) {
-				    $take = 0;
+			
+			if ($bgscore) {
+			    
+			    my $bfile_bg = "$bfile.bgn";
+			    my $workname = "score.$bfile_bg";
+			    
+			    unless (exists $bg_in{$bfile_bg}) {			    
+				unless (-e "$danscoredir_loc/R.$workname.hl_nw.Rin"){
+				    
+				    my $sys_loc = "$daner_script --score $danscore_file --range $range_file --nosi --indir $bgdir $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danscoredir_loc --bfile $bfile_bg nouse";
+				    
+				    push @danscore_arr, $sys_loc;
+#				    print "$sys_loc\n";
+				    
+				    $bg_in{$bfile_bg} = 1;
 				}
 			    }
-
-#			print "hier: $danscoredir_loc/dan_$ident.profile.log\n";
-#			sleep(1);
-#			sleep(10);
-#			exit;
-			    if ($take == 1) {
-				my $mapfile = "$dasudir_loc/dos_$ident.out.dosage.map";
-				if (-e $mapfile) {
-				    push @danscore_arr, "$daner_script --score $danscore_file --range $range_file --nosi --indir $dasudir_loc $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danscoredir_loc $ident";
-				    
+			}
+			else {
+			    my $ident = "$bfile.$refind";
+			    if ($hg19_remove) {
+				$ident =~ s/.hg19.ch.fl/.ch.fl/;
+			    }
+			    
+			    
+			    ### getting danscore_jobs
+			    unless (-e "$danscoredir_loc/dan_$ident.profile.log"){
+				
+				my $take = 1;
+				if ($trioset_file){
+				    unless (exists $trioset{$bfile}) {
+					$take = 0;
+				    }
 				}
-				else {
-				    print "$mapfile not existing, maybe empty\n";
+				
+				if ($take == 1) {
+				    my $mapfile = "$dasudir_loc/dos_$ident.out.dosage.map";
+				    if (-e $mapfile) {
+					push @danscore_arr, "$daner_script --score $danscore_file --range $range_file --nosi --indir $dasudir_loc $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danscoredir_loc $ident";
+					
+				    }
+				    else {
+					print "$mapfile not existing, maybe empty\n";
+				    }
 				}
 			    }
 			}
 		    }
 		}
-
 	    }
 	    
 	    ### META-disease
@@ -2220,7 +2248,8 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 
 
-
+#print "debug";
+#exit;
 
 
 if (@danscore_arr > 0) {
@@ -2229,6 +2258,10 @@ if (@danscore_arr > 0) {
     $sjaname = "danscore";
     $sjatime = 1;
     $sjamem = 1000;
+    if ($bgscore) {
+	$sjatime = 2;
+	$sjamem = 4000;
+    }
     @sjaarray = @danscore_arr;
     
     &send_jobarray;
@@ -2238,7 +2271,45 @@ if (@danscore_arr > 0) {
 
 
 #print "end\n";
+if  ($bgscore) {
 
+
+    foreach (@bimfli_files) {
+	my $bfile = $_;
+	$bfile =~ s/.bim$//;
+	my $danscoredir_loc = "$danscoredir/dsc_$bfile";
+	my $bfile_long = "score.$bfile.bgn";
+
+	&mysystem ("cp $danscoredir_loc/$bfile_long.pdf $distdir");
+	&mysystem ("cp $danscoredir_loc/$bfile_long.poly.out.txt.combined $distdir");
+	&mysystem ("cp $danscoredir_loc/$bfile_long.tar.gz $distdir");
+	&mysystem ("cp $danscoredir_loc/$bfile.bgn.fam.pt.ex $distdir");
+	&mysystem ("cp $danscoredir_loc/R.$bfile_long.hl_nw.Rin $distdir");
+	
+
+    }
+#    print "debug\n";
+#    exit;
+
+
+
+    #############################################################
+    ## SUCCESSSS
+    #############################################################
+    
+    $sjadir = $rootdir;
+    $sjaname = "finished";
+    push @sjaarray, "tmp";
+    $sjatime = 2;
+    $sjamem = 1000;
+    
+    
+    &send_jobarray;
+
+
+
+}
+else {
 if ($danscore_file ne "") {
 
     foreach (@bimfli_files) {
@@ -2425,6 +2496,7 @@ if ($danscore_file ne "") {
 
     
     exit;
+}
 }
 
 
@@ -3961,6 +4033,7 @@ unless ($nohet_sw) {
 
 unless (-e "manhattan.daner_$outname.gz.nog.pdf.empty") {
     &mysystem ("$shrinkpdf_script manhattan.daner_$outname.gz.nog.pdf") unless (-e "orig.manhattan.daner_$outname.gz.nog.pdf");
+#    exit;
     &mysystem ("cp manhattan.daner_$outname.gz.nog.pdf $distdir/manhattan.nog.$outname.pdf") unless (-e "$distdir/manhattan.nog.$outname.pdf");
 }
 unless (-e "manhattan.daner_$outname.gz.nog2.pdf.empty") {
@@ -4467,7 +4540,7 @@ unless (-e "replic/README") {
     &mysystem ("$linksub_script $distdir/$areator_all") ;
     &mysystem ("$linksub_script $distdir/$daner_all.p3.gz") ;
 
-    my $repl_txt = "replicator11 --dan --areator $areator_all --gwas $daner_all.p3.gz --format 7 --refdir $areat_refdir --index --trust --rep REPFILE";
+    my $repl_txt = "$replicator_script --dan --areator $areator_all --gwas $daner_all.p3.gz --format 7 --refdir $areat_refdir --index --trust --rep REPFILE";
 
     &mysystem ("echo $repl_txt > README") ;
 }

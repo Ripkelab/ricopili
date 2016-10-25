@@ -654,15 +654,15 @@ version: $version
  --out is mandatory
 
 
-you can use this as reference
- $hm3_ceu
+#you can use this as reference
+# $hm3_ceu
 
 
-even better four 1KG populations:
-ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_4pop_mix_SEQ.bed/bim/fam .
+## world wide 1KG populations:
+ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_4pop_mix_SEQ.* .
 
 
-only euros:
+## european 1KG countries:
 ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_euro_eur_SEQ.det.* .
 
 
@@ -2223,8 +2223,7 @@ unless (-e "$bfile_menv.mds") {
 					    $flip_arr[$cc] = 1;
 					}
 					else {
-					    print "Error: no match, not at all: $cells[$cc], $ref_id_arr[$cc], $cells[0], $cells[1], $bfile_menv.chuids$count_chunk.full.emds\n";
-					    exit;
+					    print "Warning: no match, not at all: $cells[$cc], $ref_id_arr[$cc], $cells[0], $cells[1], $bfile_menv.chuids$count_chunk.full.emds\n";
 					}
 #					print $count_chunk."\t".$cells[$cc]."\t".$ref_id_arr[$cc]."\t".$flip_arr[$cc]."\n";
 				    }
@@ -2265,26 +2264,26 @@ unless (-e "$bfile_menv.mds") {
 				foreach (@s1) {
 				    if ($_ ne $s2[$c]) {
 					my $diff = $_ - $s2[$c];
-					if ($diff < -0.01 || $diff > 0.01) {
+					if ($diff < -0.02 || $diff > 0.02) {
 					    $sigdiff = 1;
-					    $sigdiff_txt .= "different: $c\n";
-					    $sigdiff_txt .= "amount: $diff\n";
-					    $sigdiff_txt .= "1: $_\n";
+					    $sigdiff_txt .= "different: $c\t";
+					    $sigdiff_txt .= "amount: $diff\t";
+					    $sigdiff_txt .= "1: $_\t";
 					    $sigdiff_txt .= "2: $s2[$c]\n";
 					}
 				    }
 				    $c++;
 				}
 				if ($sigdiff) {
-				    print "Error: different mds outcomes for $id_tmp in $bfile_menv.chuids$count_chunk.full.emds\n";
+				    print "Warning: different mds outcomes for $id_tmp in $bfile_menv.chuids$count_chunk.full.emds\n";
 				    print "$emds_hash{$id_tmp}";
 				    print "@cells\n";
-				    print "-------------------------------------\n";
-				    print "$sigdiff_txt\n";
+#				    print "-------------------------------------\n";
+				    print "$sigdiff_txt";
 				    print "-------------------------------------\n";
 				    
 
-				    exit;
+#				    exit;
 
 				}
 				else {

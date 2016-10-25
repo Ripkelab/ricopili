@@ -908,6 +908,7 @@ print "\n";
 my %longvar = ("ploc","PLINK",
 	       "p2loc","PLINK2",
 	       "shloc","SHAPEIT",
+	       "ealoc","EAGLE",
 	       "i2loc","IMPUTE2",
 	       "liloc","Liftover",
 	       "eloc","Eigenstrat",
@@ -922,7 +923,8 @@ my %longvar = ("ploc","PLINK",
 
 my %variables = ("ploc", "",
 		  "p2loc","",
-		  "shloc","",
+		 "shloc","",
+		 "ealoc","",
 		 "i2loc","",
 		  "liloc","",
 		  "eloc","",
@@ -941,6 +943,7 @@ if ($clusters{broad}){
     %variables = ("ploc", "/home/unix/sripke/plink_src/src/",
 		  "p2loc","/home/unix/sripke/plink_src/plink_1.9_newest/",
 		  "shloc","/home/unix/sripke/shapeit/",
+		  "ealoc","/psych/genetics_data/ripke/rp_bins/Eagle_v2.2/",
 		  "i2loc","/psych/genetics_data/ripke/references_from_debakkerscratch/impute_v2/impute_v2/impute_2.2.7_beta/",
 		  "liloc","/home/unix/sripke/liftover/",
 		  "eloc","/home/unix/sripke/eigensoft/bin",
@@ -957,12 +960,13 @@ elsif ($clusters{lisa}){
     %variables = ("ploc", "/home/gwas/plink/1.08/src",
 		  "p2loc","/home/gwas/plink2/plink_1.9_newest",
 		  "shloc","/home/gwas/shapeit",
+		  "ealoc","/home/gwas/eagle/Eagle_v2.2",
 		  "i2loc","/home/gwas/bin_impute_v2/impute_v2.2.2_x86_64_static",
 		  "liloc","/home/gwas/liftover",
 		  "ldloc","/home/gwas/ldsc/",
 		  "eloc","/home/gwas/eigensoft",
 		  "rloc","/sara/sw/R-3.1.2/bin/",
-		  "rpac","NA",
+		  "rpac","/home/gwas/Rlibs",
 		  "hmloc","/home/gwas/pgc-samples/hapmap_ref/",
 		  "meloc","/home/gwas/metal",
 #		  "hvloc","./",
@@ -975,6 +979,7 @@ elsif ($clusters{computerome}){
     %variables = ("ploc", "/home/people/sripke/rp_external_bins/plink/",
 		  "p2loc","/home/people/sripke/rp_external_bins/plink_1.9_newest/",
 		  "shloc","/home/people/sripke/rp_external_bins/shapeit/",
+		  "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
 		  "i2loc","/home/people/sripke/rp_external_bins/impute2/",
 		  "liloc","/home/people/sripke/rp_external_bins/liftover/",
 		  "ldloc","/home/people/sripke/rp_external_bins/ldsc/",
@@ -992,6 +997,7 @@ elsif ($clusters{co_ipsych}){
     %variables = ("ploc", "/data/tools/plink-1.07/",
 		  "p2loc","/data/tools/plink2_sept2015/",
 		  "shloc","/data/tools/shapeit_sept_2015/",
+		  "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
 		  "i2loc","/data/tools/impute-2.3.2/",
 		  "liloc","/data/user_tools/rp_external_bins/liftover/",
 		  "ldloc","/data/user_tools/rp_external_bins/ldsc/",
@@ -1008,6 +1014,7 @@ elsif ($clusters{genomedk}){
     %variables = ("ploc", "/project/ricopili/plink_src/",
 		  "p2loc","/project/ricopili/plink_1.9_jul4/",
 		  "shloc","/project/ricopili/3rd_bins/shapeit/",
+		  "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
 		  "i2loc","/project/ricopili/3rd_bins/impute2/",
 		  "liloc","/project/ricopili/3rd_bins/liftover/",
 		  "eloc","/project/ricopili/3rd_bins/eigenstrat/bin/",
@@ -1023,6 +1030,7 @@ elsif ($clusters{mssm}){
     %variables = ("ploc", "/hpc/users/xripkes01/ricopili/3rd_binaries/plink-1.07-src-sripke/",
 		  "p2loc","/hpc/users/xripkes01/ricopili/3rd_binaries/plink-1.09-src-aug4/",
 		  "shloc","/hpc/users/xripkes01/ricopili/3rd_binaries/shapeit/",
+		  "ealoc","pleasedownload_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
 		  "i2loc","/hpc/users/xripkes01/ricopili/3rd_binaries/impute2/",
 		  "liloc","/hpc/users/xripkes01/ricopili/3rd_binaries/liftover/",
 		  "eloc","/hpc/packages/minerva-common/eigensoft/5.0.1/bin/",
@@ -1035,16 +1043,17 @@ elsif ($clusters{mssm}){
 }
     elsif ($clusters{uppmax}){
         %variables = ("ploc", "/sw/apps/bioinfo/plink/1.07/$uppmax_cluster/",
-    		  "p2loc","/proj/$uppmax_project/ricopili/software/plink2/",
-    		  "shloc","/proj/$uppmax_project/ricopili/software/shapeit/bin/",
-    		  "i2loc","/proj/$uppmax_project/ricopili/software/impute2/impute_v2.3.2_x86_64_static/",
-    		  "liloc","/proj/$uppmax_project/ricopili/software/liftover/",
-    		  "ldloc","/proj/$uppmax_project/ricopili/software/ldsc/",
-    		  "eloc","/proj/$uppmax_project/ricopili/software/EIG6.0.1/bin/",
-    		  "rloc","/usr/bin/",
-    		  "rpac","/proj/$uppmax_project/ricopili/software/Rpackages",
-    		  "hmloc","/proj/$uppmax_project/ricopili/hapmap_ref/",
-    		  "meloc","/proj/$uppmax_project/ricopili/software/metal/generic-metal/"
+		      "p2loc","/proj/$uppmax_project/ricopili/software/plink2/",
+		      "shloc","/proj/$uppmax_project/ricopili/software/shapeit/bin/",
+		      "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
+		      "i2loc","/proj/$uppmax_project/ricopili/software/impute2/impute_v2.3.2_x86_64_static/",
+		      "liloc","/proj/$uppmax_project/ricopili/software/liftover/",
+		      "ldloc","/proj/$uppmax_project/ricopili/software/ldsc/",
+		      "eloc","/proj/$uppmax_project/ricopili/software/EIG6.0.1/bin/",
+		      "rloc","/usr/bin/",
+		      "rpac","/proj/$uppmax_project/ricopili/software/Rpackages",
+		      "hmloc","/proj/$uppmax_project/ricopili/hapmap_ref/",
+		      "meloc","/proj/$uppmax_project/ricopili/software/metal/generic-metal/"
     	);
 }
 
@@ -1159,7 +1168,7 @@ foreach (@log_file) {
 # check whether all binary directories exist
 ############################
 my @fail_path = ();
-my %locs = ("ploc","","p2loc","","shloc","","i2loc","","liloc","","eloc","","rloc","","hmloc","","meloc","","ldloc","","rpac","");
+my %locs = ("ploc","","p2loc","","shloc","","ealoc","","i2loc","","liloc","","eloc","","rloc","","hmloc","","meloc","","ldloc","","rpac","");
 
 die $!."($conf_file)" unless open FILE, "< $conf_file";
 while (my $line = <FILE>){

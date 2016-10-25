@@ -30,7 +30,7 @@ use Ricopili::Utils qw(trans);
 # read config file
 #############################
 
-my $ploc = &trans("ploc");
+my $ploc = &trans("p2loc");
 my $sloc = &trans("sloc");
 my $qloc = &trans("queue");
 
@@ -727,7 +727,7 @@ exit;
 ###########################################
 ### here run for INFO and Freq
 ############################################
-my $sys = "$ploc/plink --dosage $dosfile_clean.gz format=2 Zin --fam $famfile --allow-no-sex --out $workname --map $mapfile ";
+my $sys = "$ploc/plink --dosage $dosfile_clean.gz format=2 --fam $famfile --allow-no-sex --out $workname --map $mapfile ";
 #my $sys = "$ploc/plink --dosage $dosfile format=2 Zin --fam $famfile --allow-no-sex --out $workname --map $mapfile ";
 # $sys = "$ploc/plink --dosage $dosfile format=2 Zin --fam $famfile.pt --allow-no-sex --logistic --out $workname --map $mapfile $cov_str $idex_str $idin_str";
 
@@ -777,7 +777,7 @@ close MO;
 ###########################################
 ### here write new dosage file
 ############################################
-$sys = "$ploc/plink --dosage $dosfile format=2 Zin --fam $famfile --allow-no-sex --out $workname --map $mapout --write-dosage ";
+$sys = "$ploc/plink --dosage $dosfile format=2 --fam $famfile --allow-no-sex --out $workname --map $mapout --write-dosage ";
 
 
 &mysystem($sys);

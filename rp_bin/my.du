@@ -12,7 +12,7 @@ my $date = "$cells[1]"."_"."$cells[4]";
 #exit;
 
 
-my $sc = system ('du -h --summarize *'." | sort -k1,1h > du_out_$date");
+my $sc = system ('du -h --summarize * .'." | sort -k1,1h > du_out_$date");
 print "systemcode: $sc\n";
 if ($sc == 0){
     system ("touch du.fini");
@@ -20,6 +20,7 @@ if ($sc == 0){
 }
 
 
+system ('tail -10 '."du_out_$date");
 
 
 
