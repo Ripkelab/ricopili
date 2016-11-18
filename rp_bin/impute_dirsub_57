@@ -229,6 +229,7 @@ $ref_coll[322] = "$hapmap_ref_root"."finref/fineur/refdan/subchr";
 my $info_th = 0.1;
 my $freq_th = 0.005;
 my $bg_th = 0.8;
+my $ne = "";
 
 my $sjamem_incr = 0;
 
@@ -298,7 +299,6 @@ version: $version
                                 for checkflip (compare to reference)
 
 
-
  
 #### post - imputation cleaning
 
@@ -310,6 +310,8 @@ version: $version
 
 
 ### technical options
+
+ --ne INT          effective sample size for SHAPEIT and IMPUTE2
 
   --refiex            file containing refinds to exclude
 
@@ -476,7 +478,7 @@ GetOptions(
     "noclean"=> \my $noclean,
     "force1"=> \my $force1,
     "eagle"=> \my $eagle_sw,
-
+    "ne=i"=> \$ne,
 
     "popname=s"=> \$popname,
     "refiex=s"=> \my $refiex_file,
@@ -2226,6 +2228,9 @@ if ($prephase_done == 0) {
 		    if ($eagle_sw) { 
 			$backbone .= " --eagle";
 		    }
+		    if ($ne ne "") {
+		        $backbone .= " --ne $ne";
+		    }
 		    if ($multi_sw == 0) {
 			push @preph_arr, $backbone;
 		    }
@@ -2605,9 +2610,14 @@ if ($imp2_done == 0) {
 		    if ($phas == 923 || $phas == 9123 || $phas == 91231) {
 			$xtxt = "--chrX $haps_file_loc_sample";
 		    }
+
+		    my $ne_txt = "";
+		    if ($ne ne ""){
+		        $ne_txt = "--ne $ne";
+		    }
 		   		    
 		    unless (exists $finifiles_hash{$pi_ch_out_fini} ) {
-			my $sys_loc = "$imp2_script $xtxt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk  --gema $gema_file";
+			my $sys_loc = "$imp2_script $xtxt $ne_txt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk  --gema $gema_file";
 #			print "$sys_loc\n";
 			push @imp2_arr, $sys_loc;
 #			exit;

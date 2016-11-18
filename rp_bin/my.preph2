@@ -32,6 +32,7 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --multi INT       multithreading
  --chrX            for X chromosome
  --spliha INT      for splitter
+ --ne              effective population size (SHAPEIT only)
  --eagle           use eagle instead of shapeit
 
 ";
@@ -42,6 +43,7 @@ my $gemafile = "";
 my $famfile = "";
 my $multi = 0;
 my $spliha = 0;
+my $ne = 15000;
 
 use Getopt::Long;
 GetOptions( 
@@ -54,6 +56,7 @@ GetOptions(
     "spliha=i"=> \ $spliha,
     "chrX"=> \my $chrx,
     "eagle"=> \my $eagle_sw,
+    "ne=i"=> \ $ne,
     );
 
 if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $famfile eq "" || $spliha == 0){
@@ -111,7 +114,7 @@ sub split_line_ref {
 die $!."$outname.phase.cmd" unless open BC, "> $outname.phase.cmd";
 
 
-my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $inname.bim $famfile --output-max $outname.haps $outname.sample --output-log $outname.shape.log --input-map $gemafile $multi_txt > /dev/null";
+my $sys_loc = "$shloc/$shapeit_bin --seed 123454 --effective-size $ne $xtxt --input-bed $inname.bed $inname.bim $famfile --output-max $outname.haps $outname.sample --output-log $outname.shape.log --input-map $gemafile $multi_txt > /dev/null";
 
 if ($eagle_sw) {
     $gemafile =~ s/.txt$/.chr.txt/;
