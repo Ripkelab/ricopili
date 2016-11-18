@@ -121,20 +121,24 @@ print "write $merge_list_name\n";
 
 open MERGE, ">", "$merge_list_name" or die $!;
 my $bfile_count=0;
+my $bfile_first=" ";
 foreach my $bele (@bfile_list) {
     if ($bele eq $out) {
-	print "skipping $out\n";
-	next;
+		print "skipping $out\n";
+		next;
     }
-    elsif ($bele =~ /bgs-merge/){
-
-	print "skipping $bele\n";
-	next;
+    elsif ($bele eq $out."-merge"){
+		print "skipping $bele\n";
+		next;
     }
-    unless ($bfile_count == 0){
-	print MERGE "$bele.bed $bele.bim $bele.fam\n" if $bfile_count++ > 0 ;
-    }
-    $bfile_count++;
+	elsif ($bfile_count == 0){
+		$bfile_first=$bele;
+		$bfile_count++;	
+	}
+	else {
+		print MERGE "$bele.bed $bele.bim $bele.fam\n";
+    	$bfile_count++;
+	}
 }
 close (MERGE);
 
@@ -142,9 +146,9 @@ close (MERGE);
 #print "debug\n";
 #exit;
 
-print "merge ".@bfile_list." chunks in the directory\n";
+print "merge ".$bfile_count." chunks in the directory\n";
 
-my $system="$p2loc/plink --memory 4000  --allow-no-sex --bfile $bfile_list[0] --merge-list $merge_list_name --out $out --make-bed" ;
+my $system="$p2loc/plink --memory 4000  --allow-no-sex --bfile $bfile_first --merge-list $merge_list_name --out $out --make-bed" ;
 #print "$system\n";
 #exit;
 &mysystem ("$system");
