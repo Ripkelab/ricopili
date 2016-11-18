@@ -25,7 +25,7 @@ my $ploc = &trans("p2loc");
 
 ###############################################
 
-
+my $plinkmem = 2000;
 
 ##### help message
 my $usage = "
@@ -38,6 +38,7 @@ version: $version
   --fam STRING        fam-file, mandatory
   --bim STRING        bim-file, mandatory
   --chr INT           chromosome
+  --plinkmem INT      memory for plink --dosage (in MB), default $plinkmem
   --help              print this message and exit
 
   --prefix STRING     prefix into famfile
@@ -60,6 +61,7 @@ GetOptions(
     "fam=s"=> \my $famname,
     "bim=s"=> \my $bimname,
     "chr=i"=> \my $chr,
+    "plinkmem=i" => \$plinkmem,
 
     );
 
@@ -248,12 +250,12 @@ close OF;
 my $twodos_tmp = "$haps_file1.combined.tmp2dos.gz";
 my $twodos_tmp_success = "$twodos_tmp.fini";
 my $imp_proc = "impprob_to_2dos $haps_file_gz $twodos_tmp";
-print "improb script: $imp_proc\n";
 
 #print "debug\n";
 #    sleep(10);
 
 unless (-e $twodos_tmp_success) {
+    print "improb script: $imp_proc\n";
     &mysystem ($imp_proc);
 }
 
@@ -270,7 +272,7 @@ unless (-e $twodos_tmp_success) {
 
 
 #my $sys_loc = "$ploc/plink --dosage $haps_file_gz noheader skip0=1 skip1=1 format=3 Z --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
-my $sys_loc = "$ploc/plink --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
+my $sys_loc = "$ploc/plink --threads 1 --memory $plinkmem --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
 print "$sys_loc\n";
 &mysystem ($sys_loc);
 
@@ -334,9 +336,16 @@ foreach (@cmd_collect) {
 close BC;
 
 
+my $outdosgz = "$dosout.out.dosage.gz";
 
-&mysystem ("touch $finiout");
-&mysystem ("rm $twodos_tmp");
-&mysystem("rm $haps_file_gz");
+if (-e $outdosgz) {
+    &mysystem ("touch $finiout");
+    &mysystem ("rm $twodos_tmp_success");
+    &mysystem ("rm $twodos_tmp");
+    &mysystem("rm $haps_file_gz");
     
-print "done\n";
+    print "done\n";
+}else{
+    die "Error: completed haps2dos4 without creating $outdosgz. Something strange is wrong.\n";
+}
+
