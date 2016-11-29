@@ -2809,7 +2809,7 @@ if ($dos_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "dos";
 	$sjatime = 2;
-#	$sjatime = 4 if ($dos_fini > 0);
+	$sjatime = 4 if ($dos_fini > 0);
 	$sjamem = 2000;
 	$sjamaxpar = 100;
 
