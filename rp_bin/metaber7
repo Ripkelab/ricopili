@@ -917,6 +917,9 @@ print DANER "\n";
 
 #print DANER "CHR\tSNP\tBP\tA1\tA2\tFRQ_A_$nca\tFRQ_U_$nco\tINFO\tOR\tSE\tP\tngt\tDirection\tHetISqt\tHetChiSq\tHetDf\tHetPVa\txdfPVa\n";
 
+my $neff_max_half = (4*$nca*$nco/($nca+$nco))/4;;
+my $neff_ex_n =0;
+
 while (<META>){
     chomp;
     my @cells = @{&split_line_ref(\$_)};
@@ -1022,7 +1025,18 @@ while (<META>){
     $out_row .= "\t".$nco{$snp_name};
     my $neff_str = sprintf "%.2f", $neff{$snp_name};
     $out_row .= "\t".$neff_str;
-    
+
+    my $neff_ex = 0;
+    if ($neff_str < $neff_max_half) {
+	if ($neff_ex_n < 10){
+	    print "exclude $snp_name because of low Neff\n";
+	}
+	if ($neff_ex_n == 10){
+	    print "more exclusions not printing\n";
+	}	
+	$neff_ex = 1;
+	$neff_ex_n++;
+    }
 #    for my $i (6..10) {
 #	$out_row .= "\t".$cells[$i];
 #    }
@@ -1034,7 +1048,9 @@ while (<META>){
 	$out_row .= "\t".$det_str{$snp_name};
     }
     $out_row .= "\n";
-    print DANER "$out_row";
+    unless ($neff_ex) {
+	print DANER "$out_row";
+    }
 
 
 }

@@ -3732,10 +3732,12 @@ if ($regplot_file) {
 
 }
 
-
+print "debug\n";
 my $forest_plot_collection = "areas.fo.$outname.pdf";
 if (@forestp_files > 0) {
+    print "debug2\n";
     unless (-e "$distdir/$forest_plot_collection") {
+	print "debug3\n";
 	print "join forest_plots\n";
 	&mysystem ("$pdfjoin_script --rotateoversize false --outfile $forest_plot_collection @forestp_files");
 #	&mysystem ("gzip $forest_plot_collection");
@@ -3743,6 +3745,7 @@ if (@forestp_files > 0) {
 	
     }
 }
+#sleep(10);
 
 my $forest_plot_collection_het = "areas.fo.het.$outname.pdf";
 if (@forestphet_files > 0) {

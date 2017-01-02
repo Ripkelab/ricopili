@@ -445,6 +445,7 @@ if (0) {
     $st_names{"scz_top3_eur"} = "SCZ SGENE - TOP3";
     $st_names{"scz_ucla_eur"} = "SCZ SGENE - UCLA";
     $st_names{"scz_zhh_eur"} = "SCZ Zucker - Hillside";
+
     $st_names{"replication.aust1e"} = "University of Queensland";
     $st_names{"replication.dk1d"} = "SGENE - Copenhagen";
     $st_names{"replication.multi1d"} = "Multicenter - Pedigree";
@@ -480,6 +481,9 @@ if (0) {
 
     $st_names{"met_BIP11.small.metadaner.ow"} = "PGC BD Stage 1";
 
+
+    
+
 }
 if (1) {
     
@@ -493,7 +497,18 @@ if (1) {
 #               mdd_ipsych_1215a.id2
     $st_names{"mdd_ukb_1215a.id2"} = "UKB";
     $st_names{"mdd_genscot_1215a"} = "GenScot";
-   
+
+
+
+    $st_names{"CLOZUK_deduplicated.assoc.dosage.nochrx"} = "CLOZUK 1 + 2";
+    $st_names{"PGC_SCZ_1016f.b"} = "PGC SCZ wave3 Oct 1016 f.b";
+    $st_names{"PGC_SCZ_1016.f.b.GCadjusted.c"} = "PGC SCZ wave3 Oct 1016 f.b (GC)";
+    $st_names{"DBSB_DBS1to23_exDENM"} = "iPSYCH";
+    $st_names{"PGC_SCZ52_0513a_noclo_noasian.1016a"} = "PGC SCZ wave2-";
+    $st_names{"PGC_SCZ_1016a.asian"} = "PGC SCZ asian Oct 2016";
+    $st_names{"PGC_SCZ_1016b.cauc.psychchip.comb_noaus1.c"} = "PGC SCZ cauc.psychchip Oct 2016";
+    $st_names{"PGC_SCZ_1016b.w3_nonpsychchp.nocogs_nogro_ngap1"} = "PGC SCZ nonpgc_w3 Oct 2016";
+       
 
 }
 
