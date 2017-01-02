@@ -2137,7 +2137,20 @@ unless (-e "$rootdir/daner_$outname.done") {
 			    
 			    unless (exists $bg_in{$bfile_bg}) {			    
 				unless (-e "$danscoredir_loc/R.$workname.hl_nw.Rin"){
-				    
+
+				    my $bg_bed = "$bgdir/$bfile_bg.bed";
+				    unless (-e $bg_bed) {
+					print "Warning: best_guess dataset not existing: $bg_bed\n";
+					$bfile_bg =~ s/.ch.fl.bgn$/.bgn/;
+
+					$bg_bed = "$bgdir/$bfile_bg.bed";
+					unless (-e $bg_bed) {
+					    print "Error: best_guess dataset not existing: $bg_bed\n";
+					    exit;
+					}
+					
+#					exit;
+				    }
 				    my $sys_loc = "$daner_script --score $danscore_file --range $range_file --nosi --indir $bgdir $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danscoredir_loc --bfile $bfile_bg nouse";
 				    
 				    push @danscore_arr, $sys_loc;
@@ -2179,6 +2192,11 @@ unless (-e "$rootdir/daner_$outname.done") {
 		    }
 		}
 	    }
+
+	    if ($bgscore) {
+		last;
+	    }
+	    
 	    
 	    ### META-disease
 	    my @dadimeta_arr = ();
