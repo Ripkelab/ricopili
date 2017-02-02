@@ -1081,7 +1081,11 @@ if ($danscore_file) {
 
 
 	&mysystem("tar -cvzf $workname.tar.gz @tarfiles");
-	my $sys = "danscore_result_3 --out $workname --tarball $workname.tar.gz";
+	my $trio_txt = "";
+	unless ($mds_name) {
+	    $trio_txt = "--trio";
+	}
+	my $sys = "danscore_result_3 --out $workname --tarball $workname.tar.gz $trio_txt";
 	&mysystem($sys);	
 
 

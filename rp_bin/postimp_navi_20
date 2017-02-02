@@ -2133,28 +2133,31 @@ unless (-e "$rootdir/daner_$outname.done") {
 			if ($bgscore) {
 			    
 			    my $bfile_bg = "$bfile.bgn";
+			    my $bg_bed = "$bgdir/$bfile_bg.bed";
+
+			    ## for backward compatibility
+			    unless (-e $bg_bed) {
+				print "Warning: best_guess dataset not existing: $bg_bed\n";
+				$bfile_bg =~ s/.ch.fl.bgn$/.bgn/;
+				
+				$bg_bed = "$bgdir/$bfile_bg.bed";
+				unless (-e $bg_bed) {
+				    print "Error: best_guess dataset not existing: $bg_bed\n";
+				    exit;
+				}
+				
+			    }
 			    my $workname = "score.$bfile_bg";
 			    
 			    unless (exists $bg_in{$bfile_bg}) {			    
 				unless (-e "$danscoredir_loc/R.$workname.hl_nw.Rin"){
 
-				    my $bg_bed = "$bgdir/$bfile_bg.bed";
-				    unless (-e $bg_bed) {
-					print "Warning: best_guess dataset not existing: $bg_bed\n";
-					$bfile_bg =~ s/.ch.fl.bgn$/.bgn/;
 
-					$bg_bed = "$bgdir/$bfile_bg.bed";
-					unless (-e $bg_bed) {
-					    print "Error: best_guess dataset not existing: $bg_bed\n";
-					    exit;
-					}
-					
-#					exit;
-				    }
 				    my $sys_loc = "$daner_script --score $danscore_file --range $range_file --nosi --indir $bgdir $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danscoredir_loc --bfile $bfile_bg nouse";
 				    
 				    push @danscore_arr, $sys_loc;
-#				    print "$sys_loc\n";
+				    print "$sys_loc\n";
+				    print "$danscoredir_loc/R.$workname.hl_nw.Rin\n";
 				    
 				    $bg_in{$bfile_bg} = 1;
 				}
@@ -2288,11 +2291,27 @@ if  ($bgscore) {
 	$bfile =~ s/.bim$//;
 	my $danscoredir_loc = "$danscoredir/dsc_$bfile";
 	my $bfile_long = "score.$bfile.bgn";
+	my $bfile_short = "$bfile.bgn";
+
+	## test for backwards compatibility
+	my $pdf_tmp = "$danscoredir_loc/$bfile_long.pdf";
+	unless (-e $pdf_tmp) {
+	    print "Warning: pdf not existing: $pdf_tmp\n";
+	    $bfile_long =~ s/.ch.fl.bgn$/.bgn/;
+	    $bfile_short =~ s/.ch.fl.bgn$/.bgn/;
+
+	    $pdf_tmp = "$danscoredir_loc/$bfile_long.pdf";
+	    unless (-e $pdf_tmp) {
+		print "Error: pdf not existing: $pdf_tmp\n";
+		exit;
+	    }
+	    
+	}
 
 	&mysystem ("cp $danscoredir_loc/$bfile_long.pdf $distdir");
 	&mysystem ("cp $danscoredir_loc/$bfile_long.poly.out.txt.combined $distdir");
 	&mysystem ("cp $danscoredir_loc/$bfile_long.tar.gz $distdir");
-	&mysystem ("cp $danscoredir_loc/$bfile.bgn.fam.pt.ex $distdir");
+	&mysystem ("cp $danscoredir_loc/$bfile_short.fam.pt.ex $distdir");
 	&mysystem ("cp $danscoredir_loc/R.$bfile_long.hl_nw.Rin $distdir");
 	
 
