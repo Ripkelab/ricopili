@@ -951,7 +951,7 @@ if ($clusters{broad}){
 		  "rloc","broadinstitute",
 		  "rpac","NA",
 		  "hmloc","/psych/genetics_data/ripke/references_outdated/hapmap_ref/",
-		  "meloc","/psych/genetics_data/ripke/references_from_debakkerscratch/metal/",
+		  "meloc","/psych/genetics_data/ripke/references_from_debakkerscratch/metal/2011_03/",
 #		  "hvloc","/home/radon01/sripke/bakker_ripke/haploview/",
 	);
 }
