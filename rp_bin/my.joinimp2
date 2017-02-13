@@ -42,7 +42,9 @@ start within new (empty directory)
 ";
 
 
-
+print "please only full paths (no relative links)\n";
+sleep (2);
+exit;
 
 print "replace reference_info\n";
 print "look for triset\n";
