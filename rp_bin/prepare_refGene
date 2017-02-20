@@ -1,0 +1,169 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+
+my $usage = "
+Usage : $progname refGene (unzipped)
+
+
+options : 
+
+  -help         display this message and exit
+
+version: $version
+
+
+ rewrites gene-file for usage in areator and ricopili
+
+
+ created by Stephan Ripke 2013 at MGH Boston
+
+";
+
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help, # prints help message
+    );
+
+
+
+die $usage if ( $help);
+
+my %gene_rows;
+my %gene_size_hash;
+
+my $rgname = $ARGV[0];
+my $rgname_out = $rgname.".out";
+
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem (){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+###################################################
+###  BEGIN
+###################################################
+
+
+my $cc=0;
+die $! unless open IN, "< $rgname";
+# f3,4,5,6,9,10,11,13
+#  2 3 4 5 8  9 10 12
+while (my $line = <IN>){
+    my @cells = @{&split_line_ref(\$line)};
+    my $gene_name = $cells[12];
+    my $gene_beg = $cells[4];
+    my $gene_end = $cells[5];
+    my $gene_chr = $cells[2];
+
+    my $gene_size = $gene_end - $gene_beg;
+
+    if ($gene_chr eq "chrX") {
+	$gene_chr = "chr23";
+    }
+    if ($gene_chr eq "chrY") {
+	$gene_chr = "chr24";
+    }
+
+    if ($gene_chr =~ /_/) {
+	next;
+    }
+
+    my $out_row = $gene_chr;
+    $out_row .= "\t".$cells[3];
+    $out_row .= "\t".$cells[4];
+    $out_row .= "\t".$cells[5];
+    $out_row .= "\t".$cells[8];
+    $out_row .= "\t".$cells[9];
+    $out_row .= "\t".$cells[10];
+    $out_row .= "\t".$cells[12];    
+    $out_row .= "\n";
+
+    my $gene_safe = $gene_name."_".$gene_chr."_".$gene_beg;
+
+    if ($gene_name eq "") {
+	print "problem\n$out_row\n";
+    }
+
+#    if ($gene_name eq "TCF4") {
+#	print "$gene_safe\n";
+#	print "$out_row\n";
+ #   }
+
+    unless (exists $gene_rows{$gene_safe}) {
+	$gene_rows{$gene_safe} = $out_row;
+	$gene_size_hash{$gene_safe} = $gene_size;
+    }
+    else {
+	if ($gene_size > $gene_size_hash{$gene_safe}) {
+	    $gene_rows{$gene_safe} = $out_row;
+	    $gene_size_hash{$gene_safe} = $gene_size;
+	}
+    }
+
+#    foreach ()
+    $cc++;
+#    die if ($cc > 10);
+}
+
+close IN;
+
+#print "\n\nresult:\n";
+#print "TCF4_chr18_52889561\n";
+#print $gene_rows{"TCF4_chr18_52889561"}."\n";
+#print $gene_size_hash{"TCF4_chr18_52889561"}."\n";
+
+#exit;
+
+
+die $! unless open OUT, "> $rgname_out";
+foreach my $gene_safe (keys %gene_rows){
+    print OUT $gene_rows{$gene_safe};   
+}
+close OUT;
+
+
+exit;
+
+

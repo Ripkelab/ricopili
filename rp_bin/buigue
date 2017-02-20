@@ -50,6 +50,7 @@ version: $version
   -help            print this message and exit
 
   --lift19         lift dataset to hg19
+  --noclean        do not remove temporary files
 
 
 
@@ -67,6 +68,7 @@ use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
     "lift19"=> \my $lift19,
+    "noclean"=> \my $noclean,
     );
 
 
@@ -134,7 +136,9 @@ my $buig;
 print "start comparison\n";
 
 
+
 die $!."($bim_file).buigue.noma_comp" unless open NC, "> $bim_file.buigue.noma_comp";
+
 
 print NC "build";
 print NC "\tN_comp";
@@ -144,6 +148,9 @@ print NC "\tN_nomatch";
 print NC "\n";
 my $bucount = 0;
 my $licount = 0;
+
+my @noma_files;
+
 foreach my $bufile (@bu_files) {
     ## compare with snp-collection
 
@@ -161,6 +168,8 @@ foreach my $bufile (@bu_files) {
 
     my $sc = gzopen($bufile, "rb")  or die "Cannot open $bufile: $gzerrno\n" ;
     die $!."($bim_file).$bush.noma" unless open NOMA, "> $bim_file.$bush.noma";
+    push @noma_files, "$bim_file.$bush.noma";
+    
     while ($sc->gzreadline(my $line) > 0) {
 
 	my @cells = @{&split_line_ref(\$line)};
@@ -233,3 +242,13 @@ die $!."($bim_file).buigue" unless open BU, "> $bim_file.buigue";
 print BU "$buig\n";
 close BU;
 print "success: $bim_file.buigue\n";
+
+&mysystem("touch $bim_file.fini");
+
+
+unless ($noclean) {
+    foreach my $nomafile (@noma_files) {
+	&mysystem("rm $nomafile");
+    }
+}
+

@@ -1,0 +1,164 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $p2loc = &trans("p2loc");
+
+###############################################
+
+use Compress::Zlib ;
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+my $version = "1.0.0";
+my $progname = $0;
+
+
+##### help message
+my $usage = "
+Usage : $progname bfile
+
+version: $version
+
+  --help           print this help message and exit
+  --bfile STRING   binary plink file
+  --out STRING     outname
+  --keep STRING    keep file
+
+ created by Stephan Ripke 2016 at MGH, Boston, MA
+ 
+";
+
+
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "bfile=s"=> \my $bfile,
+    "out=s"=> \my $out,
+    "keep=s"=> \my $keep,
+    );
+
+
+die $usage if $help;
+die $usage unless ($bfile);
+die $usage unless ($out);
+die $usage unless ($keep);
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+##########################################
+# begin
+##########################################
+
+
+my $sys = "$p2loc/plink --bfile $bfile --keep $keep --freq gz --out $out --make-bed\n";
+print ("$sys\n");
+&mysystem ("$sys");
+
+
+
+print "--------------------\n";
+print "rewriting frq-file\n";
+print "--------------------\n";
+
+## read positions
+##################
+my @snps;
+my @poss;
+die $!."($out.bim)" unless open IFILE, "< $out.bim";
+
+while (my $line = <IFILE>){
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+    push @snps, $cells[1];
+    push @poss, $cells[3];
+}
+close IFILE;
+
+#rewrite frq file
+#################
+my $igz = gzopen("$out.frq.gz", "rb")  or die "Cannot open file $out.frq.gz: $gzerrno\n" ;
+my $ogz = gzopen("$out.frq2.gz", "wb")  or die "Cannot open file $out.frq2.gz: $gzerrno\n" ;   
+$igz->gzreadline(my $line);
+$ogz->gzwrite("SNP CHR POS A1 A2 FA1 NCHROBS\n");
+
+while ($igz->gzreadline($line)){
+
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+
+    my $pos = shift(@poss);
+    my $snp = shift(@snps);
+    if ($snp ne $cells[1]) {
+	print "SNPs in $out.frq.gz and $out.bim do not fit: $cells[1] - $snp.\n";
+	exit;
+    }
+    my $out_str = $cells[1];
+    $out_str .= " ".$cells[0];
+    $out_str .= " ".$pos;
+    $out_str .= " ".$cells[2];
+    $out_str .= " ".$cells[3];
+    $out_str .= " ".$cells[4];
+    $out_str .= " ".$cells[5];
+
+    $ogz->gzwrite("$out_str\n");
+
+}
+$igz->gzclose();
+$ogz->gzclose();
+
+&mysystem ("rm $out.frq.gz");
+
+
+my $sys = "touch $out.fini\n";
+&mysystem ("$sys");

@@ -1,0 +1,27 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+my @opt = @ARGV;
+my $vcf_name = $opt[1];
+my $ftp_name = $opt[0];
+my $vcf_loc = "loc.".$vcf_name;
+
+if (@ARGV != 2) {
+    print "error: only one argument please\n";
+    exit;
+}
+
+
+# only header from first file (and check success)
+my $sc =system ("wget $ftp_name/$vcf_name");
+if ($sc != 0){
+    print "systemcode: $sc\n";
+    exit;
+}
+
+$sc =system ("mv $vcf_name $vcf_loc");
+
+
+

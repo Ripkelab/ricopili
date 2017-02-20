@@ -778,6 +778,21 @@ if ($dandir) {
 	
     }
 
+    if (-e "$refdir/infosum_pos.chunks"){
+	print "ref-version2: read info_collection out of infosum_pos.chunks...\n";
+	&error ("$refdir/infosum_pos.chunks") unless open IF, "< $refdir/infosum_pos.chunks";
+	while (my $line =<IF>){
+	    $line =~ s/^[\s]+//g;
+	    my @cells=  split /\s+/, $line;
+	    my $floc = $cells[0]."_".$cells[1]."_".$cells[2];
+	    push @info_files,$floc;
+	}
+	close IF;
+	print "...finished\n";
+	
+    }
+    
+
     ### if this didn't work out, but it really should
     if (@info_files == 0) {
 	@info_files = `cd $refdir; ls -U *.bgl.info`;
@@ -999,27 +1014,29 @@ if ($dandir) {
 	%line_hash = ();
 	my $lc = 0;
 	## read info-info in detail
-	&error ("$refdir/$df not existing") unless open DF, "< $refdir/$df";
-	&error ("$info_file not existing") unless open IF, ">> $info_file";
-	while (my $line =<DF>){
-	    my @cells = @{&split_line_ref(\$line)};
-	    if ($cells[8] >= $beg && $cells[8] <= $end){
-		print IF "@cells\n";
-
-		$frq_h{$cells[0]} = $cells[3];
-		$frq_a1{$cells[0]} = $cells[2];
-		$frq_a2{$cells[0]} = $cells[4];
-
-		if (exists $snps_loc{$cells[0]}) {
-		    $line_hash{$lc} = 1;
+	if (-e "$refdir/$df"){
+	    &error ("$refdir/$df not existing") unless open DF, "< $refdir/$df";
+	    &error ("$info_file not existing") unless open IF, ">> $info_file";
+	    while (my $line =<DF>){
+		my @cells = @{&split_line_ref(\$line)};
+		if ($cells[8] >= $beg && $cells[8] <= $end){
+		    print IF "@cells\n";
+		    
+		    $frq_h{$cells[0]} = $cells[3];
+		    $frq_a1{$cells[0]} = $cells[2];
+		    $frq_a2{$cells[0]} = $cells[4];
+		    
+		    if (exists $snps_loc{$cells[0]}) {
+			$line_hash{$lc} = 1;
+		    }
+		    
+		    
 		}
-
-
+		$lc++;
 	    }
-	    $lc++;
+	    close DF;
+	    close IF;
 	}
-	close DF;
-	close IF;
 
 	## old: &mysystem ("cat $refdir/$df >> $info_file");
 

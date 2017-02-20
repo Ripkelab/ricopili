@@ -17,6 +17,9 @@ use Ricopili::Utils qw(trans);
 
 my $i2loc = &trans("i2loc");
 
+
+my $buff = 1000;
+
 ###########################################
 ##### help message
 my $usage = "
@@ -29,7 +32,7 @@ Usage : my.imp2 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
  --refstart INT    Mb of start
  --refend INT      Mb of end
  --chrX STRING     for X chromosome, noting sample-file
-
+ --buff INT        buffer, default $buff
 ";
 
 my $outname = "";
@@ -48,6 +51,7 @@ GetOptions(
     "reffile=s"=> \ $reffile,
     "refstart=s"=> \ $refstart,
     "refend=s"=> \ $refend,
+    "buff=i"=> \ $buff,
     "chrX=s"=> \my $chrx,
     );
 
@@ -65,8 +69,14 @@ if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $reffile eq "" || $re
 
 
 unless (-e "$inname") {
-    print "error: no $inname\n";
-    exit;
+    if (-e "$inname.haps.gz"){
+	$inname = "$inname.haps.gz";
+	print "changed inname to $inname\n";
+    }
+    else {
+	print "error: no $inname\n";
+	exit;
+    }
 }
 
 my $xtxt = "";
@@ -106,7 +116,7 @@ if ($refend - $refstart > 6) {
 }
 
 
-my $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer 1000 -o $outname $allow_str";
+my $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str";
 
 ## for now without best guess
 #my $sys_loc = "$i2loc/$imp2_bin -phase -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer 1000 -o $outname $allow_str";

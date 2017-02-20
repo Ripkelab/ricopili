@@ -1,0 +1,106 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $p2loc = &trans("p2loc");
+
+###############################################
+
+
+my $version = "1.0.0";
+my $progname = $0;
+
+
+##### help message
+my $usage = "
+Usage : $progname [options] .bgl
+
+version: $version
+
+  --help         print this help message and exit
+  --out STRING   outname (mandatory)
+  --vcf STRING   vcf file (mandatory)
+
+
+ created by Stephan Ripke 2016 at MGH, Boston, MA
+ 
+";
+
+
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "vcf=s"=> \my $vcffile,
+    "out=s"=> \my $out,
+    );
+
+
+die $usage if $help;
+die $usage unless ($vcffile);
+die $usage unless ($out);
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+##########################################
+# begin
+##########################################
+
+
+my $sys = "$p2loc/plink --vcf $vcffile --make-bed --out $out\n";
+print ("$sys\n");
+&mysystem ("$sys");
+
+my $sys = "touch $out.fini\n";
+&mysystem ("$sys");

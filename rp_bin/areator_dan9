@@ -798,8 +798,16 @@ if ($pliclu) {
 
 	    if ($bfile_sc eq "") {
 		my $chr_part = "$chr"."_";
-		$bfile_sc = `ls $refdir/*chr$chr_part*bed`;
+		$bfile_sc = `ls $refdir/*chr$chr_part*plink.bed`;
 	    }
+
+	    if ($bfile_sc eq "") {
+		my $chr_part = "$chr"."_";
+		$bfile_sc = `ls $refdir/*chr$chr_part*.bed`;
+	    }
+
+
+	    
 	    if ($bfile_sc eq "") {
 		my $chr_part = "window.$chr.";
 		$bfile_sc = `ls $refdir/*$chr_part*bed`;
@@ -808,6 +816,9 @@ if ($pliclu) {
 #	    sleep(10);
 	    if ($bfile_sc eq "") {
 		die "no plink binary for this chromosome";
+	    }
+	    else {
+		print "found $bfile_sc\n";
 	    }
 	    chomp($bfile_sc);
 	    $bfile_sc =~ s/.bed$//;
