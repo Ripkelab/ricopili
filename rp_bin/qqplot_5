@@ -180,6 +180,7 @@ my @created = mkpath(   ## $created ?
 
 
 chdir ($workdir);
+print "workdir: $workdir\n";
 
 my $pfile = $ARGV[0];
 
@@ -334,14 +335,17 @@ while (<FILE>){
 #    print "$cells[$pcol-1]\n";
     my $single_pval = $cells[$pcol-1];
     $single_pval = $exp_ceiling if ($single_pval < $exp_ceiling);
-    next if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0);
+#    if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0){
+#	print "very strange: $cells[1] $cells[$pcol-1]\n";
+#	next;
+#    }
 
     if ($maf_th < 1.00) {
-	next if $cells[$frcol-1] < $maf_th;
-	next if $cells[$frcol-1] > 1-$maf_th;
+	next if $cells[$frcol-1] <= $maf_th;
+	next if $cells[$frcol-1] >= 1-$maf_th;
     }
     if ($info_th < 3.00) {
-	next if $cells[$infocol-1] < $info_th;
+	next if $cells[$infocol-1] <= $info_th;
     }
     if ($af_th > 0) {
 	my $fa = $cells[$facol-1];
@@ -354,7 +358,7 @@ while (<FILE>){
 	$ac_loc += $fa *  $nca;
 	$ac_loc += $fu *  $nco;
 
-	if (2*$ac_loc < $af_th) {
+	if (2*$ac_loc <= $af_th) {
 #	    print "@cells\n";#
 #	    print "snp:".$cells[1]."\n";#
 #	    print "ca-f:".$cells[$facol-1]."\n";
@@ -710,4 +714,5 @@ print "tar -cvzf $outname.tar.gz $pfile.qq.Rwork_tmp $pfile.forQQ_tmp\n";
 print "$outname\n";
 
 chdir ($rootdir);
+exit;
 &mysystem ("rm -rf  $workdir");
