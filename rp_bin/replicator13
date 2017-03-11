@@ -101,7 +101,8 @@ GetOptions(
    "chr=s"=> \my $one_chr,
    "noftest"=> \my $noftest,
 
-   "prekno=s"=> \my $prekno_file,
+    "prekno=s"=> \my $prekno_file,
+    "indelconv"=> \my $indel_conv,
 
    "dan"=> \my $dan,
    "noareat"=> \my $noareat,
@@ -170,6 +171,8 @@ if ($help || @ARGV != 0 || $areat_name eq "no_name" ){
 
         --index         look only for index SNP, not any LD friends
         --trust         take the SNPs as being on the same strand (no freq check on ambigous SNPs)
+        --indelconv     converts alleles of indels into I/D for compatibility
+
         --nosexcor      no LD based correction of SE
 
         --region        take only best SNP from region +-500kb and 1 form MHC
@@ -2303,34 +2306,37 @@ while (<FILE>){
 
 
 
-    if (length($a1l) > 1) {
-	if ($a1l =~ /^I/) {
-#	    print "a1-indel correct at $cells[$snp_col]\n";
-	}
-	else {
-#	    $a1_out = "I".length($a1l);
-#	    $a2_out = "D";
+
+    if ($indel_conv) {
+	if (length($a1l) > 1) {
+	    if ($a1l =~ /^I/) {
+		#	    print "a1-indel correct at $cells[$snp_col]\n";
+	    }
+	    else {
+		#	    $a1_out = "I".length($a1l);
+		#	    $a2_out = "D";
 
 
-#	    $cells[$a1_col] = "I".length($a1l);
-	    $cells[$a1_col] = "I";
-	    $cells[$a2_col] = "D";
-	}
+		#	    $cells[$a1_col] = "I".length($a1l);
+		$cells[$a1_col] = "I";
+		$cells[$a2_col] = "D";
+	    }
 
-    }
-    if (length($a2l) > 1) {
-	if ($a2l =~ /^I/) {
-#	    print "a2-indel correct at $cells[$snp_col]\n";
 	}
-	else {
-#	    $cells[$a2_col] = "I".length($a2l);
-	    $cells[$a2_col] = "I";
-	    $cells[$a1_col] = "D";
-#	    $a2_out = "I".length($a2l);
-#	    $a1_out = "D";
+	if (length($a2l) > 1) {
+	    if ($a2l =~ /^I/) {
+		#	    print "a2-indel correct at $cells[$snp_col]\n";
+	    }
+	    else {
+		#	    $cells[$a2_col] = "I".length($a2l);
+		$cells[$a2_col] = "I";
+		$cells[$a1_col] = "D";
+		#	    $a2_out = "I".length($a2l);
+		#	    $a1_out = "D";
+	    }
+	    #	$cells[$a1_col] = $a1_out;
+	    #	$cells[$a2_col] = $a2_out;
 	}
-#	$cells[$a1_col] = $a1_out;
-#	$cells[$a2_col] = $a2_out;
     }
 
 #    print "\t".$cells[$a1_col];
@@ -2363,6 +2369,12 @@ while (<FILE>){
     $rep_a1 {$cells[$snp_col]} = $cells[$a1_col];
     $rep_a2 {$cells[$snp_col]} = $cells[$a2_col];
 
+
+#    if ($cells[$snp_col] eq "rs71403989") {#
+#	print "a1: ".$rep_a1 {$cells[$snp_col]}."\n";
+#	print "a2: ".$rep_a2 {$cells[$snp_col]}."\n";
+#	exit;
+#    }
 
 
 
@@ -3152,16 +3164,18 @@ while (my $line = <BASIC>){
 	unless ($cells[$snp_bas] eq "SNP") {
 	    unless (length($gt) == 2){
 		($a1,$a2) = split '/',$gt;
-		my $gt_tmp = "$a1$a2";
-		unless (length($gt_tmp) == 2){
-		    die "gt_problem ($gt) in basic, length of genotype bigger then 2" ;
-		}
-		$gt = $gt_tmp;
+#		my $gt_tmp = "$a1$a2";
+#		unless (length($gt_tmp) == 2){
+#		    die "gt_problem ($gt) in basic, length of genotype bigger then 2, $cells[$snp_bas], $a1, $a2, $cells[$gt_bas]; " ;
+#		}
+#		$gt = $gt_tmp;
 	    }
 
 	    
 	}
     }
+
+#    print "gt: $gt\n";
 
 #    $gt =~ s/[0-9]//g;
 
@@ -3691,7 +3705,7 @@ while (my $line = <BASIC>){
 	}
 	else {
 #	    $disc_on = 0;
-	    my $problem = "alleles on same SNP do not fit: GWAS: <$gwas_a1>\t<$gwas_a2>\treplication:<$rgt>\t<target_1:$cells[$snp_bas]>\t<target:$snp_txt>\t<replication:$repsnp_name>,$gwas_info{$repsnp_name}";
+	    my $problem = "alleles on same SNP do not fit: GWAS: <$gwas_a1>\t<$gwas_a2>\treplication:<$rgt>\treplication-a1:<$ra1>\treplication-a2:<$ra2>\t<target_1:$cells[$snp_bas]>\t<target:$snp_txt>\t<replication:$repsnp_name>,$gwas_info{$repsnp_name}";
 	    print "\nWarning (phase2 switched on?): $problem\n";
 	    push @problem_arr, $problem;
 	    print NOREP "$problem\n";
@@ -3940,7 +3954,7 @@ if (@problem_arr > 0){
     foreach my $problem (@problem_arr) {
 	print REME $problem."\n";
     }
-    print REME"----------";
+    print REME "----------";
 }
 close REME;
 

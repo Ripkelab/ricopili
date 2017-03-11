@@ -787,7 +787,7 @@ if (1) {
     $qcol = 16;
     $icol = 13;
     $secol = 9;
-    $gcol = 17;
+    $gcol = 19;
 
 }
 
@@ -1127,7 +1127,7 @@ while (<DISC>){
 	$cells[$or_col] = 1 / $cells[$or_col];
     }
     else {
-	$out_str .= "\t".$cells[$a1_col].$cells[$a2_col];
+	$out_str .= "\t".$cells[$a1_col]."/".$cells[$a2_col];
     }
     $out_str .= "\t".$comb_gene{$snp_name};
     $out_str .= "\t".$cells[$fca_col];
@@ -2665,11 +2665,10 @@ close IN;
 
 
 $workbook->close();
-print "$out_name.xls\n";
+
+
 #&mysystem("send_dropbox $out_name.xls");
-&mysystem("send_dropbox $out_name.xls");
-print "check common AT/CG SNPs!!!\n";
-print "check sign_test_expectation_v2.xls!!!\n";
+
 
 
 
@@ -2686,13 +2685,12 @@ unless (-e "$out_name.info.pdf") {
 &mysystem("sort -k5,5g $out_name.missing.txt > $out_name.missing.txt.sorted");
 &mysystem("txt2xls --txt $out_name.missing.txt.sorted --xls  $out_name.missing.txt.sorted.xls --pcol 4 --cogr 5,13,14,18");
 
-print "missing: $out_name.missing.txt.sorted.xls\n";
-
-
-
-
-
-print "missing: $out_name.missing.txt.sorted.xls\n";
+print "check sign_test_expectation_v2.xls!!!\n";
+print "check common AT/CG SNPs!!!\n";
+print "---------------------------------------------------\n";
+print "check if you have too many entries here:\nout_name.missing.txt.sorted.xls\n";
+print "this is the final output file:\n$out_name.xls\n";
+print "---------------------------------------------------\n";
 
 exit;
 
