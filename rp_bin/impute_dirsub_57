@@ -2396,7 +2396,7 @@ if ($prephase_done == 0) {
 
 
 	    if (exists $indirempty_hash{$empty_ch_out} ) {
-		print "really existing: \n"
+#		print "really existing: \n"
 #		print "$bprefix.$refind.empty\n";
 	    }
 	    else {
@@ -2493,8 +2493,8 @@ if ($prephase_done == 0) {
 
 
 
-	print "here?\n";
-	exit;
+#	print "here?\n";
+#	exit;
 
 
 	    
@@ -2603,8 +2603,8 @@ if ($prephase_done == 0) {
 	print "prephasing done\n";
     }
 }
-print "debug\n";
-exit;
+#print "debug\n";
+#exit;
 
 
 ############################################################

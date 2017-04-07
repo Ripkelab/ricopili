@@ -127,7 +127,8 @@ GetOptions(
    "bfile_rep=s"=> \my $repbfile,
    "tdt"=> \my $tdt,
    "kemds"=> \my $kemds,
-   "matchpos"=> \my $matchpos,
+    "nomatchpos"=> \my $nomatchpos,
+    "nomatchindel"=> \my $nomatchindel,
    "keep=s"=> \my $keepfile,
 
 #   "repest"=> \my $repest,
@@ -187,7 +188,13 @@ if ($help || @ARGV != 0 || $areat_name eq "no_name" ){
         --keep STRING   keep file for this repbfile
         --kemds         keep file serves as mds file, then 4 PCAs and logistic
 
-        --matchpos      match SNPs based on position, makes sense for different reference versions
+
+     ## these two are on by default
+        --nomatchpos      match SNPs based on position, makes sense for different reference versions
+        --nomatchindel    match Indels, so that AAGT/A corresponds to I4/D or I/D in both ways
+
+
+
 
         --format INT    1:aust (plink-out)
                         11: plink output with SE
@@ -1612,6 +1619,8 @@ if ($eproxy) {
 	print "------------------------------------------------------------------------------------------\n";
 	exit;
     }
+    print "eproxy currently not working, please revisit\n";
+    ## see eproxy switch in create gwas_sub
 }
 #print "acuh hier\n";
 #exit;
@@ -1776,10 +1785,15 @@ unless ($eproxy) {
 		$einfo =~ s/.*\(/(/;
 		$expr{"$rs_name\t$bsnp"} = $einfo;
 		
-		unless ($index){
-		    $arsnps{$rs_name} = 1;
-		}
 
+
+#		unless ($index){
+		    $arsnps{$rs_name} = 1;
+#		}
+
+
+
+		
 #		if ($bsnp eq "rs7972947") {
 #		    print "bsnp: $bsnp\t $rs_name\n";
 #		    sleep (2);
@@ -1792,12 +1806,12 @@ unless ($eproxy) {
 
 #print "rs2108636: $arsnps{rs2108636} \t $expr_name\n";
 
-my $ref_subdir = "ref_subdir.$out_name";
+#my $ref_subdir = "ref_subdir.$out_name";
 
-my @created = mkpath(   ## $created ?
-			"$ref_subdir",
-			{verbose => 0, mode => 0750},
-    );
+#my @created = mkpath(   ## $created ?
+#			"$ref_subdir",
+#			{verbose => 0, mode => 0750},
+#    );
 
 
 
@@ -2018,12 +2032,12 @@ else {
 }
 #exit;
 
-if ($matchpos) {
-    if ($pos_col eq -1) {
-	print "Error: matchpos only possible if pos_column is defined\n";
-	exit;
-    }
-}
+#if ($matchpos) {
+#    if ($pos_col eq -1) {#
+#	print "Error: matchpos only possible if pos_column is defined\n";
+#	exit;
+#    }
+#}
 
 
 print "read areator\n";
@@ -2032,20 +2046,98 @@ print "read areator\n";
 ##########################################
 
 my %areat_snps;
-my %areat_pos;
+
 die "$!" unless open BASIC, "< $areat_name";   
 while (my $line = <BASIC>){
     chomp ($line);
     my @cells = @{&split_line_ref(\$line)};
     $areat_snps{$cells[$snp_bas]} = 1;
-    my $pos = $cells[$chr_bas]."_".$cells[$pos_bas];
+
 #    print $cells[$snp_bas]."\t$pos\n";
 #    print $cells[$chr_bas]."\n";
-    if ($matchpos) {
-	$areat_pos{$pos} = $cells[$snp_bas];
-    }
+
+
+#    if ($matchpos) {
+
+#    }
 }
 close BASIC;
+
+
+
+
+
+#########################
+## create / read gwas file
+########################
+print "create gwas_sub\n";
+my $gwas_sub = "$gwas.$out_name.sub";
+
+unless (-e $gwas_sub) {
+
+
+    my $ggz = gzopen("$gwas", "rb")  or die "Cannot open $gwas: $gzerrno\n" ;
+    die $! unless open FILE, "> $gwas_sub.tmp";
+    $ggz->gzreadline(my $header);
+    print FILE $header;
+
+    while ($ggz->gzreadline(my $line)){
+	chomp($line);
+	my @cells = @{&split_line_ref(\$line)};
+
+#	if ($eproxy) {
+#	    print FILE $line."\n" if (exists $rep_p {$cells[1]} || exists $areat_snps{$cells[1]});
+#	}
+#	else {
+	    if (exists $arsnps{$cells[1]}){
+		print FILE $line."\n";
+	    }
+#	}
+    }
+
+    $ggz -> gzclose();
+    close FILE;
+
+    &mysystem("mv $gwas_sub.tmp $gwas_sub");
+
+}
+
+print "read gwas_sub into memory: $gwas_sub\n";
+
+
+my %gwas_info;
+my %gwas_pos;
+my %gwas_gt;
+die "$!" unless open IN, "< $gwas_sub";    
+while (my $line = <IN>){
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+    $gwas_info{$cells[1]} = "@cells";
+    #    $all_chr {$cells[0]} = 1;
+
+    my $gwas_a1 = $cells[3];
+    my $gwas_a2 = $cells[4];
+    my $gwas_chr = $cells[0];
+    my $gwas_pos = $cells[2];
+    
+    my $pos = $gwas_chr."_".$gwas_pos;
+    $gwas_pos{$pos} = $cells[1];
+    $gwas_gt{$cells[1]} = $gwas_a1."/".$gwas_a2;
+
+#    print "pos: $pos\n";
+#    print "snp: $cells[1]\n";
+#    print "gt: $areat_gt{$cells[1]}\n";
+}
+close IN;
+
+
+
+use File::Path;
+my @created = mkpath(   ## $created ?
+			"ld_subdir",
+			{verbose => 0, mode => 0750},
+    );
+
 
 #exit;
 
@@ -2075,16 +2167,19 @@ unless (-e $repname_sub) {
 
     ### here for the 22 chromosomes
     my @filehandles;
-    push @filehandles, "nichts";
-    foreach my $chr_loc ($first_chr..$last_chr) {
-#	print "open: $chr_loc\n";
-	local *FILE;
-	open(FILE, "> $ref_subdir/$rep_name.chr$chr_loc") || die "$rep_name.chr$chr_loc not to open";
-	if ($one_chr) {
-	    $filehandles[$one_chr] = *FILE;
-	}
-	else {
-	    push(@filehandles, *FILE);
+    if ($eproxy) {
+
+	push @filehandles, "nichts";
+	foreach my $chr_loc ($first_chr..$last_chr) {
+	    #	print "open: $chr_loc\n";
+	    local *FILE;
+	    open(FILE, "> ld_subdir/$rep_name.chr$chr_loc") || die "$rep_name.chr$chr_loc not to open";
+	    if ($one_chr) {
+		$filehandles[$one_chr] = *FILE;
+	    }
+	    else {
+		push(@filehandles, *FILE);
+	    }
 	}
     }
 
@@ -2093,6 +2188,7 @@ unless (-e $repname_sub) {
 
     my $ggz = gzopen("$rep_name", "rb")  or die "Cannot open $rep_name: $gzerrno\n" ;
     die $! unless open FILE, "> $repname_sub.tmp";
+    die $! unless open WARNING, "> $repname_sub.warnings";
 
     $ggz->gzreadline(my $header);
     $header =~ s/RSNUMBERS/SNP/;
@@ -2109,11 +2205,13 @@ unless (-e $repname_sub) {
 #    print FILE $header;
 
     ##### for the 22 chromosomes
-    foreach my $chr_loc ($first_chr..$last_chr) {
-#	print "chr_loc\n";
-	my $file_loc = $filehandles[$chr_loc];
+    if ($eproxy) {
+	foreach my $chr_loc ($first_chr..$last_chr) {
+	    #	print "chr_loc\n";
+	    my $file_loc = $filehandles[$chr_loc];
 
-	print $file_loc $header;
+	    print $file_loc $header;
+	}
     }
 
 
@@ -2122,6 +2220,8 @@ unless (-e $repname_sub) {
 	my @cells = @{&split_line_ref(\$line)};
 	my $chr_si = $cells[$chr_col];
 	my $pos_si = $cells[$pos_col];
+	my $a1_si = $cells[$a1_col];
+	my $a2_si = $cells[$a2_col];
 
 
 	$chr_si = $chr_si * 1;
@@ -2136,17 +2236,72 @@ unless (-e $repname_sub) {
 	    print FILE $line."\n";
 	}
 	else {
+	    my $found = 0;
 	    if (exists $arsnps{$cells[$snp_col]}){
-		print FILE $line."\n";
+#		print "matchsnp: $cells[$snp_col]\n";
+		$found = 1;
 	    }
 	    else {
-		if ($matchpos) {
-#		print "$pos_co\n";
-		    if (exists $areat_pos{$pos_co}){
-			$cells[$snp_col] = $areat_pos{$pos_co};
-			print FILE "@cells\n";
+		unless ($nomatchpos) {
+		    if (exists $gwas_pos{$pos_co}){
+			$cells[$snp_col] = $gwas_pos{$pos_co};
+
+			$found = 1;
+#			print "matchpos: $pos_co, $cells[$snp_col]\n";
+
 		    }
 		}
+	    }
+	    unless ($nomatchindel) {
+		if ($found == 1) {
+		    my $gt_loc = $gwas_gt{$cells[$snp_col]};
+		    my @gcells = split '/', $gt_loc;
+
+
+#		    print "snp:$cells[$snp_col]\n";
+#		    print "gt:$gt_loc\n";
+		    if (length(@gcells[0]) > 1) {
+			if (length ($a1_si) > 1) {
+			    $cells[$a1_col] = @gcells[0];
+			    $cells[$a2_col] = @gcells[1];
+			}
+			elsif (length ($a2_si) > 1) {
+			    $cells[$a2_col] = @gcells[0];
+			    $cells[$a1_col] = @gcells[1];
+			}
+			else {
+			    print WARNING "Warning: indel mismatch on $cells[$snp_col], $pos_co\n";
+			}
+		    }
+		    if (length(@gcells[1]) > 1) {
+			if (length ($a1_si) > 1) {
+			    $cells[$a2_col] = @gcells[0];
+			    $cells[$a1_col] = @gcells[1];
+			}
+			elsif (length ($a2_si) > 1) {
+			    $cells[$a1_col] = @gcells[0];
+			    $cells[$a2_col] = @gcells[1];
+			}
+			else {
+			    print WARNING "Warning: indel mismatch on $cells[$snp_col], $pos_co\n";
+
+			}
+		    }
+		    
+		    if (0) {		    
+			print "matchindel: $pos_co\n";
+			#			print "snp:$cells[$snp_col]\n";
+			#			print "gt:$gt_loc\n";
+			print "a1d:@gcells[0]\n";
+			print "a2d:@gcells[1]\n";
+			print "a1r:$a1_si\n";
+			print "a2r:$a2_si\n";
+			print "------------------------\n";
+		    }
+		}
+	    }
+	    if ($found == 1) {
+		print FILE "@cells\n";
 	    }
 
 	}
@@ -2164,20 +2319,24 @@ unless (-e $repname_sub) {
 	}
 
 
-
-	my $file_loc = $filehandles[$chr_si];
-#	print "chr: $cells[$chr_col]\n";
-
-	print $file_loc "$line\n";
+	if ($eproxy ) {
+	    my $file_loc = $filehandles[$chr_si];
+	    #	print "chr: $cells[$chr_col]\n";
+	    
+	    print $file_loc "$line\n";
+	}
 
     }
 
     $ggz -> gzclose();
     close FILE;
+    close WARNING;
 
-    foreach my $chr_loc ($first_chr..$last_chr) {
-	my $file_loc = $filehandles[$chr_loc];
-	close $file_loc;
+    if ($eproxy){
+	foreach my $chr_loc ($first_chr..$last_chr) {
+	    my $file_loc = $filehandles[$chr_loc];
+	    close $file_loc;
+	}
     }
 
     &mysystem("mv $repname_sub.tmp $repname_sub");
@@ -2186,8 +2345,9 @@ unless (-e $repname_sub) {
 else {
     print "use already existing sub file of replication dataset: $repname_sub\n";
     print "can be dangerous, in doubt delete\n";
-    print "sleeping a bit\n";
-#    sleep(5);
+    print "sleeping a bit.............\n";
+    print "...........................\n";
+    sleep(1);
 }
 
 #print "exit\n";
@@ -2441,59 +2601,6 @@ $opp{"T"} = "A";
 
 
 
-#exit;
-#########################
-## read gwas file
-########################
-print "create gwas_sub\n";
-my $gwas_sub = "$gwas.$out_name.sub";
-unless (-e $gwas_sub) {
-
-
-    my $ggz = gzopen("$gwas", "rb")  or die "Cannot open $gwas: $gzerrno\n" ;
-    die $! unless open FILE, "> $gwas_sub.tmp";
-    $ggz->gzreadline(my $header);
-    print FILE $header;
-
-    while ($ggz->gzreadline(my $line)){
-	chomp($line);
-	my @cells = @{&split_line_ref(\$line)};
-
-	if ($eproxy) {
-	    print FILE $line."\n" if (exists $rep_p {$cells[1]} || exists $areat_snps{$cells[1]});
-	}
-	else {
-	    if (exists $arsnps{$cells[1]}){
-		print FILE $line."\n";
-	    }
-	}
-    }
-
-    $ggz -> gzclose();
-    close FILE;
-
-    &mysystem("mv $gwas_sub.tmp $gwas_sub");
-
-}
-
-print "read gwas_sub into memory\n";
-
-#replicator_meta7 --disc daner_IBD15_CD7_0711a.gz.repl_IBD_CD7_0112b.repout.sub --out IBD_BO_0112c_all --minr2 .4 --areator IBD15_CD7_1211b.daner_IBD15_CD7_0711a.clumped.xmhc --clump repl_IBD_CD7_0112b.repout.dir.daner
-
-#print "print $gwas_sub\n";#print "debug\n";
-#sleep(6);
-
-
-my %gwas_info;
-die "$!" unless open IN, "< $gwas_sub";    
-while (my $line = <IN>){
-    chomp($line);
-    my @cells = @{&split_line_ref(\$line)};
-    $gwas_info{$cells[1]} = "@cells";
-    $all_chr {$cells[0]} = 1; 
-}
-close IN;
-
 
 ########################
 ##create reference-files
@@ -2533,10 +2640,10 @@ close ALL;
 #print "debug, $count1, $count2\n";
 #exit;
 
-my @created = mkpath(   ## $created ?
-			"$ref_subdir",
-			{verbose => 0, mode => 0750},
-    );
+#my @created = mkpath(   ## $created ?
+#			"$ref_subdir",
+#			{verbose => 0, mode => 0750},
+#    );
 
 
 unless ($index) {
@@ -2554,9 +2661,9 @@ unless ($index) {
 	$bfile =~ s/.bim$//;
 	chomp($bfile);
 #	print "bfile: $bfile\n";
-	die "no reference bfile found" if ($bfile eq "");
-	my $cmd = "$ploc/plink --filter-founders --extract $out_name.allsnps --out $ref_subdir/ref.$lchr --bfile $bfile --make-bed";
-	next if (-e "$ref_subdir/ref.$lchr.bed");
+	die "Error: no reference bfile found" if ($bfile eq "");
+	my $cmd = "$ploc/plink --filter-founders --extract $out_name.allsnps --out ld_subdir/ref.$lchr --bfile $bfile --make-bed";
+	next if (-e "ld_subdir/ref.$lchr.bed");
 	&mysystem ($cmd);
     }
 }
@@ -2811,11 +2918,6 @@ my $strandflip_count = 0;
 my $unfli_count = 0;
 my @norep_arr;
 my $freq_mm_count =0;
-use File::Path;
-my @created = mkpath(   ## $created ?
-			"ld_subdir",
-			{verbose => 0, mode => 0750},
-    );
 
 
 my $nfrq_fli = 0;
@@ -2840,6 +2942,9 @@ while (my $line = <BASIC>){
     my $proxy_sw = 0;
     my $repsnp_name = $cells[$snp_bas];
 
+
+#    print "here: $snp_txt $repsnp_name\n";
+    
     my $debug = 0;
 #    my $debug_snp = "20_14701215";
     my $debug_snp = "xxxx";
@@ -2865,10 +2970,10 @@ while (my $line = <BASIC>){
 #    print "bas:$cells[$snp_bas]\n";
     ### not found in replication
 
-    if ($snp_txt eq "rs7893279") {
-	print "here we are: $snp_txt\n";
+#    if ($snp_txt eq "rs7893279") {
+#	print "here we are: $snp_txt\n";
 #	sleep (10);
-    }
+#    }
 
     unless (exists $rep_p{$cells[$snp_bas]}){
 #	print "$cells[$snp_bas]\t$cells[$chr_bas]\t$cells[$pos_bas]\tnot in found in replication file\n";
@@ -2882,44 +2987,47 @@ while (my $line = <BASIC>){
 	my $r2_max = 0;
 
 	unless ($eproxy) {
-	    foreach (@proxies) {
-		my $rs_name = $_;
-		my $r2_loc = $_;
-		$rs_name =~ s/\(.*\)//;
-		$r2_loc =~ s/.*\(//;
-		$r2_loc =~ s/\)//;
-		
-#	    print "pr:$rs_name, r2:$r2_loc\n";
-#	    sleep(1);
-#	    if ($found == 0) {
-		
-		if ($r2_loc > $r2_max) {
-		    if (exists $rep_p{$rs_name}) {
-			
-#		    $snp_txt = $cells[$snp_bas];
-			$cells[$snp_bas] = $rs_name;
-			$repsnp_name = $rs_name;
-			$proxy_sw = $_;
-			$found = 1;
-			$r2_max = $r2_loc; 
+	    unless ($index) {
+		foreach (@proxies) {
+		    my $rs_name = $_;
+		    my $r2_loc = $_;
+		    $rs_name =~ s/\(.*\)//;
+		    $r2_loc =~ s/.*\(//;
+		    $r2_loc =~ s/\)//;
+		    
+		    #	    print "pr:$rs_name, r2:$r2_loc\n";
+		    #	    sleep(1);
+		    #	    if ($found == 0) {
+		    
+		    if ($r2_loc > $r2_max) {
+			if (exists $rep_p{$rs_name}) {
 
+#			    print "diff1: $snp_txt $repsnp_name\n";
+			    #		    $snp_txt = $cells[$snp_bas];
+			    $cells[$snp_bas] = $rs_name;
+			    $repsnp_name = $rs_name;
+			    $proxy_sw = $_;
+			    $found = 1;
+			    $r2_max = $r2_loc; 
 
-			
-#		    print "proxy found, $rs_name \t $snp_txt !!\n";
-#		    sleep(1);
-#		    print "extended info:\t".$expr{"$rs_name\t$snp_txt"}."\n";
-#		    print "gwas info:\t".$gwas_info{"$rs_name"}."\n";
-#		    print "gwas info:\t".$gwas_info{"$cells[$snp_bas]"}."\n";
-#		    print "gwas info:\t".$gwas_info{"$snp_txt"}."\n";
-#		    print "rextended info:\t".$expr{"$snp_txt\t$cells[$snp_bas]"}."\n";
-			
-#		    exit;
+#			    print "diff2: $snp_txt $repsnp_name\n";
+
+			    
+			    #		    print "proxy found, $rs_name \t $snp_txt !!\n";
+			    #		    sleep(1);
+			    #		    print "extended info:\t".$expr{"$rs_name\t$snp_txt"}."\n";
+			    #		    print "gwas info:\t".$gwas_info{"$rs_name"}."\n";
+			    #		    print "gwas info:\t".$gwas_info{"$cells[$snp_bas]"}."\n";
+			    #		    print "gwas info:\t".$gwas_info{"$snp_txt"}."\n";
+			    #		    print "rextended info:\t".$expr{"$snp_txt\t$cells[$snp_bas]"}."\n";
+			    
+			    #		    exit;
+			}
 		    }
-		}
-		
-#	    }
-		
-		
+		    
+		    #	    }
+		    
+		}		    
 		
 	    }
 	}
@@ -2960,7 +3068,7 @@ while (my $line = <BASIC>){
 
 		unless (-e "$ld_subdir/rep.ld.$isnp.results.ld.ld") {
 #		    my $ggz = gzopen("$rep_name", "rb")  or die "Cannot open $rep_name: $gzerrno\n" ;
-		    die "$ref_subdir/$rep_name.chr$ichr: ".$! unless open REPSUB, "< $ref_subdir/$rep_name.chr$ichr";
+		    die "ld_subdir/$rep_name.chr$ichr: ".$! unless open REPSUB, "< ld_subdir/$rep_name.chr$ichr";
 		    die $! unless open LDOUT, "> $ld_subdir/rep.ld.$isnp.results";
 		    my $header = <REPSUB>;
 
@@ -3009,9 +3117,11 @@ while (my $line = <BASIC>){
 
 		    
 #		    my $ref = "$hmloc/subchr/hapmap3_r2_b36_fwd.consensus.qc.poly.chr$ichr.CEUTSI.phased.bgl";
-		    my $ref = "$ref_subdir/ref.$ichr";
+		    my $ref = "ld_subdir/ref.$ichr";
 #		    $ref = "$hmloc/phas2/subchr/genotypes_chr$ichr"."_CEU_r22_nr.b36_fwd.phased.bgl" if ($phase2);
-		    
+
+
+
 		    my $ld_cmd = "$ploc/plink --filter-founders --extract $ld_subdir/rep.ld.$isnp.results --out $ld_subdir/rep.ld.$isnp.results.ld.tmp --bfile $ref --r2 --ld-snp $isnp --ld-window-kb 1000 --ld-window 99999 --ld-window-r2 0";
 		    
 		    
@@ -3237,7 +3347,7 @@ while (my $line = <BASIC>){
 	    my $chr_txt = $cells[$chr_bas];
 #	    my $ref = "~/pgc-samples/hapmap_ref/plink_p3/single_chr/hapmap3_r2_b36_fwd.CEU.TSI.FOUNDERS.qc.poly.chr$chr_txt";
 #	    my $ref = "$hmloc/subchr/hapmap3_r2_b36_fwd.consensus.qc.poly.chr$chr_txt.CEUTSI.phased.bgl";
-	    my $ref = "$ref_subdir/ref.$chr_txt";
+	    my $ref = "ld_subdir/ref.$chr_txt";
 #	    $ref = "~/pgc-samples/hapmap_ref/plink_p2b/single_chr/hapmap_CEU_r23a.chr$chr_txt" if ($phase2);
 #	    $ref = "$hmloc/phas2/subchr/genotypes_chr$chr_txt"."_CEU_r22_nr.b36_fwd.phased.bgl" if ($phase2);
 
@@ -3256,6 +3366,7 @@ while (my $line = <BASIC>){
 
 	    my $errcount = 1;
 	    while ($errcount != 0) {
+		print "here: $snp_txt $repsnp_name\n";
 		my $ld_cmd = "$ploc/plink --filter-founders --out $ld_subdir/$snp_txt.$repsnp_name.ld --bfile $ref --ld $snp_txt $repsnp_name";
 #	    print "$ld_cmd\n";
 		unless (-e "$ld_subdir/$snp_txt.$repsnp_name.ld.log") {
@@ -3298,7 +3409,7 @@ while (my $line = <BASIC>){
 
 
 
-#	    print "";
+	    #	    print "";
 	    my $ld_info_phase_os2;
 	    my $ld_info_phase_gwas2;
 
@@ -3311,14 +3422,14 @@ while (my $line = <BASIC>){
 
 
 	    if (length($haplo_txt_loc) > 5) {
-#		print "problem here $haplo_txt_loc\n";
+		#		print "problem here $haplo_txt_loc\n";
 
 
 		if ($haplo_txt_loc =~ "I"){
 		    my $haplo_txt_loc_new = $haplo_txt_loc;
 		    my $indel = $haplo_txt_loc;
 		    
-#		    $haplo_txt_loc_new =~ s/I[0-9]*/i/;
+		    #		    $haplo_txt_loc_new =~ s/I[0-9]*/i/;
 		    $haplo_txt_loc_new =~ s/I[0-9]*/I/;
 
 		    $indel =~ s/.*(I[0-9]*).*/\1/;
@@ -3328,26 +3439,26 @@ while (my $line = <BASIC>){
 			my $haplo_txt_loc_new_new = $haplo_txt_loc_new;
 			$indel2 = $haplo_txt_loc_new;
 
-#			$haplo_txt_loc_new_new =~ s/I[0-9]*/p/;
+			#			$haplo_txt_loc_new_new =~ s/I[0-9]*/p/;
 			$haplo_txt_loc_new_new =~ s/I[0-9]*/I/;
 
 
 
-#			print "new: $haplo_txt_loc_new_new\n";
+			#			print "new: $haplo_txt_loc_new_new\n";
 			$indel2 =~ s/.*(I[0-9]*).*/\1/;
 
 
 
 			$haplo_txt_loc_new = $haplo_txt_loc_new_new;
-#			if ($haplo_txt_loc_new_new =~ "I"){
-#			    print "something strange with long phased SNPs: third indel: $haplo_txt_loc, $snp_txt $repsnp_name\n";
-#			    exit;
-#			}
+			#			if ($haplo_txt_loc_new_new =~ "I"){
+			#			    print "something strange with long phased SNPs: third indel: $haplo_txt_loc, $snp_txt $repsnp_name\n";
+			#			    exit;
+			#			}
 		    }
 
-#		    print "old: $haplo_txt_loc\n";
-#		    print "new: $haplo_txt_loc_new\n";
-#		    print "ind: $indel, $indel2\n";
+		    #		    print "old: $haplo_txt_loc\n";
+		    #		    print "new: $haplo_txt_loc_new\n";
+		    #		    print "ind: $indel, $indel2\n";
 
 
 		    $ld_info_phase_os = substr($haplo_txt_loc_new,0,1);
@@ -3374,8 +3485,49 @@ while (my $line = <BASIC>){
 		    
 		}
 		else {
-		    print "something strange with long phased SNPs: $haplo_txt_loc,  $snp_txt $repsnp_name\n";
-		    exit;
+		    my @pcells = split "/", $haplo_txt_loc;    # phase cells
+		    
+		    if ($pcells[0] eq $a1.$ra1 || $pcells[1] eq $a1.$ra1) {
+			my $gwas_tmp = $pcells[0];
+			$gwas_tmp =~ s/$a1//;
+			$ld_info_phase_os = $a1;
+			$ld_info_phase_gwas = $ra1;
+			$ld_info_phase_os2 = $a2;
+			$ld_info_phase_gwas2 = $ra2;
+			
+			
+			
+			unless ($pcells[1] eq $a2.$ra2 || $pcells[0] eq $a2.$ra2) {
+			    print "Error: phases do not match ($haplo_txt_loc,  $snp_txt $repsnp_name)\n";
+			    exit;
+			}
+		    }
+		    elsif ($pcells[0] eq $a1.$ra2 || $pcells[1] eq $a1.$ra2) {
+			my $gwas_tmp = $pcells[0];
+			$gwas_tmp =~ s/$a1//;
+			$ld_info_phase_os = $a1;
+			$ld_info_phase_gwas = $ra2;
+			$ld_info_phase_os2 = $a2;
+			$ld_info_phase_gwas2 = $ra1;
+			
+			unless ($pcells[1] eq $a2.$ra1 || $pcells[0] eq $a2.$ra1) {
+			    print "Error: phases do not match ($haplo_txt_loc,  $snp_txt $repsnp_name)\n";
+			    exit;
+			}
+			
+		    }
+		    else {
+			print "Error: phase-output not as expected ($haplo_txt_loc,  $snp_txt $repsnp_name, $a1, $a2, $ra1, $ra2)\n";
+			exit;
+		    }
+		    
+
+
+		    
+		    
+		    
+		    #		    print "something strange with long phased SNPs: $haplo_txt_loc,  $snp_txt $repsnp_name, $a1, $a2, $ra1, $ra2\n";
+		    #		    exit;
 		}
 
 
@@ -3385,16 +3537,16 @@ while (my $line = <BASIC>){
 
 
 
-#	    if (length($haplo_txt_loc) > 5) {
+	    #	    if (length($haplo_txt_loc) > 5) {
 
-#		print $ld_info_phase_os."\n";
-#		print $ld_info_phase_gwas."\n";
-		
-#		print $ld_info_phase_os2."\n";
-#		print $ld_info_phase_gwas2."\n";
-		
-#		exit;
-#	    }
+	    #		print $ld_info_phase_os."\n";
+	    #		print $ld_info_phase_gwas."\n";
+	    
+	    #		print $ld_info_phase_os2."\n";
+	    #		print $ld_info_phase_gwas2."\n";
+	    
+	    #		exit;
+	    #	    }
 
 
 	    $phase_all{$ld_info_phase_os} = $ld_info_phase_gwas;
