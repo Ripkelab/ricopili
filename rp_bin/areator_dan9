@@ -654,6 +654,7 @@ while ($ns == 0) {
 	$pth2 = $pth2 * 10;
 	$pth2 = 0.01 if ($pth2 > .01);
 	print "new p-th: $pth\n";
+	print "Implies p-values are outside range of  0-1; check data format – are all required data columns provided\n";
 	die if ($pth > 1);
     }
 }
