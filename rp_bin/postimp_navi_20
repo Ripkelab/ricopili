@@ -288,7 +288,8 @@ version: $version
 
   --bn_job INT        submit INT jobs at a time
 
-###  --popname STRING    important for freq-checks, either eur (default), asn, amr, afr
+  --popname STRING    population for clumping, right now eur or asn
+
   --regplot STRING    additional regplot file
   
 ###  --cond              conditional analysis on areator output
@@ -1142,6 +1143,30 @@ if ($refdir =~ /chr23/) {
 
 $refdir =~ s!/home/radon01/sripke/bakker_ripke/hapmap_ref!/psych/genetics_data/ripke/references_outdated/hapmap_ref!;
 #sleep(3);
+
+
+
+###################################
+### areator directories
+###################################
+
+
+
+my $areat_refdir = $refdir;
+my $areat_diffdir = $refdir;
+#print "$areat_refdir\n";
+$areat_diffdir =~ s/subchr/$popname/;
+#
+
+if (-e $areat_diffdir) {
+    $areat_refdir = $areat_diffdir;
+    print "using different subset for clumping: $areat_refdir\n";
+    sleep (2);
+#    $refdir = $areat_eurdir;
+}
+
+
+
 
 ############################################################
 ### datasets
@@ -3460,21 +3485,10 @@ if (@lth_arr > 0) {
 
 my @areat_arr = ();
 
-my $areat_refdir = $refdir;
-my $areat_eurdir = $refdir;
-#print "$areat_refdir\n";
-$areat_eurdir =~ s/subchr/eur/;
-#
-my $Xchr_txt = "";
-#if ($phas == 923 || $phas == 9123) {
-#    $Xchr_txt = "--Xchr";
-#}
 
-if (-e $areat_eurdir) {
-    $areat_refdir = $areat_eurdir;
-    print "using a european subset for clumping: $areat_refdir\n";
-#    $refdir = $areat_eurdir;
-}
+my $Xchr_txt = "";
+
+
 
 
 my $prekno_txt = "";
