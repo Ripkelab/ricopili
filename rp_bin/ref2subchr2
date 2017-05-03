@@ -1,0 +1,432 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.3.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+my $mb = 1000000;
+my $kb = 1000;
+
+my $scsize = 10; #subchr size in Mb
+
+my $sov = 1000; ## size of overlap in Mb
+
+##### help message
+my $usage = "
+Usage : $progname phased_file
+
+version: $version
+
+
+  --help            print this message and exit
+  --scsize INT      subchromosome size in Mb, default $scsize
+
+  --test            only two subs per file
+  --sov INT         size of overlap in kb, default $sov
+
+
+to get the files: 
+lftp -e \"mget geno*CEU*;quit;\" http://ftp.hapmap.org/phasing/2007-08_rel22/phased/
+
+new website:
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/ASW/UNRELATED/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/CHD/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/GIH/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/JPT+CHB/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/LWK/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/MEX/TRIOS/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/CHD/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/MKK/UNRELATED/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/YRI/UNRELATED/
+
+
+
+
+
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "test"=> \my $test,
+    "scsize=i"=> \$scsize,
+    "sov=i"=> \$sov, 
+
+    );
+
+die ($usage) if $help;
+
+
+
+die "$usage" if (@ARGV != 1);
+
+$scsize =1 if ($test);
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_win_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/\r//g;
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    if (@lines > 5){
+	die $! unless open FILES, "> $file";
+	foreach (@lines){
+	    print FILES $_;
+	}
+	close FILES;
+    }
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+
+
+
+#############################
+# test, if running on server
+#############################
+use Sys::Hostname;
+my $host = hostname();
+my $lisa=0;
+$lisa=1 if ($host =~ m/sara/) ;
+
+my $bgl_cmd="java  -Xmx800m -jar /home/ripke/beagle.3.0.4/utility/phased2beagle.jar";
+$bgl_cmd = "java  -Xmx1800m -jar /home/gwas/beagle.3.0.4/utility/phased2beagle.jar" if $lisa;
+
+my $hapmap_prefix = "/home/ripke/hapmap-data/";
+$hapmap_prefix = "/home/gwas/hapmap-data/" if ($lisa);
+my $affy_db=$hapmap_prefix."rsid_for_doug.full.txt";
+
+print "local running\n" unless $lisa;
+
+use Compress::Zlib ;
+
+############################################
+######### BEGIN
+########################################
+
+
+my $phased_file = $ARGV[0];
+
+if ($phased_file =~ /.gz$/){
+    &mysystem ("gunzip $phased_file");
+    $phased_file =~ s/.gz$//;
+}
+
+#printf "hier:%03d\n",3;
+#exit;
+### guess chromosome out of filename
+my @cells = split '\.', $phased_file;
+my $chr_guess = "";
+my %affy_snp;
+
+foreach (@cells) {
+    if ($_ =~ /chr/) {
+	my @cellsi = split '_', $_;
+	foreach (@cellsi) {
+	    if ($_ =~ /^chr/) {
+		$chr_guess = $_;
+		$chr_guess =~ s/chr//;
+	    }
+	}
+    }
+}
+
+#$scsize = $scsize * $mb;
+my $sov_str = $sov;
+$sov = $sov / $kb;
+
+my $scc = 1; # sc_count
+my $scname_templ = "sc_".$phased_file;
+$scname_templ =~ s/chr[0-9]*/SCCOUNT/;
+
+my $overlap_file  = $phased_file.".overlap";
+
+die "no chromsome number found" if ($chr_guess eq "");
+
+
+my $ch_start = 0;
+#my $ch_end = $ch_start + $scsize;
+my $ch_end = 0;
+my $ch_start_ov = 0;
+my $ch_end_ov = 0;
+my $fo = 0; # file_open
+
+
+die "$! ($phased_file)" unless open FILE, "< $phased_file";
+die "$! ($overlap_file)" unless open OV, "> $overlap_file";
+
+my $lc = 0;
+my $nov = 0;
+while (my $line = <FILE>){
+
+    chomp($line);
+    $line =~ s/\r//g;
+    $line =~ s/^[\s]+//g;
+	
+    @cells=  split /\s+/, $line, 2;
+    my $bp = $cells[1];
+
+
+    if ($bp > ($ch_end + $sov) * $mb) {
+
+	close SSC;
+	close OV;
+
+	while ($bp > (($ch_end) * $mb)) {
+#	while ($bp > (($ch_end + $sov) * $mb)) {
+	    $ch_end += $scsize;
+	}
+	$ch_start = $ch_end - $scsize;
+
+	my $ch_start_str = sprintf "%03d", $ch_start;
+	my $ch_end_str = sprintf "%03d", $ch_end;
+
+	my $sc_ind = "chr".$chr_guess."_".$ch_start_str."_".$ch_end_str."_".$sov_str;
+	my $scname = $scname_templ;
+	$scname =~ s/SCCOUNT/$sc_ind/;
+
+	&mysystem ("mv $overlap_file $scname");
+
+	print "create $scname\n";
+	$nov = 0;
+	die "$! ($scname)" unless open SCC, ">> $scname";
+	die "$! ($overlap_file)" unless open OV, "> $overlap_file";
+
+    }
+
+    if ($bp > ($ch_end - $sov) * $mb) {
+	print OV "$line\n";
+	if ($bp > ($ch_end) * $mb) {
+	    $nov++;
+	}
+    }
+ 
+    print SCC "$line\n";
+    
+}
+
+close FILE;
+close SCC;
+close OV;
+
+
+if ($nov > 0) {
+    $ch_end += $scsize;
+    $ch_start = $ch_end - $scsize;
+    
+    my $ch_start_str = sprintf "%03d", $ch_start;
+    my $ch_end_str = sprintf "%03d", $ch_end;
+    
+    my $sc_ind = "chr".$chr_guess."_".$ch_start_str."_".$ch_end_str."_".$sov_str;
+    my $scname = $scname_templ;
+    $scname =~ s/SCCOUNT/$sc_ind/;
+    
+    &mysystem ("mv $overlap_file $scname");
+    print "create $scname\n";
+}
+
+
+
+
+
+
+
+&mysystem ("touch $phased_file.done");
+
+
+
+
+
+###########################################################################
+
+exit;
+
+
+####################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+print "prepare CHR $chr_guess\n";
+
+
+#my $sc_ind = "chr".$chr_guess."_".$scc;
+my $scc_start = sprintf "%03d", ($scc-1) * $scsize;
+my $scc_end = sprintf "%03d", $scc * $scsize;
+my $sc_ind = "chr".$chr_guess."_".$scc_start."_".$scc_end;
+
+my $scname = $scname_templ;
+$scname =~ s/SCCOUNT/$sc_ind/;
+
+#my @outlines;
+
+
+my $overlap_file  = $phased_file.".overlap";
+&mysystem ("touch $overlap_file");
+&mysystem ("mv $overlap_file $scname");
+
+
+die "$! ($phased_file)" unless open FILE, "< $phased_file";
+die "$! ($scname)" unless open SCC, ">> $scname";
+die "$! ($overlap_file)" unless open OV, "> $overlap_file";
+
+#my $header = <FILE>;
+
+#my $overlap = "";
+print "different\n";
+my @cells;
+my $lc = 0;
+while (my $line = <FILE>){
+
+
+#    print "$nc\n";    
+#    if (0) {
+
+	
+    chomp($line);
+    $line =~ s/\r//g;
+    $line =~ s/^[\s]+//g;
+	
+    @cells=  split /\s+/, $line, 2;
+    my $nc = @cells;	
+
+#        print "$nc\n";
+	
+	
+#    my @cells=&split_win_line($line);
+	
+	
+#    print "$cells[0]\t$phased_file\n";
+#    print "$line\n";
+#    print $cells[1]."\n";
+	
+	
+	
+    #### when output reaches end + overlap
+    while ($cells[1] > (($scc * $scsize) + 1) * 1.0e+06){
+	    
+#	    printf "NNNNNNNNNNNNOOOOOOOOO\n";
+
+	$scc++;	
+	
+	#### print progress
+	print  (($scc * $scsize) + 1) * 1000000;
+	print  "\t".$scc."\t".($scsize + 1);
+	print "\n";
+
+
+	
+	$scname = $scname_templ;
+	$scc_start = sprintf "%03d", ($scc-1) * $scsize;
+	$scc_end = sprintf "%03d", $scc * $scsize;
+	$sc_ind = "chr".$chr_guess."_".$scc_start."_".$scc_end;
+	
+
+
+
+	$scname =~ s/SCCOUNT/$sc_ind/;
+#	push @outlines, "@cells\n";
+#    print "$cells[0]\t$phased_file\tend1\n";
+	close  SCC;
+	close  OV;
+	print "$overlap_file\n";
+	exit;
+	
+	&mysystem ("mv $overlap_file $scname");
+	die "$! ($scname)" unless open SCC, ">> $scname";
+	die "$! ($overlap_file)" unless open OV, "> $overlap_file";
+#	&a2file ($scname, @outlines);
+	
+	if ($test) {
+	    die if ($scc ==2);
+	}
+	
+
+#	@outlines = ();
+#	print SCC "$overlap";
+#	push @outlines, "$overlap";
+#	$overlap = "";
+	
+    }
+    
+    
+    if ($cells[1] > (($scc * $scsize) - 1) * 1.0e+06){
+	print OV "$line\n";
+#	$overlap .= "@cells\n";
+    }
+#    push @outlines, "@cells\n";
+    print SCC "$line\n";
+    
+#}    
+    $lc++;
+    
+#    if ($lc % 2000 == 0) {
+#	printf "%d rows written\t%d\t%d\t%d\n",$lc, $cells[1], $nc, localtime;
+#	print "$nc\n";
+#    }
+    
+#    print "$cells[0]\t$phased_file\tend2\n";
+}
+
+close FILE;
+close SCC;
+
+
+#$scname = $scname_templ;
+
+#$scc_start = ($scc-1) * $scsize;
+#$scc_end = $scc * $scsize;
+#$sc_ind = "chr".$chr_guess."_".$scc_start."_".$scc_end;
+
+#$sc_ind = "chr".$chr_guess."_".$scc;
+#$scname =~ s/SCCOUNT/$sc_ind/;
+
+#&a2file ($scname, @outlines);
+
+&mysystem ("touch $phased_file.done");

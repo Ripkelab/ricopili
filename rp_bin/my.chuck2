@@ -25,9 +25,12 @@ Usage : my.chuck --out BFILE --in BFILE --sfile SNPFILE
  --out STRING      name of out-bfile
  --in STRING       name of in-bfile
  --sfile STRING    file containing SNPs to exptract
+ --refind          identifier for extracting chr_start_end (in Mb)
  --empty STRING    name of empty-file
  --mendel          clean for mendel errors
 
+
+either --refind or --sfile is mandatory
 
 ";
 
@@ -35,6 +38,7 @@ my $outname = "";
 my $emptyname = "";
 my $inname = "";
 my $sfile = "";
+my $refind = "";
 
 use Getopt::Long;
 GetOptions( 
@@ -43,15 +47,19 @@ GetOptions(
     "empty=s"=> \ $emptyname,
     "in=s"=> \ $inname,
     "sfile=s"=> \ $sfile,
+    "refind=s"=> \ $refind,
     "mendel"=> \my $mendel_sw,
     );
 
 # $ploc/plink --bfile $bprefix --out $plink_ch_out.tmp --chr $chrind --make-bed --extract $snps_extract $mendel_clean";
-if ($outname eq "" || $emptyname eq ""|| $inname eq ""  || $sfile eq "" ){
+if ($outname eq "" || $emptyname eq ""|| $inname eq ""  ){
     print "$usage\n";
     die;
 }
-
+if ($sfile eq "" && $refind eq ""){
+    print "$usage\n";
+    die;
+}
 
 unless (-e "$inname.bim") {
     print "error: no $inname.bim\n";
@@ -70,6 +78,19 @@ if (-e "$outname.fini") {
 # BEGIN
 ##############################
 my $sys = "$ploc/plink --memory 2000 --bfile $inname --out $outname --make-bed --extract $sfile $mendel_clean";
+
+if ($refind) {
+    my @tcells = split /_/, $refind;
+    my $kb_start = ($tcells[1]-1)*1000;
+    my $kb_end = ($tcells[2]+1)*1000;
+    
+    my $chrind = $tcells[0];
+    $chrind =~ s/chr//;
+
+    $sys = "$ploc/plink --memory 2000 --bfile $inname --out $outname --make-bed --chr $chrind --from-kb $kb_start --to-kb $kb_end $mendel_clean";
+}
+
+
 my $sc = system ($sys);
 
 if ($sc == 0 ) {

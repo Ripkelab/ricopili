@@ -219,14 +219,14 @@ while ($inz->gzreadline($line)){
     my $pos = "$cells[1]\t$cells[2]";
     my $in = 0;
     if (exists $snphash{$sname}) {
-	$in = 1;
+	$in = 1;#
 	delete $snphash{$sname};
 #	delete $lochash{$pos};
     } 
     if  (exists $lochash{$pos}) {
 	$in = 1;
-	delete $lochash{$pos};
-    }
+#	delete $lochash{$pos};
+    } 
     if ($in) {
 #	$snpin{$sname} = 1;
 	print OF "$line";

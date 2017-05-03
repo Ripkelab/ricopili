@@ -20,7 +20,6 @@ use Compress::Zlib ;
 
 ###############################################
 
-my $nsnps = 50000;
 
 ##### help message
 my $usage = "
@@ -31,7 +30,6 @@ version: $version
   --root STRING       mandatory, two files must exist: ROOT.lengend.gz and ROOT.plink.bim
   --sample STRING     mandatory, contains sample with columns: ID, pop, super_pop, gender
   --gm STRING         mandatory, genetic map file
-  --nsnps INT         minimum number of SNPs after which chunk will be split
   --help              print this message and exit
 
 
@@ -51,7 +49,6 @@ GetOptions(
     "root=s"=> \my $root,
     "sample=s"=> \my $sample_file,
     "gm=s"=> \my $gm_file,
-    "nsnps=i"=> \$nsnps,
 
     );
 
@@ -130,301 +127,13 @@ my $samples_out = $samples_file.".rf";
 
 
 
-
-
-############################################
-######### legend file
-########################################
-
-print "reformat legend file ($legend_file)\n";
-print "will also define chunks ($legend_file.chunks)\n";
-
-
 my $chrind = $legend_file;
 $chrind =~ s/.*(chr[0-9]*).*/\1/;
 $chrind =~ s/chr//;
 
 
 
-##########################
-## stuff for legend_split
-
-my $cs=0;
-
-my $nc=0;
-my $scc_start=0;
-my $scc_end=0;
-my $pos_col = 1;
-my $in = 0;
-my $lastline;
-my @out;
-my $scc_pos = 0;
-my $scc_pos_last = 0;
-my $cs_1k=0;
-
-
-
-##################
-## for reformat
-my $tt=0;
-my $snp_col = 0;
-my $a1_col = 2;
-my $a2_col = 3;
-
-my %snpin;
-
-my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $gzerrno\n" ;
-my $ogz = gzopen("$legend_out", "wb")  or die "Cannot open file $legend_out: $gzerrno\n" ;    
-while ($igz->gzreadline(my $line)){
-    chomp($line);
-    my @cells = @{&split_line_ref(\$line)};
-
-    if ($tt++ == 0) {
-	$ogz->gzwrite("@cells\n");
-	next;
-    }
-
-
-    #######################################
-    ### legend_split
-
-    my $pos = $cells[$pos_col];
-    $scc_pos = sprintf "%03d", ($pos/1.0e+06);
-    $cs_1k++;
-
-    if ($cs == 0) {
-	$scc_pos_last = $scc_pos;
-    }
-    if ($scc_pos != $scc_pos_last){
-#	print "$scc_pos: $cs_1k\n";
-	if ($scc_pos != $scc_pos_last+1) {
-	    
-	    if ($cs < $nsnps/5 && $nc > 0) {
-		print "appending small last chunk to the last one\n";
-		my $out_str = pop @out;
-		my @ocells = @{&split_line_ref(\$out_str)};
-		$ocells[2] = sprintf "%03d", $scc_pos_last + 1;
-		$ocells[3] = sprintf "%03d", ($ocells[2]-$ocells[1]);
-		$ocells[4] = $ocells[4] + $cs;
-		my $out_str = "@ocells";
-		push @out, $out_str;
-#		print "$out_str\n";
-
-		
-		$scc_start = sprintf "%03d", ($pos/1.0e+06);
-		$cs = 0;
-		$in =1;
-
-	    }
-	    else {
-		$scc_end = sprintf "%03d", ($scc_pos_last + 1);
-		$in =0;
-		$nc++;
-
-	    }
-
-#	    print "Warning: 0 SNPs in 1K: $scc_pos $scc_pos_last: $cs\n";
-	}
-	$scc_pos_last = $scc_pos;
-	$cs_1k=0;
-    }
-    
-    if ($in == 0) {
-
-	
-	### this runs with the first row and then everytime it reaches ssc_end
-	if ($scc_pos >= $scc_end) {
-
-	    unless ($nc == 0) {
-		my $scc_diff = sprintf "%03d", ($scc_end-$scc_start);
-		my $out_str =  "$chrind $scc_start $scc_end $scc_diff $cs";
-		push @out, $out_str;
-#		print "$out_str\n";
-	    }
-
-	    $scc_start = sprintf "%03d", ($pos/1.0e+06);
-	    $cs = 0;
-	    $in =1;
-	}
-    }
-
-    if ($in == 1) {    
-
-
-	if ($cs > $nsnps) {
-
-	    $scc_end = sprintf "%03d", ($pos/1.0e+06);
-	    $scc_end++;
-	    
-#	    print "$pos\n";
-	    $in =0;
-	    $nc++;
-
-	}
-    }
-    
-    $lastline = $line;
-    $cs++;        
-
-
-
-
-
-
-
-    #############################################
-    ## refformat
-    
-    ## take only the first snp-name
-    if ($cells[$snp_col] =~ /;/) {
-	my @spl = split ';', $cells[$snp_col];
-	$cells[$snp_col] = $spl[0];
-    }
-
-    while (exists $snpin{$cells[$snp_col]}) {
-	$cells[$snp_col] .= "m";
-    }
-    $snpin{$cells[$snp_col]} = 1;
-
-    ## check allele lengths
-    if (length($cells[$a2_col]) > 1) {
-	if (length($cells[$a1_col]) > 1) {
-	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
-	    exit;
-	}
-	$cells[$a2_col] = "I";
-	$cells[$a1_col] = "D";
-    }
-    
-    ## check allele lengths
-    if (length($cells[$a1_col]) > 1) {
-	if (length($cells[$a2_col]) > 1) {
-	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
-	    exit;
-	}
-	$cells[$a1_col] = "I";
-	$cells[$a2_col] = "D";
-    }
-    
-    $ogz->gzwrite("@cells\n");
-
-
-}
-$igz->gzclose();
-$ogz->gzclose();
-
-
-%snpin= ();
-
-
-
-
-#################################
-## print out the last chunk
-
-my @cells = @{&split_line_ref(\$lastline)};
-my $pos = $cells[$pos_col];
-
-$scc_end = sprintf "%03d", ($pos/1.0e+06);
-$scc_end++;
-my $scc_diff = sprintf "%03d", ($scc_end-$scc_start);
-
-
-if ($cs < $nsnps/5) {
-    print "appending small last chunk to the last one\n";
-    my $out_str = pop @out;
-    my @ocells = @{&split_line_ref(\$out_str)};
-    $ocells[2] = $scc_end;
-    $ocells[3] = sprintf "%03d", ($ocells[2]-$ocells[1]);
-    $ocells[4] = $ocells[4] + $cs;
-    my $out_str = "@ocells";
-    push @out, $out_str;
-    print "$out_str\n";
-}
-else {
-    my $out_str =  "$chrind $scc_start $scc_end $scc_diff $cs";
-    push @out, $out_str;
-    print "$out_str\n";
-}
-
-$nc++;
-
-#print "number of chunks: $nc\n";
-print "write output file: $legend_file.chunks\n";
-
-die "$! ($legend_file.chunks)" unless open OUT, "> $legend_file.chunks";
-foreach my $out_str (@out) {
-    print OUT "$out_str\n";
-}
-close OUT;
-
-
-
-
-
-############################################
-######### bim file
-########################################
-
-print "reformat $bim_file\n";
-
-
-$snp_col = 1;
-$a1_col = 4;
-$a2_col = 5;
-
-
-    
-die $!."($bim_file)" unless open IFILE, "< $bim_file";
-die $!."($bim_out)" unless open OFILE, "> $bim_out";
-
-
-while (my $line = <IFILE>){
-    chomp($line);
-    my @cells = @{&split_line_ref(\$line)};
-
-
-    
-    ## take only the first snp-name
-    if ($cells[$snp_col] =~ /;/) {
-	my @spl = split ';', $cells[$snp_col];
-	$cells[$snp_col] = $spl[0];
-    }
-
-    while (exists $snpin{$cells[$snp_col]}) {
-	$cells[$snp_col] .= "m";
-    }
-    $snpin{$cells[$snp_col]} = 1;
-    
-
-    ## check allele lengths
-    if (length($cells[$a2_col]) > 1) {
-	if (length($cells[$a1_col]) > 1) {
-	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
-	    exit;
-	}
-	$cells[$a2_col] = "I";
-	$cells[$a1_col] = "D";
-    }
-    
-    ## check allele lengths
-    if (length($cells[$a1_col]) > 1) {
-	if (length($cells[$a2_col]) > 1) {
-	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
-	    exit;
-	}
-	$cells[$a1_col] = "I";
-	$cells[$a2_col] = "D";
-    }
-    
-    print OFILE "@cells\n";
-
-
-}
-close IFILE;
-close OFILE;
-
-%snpin= ();
+### first fam and samples file since its quicker
 
 
 
@@ -436,27 +145,23 @@ my %id_pop;
 my %id_supop;
 my %id_sex;
 
+
+
 print "read $sample_file\n";
 die $!."($sample_file)" unless open IFILE, "< $sample_file";
-my $head = <IFILE>;
+#my $head = <IFILE>;
 while (my $line = <IFILE>){
     chomp($line);
     my @cells = @{&split_line_ref(\$line)};
 
-    $id_pop{$cells[0]} = $cells[1];
-    $id_supop{$cells[0]} = $cells[2];
-    if ($cells[3] eq "female") {
-	$id_sex{$cells[0]} = 2;
-    }
-    elsif ($cells[3] eq "male") {
-	$id_sex{$cells[0]} = 1;
-    }
-    else {
-	print "Error: $cells[0] with unknonwn sex in column 4, file $sample_file\n";
-	exit
-    }
-	
+
     
+    my @c1 = split "_", @cells[0];
+    $id_pop{$cells[1]} = $c1[1];
+    $id_supop{$cells[1]} = $c1[0];
+    $id_sex{$cells[1]} = $cells[4];
+
+#    print "$cells[1]\n";
 }
 close IFILE;
 
@@ -562,14 +267,381 @@ close OFILE;
 
 
 
-&mysystem ("mv $legend_out $legend_file");
-&mysystem ("mv $bim_out $bim_file");
-&mysystem ("mv $samples_out $samples_file");
-&mysystem ("mv $fam_out $fam_file");
+
+#print "debug\n";
+#exit;
+
+
+
+############################################
+######### legend file
+########################################
+
+
+
+
+
+
+##########################
+## stuff for legend_split
+
+my $cs=0;
+
+my $nc=0;
+my $scc_start=0;
+my $scc_end=0;
+
+my $in = 0;
+my $lastline;
+my @out;
+my $scc_pos = 0;
+my $scc_pos_last = 0;
+my $cs_1k=0;
+
+
+
+##################
+## for reformat
+my $tt=0;
+my $snp_col = 0;
+my $pos_col = 1;
+
+
+my $a1_col = 2;
+my $a2_col = 3;
+
+my $cc = 0;
+my $cc_break = 100000;
+
+
+
+###
+### check for multi-SNPs first and also create a common standard for legend and bim
+###
+
+#my @snp_array; ## snp array
+
+my @snppos_array; ## snp array
+my @snp_array_legend; ## snp array
+my %snp_count; ## snp hash
+
+print "print reading $legend_file, checking and resolving for multiple SNP names\n";
+
+
+my $ocgz_cc = 0;
+
+
+if (1){
+
+my $cc= 0;
+my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $gzerrno\n" ;
+$igz->gzreadline(my $header);
+
+while ($igz->gzreadline(my $line)){
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+
+
+    ## take only the first snp-name if there are many separated by semicolon
+    if ($cells[$snp_col] =~ /;/) {
+	my @spl = split ';', $cells[$snp_col];
+	$cells[$snp_col] = $spl[0];
+    }
+
+
+    ## put the position name into an array, before indel shortening since some indels are on the same position.
+#    push @snp_array, $cells[$snp_col];
+    my $snppos = $chrind.":";
+    $snppos .= $cells[$pos_col];
+    $snppos .= "_".$cells[$a1_col];
+    $snppos .= "_".$cells[$a2_col];
+    push @snppos_array, $snppos;
+    
+    ## check allele lengths
+    if (length($cells[$a2_col]) > 1) {
+	if (length($cells[$a1_col]) > 1) {
+	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
+	    exit;
+	}
+	$cells[$a2_col] = "I";
+	$cells[$a1_col] = "D";
+    }
+    
+    ## check allele lengths
+    if (length($cells[$a1_col]) > 1) {
+	if (length($cells[$a2_col]) > 1) {
+	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
+	    exit;
+	}
+	$cells[$a1_col] = "I";
+	$cells[$a2_col] = "D";
+    }
+    
+    ## count all SNPs
+    $snp_count{$cells[$snp_col]}++;
+#    if ($snp_count{$cells[$snp_col]} > 1) {
+#	print "multi: $cells[$snp_col]\n";
+#	sleep(1);
+ #   }
+#    print "$cells[$snp_col]\n";
+
+    
+
+
+
+    ## progress report
+    $cc++;
+    if ($cc % $cc_break == 0) {
+	print "$cc lines processed\n";
+    }  
+
+}
+$igz->gzclose();
+
+
+#exit;
+
+
+
+###
+### reformat legend
+###
+$cc=0;
+
+my %snp_hash; ## snp hash
+
+print "reformat legend file ($legend_file)\n";
+
+
+
+my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $gzerrno\n" ;
+my $ogz = gzopen("$legend_out", "wb")  or die "Cannot open file $legend_out: $gzerrno\n" ;
+my $ocgz = gzopen("$legend_out.changes.gz", "wb")  or die "Cannot open file $legend_out.changes.gz: $gzerrno\n" ;
+
+
+
+
+while ($igz->gzreadline(my $line)){
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+
+    ## header
+    if ($tt++ == 0) {
+	$ogz->gzwrite("@cells\n");
+	next;
+    }
+
+
+
+
+
+    #############################################
+    ## refformat
+    my $changed = 0;
+    
+    ## take only the first snp-name if there are many separated by semicolon
+    if ($cells[$snp_col] =~ /;/) {
+	my @spl = split ';', $cells[$snp_col];
+	$cells[$snp_col] = $spl[0];
+	$changed = 1;
+    }
+
+
+    ## check out multi-occurrence
+    if ($snp_count{$cells[$snp_col]} > 1) {
+	$cells[$snp_col] = $snppos_array[$cc];
+	$changed = 1;
+    }
+
+
+    while (exists $snp_hash{$cells[$snp_col]}) {
+
+	print "Warning: multi occurrence of $cells[$snp_col], $snppos_array[$cc], $cc\n";
+	$cells[$snp_col] .= "m";
+#	exit;
+    }
+    $snp_hash{$cells[$snp_col]} = 1;
+
+    push @snp_array_legend, $cells[$snp_col];  # this here for bim file;
+    
+
+#    print "$cells[$snp_col]; $snppos_array[$cc]\n";
+#    sleep (1);
+
+
+    ## check allele lengths
+    if (length($cells[$a2_col]) > 1) {
+	if (length($cells[$a1_col]) > 1) {
+	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
+	    exit;
+	}
+	$cells[$a2_col] = "I";
+	$cells[$a1_col] = "D";
+	$changed = 1;
+    }
+    
+    ## check allele lengths
+    if (length($cells[$a1_col]) > 1) {
+	if (length($cells[$a2_col]) > 1) {
+	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
+	    exit;
+	}
+	$cells[$a1_col] = "I";
+	$cells[$a2_col] = "D";
+	$changed = 1;
+    }
+
+
+    
+    $ogz->gzwrite("@cells\n");
+
+    if ($changed) {
+	$ocgz->gzwrite("$line -> @cells\n");
+	$ocgz_cc++
+    }
+
+
+    
+
+    $cc++;
+    if ($cc % $cc_break == 0) {
+	print "$cc lines processed\n";
+    }
+
+}
+$igz->gzclose();
+$ogz->gzclose();
+$ocgz->gzclose();
+
+
+
+
+
+
+
+############################################
+######### bim file
+########################################
+
+print "reformat $bim_file\n";
+
+
+$snp_col = 1;
+$a1_col = 4;
+$a2_col = 5;
+
+
+    
+die $!."($bim_file)" unless open IFILE, "< $bim_file";
+die $!."($bim_out)" unless open OFILE, "> $bim_out";
+my $ocgz = gzopen("$bim_out.changes.gz", "wb")  or die "Cannot open file $bim_out.changes.gz: $gzerrno\n" ;   
+
+$cc= 0;
+
+while (my $line = <IFILE>){
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+
+
+    
+    ## take only the first snp-name
+#    if ($cells[$snp_col] =~ /;/) {
+#	my @spl = split ';', $cells[$snp_col];
+#	$cells[$snp_col] = $spl[0];
+#    }
+    my $changed = 0;
+    if ($cells[$snp_col] ne $snp_array_legend[$cc]) {
+	$changed = 1;
+	$cells[$snp_col] = $snp_array_legend[$cc];
+    }
+
+#    print "$cells[$snp_col]; $snp_array_legend[$cc]\n";
+#    sleep (1);
+
+#    while (exists $snpin{$cells[$snp_col]}) {
+#	$cells[$snp_col] .= "m";
+#    }
+#    $snpin{$cells[$snp_col]} = 1;
+    
+
+    ## check allele lengths
+    if (length($cells[$a2_col]) > 1) {
+	if (length($cells[$a1_col]) > 1) {
+	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
+	    exit;
+	}
+	$cells[$a2_col] = "I";
+	$cells[$a1_col] = "D";
+	$changed = 1;
+    }
+    
+    ## check allele lengths
+    if (length($cells[$a1_col]) > 1) {
+	if (length($cells[$a2_col]) > 1) {
+	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col]))\n";
+	    exit;
+	}
+	$cells[$a1_col] = "I";
+	$cells[$a2_col] = "D";
+	$changed = 1;
+    }
+    
+    print OFILE "@cells\n";
+    if ($changed) {
+	$ocgz->gzwrite("$line -> @cells\n");
+	$ocgz_cc++;
+    }
+    
+
+    $cc++;
+    if ($cc % $cc_break == 0) {
+	print "$cc lines processed\n";
+    }
+
+}
+close IFILE;
+close OFILE;
+$ocgz->gzclose();
+
+
+}
+#print "bim and legend finished\n";
+#exit;
+
+
+#%snpin= ();
+
+
+
+if ($ocgz_cc > 0) {
+    &mysystem ("mkdir -p backup");
+    &mysystem ("mv $legend_file backup/$legend_file.bk");
+    &mysystem ("mv $bim_file backup/$bim_file.bk");
+    &mysystem ("mv $samples_file backup/$samples_file.bk");
+    &mysystem ("mv $fam_file backup/$fam_file.bk");
+    
+    &mysystem ("mv $legend_out $legend_file");
+    &mysystem ("mv $bim_out $bim_file");
+    &mysystem ("mv $samples_out $samples_file");
+    &mysystem ("mv $fam_out $fam_file");
+    
+    
+    die "$! ($legend_file.refformat.undo)" unless open OUT, "> $legend_file.refformat.undo";
+    
+    
+    print OUT "move backup files back:\n";
+    print OUT "mv backup/$legend_file.bk $legend_file\n";
+    print OUT "mv backup/$bim_file.bk $bim_file\n";
+    print OUT "mv backup/$samples_file.bk $samples_file\n";
+    print OUT "mv backup/$fam_file.bk $fam_file\n";
+    
+    close OUT;
+}
+
 
 
 
 &mysystem ("touch $root.rf.fini");
 
-    
+
 

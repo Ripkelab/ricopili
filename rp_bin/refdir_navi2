@@ -23,6 +23,61 @@ srand(0);
 
 
 
+
+### what is done where:
+#
+#
+#
+#
+#  my.wget (vcf_download):
+#        - download vcf and genetic maps
+#       
+#
+#  my.prepvcf_filtnorm (bcftools_filtnorm):
+#        - create filtnorm-vcf with mac 4 and normalize multiallelic SNPs
+#
+#
+#  prepare_ref_mm (prep_minimac):
+#        - create minimac reference out of filtnorm vcf
+#        - taken out of the pipeline for now
+#
+#
+#  my.prepvcf_imp2 (bcftools_impute2):
+#        - make impute reference out of filtnorm vcf (here some SNP identifier are introduced)
+#
+#
+#  vcf2plink (vcf2plink):
+#        - create plink binary out of filtnorm vcf
+#
+#  refformat_legend_bim (refformat):
+#        - reformat legend and bimfiles (this will be different to minimac):
+#           - take only first SNP if SNPname has many SNPs divided by semicolon
+#           - INDELs into I and D
+#           - multi occurence with chr:pos_a1_a2
+#           - record changes into changes.gz files
+#        - translate the new sample names into samples-file and fam-file per chromosome
+#
+#  legend_chunk (chunk)
+#        - define chunks with --nsnps out of filtnorm positions
+#           
+#  pobed (plink_anc)
+#        - separate plink binaries for each ancestry including frequencies
+#
+#
+#
+#
+#
+#    in imputation module: checkpos check for SNP overlap and then also for alleles if position gets translated, indels with full length alleles.
+#                           also from readref maybe (or the position will tell)
+#   - put the multi warning in refformat into a separate file (not only in changes)
+#   - compare phasing with eagle
+
+
+
+
+
+
+
 #############################
 # read config file
 #############################
@@ -105,7 +160,7 @@ my $mhc_head =5;
 my $q16_head =1;
 
 my $job_bn_th = 1000;
-my $chunksnps = 50000; ## min number of SNPs in each chunk
+my $chunksnps = 30000; ## min number of SNPs in each chunk
 
 use Getopt::Long;
 GetOptions( 
@@ -148,12 +203,14 @@ my @test_scripts;
 
 my $mach2impute_script = "mach2impute";               ### not needed for now
 my $preprefgene_script = "prepare_refGene";           ### my.pipeline_tar
-my $vcf2plink_script = "vcf2plink";                 ### my.pipeline_tar
+my $vcf2plink_script = "vcf2plink";                   ### my.pipeline_tar
 my $refformat_script = "refformat_legend_bim";        ### my.pipeline_tar
+my $chunk_script = "legend_chunk";                    ### my.pipeline_tar
 my $plinkanc_script = "plink_anc";                    ### my.pipeline_tar
 my $wget_script = "my.wget";                          ### my.pipeline_tar
-my $prepvcf_script = "my.prepvcf";                    ### my.pipeline_tar
-my $prepmm_script = "prepare_ref_mm";                ### my.pipeline_tar
+my $prepvcf_script_filtnorm = "my.prepvcf_filtnorm";  ### my.pipeline_tar
+my $prepvcf_script_imp2 = "my.prepvcf_imp2";          ### my.pipeline_tar
+my $prepmm_script = "prepare_ref_mm";                 ### my.pipeline_tar
 my $vcf_script = "$vloc/vcftools";                    ### 
 my $annot_hg19pos_script = "annot_hg19pos";           ### 
 my $impute2beagle_script = "impute2beagle2";          ### not needed for now
@@ -174,6 +231,7 @@ my $blue_script = "blueprint";                        ### my.pipeline_tar
 #push @test_scripts, $impute2beagle_script ;
 push @test_scripts, $prepare_hm_ref_2_script ;
 push @test_scripts, $refformat_script ;
+push @test_scripts, $chunk_script ;
 push @test_scripts, $vcf2plink_script ;
 push @test_scripts, $plinkanc_script ;
 #push @test_scripts, $beagle2plink_script ;
@@ -695,6 +753,7 @@ my @job_phased = ();
 my @job_bgl = ();
 my @job_plink = ();
 my @job_refformat = ();
+my @job_chunk = ();
 my @job_frq = ();
 my @job_pobed = ();
 my @job_sumfrq = ();
@@ -832,6 +891,7 @@ if (@cat_files == 0) {
     print 'cat gwascatalog.txt.ow | cut -f2,8,12,13,21,22,28 > gwascatalog.txt.ow.short'."\n";
     print 'awk \'$7<5.0e-08{if (length($2)> 25 ) {$2 = substr($2,1,15)"..."}; print $6,$3,$4,$4,$7,$2"("$1")"}\' gwascatalog.txt.ow.short | awk \'NF > 5\' > gwascatalog.txt.ow.short.ow'."\n";
     print 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short.ow > gwascatalog.rp.txt'."\n";
+    print 'gzip full'."\n";
 #    print ''."\n";
  #   print ''."\n";
     print "********************************\n";
@@ -892,7 +952,8 @@ if (@cat_files == 0) {
 	print "sort...\n";
 	$sys = 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short > gwascatalog.rp.txt';	
 	&mysystem ($sys);
-	
+        $sys = 'gzip full';
+	&mysystem ($sys);
 	
 #	print "debug gwascatalog.rp.txt\n";	
 #	exit;
@@ -976,6 +1037,7 @@ unless (-e "$sample_root") {
 
 	print "trying this:\n$sys\n";
 	&mysystem ($sys);
+	print "seems to have worked...\n";
 
     }
     else {
@@ -999,14 +1061,15 @@ unless (-e "$sample_root") {
 ## out_templ
 ################################################
 
-print "put in the vcf template into reference_templ\n";
-exit;
 
 
 unless (-e "reference_templ") {
     print "create file reference_templ\n";
     die $! unless open RT, "> reference_templ";
-    print RT "$out_templ\n";
+    print RT "vcf_site      $vcf_site\n";
+    print RT "vcf_template  $vcf_templ\n";
+    print RT "out_template  $out_templ\n";
+
     close RT;
 }
 
@@ -1031,24 +1094,42 @@ my %ca_hash;
 
 ## read out the collection of continental ancestries
 unless (-e $sample_ca) {
+    print "read continental info from $sample_root\n";
+    
     die $!."($sample_root)" unless open IN, "< $sample_root";
 
     my $line = <IN>; #1
+    my @cells = @{&split_line_ref(\$line)};
+    my $super_pop_col = -1;
+    foreach my $cc (0..$#cells){
+	if ($cells[$cc] eq "super_pop") {
+	    $super_pop_col = $cc;
+	}
+    }
+    if ($super_pop_col == -1){
+	print "Error: no super_pop header in $sample_root\n";
+	exit;
+    }
     while (my $line = <IN>){
 	my @cells = @{&split_line_ref(\$line)};
-	my $ca = $cells[2];
+	my $ca = $cells[$super_pop_col];
 	$ca_hash{$ca} = 1;
 
     }
     close IN;
 
+    print "write continental info into $sample_ca\n";
     die $!."($sample_ca)" unless open OUT, "> $sample_ca";
     foreach my $ca (keys %ca_hash){
 	print OUT "$ca\n";
+	print "$ca\n";
     }
     close OUT;
 
 }
+#print "debug\n";
+#exit;
+
 
 print "reading existing populations\n";
 ## read ancesty collection
@@ -1062,23 +1143,137 @@ close IN;
 
 ## create famfiles, etc.
 unless (-e $sample_fini) {
+
+
+    print  "read sex of panel file\n";
+    die $!."($sample_root)" unless open IN, "< $sample_root";
+
+    my $line = <IN>; #1
+    my @cells = @{&split_line_ref(\$line)};
+
+    my %sex_hash;
+    my $sex_col = -1;
+    my $iid_col = -1;
+    my $panel_sex = 1;
+    
+    foreach my $cc (0..$#cells){
+	if ($cells[$cc] eq "gender") {
+	    $sex_col = $cc;
+	}
+	if ($cells[$cc] eq "sample" || $cells[$cc] eq "IID") {
+	    $iid_col = $cc;
+	}		
+    }
+    
+    if ($sex_col == -1){
+	print "Warning: no gender header in $sample_root\n";
+	$panel_sex = 0;
+    }
+    if ($iid_col == -1){
+	print "Error: no sample or iid header in $sample_root\n";
+	exit;
+    }
+
+    
+
+    while (my $line = <IN>){
+	my @cells = @{&split_line_ref(\$line)};
+	my $sex = 0;
+	if ($cells[$sex_col] eq "female" || $cells[$sex_col] == 2) {
+	    $sex = 2;
+	}
+	if ($cells[$sex_col] eq "male" || $cells[$sex_col] == 1) {
+	    $sex = 1;
+	}
+	my $iid = $cells[$iid_col];
+#	print "$iid has sex $sex\n";	
+	$sex_hash{$iid} = $sex;
+    }
+
+    close IN;
+
+
+
+    
+    if ($sex_col == -1){
+	print  "read sex of chr22-samples\n";
+	my @chr22_samples = `ls *chr22*samples`;
+	if (@chr22_samples > 1) {
+	    print "Error: many *chr22*samples files\n";
+	    exit;
+	}
+	if (@chr22_samples < 1) {
+	    print "Error: no *chr22*samples files\n";
+	    exit;
+	}
+	
+
+	die $!."($chr22_samples[0])" unless open CHR, "< $chr22_samples[0]";
+	while (my $line = <CHR>){
+	    my @cells = @{&split_line_ref(\$line)};
+	    my $iid = $cells[0];
+	    my $sex = $cells[3];
+	    $sex_hash{$iid} = $sex;
+	}
+	close CHR;
+    }
+
+#    exit;
+
+    
+
+    
     print "creating root population famfiles\n";
     my @famlines;
     die $!."($sample_root)" unless open IN, "< $sample_root";
     die $!."($sample_fam)" unless open OUT, "> $sample_fam";
     
     my $line = <IN>; #1
+
+    my @cells = @{&split_line_ref(\$line)};
+    my $super_pop_col = -1;
+    my $pop_col = -1;
+    my $iid_col = -1;
+    foreach my $cc (0..$#cells){
+	if ($cells[$cc] eq "super_pop") {
+	    $super_pop_col = $cc;
+	}
+	if ($cells[$cc] eq "population" || $cells[$cc] eq "pop") {
+	    $pop_col = $cc;
+	}
+	if ($cells[$cc] eq "sample" || $cells[$cc] eq "IID") {
+	    $iid_col = $cc;
+	}		
+    }
+    
+    if ($super_pop_col == -1){
+	print "Error: no super_pop header in $sample_root\n";
+	exit;
+    }
+    if ($pop_col == -1){
+	print "Error: no pop or population header in $sample_root\n";
+	exit;
+    }
+    if ($iid_col == -1){
+	print "Error: no sample or iid header in $sample_root\n";
+	exit;
+    }
+
+
+    
     while (my $line = <IN>){
 	my @cells = @{&split_line_ref(\$line)};
-	my $fid = $cells[2]."_".$cells[1];
-	my $iid = $cells[0];
-	my $sex = 0;
-	if ($cells[3] eq "female") {
-	    $sex = 2;
+	my $fid = $cells[$super_pop_col]."_".$cells[$pop_col];
+	my $iid = $cells[$iid_col];
+	my $sex;
+	if (exists $sex_hash{$iid}) {
+	    $sex = $sex_hash{$iid};
 	}
-	if ($cells[3] eq "male") {
-	    $sex = 1;
+	else {
+	    print "Error: $iid does not have an entry in sex specifying file\n";
+	    exit;
 	}
+
 	
 	my $out_line = $fid;
 	$out_line .= "\t".$iid;
@@ -1119,13 +1314,104 @@ unless (-e $sample_fini) {
 #print "debug\n";
 #exit;
 
+
+
+
+
+
 my $answer = "";
 my $answer_gm = "";
 my $exit = 0;
 my @plink_collection;
 my @chunks_collection;
+my @backup_arr;
 my $gm_name;
 unless (-e "$rootdir/rootdir_done"){
+
+
+    my $answer_rename = "";
+
+    foreach my $chr ($chr_start..$chr_end){
+	my $vcf_name = $vcf_templ;
+	$vcf_name =~ s/XXX/$chr/g;
+	my $vcf_name_loc;
+	
+	if (-e $vcf_name) {
+	    $vcf_name_loc = $vcf_name;
+	}
+	elsif (-e "loc.".$vcf_name) {
+	    $vcf_name_loc = "loc.".$vcf_name;
+	}
+	else {
+	    my @vcf_files = `ls *chr$chr.samples | grep -v impute`;
+	    if (@vcf_files == 1) {
+		my $vcf_found = $vcf_files[0];
+		chomp ($vcf_found);
+		unless ($answer_rename eq "y" || $answer_rename eq "Y"){
+		    print "********************************\n";
+		    print "vcf-file ($vcf_name) not found, but I found another possibility ($vcf_found).\n";
+		    print "do you want to rename into matching template $vcf_templ (old names are lost) for all chromosomes?\n";
+		}
+		
+		if ($answer_rename eq "") {
+		    $answer_rename = lc <>;
+		    chomp $answer_rename;
+		}
+
+		if ($answer_rename eq "y" || $answer_rename eq "Y"){
+		    my $vcf_new = $vcf_templ;
+		    $vcf_name =~ s/XXX/$chr/g;
+		    my $samples_name_old = $vcf_found;
+		    my $samples_name_new = $vcf_name;
+		    $samples_name_new =~ s/.haplotypes.vcf.gz$/.samples/;
+		    &mysystem ("mv $samples_name_old $samples_name_new");
+		    push @backup_arr, "mv $samples_name_new $samples_name_old\n";
+		    
+		    my $vcf_name_old = $vcf_found;
+		    my $vcf_name_new = $vcf_name;
+		    $vcf_name_old =~ s/.samples$/.haplotypes.vcf.gz/;
+		    &mysystem ("mv $vcf_name_old $vcf_name_new");
+		    push @backup_arr, "mv $vcf_name_new $vcf_name_old\n";
+
+		    my $legend_name_old = $vcf_found;
+		    my $legend_name_new = $vcf_name;
+		    $legend_name_new =~ s/.haplotypes.vcf.gz$/.legend.gz/;
+		    $legend_name_old =~ s/.samples$/.legend.gz/;
+		    &mysystem ("mv $legend_name_old $legend_name_new");
+		    push @backup_arr, "mv $legend_name_new $legend_name_old\n";		    
+		}
+
+
+	    }
+	    if (@vcf_files == 0) {
+		print "Warning: cannot find any matching samples filenames\n";
+	    }
+	    if (@vcf_files > 1) {
+		print "Error: too many matching samples filenames\n";
+		exit;
+	    }	    
+#	    print "here we go: @vcf_files\n";
+	}    
+    }
+
+    if (@backup_arr > 0) {
+	die $!."($vcf_templ.backup)" unless open BA, "> $vcf_templ.backup";
+	foreach (@backup_arr) {
+	    print BA$_;
+	}
+	close BA;
+	
+	print "-----------------------------------------------\n";
+	print "renamed many files\n";
+	print "if you want to undo, please have a look at $vcf_templ.backup\n";
+	print "please check if you are happy with the results\n";
+	print "if yes, then restart\n";
+	exit;	
+    }
+
+
+
+    
     foreach my $chr ($chr_start..$chr_end){
 
 #
@@ -1140,9 +1426,19 @@ unless (-e "$rootdir/rootdir_done"){
 	if ($vcf_templ ne "") {
 
 
+	    
+
 	    my $vcf_name = $vcf_templ;
 	    $vcf_name =~ s/XXX/$chr/g;
-	    my $vcf_name_loc = "loc.".$vcf_name;
+	    my $vcf_name_loc;
+
+	    if (-e $vcf_name) {
+		$vcf_name_loc = $vcf_name;
+	    }
+	    else {
+		$vcf_name_loc = "loc.".$vcf_name;
+#		my @cat_files = `ls gwascatalog.rp.txt`;
+	    }
 
 
 	    my $vcf_name_remote = $vcf_templ;
@@ -1253,7 +1549,7 @@ unless (-e "$rootdir/rootdir_done"){
 	    ####################################
 
 	    unless (-e $vcf_name_loc_filtnorm_fini) {
-		push @job_btools1, "$prepvcf_script --filtnorm --vcf $vcf_name_loc --mac_th $mac_th";
+		push @job_btools1, "$prepvcf_script_filtnorm --filtnorm --vcf $vcf_name_loc --mac_th $mac_th";
 	    }
 
 
@@ -1280,7 +1576,7 @@ unless (-e "$rootdir/rootdir_done"){
 	    
 	    unless (-e $hapout_name_fini) {
 		#		print "hapout: $hapout_name\n";
-		push @job_btools2, "$prepvcf_script --vcf $vcf_name_loc_filtnorm --out $hapout_name";
+		push @job_btools2, "$prepvcf_script_imp2 --vcf $vcf_name_loc_filtnorm --out $hapout_name";
 #		push @job_vtools, "$vcf_script --mac $mac_th --gzvcf $vcf_name_loc --IMPUTE --out $hap_name";
 	    }
 
@@ -1440,11 +1736,17 @@ unless (-e "$rootdir/rootdir_done"){
 
 
 	my $refformat_fini = $hapout_name.".rf.fini";
-	push @chunks_collection, "$hapout_name.legend.gz.chunks";
 	unless (-e $refformat_fini) {
 #	    print "plink: $plink_name\n";
-	    push @job_refformat, "$refformat_script --nsnps $chunksnps --root $hapout_name --sample $sample_root --gm $gm_name";
+	    push @job_refformat, "$refformat_script --root $hapout_name --sample $sample_root.fam --gm $gm_name";
 	}
+
+	my $chunk_fini = $hapout_name.".legend.gz.chunks.fini";
+	unless (-e $chunk_fini) {
+#	    print "plink: $plink_name\n";
+	    push @job_chunk, "$chunk_script --nsnps $chunksnps --root $hapout_name";
+	}
+	push @chunks_collection, "$hapout_name.legend.gz.chunks";	
 
 
 
@@ -1583,20 +1885,22 @@ unless (-e "$rootdir/rootdir_done"){
 
     }
 
-    if (@job_prepmm > 0 ) {
-
-	
-	$sjaweek = 1;
-	$sjadir = $rootdir;
-	$sjaname = "prep_minnimac";
-	$sjatime = 2;
-	$sjamulti = 4;
-	$sjamem = 12000;
-	@sjaarray = @job_prepmm;
-	
-	&send_jobarray;
-
-
+    if (0) {
+	if (@job_prepmm > 0 ) {
+	    
+	    
+	    $sjaweek = 1;
+	    $sjadir = $rootdir;
+	    $sjaname = "prep_minimac";
+	    $sjatime = 2;
+	    $sjamulti = 4;
+	    $sjamem = 12000;
+	    @sjaarray = @job_prepmm;
+	    
+	    &send_jobarray;
+	    
+	    
+	}
     }
 
 
@@ -1664,8 +1968,19 @@ unless (-e "$rootdir/rootdir_done"){
 	
 	&send_jobarray;
 
-    }    
+    }
 
+    if (@job_chunk > 0 ) {
+
+	$sjadir = $rootdir;
+	$sjaname = "chunk";
+	$sjatime = 2;
+	$sjamem = 2000;
+	@sjaarray = @job_chunk;
+	
+	&send_jobarray;
+
+    }
     
 
     if (@job_pobed > 0 ) {
@@ -1676,11 +1991,15 @@ unless (-e "$rootdir/rootdir_done"){
 	$sjamem = 4000;
 	@sjaarray = @job_pobed;
 	
-	&send_jobarray;
-	
-	
+	&send_jobarray;	
     }
 
+
+#    print "debug\n";
+#    exit;
+
+
+    
 #    if (@job_frq > 0 ) {
 	
 	
@@ -1730,42 +2049,46 @@ unless (-e "$rootdir/rootdir_done"){
 
     
 
-    print "debug\n";
-    exit;
+#    print "debug\n";
+#    exit;
 
-    foreach my $pf_loc (@pop_fams) {
-	
-	unless (-e "sumfrq.$pf_loc") {
+
+    if (0){
+    
+	foreach my $pf_loc (@pop_fams) {
 	    
+	    unless (-e "sumfrq.$pf_loc") {
+		
+		
+		my $sys_f = "$floc2sumfrq_script --chrstart $chr_start --chrend $chr_end --out sumfrq.$pf_loc --bim $out_templ"."$imp_phased_postfix".".bgl.bim --frq $out_templ.$pf_loc.frq";
+		#	    print "$sys_f\n";
+		push @job_sumfrq, "$sys_f";
+		
+	    }
 	    
-	    my $sys_f = "$floc2sumfrq_script --chrstart $chr_start --chrend $chr_end --out sumfrq.$pf_loc --bim $out_templ"."$imp_phased_postfix".".bgl.bim --frq $out_templ.$pf_loc.frq";
-#	    print "$sys_f\n";
-	    push @job_sumfrq, "$sys_f";
+	    unless (-e "sumfrq.$pf_loc.done") {
+		
+		
+		my $sys_f = "$floc2sumfrq_script2 --chrstart $chr_start --chrend $chr_end --out sumfrq.$pf_loc --bim $out_templ"."$imp_phased_postfix".".bgl.bim --frq $out_templ.$pf_loc.frq";
+		#	    print "$sys_f\n";
+		push @job_sumfrq, "$sys_f";
+		
+	    }
 	    
 	}
-
-	unless (-e "sumfrq.$pf_loc.done") {
+	
+	
+	if (@job_sumfrq > 0 ) {
 	    
+	    $sjadir = $rootdir;
+	    $sjaname = "sumfreq";
+	    $sjatime = 2;
+	    $sjamem = 2000;
+	    @sjaarray = @job_sumfrq;
 	    
-	    my $sys_f = "$floc2sumfrq_script2 --chrstart $chr_start --chrend $chr_end --out sumfrq.$pf_loc --bim $out_templ"."$imp_phased_postfix".".bgl.bim --frq $out_templ.$pf_loc.frq";
-#	    print "$sys_f\n";
-	    push @job_sumfrq, "$sys_f";
+	    &send_jobarray;
 	    
 	}
-	
-    }
-
-
-    if (@job_sumfrq > 0 ) {
-
-	$sjadir = $rootdir;
-	$sjaname = "sumfreq";
-	$sjatime = 2;
-	$sjamem = 2000;
-	@sjaarray = @job_sumfrq;
-	    
-	&send_jobarray;
-
     }
 
 
@@ -1778,11 +2101,13 @@ unless (-e "$rootdir/rootdir_done"){
 #exit;
     
     &mysystem ("touch $rootdir/rootdir_done");
-    
+	
 
 }
 
 
+print "debug\n";
+exit;
 
 
 

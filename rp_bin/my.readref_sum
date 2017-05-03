@@ -83,31 +83,37 @@ print "sum ref-files\n";
 
 die "$outfile".$! unless open FD , "> $outfile";
 
-die $!."$bimfile.ref.chr1" unless open FILE, "< $bimfile.ref.chr1";
-my $line = <FILE>;
-print FD "$line";
-close FILE;
-
-
+my $tt=0;
 foreach my $chrloc(1..22) {
-    die $!."$bimfile.ref.chr$chrloc" unless open FILE, "< $bimfile.ref.chr$chrloc";
-    my $line = <FILE>;
 
-    while (my $line = <FILE>){
-	print FD "$line";
+    unless (-e "$bimfile.ref.chr$chrloc") {
+	print "Warning: $bimfile.ref.chr$chrloc is not existing\n";
     }
-    close FILE;
+    else {    
+    
+	die $!."$bimfile.ref.chr$chrloc" unless open FILE, "< $bimfile.ref.chr$chrloc";
+	my $line = <FILE>;
+	if ($tt == 0){
+	    print FD "$line";
+	}
+	
+	while (my $line = <FILE>){
+	    print FD "$line";
+	}
+	close FILE;
+
+    }
 
 }
 
 close FD;
 
-
-&mysystem ("tar -cvzf $bimfile.ref.addinfo.tar.gz $bimfile.ref.chr*.leftloc $bimfile.ref.chr*.renames");
-#&mysystem ("gzip $outfile");
-
+### needs to be system since sometimes tar exits with "1" and then the script failes
 
 &mysystem ("touch $bimfile.ref.sum.done");
+
+system ("tar -cvzf $bimfile.ref.addinfo.tar.gz $bimfile.ref.chr*.leftloc $bimfile.ref.chr*.renames");
+
 &mysystem ("rm $bimfile.ref.chr*");
 print "done\n";
 

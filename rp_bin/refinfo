@@ -1,0 +1,226 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+my $bgl_file = "";
+my $annot_file = "";
+my $like_file = "";
+
+##### help message
+my $usage = "
+Usage : $progname 
+
+version: $version
+
+  --bgl STRING      phased beagle file
+  --annot STRING    annotation file, col 7+8
+    --bim           take annotation from bim, so column 2,1,4
+  --like STRING     likelihood file
+  --help            print this message, then exit
+
+ created by Stephan Ripke 2010 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+
+
+use Getopt::Long;
+GetOptions( 
+    "bgl=s"=> \ $bgl_file,
+    "annot=s"=> \ $annot_file,
+    "bim"=> \my $bim_annot,
+    "like=s"=> \ $like_file,
+    "help"=> \my $help,
+    );
+
+
+die ($usage) if ($help || ($bgl_file eq "" && $like_file eq ""));
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_win_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/\r//g;
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+############################################
+######### BEGIN
+########################################
+
+my %sanno ;
+
+### phased bgl file
+if ($annot_file ne ""){
+    my $scol = 0; ## snp-name
+    my $chrcol = 6; 
+    my $poscol = 7; 
+    if ($bim_annot) {
+	$scol = 1; ## snp-name
+	$chrcol = 0; 
+	$poscol = 3; 
+    }
+    
+    die "$! ($annot_file)" unless open ANNOT, "< $annot_file";
+
+    while (my $line = <ANNOT>){
+	my @cells = &split_win_line($line);
+	$sanno{$cells[$scol]} = "$cells[$chrcol]\t$cells[$poscol]";
+    }
+    
+    close ANNOT;
+    
+}
+
+
+### phased bgl file
+if ($bgl_file ne ""){
+    my $scol = 1; ## snp-name
+    my $hcol = 2; ## number of cells to skip at beginning of each row.
+    my $icol = 0; ## indicator - M for SNP
+    
+    die "$! ($bgl_file)" unless open BGL, "< $bgl_file";
+    my $info_file = "$bgl_file.info";
+    $info_file .= "_pos" if ($annot_file);
+    die "$! ($info_file.tmp)" unless open INFO, "> $info_file.tmp";
+    
+    
+    my $snp_count = 0;
+    while (my $line = <BGL>){
+	my @cells = &split_win_line($line);
+	my %cc = ();
+	
+	next unless ($cells[$icol] eq "M");
+	print INFO "$cells[$scol]\t".@cells;
+#    print "$cells[$scol]\n";
+	foreach ($hcol .. $#cells){
+	    $cc{$cells[$_]} ++ if ($cells[$_] ne "0" && $cells[$_] ne "-");
+	}
+	my $comi=10000000;
+	foreach(keys %cc){
+	    my $rat = $cc{$_} / @cells;
+	    printf INFO "\t$_\t%.4f",$rat;
+	    $comi = $cc{$_ }if ($cc{$_} < $comi);
+	}
+	print INFO "\t$comi";
+	if ($annot_file) {
+	    unless (exists $sanno{$cells[$scol]}){
+		print "no annotation for $cells[$scol]\n";
+		exit;
+	    }
+	}
+	print INFO "\t$sanno{$cells[$scol]}\n";
+    }
+    
+    close BGL;
+    close INFO;
+    
+    &mysystem ("mv $info_file.tmp $info_file")
+#    &mysystem ("sort -k1,1 $info_file > $info_file.sorted")
+}
+
+
+
+### likelihood file
+if ($like_file ne ""){
+my $scol = 0; ## snp-name
+my $hcol = 3; ## number of cells to skip at beginning of each row.
+my $icol = 0; ## indicator - M for SNP
+
+die "$! ($like_file)" unless open LIK, "< $like_file";
+die "$! ($like_file.info)" unless open INFO, "> $like_file.info";
+die "$! ($like_file.hc)" unless open HC, "> $like_file.hc";
+
+my $snp_count = 0;
+while (my $line = <LIK>){
+    my @cells = &split_win_line($line);
+    my %cc = ();
+
+
+#    print "$line\n";
+
+    my $a1 = $cells[1];
+    my $a2 = $cells[2];
+    my $ngt = 0;
+    print HC "$cells[$scol]";
+
+#    print "$cells[$scol]\n";
+    for (my $i = $hcol; $i < $#cells; $i=$i+3){
+	my $mx = 0;
+	my $gt = 0;
+	foreach (0..2){
+	    if ($cells[$i + $_] > $mx ) {
+		$mx = $cells[$i + $_];
+		$gt = $_;
+	    }
+	    elsif ($cells[$i + $_] == $mx ) {
+		$gt = -1;
+	    }
+#	    print "$cells[$i + $_]\t";
+	}
+	$cc{$a1} += 2 if ($gt ==0);
+	$cc{$a1}++ if ($gt ==1);
+	$cc{$a2}++ if ($gt ==1);
+	$cc{$a2} += 2 if ($gt ==2);
+	$ngt += 2;
+	print HC "\t$gt";
+#	print "\t$gt\n";
+    }
+    print HC "\n";
+#    print "\n";
+    print INFO "$cells[$scol]\t".$ngt;
+    my $comi=10000000;
+    foreach(keys %cc){
+	my $rat = $cc{$_} / $ngt;
+	printf INFO "\t$_\t%.4f",$rat;
+	$comi = $cc{$_ }if ($cc{$_} < $comi);
+    }
+    print INFO "\t$comi\n";
+#    last if ($snp_count++ == 10);
+}
+
+close LIK;
+close INFO;
+close HC;
+
+&mysystem ("sort -k1,1 $like_file.info > $like_file.info.sorted")
+
+
+}
+
+
+
+

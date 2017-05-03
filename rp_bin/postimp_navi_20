@@ -2083,9 +2083,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 		    my $empty_file = "$bfile.$refind.empty";
 		    if (exists $empty_files{$empty_file}) {
-#		if (-e $empty_file) {
 			print "empty: $empty_file\n";
-#		    sleep(2);
 		    }
 		    else {
 
@@ -2251,34 +2249,39 @@ unless (-e "$rootdir/daner_$outname.done") {
 			}
 		    }
 
-		    my $dadimetadir = $dametadir."_$cx";
-		    my $dameta_out = "$dadimetadir/dan_$refind.assoc.dosage.meta.ngt";
-		    unless (-e "$dameta_out.metadaner.gz") {
-			my $sys = "$metaber_script $xdf_txt --out $dameta_out @dasidifiles";
-			push @daner_dimeta_arr, $sys; 
+		    if (@dasidifiles > 0) {
+			my $dadimetadir = $dametadir."_$cx";
+			my $dameta_out = "$dadimetadir/dan_$refind.assoc.dosage.meta.ngt";
+			unless (-e "$dameta_out.metadaner.gz") {
+			    my $sys = "$metaber_script $xdf_txt --out $dameta_out @dasidifiles";
+			    push @daner_dimeta_arr, $sys; 
+			}
+			push @ {$dadimeta_files {$cx}}, "$dameta_out.metadaner.gz";
+			push @dadimeta_arr, "$dameta_out.metadaner.gz";
 		    }
-		    push @ {$dadimeta_files {$cx}}, "$dameta_out.metadaner.gz";
-		    push @dadimeta_arr, "$dameta_out.metadaner.gz";
 		}
 	    }
 
 
-	    ### META - overall
-	    my $dameta_out = "$dametadir/dan_$refind.assoc.dosage.meta.ngt";
-	    unless (-e "$dameta_out.metadaner.gz") {
-		my @dasifiles_loc = @dasifiles;
-		@dasifiles_loc = @dadimeta_arr if ($n_cdg > 1);
-		push @daner_meta_arr, "$metaber_script $xdf_txt --out $dameta_out @dasifiles_loc";
-#	    print "metaber5 $xdf_txt --out $dameta_out @dasifiles_loc\n";
-#	    exit;
+	    if (@dasifiles > 0) {
+		### META - overall
+		my $dameta_out = "$dametadir/dan_$refind.assoc.dosage.meta.ngt";
+		unless (-e "$dameta_out.metadaner.gz") {
+		    my @dasifiles_loc = @dasifiles;
+		    @dasifiles_loc = @dadimeta_arr if ($n_cdg > 1);
+		    
+		    
+		    push @daner_meta_arr, "$metaber_script $xdf_txt --out $dameta_out @dasifiles_loc";
+		    #	    print "metaber5 $xdf_txt --out $dameta_out @dasifiles_loc\n";
+		    #	    exit;
+		}
+		else {
+		    $daner_fini_meta_count++;
+		}
+		
+		my $dameta_out_short = "dan_$refind.assoc.dosage.meta.ngt";
+		push @dameta_files, "$dameta_out_short.metadaner.gz";
 	    }
-	    else {
-		$daner_fini_meta_count++;
-	    }
-
-	    my $dameta_out_short = "dan_$refind.assoc.dosage.meta.ngt";
-	    push @dameta_files, "$dameta_out_short.metadaner.gz";
-
 	    
 #	exit;
 	    last if ($test);
@@ -2718,6 +2721,8 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 	    push @result_files, $line;
 	    push @daner_collect, $line;
 	    unless (-e "$rootdir/$line") {
+		print "Error: $rootdir\n";
+		print "Error: $line\n";
 		print "Error: <$rootdir/$line> is not existing as a daner-file\n";
 		print "please check $result_name, maybe an empty line in there?\n";
 		print "exiting now\n";

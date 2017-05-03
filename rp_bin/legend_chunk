@@ -1,0 +1,332 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.3.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
+use lib $ENV{rp_perlpackages};
+use Compress::Zlib ;
+
+
+
+###############################################
+
+my $nsnps = 0;
+
+##### help message
+my $usage = "
+Usage : $progname 
+
+version: $version
+
+  --root STRING       mandatory, two files must exist: ROOT.lengend.gz and ROOT.plink.bim
+  --nsnps INT         minimum number of SNPs after which chunk will be split
+  --help              print this message and exit
+
+
+ creates sensible chunks for legend files 
+
+ nssnps is mandatory above 10000
+
+ created by Stephan Ripke 2017 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+
+my $prefix = "";
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "root=s"=> \my $root,
+    "nsnps=i"=> \$nsnps,
+
+    );
+
+die ($usage) if $help;
+die ($usage) unless $root;
+
+
+die "$usage" if ($nsnps < 10000);
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+###################################################
+## check snpname
+###################################################
+
+
+sub csnp(){
+    my ($cell)="@_";
+    if ($cell =~ /;/) {
+#	print "yes there is a semi: $cell\n";
+	my @spl = split ';', $cell;
+	return $spl[0];
+    }
+    else {
+	return $cell;
+    }
+}
+
+
+
+
+############################################
+######### BEGIN
+########################################
+
+
+
+
+my $legend_file = "$root.legend.gz";
+
+
+
+my $chrind = $legend_file;
+$chrind =~ s/.*(chr[0-9]*).*/\1/;
+$chrind =~ s/chr//;
+
+
+
+### first fam and samples file since its quicker
+
+
+
+
+############################################
+######### legend file
+########################################
+
+
+
+
+##########################
+## stuff for legend_split
+
+my $cs=0;
+
+my $nc=0;
+my $scc_start=0;
+my $scc_end=0;
+
+my $in = 0;
+my $lastline;
+my @out;
+my $scc_pos = 0;
+my $scc_pos_last = 0;
+my $cs_1k=0;
+
+
+
+##################
+## for reformat
+my $tt=0;
+my $snp_col = 0;
+my $pos_col = 1;
+
+
+my $a1_col = 2;
+my $a2_col = 3;
+
+my $cc = 0;
+my $cc_break = 100000;
+
+
+
+
+
+###
+### print chunks 
+###
+$cc=0;
+
+my %snp_hash; ## snp hash
+
+print "read legend file ($legend_file)\n";
+
+my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $gzerrno\n" ;
+
+$igz->gzreadline(my $line);
+
+while ($igz->gzreadline(my $line)){
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+
+
+    #######################################
+    ### legend_split
+
+    my $pos = $cells[$pos_col];
+    $scc_pos = sprintf "%03d", ($pos/1.0e+06);
+    $cs_1k++;
+
+    if ($cs == 0) {
+	$scc_pos_last = $scc_pos;
+    }
+    if ($scc_pos != $scc_pos_last){
+#	print "$scc_pos: $cs_1k\n";
+	if ($scc_pos != $scc_pos_last+1) {
+	    
+	    if ($cs < $nsnps/5 && $nc > 0) {
+		print "appending small last chunk to the last one\n";
+		my $out_str = pop @out;
+		my @ocells = @{&split_line_ref(\$out_str)};
+		$ocells[2] = sprintf "%03d", $scc_pos_last + 1;
+		$ocells[3] = sprintf "%03d", ($ocells[2]-$ocells[1]);
+		$ocells[4] = $ocells[4] + $cs;
+		my $out_str = "@ocells";
+		push @out, $out_str;
+#		print "$out_str\n";
+
+		
+		$scc_start = sprintf "%03d", ($pos/1.0e+06);
+		$cs = 0;
+		$in =1;
+
+	    }
+	    else {
+		$scc_end = sprintf "%03d", ($scc_pos_last + 1);
+		$in =0;
+		$nc++;
+
+	    }
+
+#	    print "Warning: 0 SNPs in 1K: $scc_pos $scc_pos_last: $cs\n";
+	}
+	$scc_pos_last = $scc_pos;
+	$cs_1k=0;
+    }
+    
+    if ($in == 0) {
+
+	
+	### this runs with the first row and then everytime it reaches ssc_end
+	if ($scc_pos >= $scc_end) {
+
+	    unless ($nc == 0) {
+		my $scc_diff = sprintf "%03d", ($scc_end-$scc_start);
+		my $out_str =  "$chrind $scc_start $scc_end $scc_diff $cs";
+		push @out, $out_str;
+#		print "$out_str\n";
+	    }
+
+	    $scc_start = sprintf "%03d", ($pos/1.0e+06);
+	    $cs = 0;
+	    $in =1;
+	}
+    }
+
+    if ($in == 1) {    
+
+
+	if ($cs > $nsnps) {
+
+	    $scc_end = sprintf "%03d", ($pos/1.0e+06);
+	    $scc_end++;
+	    
+#	    print "$pos\n";
+	    $in =0;
+	    $nc++;
+
+	}
+    }
+    
+    $lastline = $line;
+    $cs++;        
+
+
+    $cc++;
+    if ($cc % $cc_break == 0) {
+	print "$cc lines processed\n";
+    }
+
+}
+$igz->gzclose();
+
+
+
+
+
+#################################
+## print out the last chunk
+
+my @cells = @{&split_line_ref(\$lastline)};
+my $pos = $cells[$pos_col];
+
+$scc_end = sprintf "%03d", ($pos/1.0e+06);
+$scc_end++;
+my $scc_diff = sprintf "%03d", ($scc_end-$scc_start);
+
+
+if ($cs < $nsnps/5) {
+    print "appending small last chunk to the last one\n";
+    my $out_str = pop @out;
+    my @ocells = @{&split_line_ref(\$out_str)};
+    $ocells[2] = $scc_end;
+    $ocells[3] = sprintf "%03d", ($ocells[2]-$ocells[1]);
+    $ocells[4] = $ocells[4] + $cs;
+    my $out_str = "@ocells";
+    push @out, $out_str;
+#    print "$out_str\n";
+}
+else {
+    my $out_str =  "$chrind $scc_start $scc_end $scc_diff $cs";
+    push @out, $out_str;
+    print "$out_str\n";
+}
+
+$nc++;
+
+#print "number of chunks: $nc\n";
+print "write output file: $legend_file.chunks\n";
+
+die "$! ($legend_file.chunks)" unless open OUT, "> $legend_file.chunks";
+foreach my $out_str (@out) {
+    print OUT "$out_str\n";
+}
+close OUT;
+
+
+
+&mysystem ("touch $legend_file.chunks.fini");
+
+print "all done\n";
+    
+

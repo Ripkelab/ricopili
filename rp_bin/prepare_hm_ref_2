@@ -1,0 +1,754 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.3.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+my $mac_th = 0;
+
+##### help message
+my $usage = "
+Usage : $progname phased_file
+
+version: $version
+
+  -nobgl           mach instead of beagle-phased reference
+  -not             no transpose
+  -phase2          get phase2-files, beagle will be switched on automatically
+  --p2to3          phase2 format into phase3 format
+  --cnvref         cnvref for p2to3
+  -phase1KG        get phase1KG, beagle will be switched on automatically
+  -noaffy          no affy snps in data
+  -annot           only annotation file (with phase1KG)
+  --names STRING   names (in header) of IDs to include
+  --fig2let        figures (1,2,3,4) into letters (A,C,G,T)
+  -help            print this message and exit
+
+  --mac_th INT     max minor-allele-count to include
+
+
+to get the files: 
+lftp -e \"mget geno*CEU*;quit;\" http://ftp.hapmap.org/phasing/2007-08_rel22/phased/
+
+new website:
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/ASW/UNRELATED/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/CHD/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/GIH/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/JPT+CHB/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/LWK/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/MEX/TRIOS/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/CHD/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/MKK/UNRELATED/
+lftp -e \"mget *;quit;\" http://hapmap.ncbi.nlm.nih.gov/downloads/phasing/2009-02_phaseIII/HapMap3_r2/YRI/UNRELATED/
+
+
+
+
+
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+
+
+#http://ftp.hapmap.org/phasing/2007-08_rel22/phased/
+
+my $bgl=1;
+my $notrans=0;
+
+use Getopt::Long;
+GetOptions( 
+    "not"=> \my $notrans_temp,
+    "nobgl"=> \my $nobgl_tmp,
+    "phase2"=> \my $phase2,
+    "fig2let"=> \my $fig2let,
+    "cnvref"=> \my $cnvref,
+    "p2to3"=> \my $p2to3,
+    "names=s"=> \my $names,
+    "annot"=> \my $annot_only,
+    "phase1KG"=> \my $phase1KG,
+    "noaffy"=> \my $noaffy,
+    "help"=> \my $help,
+    "mac_th=i"=> \$mac_th,
+
+    );
+
+die ($usage) if $help;
+
+$bgl=1 if $phase2;
+$bgl=1 if $phase1KG;
+$notrans=1 if $phase2;
+$notrans=1 if $notrans_temp;
+$bgl=0 if $nobgl_tmp;
+
+die "$usage" if (@ARGV != 1);
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_win_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/\r//g;
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+my $ph2_snpsdet_templ="genotypes_chrCHR_CEU_r22_nr.b36_fwd.phased.snp_det";
+my $ph2_markers_templ="genotypes_chrCHR_CEU_r22_nr.b36_fwd.phased.bgl.markers";
+my $ph2_annot_templ="genotypes_chrCHR_CEU_r22_nr.b36_fwd.phased.bgl.annot.markers";
+
+#my $ph2_data_templ="genotypes_chrCHR_CEU_r22_nr.b36_fwd.phase.gz";
+my $ph2_data_templ="genotypes_chrCHR_CEU_r22_nr.b36_fwd.phased.gz";
+my $ph2_legend_templ="genotypes_chrCHR_CEU_r22_nr.b36_fwd_legend.txt.gz";
+
+my $ph2_data_tr_templ="genotypes_chrCHR_CEU_r22_nr.b36_fwd.phased";
+my $ph2_data_tr_bgl_templ="genotypes_chrCHR_CEU_r22_nr.b36_fwd.phased.bgl";
+
+if ($cnvref){
+    $ph2_data_templ="CEU_TSI_chrCHR.full_reference.phased.gz";
+    $ph2_legend_templ="CEU_TSI_chrCHR.reference.marker";
+}
+
+
+my $proc_count=0;
+
+
+#############################
+# test, if running on server
+#############################
+use Sys::Hostname;
+my $host = hostname();
+my $lisa=0;
+$lisa=1 if ($host =~ m/sara/) ;
+
+my $bgl_cmd="java  -Xmx800m -jar /home/ripke/beagle.3.0.4/utility/phased2beagle.jar";
+$bgl_cmd = "java  -Xmx1800m -jar /home/gwas/beagle.3.0.4/utility/phased2beagle.jar" if $lisa;
+
+my $hapmap_prefix = "/home/ripke/hapmap-data/";
+$hapmap_prefix = "/home/gwas/hapmap-data/" if ($lisa);
+my $affy_db=$hapmap_prefix."rsid_for_doug.full.txt";
+
+print "local running\n" unless $lisa;
+
+use Compress::Zlib ;
+
+############################################
+######### BEGIN
+########################################
+
+my %inames = ();
+if ($names){
+    die $! unless open NA, "< $names";
+    while (my $line = <NA>){
+	chomp($line);
+	$inames {$line} = 1;
+    }
+    close NA;
+}
+
+
+
+
+my $phased_file = $ARGV[0];
+
+unless ($phase1KG){
+    if ($phased_file =~ /.gz$/){
+	&mysystem ("gunzip $phased_file");
+	$phased_file =~ s/.gz$//;
+    }
+}
+
+### guess chromosome out of filename
+my @cells = split '\.', $phased_file;
+my $chr_guess = "";
+my %affy_snp;
+
+#if ($phase1KG){
+#    $chr_guess = $cells[5];
+#    $chr_guess =~ s/[^0-9]//g;
+#}
+#else {
+    foreach (@cells) {
+#    print "$_\n";
+	if ($_ =~ /chr/) {
+	    my @cellsi = split '_', $_;
+	    foreach (@cellsi) {
+		if ($_ =~ /^chr/) {
+		    $chr_guess = $_;
+		    $chr_guess =~ s/chr//;
+		}
+	    }
+	}
+    }
+    unless ($noaffy){
+	print STDERR "read Affy-DB\n";
+	die $! unless open AFI, "< $affy_db";   
+	while (<AFI>) {
+	    my @cells = @{&split_line_ref(\$_)};
+#	    my @cells = &split_line($_);
+	    $affy_snp{$cells[0]} = $cells[1];
+	}
+	close AFI;
+    }
+#}
+#print "$chr_guess\n";
+#exit;
+die "no chromsome number found" if ($chr_guess eq "");
+
+
+
+
+
+print "prepare CHR $chr_guess\n";
+
+
+
+my $haps_out = $phased_file.".tr.haps";
+
+my $snps_out = $phased_file.".snp";
+my $snpsdet_out = $phased_file.".snp_det";
+
+my $phas_bgl = $phased_file.".bgl";
+my $mono_excl = $phased_file.".mono";
+my $arrsize_excl = $phased_file.".arrsize";
+my $marker_bgl = $phased_file.".bgl.markers";
+my $hm_annot = $phased_file.".annot.markers";
+
+
+
+my @AoA = ();          # array that will be an array of arrays
+
+
+if ($bgl){
+    	if ($phase2 || $p2to3) {
+
+	    my $ph2_data = $ph2_data_templ;
+	    $ph2_data =~ s/CHR/$chr_guess/g;
+	    my $ph2_legend = $ph2_legend_templ;
+	    $ph2_legend =~ s/CHR/$chr_guess/g;
+	    my $ph2_data_tr = $ph2_data_tr_templ;
+	    $ph2_data_tr =~ s/CHR/$chr_guess/g;
+	    my $ph2_data_tr_bgl = $ph2_data_tr_bgl_templ;
+	    $ph2_data_tr_bgl =~ s/CHR/$chr_guess/g;
+	    my $ph2_snpsdet_out = $ph2_snpsdet_templ;
+	    $ph2_snpsdet_out =~ s/CHR/$chr_guess/g;
+	    my $ph2_markers_out = $ph2_markers_templ;
+	    $ph2_markers_out =~ s/CHR/$chr_guess/g;
+	    my $ph2_annot_out = $ph2_annot_templ;
+	    $ph2_annot_out =~ s/CHR/$chr_guess/g;
+
+#	    my $snp_name_file = "snpnames_$chr_guess";
+	    my $snp_name_file = "snpnames_$chr_guess";
+
+
+	    print "$ph2_legend\n";
+#	    die "$! ($ph2_legend)" unless open LEGEND, "< $ph2_legend";
+	    my $lez = gzopen($ph2_legend, "rb")  or die "Cannot open $ph2_legend: $gzerrno\n" ;
+	    die "$! ($snp_name_file)" unless open NAME, "> $snp_name_file";
+	    die "$! ($ph2_markers_out)" unless open MAR, "> $ph2_markers_out";
+
+	    print "read legend\n";
+
+	    my %a_hash_0;
+	    my %a_hash_1;
+	    my %a_hash_pos;
+
+	    my @all1 = ();
+	    my @all2 = ();
+	    my @pos = ();
+	    my $line;
+	    $lez->gzreadline($line) unless ($cnvref);
+	    while ($lez->gzreadline($line) > 0) {
+#	    while (my $line = <LEGEND>){
+		my @line_array=&split_win_line($line);
+		print NAME "$line_array[0]\n";
+		print MAR "$line_array[0] $line_array[1] $line_array[2] $line_array[3]\n";
+#		print "$line_array[0]\n";
+		push @all1, $line_array[2];
+		push @all2, $line_array[3];
+		push @pos, $line_array[1];
+		$a_hash_0{$line_array[0]} = $line_array[2];
+		$a_hash_1{$line_array[0]} = $line_array[3];
+		$a_hash_pos{$line_array[0]} = $line_array[1];
+
+	    }
+
+	    my $all_number = @all1;
+
+	    $lez->gzclose();
+	    close NAME;
+	    close MAR;
+
+
+#	    exit;
+	    if ($p2to3) {
+		my $lez = gzopen($ph2_data, "rb")  or die "Cannot open $ph2_data: $gzerrno\n" ;
+#		die "$! ($snp_name_file)" unless open NAME, "> $snp_name_file";
+		die "$! ($ph2_data.out)" unless open MAR, "> $ph2_data.out";
+		
+		print "translate phase 2 into phase 3\n";
+		
+		$lez->gzreadline(my $line) ;
+		while ($lez->gzreadline($line) > 0) {
+#	    while (my $line = <LEGEND>){
+		    my @line_array=&split_win_line($line);
+		    my $snp = $line_array[1];
+		    my $a0 = $a_hash_0{$snp};
+		    my $a1 = $a_hash_1{$snp};
+
+
+		    print MAR "$snp";
+		    print MAR " $a_hash_pos{$snp}";
+		    foreach (2 .. $#line_array) {
+			if ($cnvref) {
+			    print MAR " $line_array[$_]";
+			}
+			else {
+			    if ($line_array[$_] eq "0") {
+				print MAR " $a0";
+			    }
+			    elsif ($line_array[$_] eq "1") {
+				print MAR " $a1";
+			    }
+			    else {
+				die "only 0 or 1 please";
+			    }
+			}
+		    }
+		    print MAR "\n";
+		}
+		$lez->gzclose();
+		close MAR;
+
+	    }
+
+	    exit;
+	    print "convert with beagle\n";
+	    print "$bgl_cmd phased=$ph2_data beagle=$ph2_data_tr markers=$snp_name_file\n";
+
+
+	    if (1){
+		&mysystem ("$bgl_cmd phased=$ph2_data beagle=$ph2_data_tr markers=$snp_name_file");
+	    }
+
+
+	    print "prepare marker and snp_det-file\n";
+	    die "$! ($ph2_data_tr)" unless open TR, "< $ph2_data_tr";
+	    die "$! ($ph2_data_tr_bgl)" unless open BGL, "> $ph2_data_tr_bgl";
+	    die "$! ($snpsdet_out)" unless open DET, "> $ph2_snpsdet_out";
+	    die "$! ($ph2_annot_out)" unless open ANNOT, "> $ph2_annot_out";
+	    my $snp_count = 0;
+	    while (my $line = <TR>){
+		my @cells = @{&split_line_ref(\$line)};
+#		my @cells = &split_line($line);
+		print BGL "$cells[0]";
+		print BGL "\t$cells[1]";
+		my $a1c=0;
+		my $a2c=0;
+		foreach (2..$#cells){
+		    if ($cells[$_] == 0){
+			print BGL "\t$all1[$snp_count]";
+			$a1c++;
+		    }
+		    elsif ($cells[$_] == 1){
+			print BGL "\t$all2[$snp_count]";
+			$a2c++;
+		    }
+		    else {
+			die "Format error\n";
+		    }
+		}
+		print BGL "\n";
+		print DET "$cells[1]\t$all1[$snp_count]\t$a1c\t$all2[$snp_count]\t$a2c\n";
+		my $asum = $a1c + $a2c;
+		printf ANNOT "$cells[1]\t+\t$all1[$snp_count]\t%.3f\t$all2[$snp_count]\t%.3f\t$chr_guess\t$pos[$snp_count]\n",$a1c/$asum,$a2c/$asum;
+		$snp_count++;
+	    }
+
+	    close TR;
+	    close BGL;
+	    close DET;
+	    close ANNOT;
+
+
+	    die "snp_numbers don't match" if ($all_number != $snp_count);
+	    print "finished bgl\n";
+
+	}
+	elsif ($phase1KG) {
+	    ## read file in array of arrays
+#	    die "$! ($phased_file)" unless open FILE, "< $phased_file";
+	    my $lez = gzopen($phased_file, "rb")  or die "Cannot open $phased_file: $gzerrno\n" ;
+	    
+	    die "$! ($phas_bgl)" unless open BGL, "> $phas_bgl";
+	    die "$! ($marker_bgl)" unless open OUT, "> $marker_bgl";
+	    die "$! ($hm_annot)" unless open ANNOT, "> $hm_annot";
+	    die "$! ($mono_excl)" unless open MONO, "> $arrsize_excl";
+	    die "$! ($snpsdet_out)" unless open DET, "> $snpsdet_out";
+	    $lez->gzreadline(my $header);
+	    chomp($header);
+	    my @line_array=&split_win_line($header);
+	    my $arr_size = @line_array;
+	    print  BGL $header."\n";
+
+	    print DET $line_array[0]." ";
+	    print DET " $line_array[1] 0 $line_array[2] 0\n";
+	    
+	    while ($lez->gzreadline(my $line) > 0) {
+#	    while (my $line = <FILE>){
+		my @line_array=&split_win_line($line);
+		my $excl=0;
+#		print @line_array.", soviele sind das hier.\n";
+		## check empty values
+		my $cc = 2;
+		my @en ; # 0 empty, 1 full
+		while ($cc < $#line_array) {
+		    
+		    $cc +=3;
+		    if ($line_array[$cc] == $line_array[$cc-1] && $line_array[$cc] == $line_array[$cc-2]) {
+#			print "$line_array[$cc]\n";
+#			print "$line_array[$cc-1]\n";
+#			print "$line_array[$cc-2]\n";
+			$en[0]++;
+		    }
+		    else {
+			$en[1]++;
+		    }
+		}
+		my $ratio = $en[0]/($en[0]+$en[1]);
+		$excl = 1 if ($ratio > 0.07);
+#		die "empty: ".$en[0].",full ".$en[1];
+		$excl = 1 if (@line_array != $arr_size);
+
+#		my %all=();
+#		for my $n (2..$#line_array){
+#		    $excl=1 unless $line_array[$n] =~ /[ACGT\-]/;
+#		    $all{$line_array[$n]}++ if ($line_array[$n] ne "-");
+#		}
+#		$excl =1 if (keys (%all) != 2);
+		print "am I writh?\n";
+		unless ($excl){
+## this here for affy-snps
+#		    if ($snp_name =~ /SNP/){
+#			print "Affy-annotation in $snp_name -> ";
+#			$snp_name =~ s/.*rs/rs/;
+#			print "$snp_name\n";
+#			$snp_name = $affy_snp{$snp_name} if (exists $affy_snp{$snp_name});
+#			print "$snp_name\n";
+#		    }
+		    
+		    
+#		my $snp_name = $snp_name;
+#		$snp_name =~ s/.*rs/rs/ if ($snp_name);
+		    
+		    my @pos_arr = split ':', $line_array[0];
+		    my $pos_bp = $pos_arr[1];
+		    my $snp_name = $line_array[0];
+		    $snp_name =~ s/.*rs/rs/;
+		    
+		    $line_array [0] = $snp_name;
+		    unless ($annot_only){
+			print BGL "@line_array\n";
+		    }
+		    #####read position out of "SNPname"
+		    
+		    
+		    
+		    
+		    print OUT $snp_name." ".$pos_bp;
+		    print ANNOT $snp_name."\t+";
+		    print DET $snp_name." ";
+		    
+		    my $all_count=0;
+		    print OUT " $line_array[1] $line_array[2]";
+		    print ANNOT " $line_array[1] 0 $line_array[2] 0";
+		    print DET " $line_array[1] 0 $line_array[2] 0";
+		    
+#		for my $key ( keys %all ) {
+#		    my $value = $all{$key} / (@line_array-2);
+#		    print OUT " $key";
+#		    printf ANNOT "\t%s\t%.3f",$key,$value;
+#		    $all_count++;
+#		}
+#		print ANNOT "\tX\t0.000" if ($all_count==1);
+		    print OUT "\n";
+		    print DET "\n";
+		    print ANNOT "\t".$chr_guess."\t".$pos_bp."\n";
+		}
+		else {
+		    print MONO "$line_array[0]\n";
+		    print "$line_array[0]\t$ratio\t$arr_size\n";
+		}
+	    }
+	    $lez->gzclose();
+#	    close FILE;
+	    close OUT;
+	    close BGL;
+	    close ANNOT;
+	    close MONO;
+	    close DET;
+	}
+	else {
+	    ###### PHASE 3
+	    ## read file in array of arrays
+	    die "$! ($phased_file)" unless open FILE, "< $phased_file";
+	    die "$! ($phas_bgl)" unless open BGL, "> $phas_bgl";
+	    die "$! ($marker_bgl)" unless open OUT, "> $marker_bgl";
+	    die "$! ($hm_annot)" unless open ANNOT, "> $hm_annot";
+	    die "$! ($mono_excl)" unless open MONO, "> $mono_excl";
+
+	    my $header = <FILE>;
+	    my @col_incl = ();
+	    if ($names) {
+		my @line_array=&split_win_line($header);
+		push @col_incl, 1;
+		push @col_incl, 1;
+		foreach (@line_array) {
+		    my $id = $_;
+		    $id =~ s/_A$//;
+		    $id =~ s/_B$//;
+#		    print "$id\n";
+		    if (exists $inames{$id}){
+			push @col_incl, 1;
+		    }
+		    else {
+			push @col_incl, 0 ;
+		    }
+		}
+	    }
+
+#	    print "@col_incl\n";
+#	    exit;
+	    my $nexcl = 0;
+
+	    while (my $line = <FILE>){
+
+#		my @line_array_tmp=&split_win_line($line);
+
+		chomp($line);
+		$line =~ s/\r//g;
+		$line =~ s/^[\s]+//g;
+		my @line_array_tmp=  split /\s+/, $line;
+
+
+		my @line_array;
+		if ($names){
+		    my $cc = 0;
+		    foreach (@col_incl){
+			push @line_array,$line_array_tmp[$cc] if ($_ == 1);
+			$cc++;
+		    }
+		}
+		else {
+		    @line_array = @line_array_tmp;
+		}
+
+
+
+		my $excl=0;
+		my %all=();
+		my $valid_chars = "ACGTD\-";
+		$valid_chars = "012".$valid_chars if ($cnvref);
+		$valid_chars = "1234" if ($fig2let);
+		my @fig_arr = qw /0 A C G T/;
+		my @cnv_arr = qw /A C T/;
+
+		for my $n (2..$#line_array){
+		    unless ($line_array[$n] =~ /[$valid_chars]/) {
+			unless ($line_array[$n] =~ /I[0-9]*/) {
+#			unless ($line_array[$n] =~ /P[0-9]*/) {
+			    unless ($line_array[$n] eq "N") {
+				unless ($line_array[$n] eq "del") {
+				    $excl=1 ;
+				    print "unlvaild allele at $line_array[0]\n";
+				    exit;
+				}
+			    }
+			}
+		    }
+		    $line_array[$n] = $fig_arr[$line_array[$n]] if ($fig2let);
+		    if ($cnvref){
+			$line_array[$n] = $cnv_arr[$line_array[$n]] if ($line_array[$n] eq "0" || $line_array[$n] eq "1" || $line_array[$n] eq "2");
+		    }
+		    $all{$line_array[$n]}++ if ($line_array[$n] ne "-");
+
+		}
+
+#		print "excluded: $line_array[0]\t$line_array[1]\n" if ($excl == 1);
+		$excl =1 if (keys (%all) != 2);
+		my @tmp_arr = keys (%all);
+		my $mac = 100;
+		foreach my $aa (keys (%all)) {
+		    if ($all{$aa} < $mac) {
+		       $mac = $all{$aa};
+	            }
+	        }  
+	        if ($mac < $mac_th) {
+	           $excl = 1;
+	        }
+#		print "excluded: $line_array[0]\t$line_array[1]\t".keys (%all)."\t@tmp_arr\n" if ($excl == 1);
+		unless ($excl){
+		    if ($line_array[0] =~ /SNP/){
+			print "Affy-annotation in $line_array[0] -> ";
+			$line_array[0] =~ s/.*rs/rs/;
+			print "$line_array[0]\n";
+			$line_array[0] = $affy_snp{$line_array[0]} if (exists $affy_snp{$line_array[0]});
+			print "$line_array[0]\n";
+		    }
+		    print BGL "M ".$line_array[0];
+
+
+		    for my $n (2..$#line_array){
+			print BGL " $line_array[$n]";
+		    }
+
+		    print BGL "\n";
+#		push @AoA, [@line_array];   ## here push in 2dim array
+		    
+		    print OUT $line_array[0]." ".$line_array[1];
+		    print ANNOT $line_array[0]."\t+";
+		    
+		    my $all_count=0;
+		    for my $key ( keys %all ) {
+			my $value = $all{$key} / (@line_array-2);
+			print OUT " $key";
+			printf ANNOT "\t%s\t%.3f",$key,$value;
+			$all_count++;
+		    }
+		    print ANNOT "\tX\t0.000" if ($all_count==1);
+		    print OUT "\n";
+		    print ANNOT "\t".$chr_guess."\t".$line_array[1]."\n";
+		}
+		else {
+		    $nexcl++ ;
+#		    print MONO "$line_array[0] with \n";
+		    print MONO "$line_array[0]\twith\t". keys (%all). "\t different alleles and MAC of ".$mac."\n";
+		}
+#		print "gere?\n";
+	    }
+	    close FILE;
+	    close OUT;
+	    close BGL;
+	    close ANNOT;
+	    close MONO;
+	    &mysystem ("refinfo --annot $hm_annot --bgl $phas_bgl");
+#	    print "refinfo --bgl $phas_bgl\n";
+	    print "$nexcl excluded SNPs\n";
+
+	}
+}
+
+exit if ($phase1KG);
+
+unless ($notrans){
+    
+    ## read file in array of arrays
+    die "$! ($phased_file)" unless open FILE, "< $phased_file";
+    die "$! ($snpsdet_out)" unless open DET, "> $snpsdet_out";
+    while (my $line = <FILE>){
+#	print "KOMISCH \t$phas\t$snpsdet_out\n";
+#	exit;
+	
+	
+	my @line_array=&split_win_line($line);
+	my $excl=0;
+	my %all=();
+	for my $n (2..$#line_array){
+	    $excl=1 unless $line_array[$n] =~ /[ACGT]/;
+	    $all{$line_array[$n]}++;
+#	    print "$line_array[$n]\t";
+	}
+#	print "\n";
+	unless ($excl){
+#	    push @AoA, [@line_array];   ## here push in 2dim array   #### de-remark for more than snp_det !!!!!!!!!!!!!!!!
+	    print DET $line_array[0];
+	    for my $key ( sort keys %all ) {
+		my $value = $all{$key};
+		print DET "\t$key\t$value";
+	    }
+	    print DET "\n";
+	}
+    }
+    close FILE;
+    close DET;
+    
+    ## write out the stuff, while skipping the first two lines
+    die "$! ($haps_out)" unless open OUT, "> $haps_out";
+    for my $i (2 .. $#{$AoA[0]}){
+	print OUT "ID $AoA[0][$i]";
+	for my $j (1 .. $#AoA){
+#	    if ($AoA[$j][$i] =~ /[ACGT]/){
+	    if (1){
+		print OUT " $AoA[$j][$i]" ;
+	    }
+	    else {
+		print OUT " $AoA[$j][$i-1]" if ($j % 2 == 1); # if uneven, take the followin
+		print "even\n" if ($j % 2 == 1); # if uneven, take the following
+		print OUT " $AoA[$j][$i+1]" if ($j % 2 == 0); # if even, take the preceding
+		print "uneven\n" if ($j % 2 == 0); # if even, take the preceding
+	    }
+	}
+	print OUT "\n";
+    }
+    close OUT;
+    
+    
+    ## write out first two lines
+    die "$! ($snps_out)" unless open OUT, "> $snps_out";
+    for my $j (1 .. $#AoA){
+	print OUT "$AoA[$j][0]\n";
+    }
+    close OUT;
+}
+
+
+

@@ -1,0 +1,132 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+my $version = "1.0.0";
+my $progname = $0;
+
+
+##### help message
+my $usage = "
+Usage : $progname [options] --out SUMFRQ --bim BIMFILE --frq FRQFILE
+
+version: $version
+
+  --help         print this help message and exit
+  --out STRING   OUTNAME
+  --bim STRING   BIMFILE
+  --frq STRING   FRQFILE
+  --chrstart INT first chromosome
+  --chrend  INT  last chromosome
+
+
+
+ will create a sumfrq file, helper of refdir_navi2
+
+ created by Stephan Ripke 2009 at MGH, Boston, MA
+ 
+";
+
+
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "out=s"=> \my $outname,
+    "bim=s"=> \my $bimfile,
+    "frq=s"=> \my $frqfile,
+    "chrstart=i"=> \my $chr_start,
+    "chrend=i"=> \my $chr_end,
+    );
+
+
+die $usage if $help;
+die $usage unless ($outname);
+die $usage unless ($bimfile);
+die $usage unless ($frqfile);
+die $usage unless ($chr_start);
+die $usage unless ($chr_end);
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+
+
+
+
+
+foreach my $chr ($chr_start..$chr_end) {
+    die $! unless open FO, "> $outname.$chr";
+    print FO "SNP\tCHR\tPOS\tA1\tA2\tFA1\n";
+
+    my $floc = $frqfile;
+    $floc =~ s/XXX/$chr/g;
+    my $plink_name = $bimfile;
+    $plink_name =~ s/XXX/$chr/g;
+    print "floc: $floc\n";
+    
+    my %pos_hash = ();
+    print "read $plink_name into hash\n";
+    die "$plink_name not existing: $!" unless open BIM, "< $plink_name";
+    while (my $line = <BIM>){
+	my @cells = @{&split_line_ref(\$line)};
+	$pos_hash{$cells[1]} = $cells[3];
+    }
+    close BIM;
+
+    print "rewrite $floc into $outname.$chr\n";
+    die "$floc not existing: $!" unless open FI, "< $floc";
+    while (my $line = <FI>){
+
+	my @cells = @{&split_line_ref(\$line)};
+	next if ($cells[1] eq "SNP");
+	unless (exists $pos_hash{$cells[1]}) {
+	    print "Error: postition not existing: $cells[1]\n";
+	    exit;
+	}
+
+	print FO $cells[1];
+	print FO "\t".$cells[0];
+	print FO "\t".$pos_hash{$cells[1]};
+	print FO "\t".$cells[2];
+	print FO "\t".$cells[3];
+	printf FO "\t%.3f",$cells[4];
+	print FO "\n";
+
+    }
+    close FI;
+    close FO;
+    &mysystem ("gzip -f $outname.$chr");
+}
+
+&mysystem ("touch $outname.done");
+

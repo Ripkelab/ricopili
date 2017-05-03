@@ -1,0 +1,104 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    if (@cells > 1) {
+	$conf{$cells[0]} = $cells[1];
+    }
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $bcloc = &trans("bcloc");
+my $bcrloc = &trans("bcrloc");
+
+
+
+
+$bcloc =~ s/###/ /g;
+
+
+
+my $vcffile = "";
+my $mac_th = 4;
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "vcf=s"=> \$vcffile,
+    "mac_th=i"=> \$mac_th,
+    );
+
+
+if ($help || $vcffile eq ""){
+    print "usage: $progname
+
+version: $version
+
+      options:
+
+        --help              this help-text
+        --vcf STRING        name of vcf file
+        --out STRING        prefix, haps.gz, legend.gz will be appended
+        --mac_th INT        minimum minor allele count
+
+
+
+
+ created by Stephan Ripke 2016 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+
+
+my $fasta_file = "$bcrloc/human_g1k_v37.fasta";
+
+my $bcftools2 = $bcloc."bcftools";;
+if ($bcloc =~ / /) {
+    $bcftools2 = "bcftools";
+}
+
+
+my $sys = "$bcloc"."bcftools norm -m-both -f $fasta_file $vcffile | $bcftools2 filter -i \"MAC>"."$mac_th"."\" | gzip -c > $vcffile.filtnorm.gz";
+
+print "$sys\n";
+
+
+my $sc =system ($sys);
+
+if ($sc != 0){
+    print "Error systemcode: $sc\n";
+    exit;
+}
+
+$sc =system ("touch $vcffile.filtnorm.gz.fini");
+
+
+
+
