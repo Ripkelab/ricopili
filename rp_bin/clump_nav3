@@ -69,7 +69,7 @@ my $outname ="";
 my $pfile ="";
 my $walltime = 4;
 my $job_bn_th = 1000;
-
+my $popname = "CEU";
 
 use Getopt::Long;
 GetOptions( "outname=s"=> \$outname,
@@ -81,6 +81,7 @@ GetOptions( "outname=s"=> \$outname,
 	    "hq_i=f"=> \$hq_info,
 	    "qrat=f"=> \$qrat_th,
 	    "pfile=s"=> \$pfile,
+	    "popname=s"=> \$popname,
 
 	    
 	    "clu_window=i"=> \$cwindow,
@@ -143,6 +144,8 @@ version: $version
 
   --bn_job INT        submit INT jobs at a time
 
+  --popname STRING    population for clumping, right now: eur, eas, sas, amr, afr
+
 
 
 
@@ -164,7 +167,7 @@ rs1801274   1     159.54  159.91  2.16e-20  anderson
 }
 
 
-
+$popname = uc $popname;
 
 
 my $oub_txt = '
@@ -837,19 +840,36 @@ my @clump_files;
 	my $chr_loc = "chr$chr.";
 	
 	my $in_loc = "$chr_subdir/$outname.chr$chr.txt";
+
+
 	
+	my $bfile_sc = "";
+
 	
 
-	my $bfile_sc = `ls $refdir/*chr$chr.*bed`;
-	if ($bfile_sc eq "") {
-	    my $chr_part = "$chr"."_";
-	    $bfile_sc = `ls $refdir/*chr$chr_part*bed`;
+	if (-e "$refdir/reference_templ") {
+	    my $out_template = `grep bfile_template $refdir/reference_templ`;
+	    $out_template =~ s/bfile_template[ ]+//;
+	    chomp($out_template);
+	    #		print "out: $out_template\n";
+	    $bfile_sc = "$refdir/$out_template";
+	    $bfile_sc =~ s/XXX/$chr/;
+#	    $bfile_sc .= ".impute.plink.$popname.bed";
+	    #		print "bf: $bfile_sc\n";
+	    
 	}
-	if ($bfile_sc eq "") {
-	    print "Error: no plink binary for this chromosome";
-	    exit;
+	else {
+	    $bfile_sc = `ls $refdir/*chr$chr.*bed`;
+	    if ($bfile_sc eq "") {
+		my $chr_part = "$chr"."_";
+		$bfile_sc = `ls $refdir/*chr$chr_part*bed`;
+	    }
+	    if ($bfile_sc eq "") {
+		print "Error: no plink binary for this chromosome";
+		exit;
+	    }
 	}
-	
+
 	chomp($bfile_sc);
 	$bfile_sc =~ s/.bed$//;
 	    

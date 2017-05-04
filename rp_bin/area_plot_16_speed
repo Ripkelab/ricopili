@@ -752,7 +752,7 @@ foreach my $snp_loc1 (@multiarea) {
 
 if ($dandir) {
  
-    print "yes I a m here\n";
+#    print "yes I a m here\n";
 #    sleep(3);
 
     my @daner_files = `cd $dandir; ls -U dan*chr*gz`;
@@ -839,7 +839,7 @@ if ($dandir) {
 
     foreach my $df (@daner_files) {
 	chomp($df);
-	print "$df\n";
+#	print "$df\n";
 #	sleep(3);
 	my $bind = $df;
 #	    print $bind."\n";
@@ -868,7 +868,7 @@ if ($dandir) {
 	next if ($tcells[0] ne $chr);
 	next if ($mega_start_M > $end);
 	next if ($mega_end_M < $beg);
-	print "$df\n";
+#	print "$df\n";
 
 	push @daner_files_loc, $df;
     }
@@ -944,7 +944,7 @@ if ($dandir) {
 
     
     foreach my $pth_loc (sort keys %pth_c) {
-	print "n_$pth_loc: $pth_c{$pth_loc}\n";
+#	print "n_$pth_loc: $pth_c{$pth_loc}\n";
 	if ($pth_c{$pth_loc} > $ths) {
 	    print "continue with $pth_c{$pth_loc} SNPs left with $pth_loc\n";
 	    $plot_th = $pth_loc;
@@ -1008,7 +1008,7 @@ if ($dandir) {
 	next if ($tcells[0] ne $chr);
 	next if ($mega_start_M > $end);
 	next if ($mega_end_M < $beg);
-	print "$df\n";
+#	print "$df\n";
 
 	my %line_hash;
 	%line_hash = ();
@@ -1170,17 +1170,34 @@ my $cwindow = sprintf "%i",($end - $beg)/1000;
 #sleep(5);
 #my $cwindow = 250;
 
-my $bfile_sc = `ls $refdir/*chr$chr.*bed`;
-if ($bfile_sc eq "") {
-    my $chr_part = "$chr"."_";
-    $bfile_sc = `ls $refdir/*chr$chr_part*bed | head -1`;
-}
-if ($bfile_sc eq "") {
-    &error ("no plink binary for this chromosome");
-}
-chomp($bfile_sc);
-$bfile_sc =~ s/.bed$//;
 
+
+my $bfile_sc = "";
+
+if (-e "$refdir/reference_templ") {
+    my $out_template = `grep bfile_template $refdir/reference_templ`;
+    $out_template =~ s/bfile_template[ ]+//;
+    chomp($out_template);
+    #		print "out: $out_template\n";
+    $bfile_sc = "$refdir/$out_template";
+    $bfile_sc =~ s/XXX/$chr/;
+    #		$bfile_sc .= ".impute.plink.$popname.bed";
+    #		print "bf: $bfile_sc\n";
+    
+}
+else {
+
+    $bfile_sc = `ls $refdir/*chr$chr.*bed`;
+    if ($bfile_sc eq "") {
+	my $chr_part = "$chr"."_";
+	$bfile_sc = `ls $refdir/*chr$chr_part*bed | head -1`;
+    }
+    if ($bfile_sc eq "") {
+	&error ("no plink binary for this chromosome");
+    }
+    chomp($bfile_sc);
+    $bfile_sc =~ s/.bed$//;
+}
 
 
 
@@ -1216,15 +1233,15 @@ close LO;
 #print $sc.": number of SNPs\n";
 #sleep(3);
 
-print "start plink\n";
+print "start plink_step1\n";
 #my $cmd = "$ploc/plink --bfile $bfile_sc --extract $pfile.local --out $pfile.local.plink --make-bed";
 ## here speed up
 my $cmd = "$ploc/plink --bfile $bfile_sc --extract $pfile.local --out $pfile.local.plink --make-bed --silent";
-    print "$cmd\n";
+#    print "$cmd\n";
 #    sleep(5);
 &mysystem($cmd);
 
-print "finished plink\n";
+#print "finished plink\n";
 
 
 
@@ -1261,12 +1278,12 @@ if ($clump && $nclump > 1) {
 #    sleep(1);
 
 
-    my $cmd = "$ploc/plink --bfile $pfile.local.plink --extract $pfile.p4 --clump $pfile.p4 --clump-p1 $clump --clump-p2 $clump --clump-r2 $cr2 --clump-kb $cwindow --out $pfile.p4 > /dev/null";
-    print "$cmd\n";
+    my $cmd = "$ploc/plink --bfile $pfile.local.plink --extract $pfile.p4 --clump $pfile.p4 --clump-p1 $clump --clump-p2 $clump --clump-r2 $cr2 --clump-kb $cwindow --out $pfile.p4 --silent";
+#    print "$cmd\n";
 #    sleep(5);
-    print "start plink2\n";
+    print "start plink_step2\n";
     &mysystem($cmd);
-    print "fisnished plink2\n";
+#    print "fisnished plink2\n";
 
 
 #    print "plink finished\n";
@@ -1466,7 +1483,7 @@ if (1){
     }
     }
 
-    print "TIME\n";
+#    print "TIME\n";
 
 #	&mysystem ("cp $detail_file $rootdir");
 #print "$subin_file\n";
@@ -1510,7 +1527,7 @@ if (1){
 	close GO;
     }
 
-    print "TIME2\n";
+#    print "TIME2\n";
 #    exit;
 
 ######################################
@@ -1524,7 +1541,7 @@ if (1){
     
 #	print "$gene_list_0610\n";
 
-    print "TIME3\n";
+#    print "TIME3\n";
 ###########################
 ## read area out of gene-file
 #########################
@@ -1578,7 +1595,7 @@ if (1){
     my $gen_ld_dir = "$region_dir/$gen_ld";
     my $gen_png_dir = "$region_dir/$gen_png";
     
-    print "TIME4\n";
+#    print "TIME4\n";
 
 
 
@@ -1655,9 +1672,9 @@ if (1){
 #	    sleep (10);
 	    
 	    
-	    print "start plink3\n";
-	    my $cmd = "$ploc/plink --bfile $pfile.local.plink --extract $subin_file --ld-snp $snp_loc --r2 --ld-window-kb $cwindow --ld-window 99999 --ld-window-r2 0.0 --out $hv_name.$snp_loc > /dev/null";
-	    print "$cmd\n";
+	    print "start plink_step3\n";
+	    my $cmd = "$ploc/plink --bfile $pfile.local.plink --extract $subin_file --ld-snp $snp_loc --r2 --ld-window-kb $cwindow --ld-window 99999 --ld-window-r2 0.0 --out $hv_name.$snp_loc --silent";
+#	    print "$cmd\n";
 
 	    if ($ldp == 1) {
 		&mysystem($cmd);
@@ -1665,7 +1682,7 @@ if (1){
 	    else {
 		&mysystem("touch $hv_name.$snp_loc.ld");
 	    }
-	    print "finished plink3\n";
+
 
 #    print "plink finished\n";
  #   sleep(5);
@@ -1728,7 +1745,7 @@ if (1){
 		if (-e $ld_name) {
 		    &error($!) unless open PF, "< $ld_name";
 		    &error($!) unless open PO, "> $ld_out_name.$snp_loc";
-		    print "hier: $ld_out_name.$snp_loc\n";
+#		    print "hier: $ld_out_name.$snp_loc\n";
 		    
 		    my $line =<PF>;
 		    print PO "SNP\tDprime\tr2\n";
@@ -1782,7 +1799,7 @@ if (1){
     my %reg_hash = (); ## hash with r2 to SNP of interest
 
     unless ($multi_sw) {
-	print "und hier: $ld_out_name.$snp_mark\n";
+#	print "und hier: $ld_out_name.$snp_mark\n";
 	&error("$!:  $ld_out_name.$snp_mark, mabye chosen Index - SNP ($snp_mark) is not present in chosen area") unless open PF, "< $ld_out_name.$snp_mark";
 	my $line =<PF>;
 	
@@ -1846,7 +1863,7 @@ if (1){
 	my $hm3_refdir = "$hapmap_ref_root/subchr";
 	my @hm3_coll = `cat $hm3_refdir/*chr$chr.*bim`;
 	my @hm3_files = `ls $hm3_refdir/*chr$chr.*bim`;
-	print "hmind files: @hm3_files\n";
+#	print "hmind files: @hm3_files\n";
 	foreach my $line (@hm3_coll) {
 	    my @cells = @{&split_line_ref(\$line)};
 #	    if ($cells[3] >= $beg && $cells[3] <= $end) {
@@ -2960,8 +2977,8 @@ else {
 #    $systemGWA="source /broad/software/scripts/useuse; use R-2.14; R < R_$out.plot.in_tmp --vanilla";
 }
 
-print "$workdir\n";
-print "$systemGWA\n";
+#print "$workdir\n";
+#print "$systemGWA\n";
 #my $systemGWA="$rloc/R < $outdir/R_GWAplot.in_tmp --save --no-restore > $outdir/R_GWA_log.txt\n";
 &mysystem ($systemGWA);
 print "finished R\n";

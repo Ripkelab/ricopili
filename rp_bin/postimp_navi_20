@@ -288,7 +288,7 @@ version: $version
 
   --bn_job INT        submit INT jobs at a time
 
-  --popname STRING    population for clumping, right now eur or asn
+  --popname STRING    population for clumping, right now: eur, eas, sas, amr, afr
 
   --regplot STRING    additional regplot file
   
@@ -348,8 +348,8 @@ GetOptions(
     "allsw"=> \my $allsw,
     "cox"=> \my $cox,
     "outname=s"=> \my $outname,
-   "serial"=> \my $serial,
-            "sleep=i"=> \my $sleep_sw,
+    "serial"=> \my $serial,
+    "sleep=i"=> \my $sleep_sw,
 
     "walltime=i"=> \ $walltime,
     "mem=i"=> \ $jmem,
@@ -401,6 +401,7 @@ GetOptions(
 
 
 
+$popname = uc $popname;
 
 if ($nohet) {
   $nohet_sw = 1;
@@ -943,7 +944,7 @@ sub send_jobarray {
 
 	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_postimp_error '.$email) ;
 #	    unless ($serial) {
-		exit;
+	    exit;
 #	    }
 	}
 
@@ -983,7 +984,7 @@ sub send_jobarray {
 
     my $wt_file = "$sjadir/blueprint_joblist_file-$sjaname.$outname";
     chdir "$rootdir" or die "something strange";
-    if ($qloc eq "bsub") {
+    if ($qloc eq "bsub" ) {
 	$wt_file =~ s/.*blueprint_joblist_file-//;
     }
 
@@ -1142,7 +1143,14 @@ if ($refdir =~ /chr23/) {
 }
 
 $refdir =~ s!/home/radon01/sripke/bakker_ripke/hapmap_ref!/psych/genetics_data/ripke/references_outdated/hapmap_ref!;
-#sleep(3);
+
+if (-e "$refdir/pop_$popname") {
+
+    $refdir = "$refdir/pop_$popname";
+    print "found ancestry specidic reference data for clumping and such: $refdir\n";
+    sleep(3);
+
+}
 
 
 
@@ -1155,14 +1163,20 @@ $refdir =~ s!/home/radon01/sripke/bakker_ripke/hapmap_ref!/psych/genetics_data/r
 my $areat_refdir = $refdir;
 my $areat_diffdir = $refdir;
 #print "$areat_refdir\n";
-$areat_diffdir =~ s/subchr/$popname/;
-#
 
-if (-e $areat_diffdir) {
-    $areat_refdir = $areat_diffdir;
-    print "using different subset for clumping: $areat_refdir\n";
-    sleep (2);
-#    $refdir = $areat_eurdir;
+
+
+if ($areat_diffdir =~ /subchr&/ || $areat_diffdir =~ /subchr\/&/) {
+
+    $areat_diffdir =~ s/subchr/$popname/;
+
+
+    if (-e $areat_diffdir) {
+	$areat_refdir = $areat_diffdir;
+	print "using different subset for clumping: $areat_refdir\n";
+	sleep (2);
+	#    $refdir = $areat_eurdir;
+    }
 }
 
 
@@ -3175,7 +3189,7 @@ if ($polyfrom_file ne "") {
 
 
     unless (-e $clu_out_file) {
-	my $sys = "$clumpnavi_script --pfile $daner_all --hq_f .02 --hq_i .9 --out $outname --clu_p1 1 --clu_p2 1 --clu_window 500 --clu_r2 0.25 --refdir $refdir --reinvo $reinvo_file";
+	my $sys = "$clumpnavi2_script --pfile $daner_all --hq_f .02 --hq_i .9 --out $outname --clu_p1 1 --clu_p2 1 --clu_window 500 --clu_r2 0.25 --refdir $refdir --reinvo $reinvo_file";
 #	&mysystem($sys);
 	print "clump_navi needs to run on euro directory, with clump_nav3\n";#
 	print "$sys\n";#
@@ -4103,7 +4117,7 @@ unless (-e "manhattan.daner_$outname.gz.nog2.pdf.empty") {
 
 if ($gwclump) {
     chdir "$distdir";
-    my $sys_tmp  = "echo $clumpnavi2_script --noindel --pfile $daner_all --hq_f .05 --hq_i .9 --out $daner_all --clu_p1 1.0 --clu_p2 1.0 --clu_window 500 --clu_r2 0.1 --refdir $areat_refdir | $blueprint_script -b \"prefix\" --wa 4 -j --na _clumpnav_$daner_all";
+    my $sys_tmp  = "echo $clumpnavi2_script --noindel --pfile $daner_all --hq_f .05 --hq_i .9 --out $daner_all --clu_p1 1.0 --clu_p2 1.0 --clu_window 500 --clu_r2 0.1 --refdir $areat_refdir  | $blueprint_script -b \"prefix\" --wa 4 -j --na _clumpnav_$daner_all";
     my $bsys = $sys_tmp;
     
     

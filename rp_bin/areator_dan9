@@ -60,6 +60,7 @@ my $fre1col = 11;
 my $fre2col = 12;
 my $faicol = 8;
 my $ngtcol = 9;
+my $popname = "EUR";
 
 #my $hmicol = 14;
 my $detcol_beg = 14;
@@ -142,6 +143,7 @@ version: $version
 
   --noxls        helpful if output files to long
 
+  --popname STRING  ancestry EUR,EAS,SAS,AFR,AMR
 
 
  best-file: gzipped best-file
@@ -787,40 +789,67 @@ if ($pliclu) {
 	
 	unless (-e "chr$chr.hv.ped.LD") {
 	    die unless ($refdir);
-	    my $bfile_sc = `ls $refdir/*chr$chr.*bed`;
 
 
-	    if ($bfile_sc eq "") {
-		my $chr_part = "$chr"."_";
-		$bfile_sc = `ls $refdir/my*chr$chr_part*bed`;
-	    }
+	    my $bfile_sc = "";
+		
+	    if (-e "$refdir/reference_templ") {
+		my $out_template = `grep bfile_template $refdir/reference_templ`;
+		$out_template =~ s/bfile_template[ ]+//;
+		chomp($out_template);
+#		print "out: $out_template\n";
+		$bfile_sc = "$refdir/$out_template";
+		$bfile_sc =~ s/XXX/$chr/;
+#		$bfile_sc .= ".impute.plink.$popname.bed";
+#		print "bf: $bfile_sc\n";
 
-
-
-	    if ($bfile_sc eq "") {
-		my $chr_part = "$chr"."_";
-		$bfile_sc = `ls $refdir/*chr$chr_part*plink.bed`;
-	    }
-
-	    if ($bfile_sc eq "") {
-		my $chr_part = "$chr"."_";
-		$bfile_sc = `ls $refdir/*chr$chr_part*.bed`;
-	    }
-
-
-	    
-	    if ($bfile_sc eq "") {
-		my $chr_part = "window.$chr.";
-		$bfile_sc = `ls $refdir/*$chr_part*bed`;
-	    }
-#	    print "$bfile_sc\n";
-#	    sleep(10);
-	    if ($bfile_sc eq "") {
-		die "no plink binary for this chromosome";
 	    }
 	    else {
-		print "found $bfile_sc\n";
+		$bfile_sc = `ls $refdir/*chr$chr.*bed`;
+
+
+		if ($bfile_sc eq "") {
+		    my $chr_part = "$chr"."_";
+		    $bfile_sc = `ls $refdir/my*chr$chr_part*bed`;
+		}
+		
+		print $bfile_sc."\n";
+		
+		if ($bfile_sc eq "") {
+		    my $chr_part = "$chr"."_";
+		    $bfile_sc = `ls $refdir/*chr$chr_part*plink.bed`;
+		}
+		
+		print $bfile_sc."\n";
+		
+		if ($bfile_sc eq "") {
+		    my $chr_part = "$chr"."_";
+		    $bfile_sc = `ls $refdir/*chr$chr_part*.bed`;
+		}
+		
+		print $bfile_sc."\n";
+		
+		if ($bfile_sc eq "") {
+		    my $chr_part = "window.$chr.";
+		    $bfile_sc = `ls $refdir/*$chr_part*bed`;
+		}
+		
+		print $bfile_sc."\n";
+
+		
+		print "$bfile_sc\n";
+		sleep(10);
 	    }
+
+	    if (-e "$bfile_sc.bed") {
+		print "using $bfile_sc\n";
+	    }
+	    else {
+		print "Error: no reference found\n";
+		exit;
+	    }
+
+	    
 	    chomp($bfile_sc);
 	    $bfile_sc =~ s/.bed$//;
 

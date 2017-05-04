@@ -187,6 +187,7 @@ GetOptions(
     "q16=s"=> \my $q16,
     "qheadd=i"=> \$q16_head,
     "mac_th=i"=> \$mac_th,
+    "serial"=> \my $serial,
     );
 
 
@@ -368,6 +369,9 @@ version: $version
         --force1            do not exit if same fail, but do this only once
      
         --chunksnps INT    minimum number of SNPs in each chunk (default: $chunksnps) 
+
+        --serial          no sending jobs to queue all in one run
+                              -> usually only used for testing 
 
 
  --out_templ is mandatory
@@ -617,12 +621,6 @@ sub send_jobarray {
     if ($sjaweek > 0) {
 	$sja_week_str = "--week 1";
     }
-    my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $sjaname.$outname $multi_txt";
-
-#    print "$sys_loc\n";
-#    exit;
-    &mysystem ($sys_loc);
-
 
 
     my $old_cmd = `tail -1 $sjainfofile | head -1`;
@@ -663,12 +661,34 @@ sub send_jobarray {
     }
 
 
+
+    #################################
+    ## starting the job array
+    ##################################
+    if ($serial) {
+	print "starting step $sjaname with ".@sjaarray." jobs\n";
+	print "please be patient.\n";
+	my $jc = 1;
+	foreach (@sjaarray) {
+	    print "running job $jc...\n";
+	    &mysystem($_);
+	    $jc++;
+	    
+	}
+    }
+    else { 
+	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $sjaname.$outname $multi_txt";
+	&mysystem ($sys_loc);
+    }
+    
+    
+    
     $command_line =~ s/--force1//;
 
 
     my $wt_file = "$sjadir/blueprint_joblist_file-$sjaname.$outname";
     chdir "$rootdir" or die "something strange";
-    if ($qloc eq "bsub" || $qloc eq "msub") {
+    if ($qloc eq "bsub") {
 	$wt_file =~ s/.*blueprint_joblist_file-//;
     }
     if ($qloc eq "slurm" || $qloc eq "slurm_u") {
@@ -685,15 +705,19 @@ sub send_jobarray {
 	$wt_file = "$sjadir/j.$sjaname.$outname.id";
     }
 
-    my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 4 --di -j --fwt $wt_file --na _ref_$outname";
 
 
-#    print "$sys_re\n";
-#    exit;
+    if ($serial) {
+	my $sys_re = "$command_line";
+	&mysystem ($sys_re);
+	exit;
+    }
+    else {
+	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 4 --di -j --fwt $wt_file --na _ref_$outname";
+	
+	&mysystem ($sys_re);
 
-    &mysystem ($sys_re);
-
-
+    }
 
     print "------------------------------------------------------------\n";
     print "$nsja jobs successfully submitted\n";
@@ -766,10 +790,10 @@ if ($subname){
 
 
 
-my @created = mkpath(
-    $subchr_dir,
-    {verbose => 0, mode => 0750},
-    );
+#my @created = mkpath(
+#    $subchr_dir,
+#    {verbose => 0, mode => 0750},
+#    );
 
 
 
@@ -1759,6 +1783,9 @@ unless (-e "$rootdir/rootdir_done"){
 
 		my $bfile_pf = "$plink_name.$pf_loc";
 
+
+#		print "$pf_loc -> $bfile_pf\n";
+		
 		unless (-e "$bfile_pf.fini"){
 #		    push @job_pobed, "$plink_script --bfile $plink_name --out $bfile_pf --keep $keep_file --make-bed --freq";
 		    push @job_pobed, "$plinkanc_script --bfile $plink_name --out $bfile_pf --keep $keep_file";
@@ -2106,8 +2133,66 @@ unless (-e "$rootdir/rootdir_done"){
 }
 
 
-print "debug\n";
-exit;
+
+unless (-e "popdirs_done") {
+
+	
+	foreach my $pf_loc (@pop_fams) {
+
+#	    &mysystem ("mkdir pop_$pf_loc");#
+
+	    unless (-e "pop_$pf_loc/reference_templ") {
+		print "create file reference_templ\n";
+		die $! unless open RT, "> pop_$pf_loc/reference_templ";
+		print RT "vcf_site      $vcf_site\n";
+		print RT "vcf_template  $vcf_templ\n";
+		print RT "out_template  $out_templ\n";
+		print RT "bfile_template  $out_templ.impute.plink.$pf_loc\n";
+		close RT;
+	    }
+	    unless (-e "pop_$pf_loc/infosum_pos.chunks") {
+		&mysystem ("cp infosum_pos.chunks pop_$pf_loc/");
+	    }
+
+
+	    foreach my $chr ($chr_start..$chr_end){
+		
+		$hapout_name = $out_templ.".impute";
+		$hapout_name =~ s/XXX/$chr/g;
+		my $plink_name = $hapout_name.".plink";	    
+		my $bfile_pf = "$plink_name.$pf_loc";
+
+		unless (-e "pop_$pf_loc/$bfile_pf.fam") {
+		    print "moving $bfile_pf.bed/bim/fam\n";
+		    system ("mv $bfile_pf.bed pop_$pf_loc/");
+		    system ("mv $bfile_pf.bim pop_$pf_loc/");
+		    system ("mv $bfile_pf.fam pop_$pf_loc/");
+		}
+		
+	    }
+	}
+}
+&mysystem ("touch $rootdir/popdirs_done");
+
+
+
+    
+
+#############################################################
+## SUCCESSSS
+#############################################################
+
+$sjadir = $rootdir;
+$sjaname = "finished";
+push @sjaarray, "tmp";
+$sjatime = 2;
+$sjamem = 1000;
+
+    
+&send_jobarray;
+
+
+
 
 
 
