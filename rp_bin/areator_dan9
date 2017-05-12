@@ -813,34 +813,39 @@ if ($pliclu) {
 		    $bfile_sc = `ls $refdir/my*chr$chr_part*bed`;
 		}
 		
-		print $bfile_sc."\n";
+#		print $bfile_sc."\n";
 		
 		if ($bfile_sc eq "") {
 		    my $chr_part = "$chr"."_";
 		    $bfile_sc = `ls $refdir/*chr$chr_part*plink.bed`;
 		}
 		
-		print $bfile_sc."\n";
+#		print $bfile_sc."\n";
 		
 		if ($bfile_sc eq "") {
 		    my $chr_part = "$chr"."_";
 		    $bfile_sc = `ls $refdir/*chr$chr_part*.bed`;
 		}
 		
-		print $bfile_sc."\n";
+#		print $bfile_sc."\n";
 		
 		if ($bfile_sc eq "") {
 		    my $chr_part = "window.$chr.";
 		    $bfile_sc = `ls $refdir/*$chr_part*bed`;
 		}
 		
-		print $bfile_sc."\n";
+#		print $bfile_sc."\n";
 
 		
-		print "$bfile_sc\n";
-		sleep(10);
+#		print "$bfile_sc\n";
+#		sleep(10);
 	    }
 
+	    
+	    chomp($bfile_sc);
+	    $bfile_sc =~ s/.bed$//;
+
+	    
 	    if (-e "$bfile_sc.bed") {
 		print "using $bfile_sc\n";
 	    }
@@ -849,10 +854,8 @@ if ($pliclu) {
 		exit;
 	    }
 
-	    
-	    chomp($bfile_sc);
-	    $bfile_sc =~ s/.bed$//;
 
+	    
 	    my @bfile_sc_arr = split "\n", $bfile_sc;
 
 	    if (@bfile_sc_arr != 1) {
