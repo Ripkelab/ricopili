@@ -8,7 +8,21 @@ use Data::Dumper;
 ### Jackie Goldstein, Jan 2014 & stephan ripke 2016
 
 
-if (0) {
+###################################################
+###  waiting for y to continue
+###################################################
+sub cont(){
+    print "continue?";
+    my $answer = lc <>;
+    chomp $answer;
+    unless ($answer eq "y") {
+	print "exiting.....\n";
+	exit;
+    }
+}
+
+
+
 #my $external_bin_dir;
     my $rp_installation_file = "rp_config.variables";
     my %conf;
@@ -28,14 +42,31 @@ else {
 
     die $!."($rp_installation_file)" unless open FILE, "> $rp_installation_file";
     print FILE "variable value remarks\n";
+    print FILE "-----------------------------------------\n";
     print FILE "exbin_dir PLACEHOLDER ## directory in which all downloaded external binaries will be installed to\n";
     close FILE;
     
 }
 
+print "------------------------------------------------------------------\n";
+print "------------------------------------------------------------------\n";
+
+print "Process for Downloading, Configuration, Installation of Ricopili\n";
+print "------------------------------------------------------------------\n";
+print "------------------------------------------------------------------\n";
+print "starting to download install\n";
+print "------------------------------------------------------------------\n";
+
+print "you will be asked in each step for confirmation\n"; 
+print "and you can interrupt the process anytime with command-c\n";
+print "are you ready?\n";
+&cont();
+
+print "using this here as directory for external bins: ".$conf{"exbin_dir"}."\n";
+&cont();
 exit;
 
-}
+
 my %bin_names;
 my %bin_locs;
 
