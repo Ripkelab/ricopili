@@ -931,7 +931,13 @@ if (0) {
 	exit;
     }
 }
-#sleep(10);
+
+my $quant_pt = 0;
+if ($ncaco{1} + $ncaco{2} < 5) {
+    $quant_pt = 1;
+    print "quantitative_phenotype\n";
+}
+
 
 #print "debug sleep\n";
 #sleep(10);
@@ -982,9 +988,15 @@ if ($idin_name || $males || $females) {
 
 my $sys = "nan";
 
+my $caco_txt = "case-control-freqs";
+
+## needs to stay there, otherwise only one FRQ column, makes more sense but breaks dameta
+#if ($quant_pt == 1) {
+#    $caco_txt = "";
+#}
 
 unless ($danscore_file) {
-    $sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 case-control-freqs --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
+    $sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2  $caco_txt --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
 
 
 }
@@ -1249,14 +1261,13 @@ unless ($danscore_file) {
     die "$workname.assoc.dosage.ngt:".$! unless open OFILE, "> dan_$workname.assoc.dosage.ngt";
     my $head = <IFILE>;
     chomp ($head);
-    $head =~ s/FRQ_A/FRQ_A_$ncaco{2}/;
-    if ($ncaco{1}>0){
-	#    print "ncaco_1: $ncaco{1}\n";
-	#    sleep(5);
+    unless ($quant_pt == 1){
 	$head =~ s/FRQ_U/FRQ_U_$ncaco{1}/;
+	$head =~ s/FRQ_A/FRQ_A_$ncaco{2}/;
     }
     else {
 	$head =~ s/FRQ_U/FRQ_U_$Nall/;
+	$head =~ s/FRQ_A/FRQ_A_$Nall/;
     }
     print OFILE "$head   ngt\n";
     while (my $line = <IFILE>){
