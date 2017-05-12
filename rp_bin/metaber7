@@ -152,6 +152,12 @@ use File::Path;
 use File::Copy;
 use Cwd;
 
+my $min_OR = 0.0001;
+my $max_OR = 10000;
+my $min_BETA = -4;
+my $max_BETA = 4;
+
+
 
 
 my $out_short = $out_name;
@@ -516,6 +522,11 @@ foreach my $dfile (@ARGV) {
     my $ngt_sw = 1;
     $ngt_sw = 0 unless (exists $col{"ngt"});
 
+    my $beta = 0;
+    if (exists $col{"BETA"}) {
+	$beta = 1;
+    }
+
     my $nwarnings=0;
     while ($df->gzreadline(my $line)){
 	chomp($line);
@@ -642,19 +653,55 @@ foreach my $dfile (@ARGV) {
 	    }
 	}
 
+
+
+	if ($cells[$col{"P"}] == "NA"){
+		if ($nwarnings < 10) {
+		    print "Warning: invalid P, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+		}
+		if ($nwarnings == 10) {
+		    print "more than 10 warnings, not printing out more....\n";
+		}
+		$nwarnings++;
+		
+		next;
+	    }
+
+
 #	if ($cells[$col{"OR"}] eq "NA"){
-#	if ($cells[$col{"OR"}]*1 !=  $cells[$col{"OR"}] || $cells[$col{"OR"}] <= 0){
-	if ($cells[$col{"OR"}] <= 0){
-	    if ($nwarnings < 10) {
-		print "Warning: invalid OR, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+	#	if ($cells[$col{"OR"}]*1 !=  $cells[$col{"OR"}] || $cells[$col{"OR"}] <= 0){
+	if ($beta) {
+
+	    if ($cells[$col{"BETA"}] < $min_BETA || $cells[$col{"BETA"}] > $max_BETA){
+		if ($nwarnings < 10) {
+		    print "Warning: invalid BETA, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+		}
+		if ($nwarnings == 10) {
+		    print "more than 10 warnings, not printing out more....\n";
+		}
+		$nwarnings++;
+		
+		next;
 	    }
-	    if ($nwarnings == 10) {
-		print "more than 10 warnings, not printing out more....\n";
-	    }
-	    $nwarnings++;
 	    
-	    next;
 	}
+	else {
+	    if ($cells[$col{"OR"}] < $min_OR || $cells[$col{"OR"}] > $max_OR){
+		if ($nwarnings < 10) {
+		    print "Warning: invalid OR, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+		}
+		if ($nwarnings == 10) {
+		    print "more than 10 warnings, not printing out more....\n";
+		}
+		$nwarnings++;
+		
+		next;
+	    }
+	}
+
+
+
+	
 	
 	$nca{$cells[$col{"SNP"}]} += $nca_loc;
 	$nco{$cells[$col{"SNP"}]} += $nco_loc;
@@ -707,6 +754,14 @@ foreach my $dfile (@ARGV) {
     my $df = gzopen("$dfile", "rb")  or die "Cannot open $dfile: $gzerrno\n" ;
     my $dfo = gzopen("$workdir/$dfile_short.clean.gz", "wb")  or die "Cannot open $workdir/$dfile_short.clean.gz: $gzerrno\n" ;
     $df->gzreadline(my $line);
+
+    my $beta = 0;
+    my @cells = @{&split_line_ref(\$line)};
+    if ($cells[8] eq "BETA"){#
+	$beta = 1;
+    }
+    
+    
     $dfo->gzwrite($line);
     
     
@@ -716,13 +771,20 @@ foreach my $dfile (@ARGV) {
 
 
 	if (@cells < 11) {	
-	    print "Warning: ".$cells[$col{"SNP"}]." does not have enough cells in $dfile\n" ;
+	    print "Error: ".$cells[$col{"SNP"}]." does not have enough cells in $dfile\n" ;
 	    $die = 1;
 	}
 
 	## remove OR lower than 1.0e-04 or bigger than 1.0e04)
-	if ($cells[8] <0.0001 || $cells[8]>10000) {
-	    next;
+	if ($beta){
+	    if ($cells[8] < $min_BETA || $cells[8] > $max_BETA) {
+		next;
+	    }
+	}
+	else {
+	    if ($cells[8] < $min_OR || $cells[8] > $max_OR) {
+		next;
+	    }
 	}
 	
 	if (exists $snpex{$cells[$col{"SNP"}]}) {
