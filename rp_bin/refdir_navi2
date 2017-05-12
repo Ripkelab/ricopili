@@ -1573,7 +1573,7 @@ unless (-e "$rootdir/rootdir_done"){
 	    ####################################
 
 	    unless (-e $vcf_name_loc_filtnorm_fini) {
-		push @job_btools1, "$prepvcf_script_filtnorm --filtnorm --vcf $vcf_name_loc --mac_th $mac_th";
+		push @job_btools1, "$prepvcf_script_filtnorm --vcf $vcf_name_loc --mac_th $mac_th";
 	    }
 
 
@@ -2139,7 +2139,7 @@ unless (-e "popdirs_done") {
 	
 	foreach my $pf_loc (@pop_fams) {
 
-#	    &mysystem ("mkdir pop_$pf_loc");#
+	    unless (-e "pop_$pf_loc") {&mysystem ("mkdir pop_$pf_loc")};#
 
 	    unless (-e "pop_$pf_loc/reference_templ") {
 		print "create file reference_templ\n";
