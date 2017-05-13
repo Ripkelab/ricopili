@@ -1286,14 +1286,22 @@ if ($job){
     my $jobname;
 
 
+    ###### see different kinds of nodes
+    #####  https://userinfo.surfsara.nl/systems/lisa/description
+
     my $mem_str = ($jmem / 1000) * 1;
-    if ($mem_str < 8){
+    $mem_str = $mem_str * $cores;
+
+    if ($mem_str <= 32){
 	$mem_str = 32;
+    }
+    elsif ($mem_str <= 64) {
+	$mem_str = 64;
+	$cores = 8;
     }
     else {
 	$mem_str = 64;
-	$cores =6;
-	
+	$cores = 4;
     }
 
 

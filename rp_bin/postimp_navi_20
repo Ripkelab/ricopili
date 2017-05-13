@@ -184,6 +184,7 @@ my $minthread = 0;
 
 my $popname = "eur";
 my $nohet_sw = 0;
+my $prekno_file = "";
 
 ##### help message
 my $usage = "
@@ -374,7 +375,7 @@ GetOptions(
     "rseed=i"=> \$rseed,
     "r2th=f"=> \$r2th,
     "wide=i"=> \$wide_range,
-    "prekno=s"=> \my $prekno_file,
+    "prekno=s"=> \$prekno_file,
     "popname=s"=> \$popname,
     "refiex=s"=> \my $refiex_file,
     "score=s"=> \$danscore_file,
@@ -1108,7 +1109,6 @@ $info_txt = "command:\t\"$command_line\"\tdir:\t$rootdir";
 
 
 
-
 ############################################################
 ### refind array
 #############################################################
@@ -1144,13 +1144,32 @@ if ($refdir =~ /chr23/) {
 
 $refdir =~ s!/home/radon01/sripke/bakker_ripke/hapmap_ref!/psych/genetics_data/ripke/references_outdated/hapmap_ref!;
 
+
+
+##########################################
+## with new population ancestry directory
+#########################################
+
+
+
 if (-e "$refdir/pop_$popname") {
 
     $refdir = "$refdir/pop_$popname";
     print "found ancestry specidic reference data for clumping and such: $refdir\n";
+
+
+
+    my @gwascat_files = `ls $refdir/gwascatalog.*.rp.txt`;
+    if (@gwascat_files == 1) {
+	print "using as gwas catalog file: ".$gwascat_files[0]."\n";
+	$prekno_file = $gwascat_files[0];
+	chomp($prekno_file)
+#	$prekno_txt = "--prekno $prekno_file";
+    }
     sleep(3);
 
 }
+#sleep(10);
 
 
 
@@ -3510,17 +3529,35 @@ my $Xchr_txt = "";
 
 
 
-my $prekno_txt = "";
-if ($prekno_file){
-#    unless (-e $prekno_file){
-    &mysystem ("cp $rootdir/$prekno_file ."); 
-#    }
-    $prekno_txt = "--prekno $prekno_file";
-}
-#$prekno_txt = "--prekno $hapmap_ref_root/gwascatalog/1211/gwascatalog.txt.ow.short.new.sorted";
-#$prekno_txt = "--prekno $hapmap_ref_root/gwascatalog/0712/gwascatalog.txt.ow.short.new.sorted";
-$prekno_txt = "--prekno $hapmap_ref_root/gwascatalog/1015b/gwascatalog.txt.ow.short.new.sorted";
 
+#############################################################
+## define gwas catalog file
+##############################################################
+
+
+
+
+
+
+my $prekno_txt = "";
+
+unless (-e $prekno_file) {
+    $prekno_file = "$hapmap_ref_root/gwascatalog/1015b/gwascatalog.txt.ow.short.new.sorted";
+
+}
+
+unless (-e $prekno_file) {
+    print "Error: cannot find gwas catalog file\n";
+    exit;
+}
+
+
+my $prekno_txt = "--prekno $prekno_file";
+#print "using as gwas catalog file: ".$prekno_file."\n";
+#print "option: ".$prekno_txt."\n";
+
+
+#sleep (3);
 
 
 foreach my $dc_loc (@daner_allcoll) {
@@ -3643,7 +3680,10 @@ while (my $line = <FILE>){
     }
     else {
 	unless (-e "$a_outname.pdf"){
-	    push @areap_arr, "$areaplot_script $prekno_txt --dandir $dametadir --refdir $refdir  --ngt-max -1 @cells --cols 2,11,1,3,-1,12 $daner_all" ;
+	    my $sys = "$areaplot_script $prekno_txt --dandir $dametadir --refdir $refdir  --ngt-max -1 @cells --cols 2,11,1,3,-1,12 $daner_all" ;
+	    push @areap_arr, $sys;
+#	    print "$sys\n";
+#	    sleep (3);
 	}
 	else {
 	    push @areap_files, "$a_outname.pdf";

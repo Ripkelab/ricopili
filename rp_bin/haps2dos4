@@ -277,7 +277,7 @@ unless (-e $twodos_tmp_success) {
 
 
 #my $sys_loc = "$ploc/plink --dosage $haps_file_gz noheader skip0=1 skip1=1 format=3 Z --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
-my $sys_loc = "$ploc/plink --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
+my $sys_loc = "$ploc/plink --memory 2000 --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
 print "$sys_loc\n";
 &mysystem ($sys_loc);
 

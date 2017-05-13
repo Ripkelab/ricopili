@@ -32,6 +32,7 @@ use strict;
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
+use File::Basename;
 
 my $version = "1.3.2";
 my $progname = $0;
@@ -319,6 +320,9 @@ die "$usage\n" if ($ngt_max == 0);
 my @prekno_arr;
 my %prekno_hash;
 my %prekno_txt;
+
+
+
 if ($prekno_file) {
 
     &error ("$prekno_file not existing") unless open PF, "< $prekno_file";
@@ -354,6 +358,13 @@ if ($prekno_file) {
     close PF;
 
 }
+
+
+
+my ($prekno_base,$prekno_dir) = fileparse ($prekno_file);
+#print "$prekno_base\n";
+#print "$prekno_dir\n";
+#exit;
 
 
 
@@ -1236,7 +1247,7 @@ close LO;
 print "start plink_step1\n";
 #my $cmd = "$ploc/plink --bfile $bfile_sc --extract $pfile.local --out $pfile.local.plink --make-bed";
 ## here speed up
-my $cmd = "$ploc/plink --bfile $bfile_sc --extract $pfile.local --out $pfile.local.plink --make-bed --silent";
+my $cmd = "$ploc/plink --memory 2000 --bfile $bfile_sc --extract $pfile.local --out $pfile.local.plink --make-bed --silent";
 #    print "$cmd\n";
 #    sleep(5);
 &mysystem($cmd);
@@ -1278,7 +1289,7 @@ if ($clump && $nclump > 1) {
 #    sleep(1);
 
 
-    my $cmd = "$ploc/plink --bfile $pfile.local.plink --extract $pfile.p4 --clump $pfile.p4 --clump-p1 $clump --clump-p2 $clump --clump-r2 $cr2 --clump-kb $cwindow --out $pfile.p4 --silent";
+    my $cmd = "$ploc/plink --memory 2000 --bfile $pfile.local.plink --extract $pfile.p4 --clump $pfile.p4 --clump-p1 $clump --clump-p2 $clump --clump-r2 $cr2 --clump-kb $cwindow --out $pfile.p4 --silent";
 #    print "$cmd\n";
 #    sleep(5);
     print "start plink_step2\n";
@@ -1346,6 +1357,7 @@ my $gene_list = "$hapmap_ref_root/debakker/genome.exons.b36.chr$chr";
 my $recomb_list = "$hapmap_ref_root/debakker/genetic_map_chr$chr.txt";
 my $recomb_local = "$subin_file.recomb";
 my $gene_local = "$subin_file.genes";
+my $gene_local_inter = "$subin_file.inter.genes";
 
 
 
@@ -1556,196 +1568,209 @@ if (1){
     my %gene_hash;
     print "start reading gene list\n";
     unless (-e $png_name && -e $ld_out_name){
-    unless (-e $gene_local){
-	&error("$gene_list_0610") unless open GI, "< $gene_list_0610";
-	&error($!) unless open GO, "> $gene_local";
-	
-#my $line =<GI>;
-#    print GO "CHR STRAND START STOP NISO NEXONS EXSTART EXEND GENE\n";  ## old
-	print GO "CHR STRAND START STOP NEXONS EXSTART EXEND GENE\n";
-	
-	while (my $line =<GI>){
-	    my @cells = @{&split_line_ref(\$line)};
-
-	    if ($cells[0] eq "chr$chr") {
-		if ( $cells[2] < $end && $cells[3] > $beg ) {
-#    if (($cells[2] < $end && $cells[3] > $beg)) {   ### old
-		    my $gene_tag = "$cells[0].$cells[2].$cells[3].$cells[7]";
-		    unless (exists $gene_hash{$gene_tag}){
-			print GO "@cells\n";
-			$gene_hash{$gene_tag} = 1;
-		    }
-#		    my $diff = $cells[2] - $cells[3];
-#		    print "$diff\t@cells\n";
-#		    print "@cells\n";
-#		    print $line;
-		}
-	    }
-	}
-	close GI;
-	close GO;
-    }
-    
-#    print "end reading gene list\n";
-#    print "sleep\n";
-#   sleep(10);
-    
-    
-#exit;
-    my $gen_ld_dir = "$region_dir/$gen_ld";
-    my $gen_png_dir = "$region_dir/$gen_png";
-    
-#    print "TIME4\n";
-
-
-
-    
-
-
-#    if (-e $gen_ld_dir && -e $gen_png_dir) {
-    if (0) {
-
-	&mysystem ("cp $gen_ld_dir $ld_out_name ");
-	&mysystem ("cp $gen_png_dir $png_name ");
-
-    }
-    else {
-
-#	print "$gen_ld_dir\n";
-#	print "$gen_png_dir\n";
-#	exit;
-######################################
-##  clean multiarea
-######################################
-	my @multitemp;
-	foreach my $snp_loc (@multiarea) {
-	    if (exists $snp_coll{$snp_loc}){
-		push @multitemp, $snp_loc;
-		$index_coll{$snp_loc} = 1;
-	    }
-	}
-	@multiarea = @multitemp;
-
-
-
-
-######################################
-##  clean repsnp
-######################################
-	my @repsnptemp;
-	foreach my $snp_loc (@repsnp_arr) {
-	    if (exists $snp_coll{$snp_loc}){
-		push @repsnptemp, $snp_loc;
-	    }
-	}
-	@repsnp_arr = @repsnptemp;
-
-	print @repsnp_arr." snps with replication data\n";
-#	sleep(3);
-
-
-######################################
-##  create LD - plot and LD - file
-######################################
-
-	my $p2_txt = "";
-	$p2_txt = "--phase2" if ($phase2);
-	if ($refdir) {
-	    $p2_txt = "--refdir $refdir";
-	}
-	
-	foreach my $snp_loc (@multiarea) {
-#	    my $sys = "$bin/area_ld $p2_txt --snp $snp_loc --chr $chr --mem $hv_mem --out $hv_name.$snp_loc --maxdi $maxdi $subin_file";
+	unless (-e $gene_local_inter){
+	    &error("$gene_list_0610") unless open GI, "< $gene_list_0610";
+	    &error($!) unless open GO, "> $gene_local_inter";
 	    
-	    ## check presence of ld SNP
-	    my $ldp = 0;
-	    &error("$pfile.local.plink.bim") unless open BIM, "< $pfile.local.plink.bim";
-	    while (my $line =<BIM>){
+	    #	print GO "CHR STRAND START STOP NEXONS EXSTART EXEND GENE\n";
+	
+	    while (my $line =<GI>){
 		my @cells = @{&split_line_ref(\$line)};
-		if ($snp_loc eq $cells[1]) {
-
-		    $ldp = 1;
+		
+		if ($cells[0] eq "chr$chr") {
+		    if ( $cells[2] < $end && $cells[3] > $beg ) {
+			my $gene_tag = "$cells[0].$cells[2].$cells[3].$cells[7]";
+			my $gene_size = $cells[3] - $cells[2];
+			unless (exists $gene_hash{$gene_tag}){
+			    print GO "@cells $gene_size\n";
+			    $gene_hash{$gene_tag} = 1;
+			}
+		    }
 		}
 	    }
-	    close BIM;
-#	    print "snp found: $ldp\n";
-#	    sleep (10);
-	    
-	    
-	    print "start plink_step3\n";
-	    my $cmd = "$ploc/plink --bfile $pfile.local.plink --extract $subin_file --ld-snp $snp_loc --r2 --ld-window-kb $cwindow --ld-window 99999 --ld-window-r2 0.0 --out $hv_name.$snp_loc --silent";
-#	    print "$cmd\n";
-
-	    if ($ldp == 1) {
-		&mysystem($cmd);
-	    }
-	    else {
-		&mysystem("touch $hv_name.$snp_loc.ld");
-	    }
-
-
-#    print "plink finished\n";
- #   sleep(5);
-
-#	    sleep(5);
-#	    print "$sys\n";#
-#	    &mysystem ($sys);
+	    close GI;
+	    close GO;
 	}
 	
-
+	&mysystem ("sort -k8,8 -k9,9rn $gene_local_inter > $gene_local_inter.sorted");
 	
 	
 	
 	
-################################
-### write snp_ld_file haploview
-###############################
+	my @gstart_arr;
+	my @gend_arr;
+	my @gname_arr;
+	
+	## take out the smaller transcripts
+	unless (-e $gene_local){
+	    &error("$gene_list_0610") unless open GI, "< $gene_local_inter.sorted";
+	    &error($!) unless open GO, "> $gene_local";
+	    
+#	    my $line =<GI>;
+	    print GO "CHR STRAND START STOP NEXONS EXSTART EXEND GENE SIZE\n";
+	    
+	    while (my $line =<GI>){
+		my @cells = @{&split_line_ref(\$line)};
+		
+		my $gstart = $cells[2];
+		my $gend = $cells[3];
+		my $gname = $cells[7];
+		
+		
+		my $in = 1;
+#		print "@gname_arr\n";
+		foreach my $cc (0..$#gstart_arr){
+		    print "testing $gname_arr[$cc]\n";
+		    if ($gname eq $gname_arr[$cc]) {
+#			print "found $gname $gstart $gend $gname_arr[$cc] $gstart_arr[$cc] $gend_arr[$cc]\n";
+			#### if this one gets swallowed by a former one, do nothing
+			if ($gend <= $gend_arr[$cc] && $gstart => $gstart_arr[$cc]) {
+			    $in = 0;
+#			    print "$gend with $gstart and $gend is out\n";
+			}
+		    }
+		    #### if in then safe it
+		    
+		    
+		    
+		}
+		
+		if ($in == 1) {
+		    push @gstart_arr, $gstart;
+		    push @gend_arr, $gend;
+		    push @gname_arr, $gname;
+		    print GO "@cells\n";
+		}
+		
+		
+	    }
+	    close GI;
+	    close GO;
+	}
+	
+	
+	
+	
+	print "end reading gene list\n";
+#	print "sleep\n";
+#	sleep(10);
+	
+	
+	#exit;
+	my $gen_ld_dir = "$region_dir/$gen_ld";
+	my $gen_png_dir = "$region_dir/$gen_png";
+	
+	#    print "TIME4\n";
+	
+	
+	
+	
+	
+	
+	#    if (-e $gen_ld_dir && -e $gen_png_dir) {
 	if (0) {
 	    
-	    my $ld_name = "$hv_name"."_hv2.ped.LD";
-	    if (-e $ld_name) {
-		&error($!) unless open PF, "< $ld_name";
-		&error($!) unless open PO, "> $ld_out_name";
-		
-		my $line =<PF>;
-		print PO "SNP\tDprime\tr2\n";
-		
-		while (my $line =<PF>){
-		    my @cells = @{&split_line_ref(\$line)};
-		    my $snp;
-		    if ($cells[0] eq $snp_mark || $cells[1] eq $snp_mark){
-			$snp = $cells[1] if ($cells[0] eq $snp_mark);
-			$snp = $cells[0] if ($cells[1] eq $snp_mark);
-			print PO "$snp\t$cells[2]\t$cells[4]\n";
-		    }
-		}
-		close PF;
-		close PO;
-	    }
-	    else {
-		&error($!) unless open PO, "> $ld_out_name";
-		print PO "SNP\tDprime\tr2\n";
-		close PO;
-	    }
-
-
-################################
-### write snp_ld_file plink
-###############################
-
+	    &mysystem ("cp $gen_ld_dir $ld_out_name ");
+	    &mysystem ("cp $gen_png_dir $png_name ");
+	    
 	}
 	else {
-	    print "some rewriting\n";
+	    
+	    #	print "$gen_ld_dir\n";
+	    #	print "$gen_png_dir\n";
+	    #	exit;
+	    ######################################
+	    ##  clean multiarea
+	    ######################################
+	    my @multitemp;
 	    foreach my $snp_loc (@multiarea) {
-#	my $ld_name = "$hv_name.$snp_loc"."_hv.ld";
-		my $ld_name = "$hv_name.$snp_loc.ld";
+		if (exists $snp_coll{$snp_loc}){
+		    push @multitemp, $snp_loc;
+		    $index_coll{$snp_loc} = 1;
+		}
+	    }
+	    @multiarea = @multitemp;
+	    
+	    
+	    
+	    
+	    ######################################
+	    ##  clean repsnp
+	    ######################################
+	    my @repsnptemp;
+	    foreach my $snp_loc (@repsnp_arr) {
+		if (exists $snp_coll{$snp_loc}){
+		    push @repsnptemp, $snp_loc;
+		}
+	    }
+	    @repsnp_arr = @repsnptemp;
+	    
+	    print @repsnp_arr." snps with replication data\n";
+	    #	sleep(3);
+	    
+	    
+	    ######################################
+	    ##  create LD - plot and LD - file
+	    ######################################
+	    
+	    my $p2_txt = "";
+	    $p2_txt = "--phase2" if ($phase2);
+	    if ($refdir) {
+		$p2_txt = "--refdir $refdir";
+	    }
+	    
+	    foreach my $snp_loc (@multiarea) {
+		#	    my $sys = "$bin/area_ld $p2_txt --snp $snp_loc --chr $chr --mem $hv_mem --out $hv_name.$snp_loc --maxdi $maxdi $subin_file";
+		
+		## check presence of ld SNP
+		my $ldp = 0;
+		&error("$pfile.local.plink.bim") unless open BIM, "< $pfile.local.plink.bim";
+		while (my $line =<BIM>){
+		    my @cells = @{&split_line_ref(\$line)};
+		    if ($snp_loc eq $cells[1]) {
+			
+			$ldp = 1;
+		    }
+		}
+		close BIM;
+		#	    print "snp found: $ldp\n";
+		#	    sleep (10);
+		
+		
+		print "start plink_step3\n";
+		my $cmd = "$ploc/plink --memory 2000 --bfile $pfile.local.plink --extract $subin_file --ld-snp $snp_loc --r2 --ld-window-kb $cwindow --ld-window 99999 --ld-window-r2 0.0 --out $hv_name.$snp_loc --silent";
+		#	    print "$cmd\n";
+		
+		if ($ldp == 1) {
+		    &mysystem($cmd);
+		}
+		else {
+		    &mysystem("touch $hv_name.$snp_loc.ld");
+		}
 
-#	print "dat hjibbe: $ld_name\n";
-#	sleep(3);
+
+		#    print "plink finished\n";
+		#   sleep(5);
+
+		#	    sleep(5);
+		#	    print "$sys\n";#
+		#	    &mysystem ($sys);
+	    }
+	    
+
+	    
+	    
+	    
+	    
+	    ################################
+	    ### write snp_ld_file haploview
+	    ###############################
+	    if (0) {
+		
+		my $ld_name = "$hv_name"."_hv2.ped.LD";
 		if (-e $ld_name) {
 		    &error($!) unless open PF, "< $ld_name";
-		    &error($!) unless open PO, "> $ld_out_name.$snp_loc";
-#		    print "hier: $ld_out_name.$snp_loc\n";
+		    &error($!) unless open PO, "> $ld_out_name";
 		    
 		    my $line =<PF>;
 		    print PO "SNP\tDprime\tr2\n";
@@ -1753,53 +1778,93 @@ if (1){
 		    while (my $line =<PF>){
 			my @cells = @{&split_line_ref(\$line)};
 			my $snp;
-			if ($cells[2] eq $snp_loc || $cells[5] eq $snp_loc){
-			    $snp = $cells[2] if ($cells[5] eq $snp_loc);
-			    $snp = $cells[5] if ($cells[2] eq $snp_loc);
-			    print PO "$snp\t$cells[6]\t$cells[6]\n";
+			if ($cells[0] eq $snp_mark || $cells[1] eq $snp_mark){
+			    $snp = $cells[1] if ($cells[0] eq $snp_mark);
+			    $snp = $cells[0] if ($cells[1] eq $snp_mark);
+			    print PO "$snp\t$cells[2]\t$cells[4]\n";
 			}
 		    }
 		    close PF;
 		    close PO;
 		}
 		else {
-		    &error($!) unless open PO, "> $ld_out_name.$snp_loc";
+		    &error($!) unless open PO, "> $ld_out_name";
 		    print PO "SNP\tDprime\tr2\n";
 		    close PO;
 		}
 
-#	sleep(10);
+
+		################################
+		### write snp_ld_file plink
+		###############################
+
 	    }
-	    print "finished rewriting\n";
+	    else {
+		print "some rewriting\n";
+		foreach my $snp_loc (@multiarea) {
+		    #	my $ld_name = "$hv_name.$snp_loc"."_hv.ld";
+		    my $ld_name = "$hv_name.$snp_loc.ld";
+
+		    #	print "dat hjibbe: $ld_name\n";
+		    #	sleep(3);
+		    if (-e $ld_name) {
+			&error($!) unless open PF, "< $ld_name";
+			&error($!) unless open PO, "> $ld_out_name.$snp_loc";
+			#		    print "hier: $ld_out_name.$snp_loc\n";
+			
+			my $line =<PF>;
+			print PO "SNP\tDprime\tr2\n";
+			
+			while (my $line =<PF>){
+			    my @cells = @{&split_line_ref(\$line)};
+			    my $snp;
+			    if ($cells[2] eq $snp_loc || $cells[5] eq $snp_loc){
+				$snp = $cells[2] if ($cells[5] eq $snp_loc);
+				$snp = $cells[5] if ($cells[2] eq $snp_loc);
+				print PO "$snp\t$cells[6]\t$cells[6]\n";
+			    }
+			}
+			close PF;
+			close PO;
+		    }
+		    else {
+			&error($!) unless open PO, "> $ld_out_name.$snp_loc";
+			print PO "SNP\tDprime\tr2\n";
+			close PO;
+		    }
+
+		    #	sleep(10);
+		}
+		print "finished rewriting\n";
+	    }
+
+	    #	exit;
+	    
+	    ##################################
+	    ## rename these files in a general way
+	    ################################
+
+
+	    
+	    #    &mysystem ("cp $ld_out_name $gen_ld_dir");
+	    #    &mysystem ("cp $png_name $gen_png_dir") if (-e $gen_png_dir);
+	    
 	}
-
-#	exit;
-	
-##################################
-## rename these files in a general way
-################################
-
-
-	
-#    &mysystem ("cp $ld_out_name $gen_ld_dir");
-#    &mysystem ("cp $png_name $gen_png_dir") if (-e $gen_png_dir);
 	
     }
-    
-    }
-#    exit;
+    #    exit;
     
 
-################################
-### read LD-hash
-###############################
+    ################################
+    ### read LD-hash
+    ###############################
 
     
     my %ld_hash = (); ## hash with r2 to SNP of interest
     my %reg_hash = (); ## hash with r2 to SNP of interest
 
     unless ($multi_sw) {
-#	print "und hier: $ld_out_name.$snp_mark\n";
+	#	print "und hier: $ld_out_name.$snp_mark\n";
 	&error("$!:  $ld_out_name.$snp_mark, mabye chosen Index - SNP ($snp_mark) is not present in chosen area") unless open PF, "< $ld_out_name.$snp_mark";
 	my $line =<PF>;
 	
@@ -1819,7 +1884,7 @@ if (1){
 	    while (my $line =<PF>){
 		my @cells = @{&split_line_ref(\$line)};
 		
-#		$ld_hash {$cells[0]} = $cells[2];
+		#		$ld_hash {$cells[0]} = $cells[2];
 		if ($cells[2] > $cr2) {
 		    unless (exists $ld_hash {$cells[0]}) {
 			$ld_hash {$cells[0]} = $cells[2];
@@ -1838,9 +1903,9 @@ if (1){
 
     }
 
-################################
-### read HM3 info
-###############################
+    ################################
+    ### read HM3 info
+    ###############################
 
     print "finished rewriting 2\n";
 
@@ -1863,24 +1928,24 @@ if (1){
 	my $hm3_refdir = "$hapmap_ref_root/subchr";
 	my @hm3_coll = `cat $hm3_refdir/*chr$chr.*bim`;
 	my @hm3_files = `ls $hm3_refdir/*chr$chr.*bim`;
-#	print "hmind files: @hm3_files\n";
+	#	print "hmind files: @hm3_files\n";
 	foreach my $line (@hm3_coll) {
 	    my @cells = @{&split_line_ref(\$line)};
-#	    if ($cells[3] >= $beg && $cells[3] <= $end) {
+	    #	    if ($cells[3] >= $beg && $cells[3] <= $end) {
 	    if (exists $frq_h{$cells[1]}) {
 		$hmind {$cells[1]} = 1;
 	    }
-#		print "$cells[1]\n";
-#	    }
+	    #		print "$cells[1]\n";
+	    #	    }
 	}
     }
 
 
     print "finished rewriting 3\n";
 
-################################
-### transfer LD
-###############################
+    ################################
+    ### transfer LD
+    ###############################
     
     &error($!) unless open SI, "< $subin_file";
     &error($!) unless open DB, "> $debakker_in";
@@ -1939,72 +2004,72 @@ if (1){
 	}
 	
 	
-#	if (exists $rep_snps{$cells[$snpcol-1]}) {
-#	    print "found replication: $cells[$snpcol-1]\t$rep_snps{$cells[$snpcol-1]}\n";
-#	    sleep(3);
-#	}
+	#	if (exists $rep_snps{$cells[$snpcol-1]}) {
+	#	    print "found replication: $cells[$snpcol-1]\t$rep_snps{$cells[$snpcol-1]}\n";
+	#	    sleep(3);
+	#	}
 	
 	$reg{$cells[$snpcol-1]} = 1;
 	print DB $cells[$snpcol-1];
 	print DB "\t".$cells[$poscol-1];
 	print DB "\t".$cells[$pcol - 1];
-#    my $type = "typed";
-#    $type = "imputed" if $cells[9] == $ngt_max;
-#    print DB "\t".$type;
+	#    my $type = "typed";
+	#    $type = "imputed" if $cells[9] == $ngt_max;
+	#    print DB "\t".$type;
 	
 	if ($ngt_max < 0){
 	    print DB "\t1";
 	}
 	else {
-	print DB "\t".$cells[$ngtcol-1];
-    }
-
-    my $r2 = "0";
-    my $reg_col = "0";
-    $r2 = $ld_hash{$cells[$snpcol-1]} if (exists $ld_hash{$cells[$snpcol-1]});
-    $reg_col = $reg_hash{$cells[$snpcol-1]} if (exists $reg_hash{$cells[$snpcol-1]});
-    print DB "\t".$r2;
-    print DB "\t".$reg_col;
-
-
-    
-    if ($hmicol < 1){
-         ###########REMARKS for for full HMIND
-
-#	if (exists $hmind{"$chr:$cells[$poscol-1]"}){
-#	print "$cells[$snpcol-1]\n";
-	if (exists $hmind{$cells[$snpcol-1]}){
-	    print DB "\t1";
+	    print DB "\t".$cells[$ngtcol-1];
 	}
-	else {
-	    print DB "\t0";
-	}
-    }
-    else {
+
+	my $r2 = "0";
+	my $reg_col = "0";
+	$r2 = $ld_hash{$cells[$snpcol-1]} if (exists $ld_hash{$cells[$snpcol-1]});
+	$reg_col = $reg_hash{$cells[$snpcol-1]} if (exists $reg_hash{$cells[$snpcol-1]});
+	print DB "\t".$r2;
+	print DB "\t".$reg_col;
+
+
+	
 	if ($hmicol < 1){
-	    print DB "\t1";
+	    ###########REMARKS for for full HMIND
+
+	    #	if (exists $hmind{"$chr:$cells[$poscol-1]"}){
+	    #	print "$cells[$snpcol-1]\n";
+	    if (exists $hmind{$cells[$snpcol-1]}){
+		print DB "\t1";
+	    }
+	    else {
+		print DB "\t0";
+	    }
 	}
 	else {
-	    print DB "\t".$cells[$hmicol-1] ;
+	    if ($hmicol < 1){
+		print DB "\t1";
+	    }
+	    else {
+		print DB "\t".$cells[$hmicol-1] ;
+	    }
 	}
+
+	print DB "\n";
+
     }
 
-    print DB "\n";
 
-}
+    close DB;
+    close SI;
 
+    #    foreach (@index_info_arr){
+    #	print "INFO: $_\n";
+    #    }
+    #    sleep(10);
 
-close DB;
-close SI;
-
-#    foreach (@index_info_arr){
-#	print "INFO: $_\n";
-#    }
-#    sleep(10);
-
-######################################
-##  clean prekno
-######################################
+    ######################################
+    ##  clean prekno
+    ######################################
 
 
     &mysystem ("sort -k3,3g $debakker_in > $debakker_in.psorted");
@@ -2019,7 +2084,7 @@ close SI;
 
 	my $snp_loc = $cells[0];
 
-#    foreach my $snp_loc (@prekno_arr) {
+	#    foreach my $snp_loc (@prekno_arr) {
 	if (exists $prekno_hash{$snp_loc}){
 	    push @preknotemp, $snp_loc;
 
@@ -2041,15 +2106,21 @@ close SI;
 
 
 
+my ($gene_base,$gene_dir) = fileparse ($gene_list_0610);
+chomp($gene_base);
+#print "$gene_base\n$prekno_base\n";
+#print "$gene_dir\n";
+
+
 #exit;
 
-    print "finished rewriting 4\n";
+print "finished rewriting 4\n";
 
 ######################################################################
 ##   R templates
 ######################################################################
 
-    my $R_templ='
+my $R_templ='
 
 # 
 #
@@ -2579,6 +2650,13 @@ for (ra in rk){
 
 
 
+
+
+#################################################
+#### some outer infos
+
+ mtext("database: GWASCATALOG, GENELIST",side=1,line=3.0, cex=0.3,adj=1.0)
+
 #################################################
 #### gene-section
 
@@ -2931,6 +3009,8 @@ $title =~ s/daner_//g;
 $title =~ s/.gz.p4//g;
 
 $R_templ =~ s/TITLE/$title/g;
+$R_templ =~ s/GWASCATALOG/$prekno_base/g;
+$R_templ =~ s/GENELIST/$gene_base/g;
 my $snp_loc = $multiarea[0];
 $R_templ =~ s/SNPNAME/$snp_loc/g ; 
 

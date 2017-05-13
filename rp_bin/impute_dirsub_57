@@ -1,6 +1,9 @@
 #!/usr/bin/perl
 use strict;
-  
+
+
+### on LISA: sjamem up to 2000 means with 16 cores the 32 GB machines
+### if sjamem more than 2000 -> 64 GB nodes and reduced number of cores
 
 ########################################
 #
@@ -1626,7 +1629,7 @@ unless (-e "$rootdir/buigue_done") {
 	    $sjatime = 2;
 #	    $sjatime = 4 if ($buigue_fini > 0);
 	    
-	    $sjamem = 3000;
+	    $sjamem = 2000;
 	    @sjaarray = @buigue_arr;
 	    
 	    &send_jobarray;
@@ -1685,7 +1688,7 @@ if ($suminfo_s_v2_sw == 1) {
 	    $sjatime = 2;
 #	    $sjatime = 4 if ($readref_fini > 0);
 	    
-	    $sjamem = 3000;
+	    $sjamem = 2000;
 	    $sjamaxpar = 100;
 	    @sjaarray = @readref_arr;
 	    
@@ -1804,7 +1807,7 @@ unless (-e "$rootdir/posing_done") {
 	$sjaname = "chepos";
 	$sjatime = 2;
 #	$sjatime = 4 if ($chepos_fini > 0);
-	$sjamem = 3000;
+	$sjamem = 2000;
 	@sjaarray = @chepos_arr;
 	
 	&send_jobarray;
@@ -1875,7 +1878,7 @@ my $chefli_fini = 0;
 	    $sjaname = "chefli";
 	    $sjatime = 2;
 #	    $sjatime = 4 if ($chefli_fini > 0);
-	    $sjamem = 3000;
+	    $sjamem = 2000;
 	    @sjaarray = @chefli_arr;
 	    
 	    &send_jobarray;
@@ -2305,7 +2308,7 @@ if ($chucking_done == 0) {
 	$sjaname = "chuck";
 	$sjatime = 0;
 #	$sjatime = 1 if ($chuck_fini > 0);
-	$sjamem = 4000;
+	$sjamem = 2000;
 	@sjaarray = @chuck_arr;
 
 
@@ -2500,7 +2503,7 @@ if ($prephase_done == 0) {
 		    if ($suminfo_s_v2_sw == 1) {
 			$backbone .= " --nospli";
 #			print "v2 found\n";
-			print "$multi_sw\n";
+#			print "$multi_sw\n";
 		    }
 
 #		    print "$backbone\n";
@@ -3584,7 +3587,7 @@ if (@merge_arr > 0) {
     $sjadir = $cobg_dir;
     $sjaname = "merge";
     $sjatime = 2;
-    $sjamem = 3000;
+    $sjamem = 2000;
     @sjaarray = @merge_job;
     
     &send_jobarray;

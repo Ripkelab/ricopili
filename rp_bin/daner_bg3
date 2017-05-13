@@ -658,7 +658,7 @@ close IOX;
 ################################
 
 if ($ntp > 0) {
-    my $sys = "$ploc/plink --tped $dosfile_tped --tfam $famfile --make-bed --out $dosfile.qc1";
+    my $sys = "$ploc/plink --memory 2000 --tped $dosfile_tped --tfam $famfile --make-bed --out $dosfile.qc1";
     &mysystem($sys);
     &mysystem("cp $dosfile.qc1.bed $outdir/bg/");
     &mysystem("cp $dosfile.qc1.bim $outdir/bg/");
@@ -666,14 +666,14 @@ if ($ntp > 0) {
     
 }
 if ($ntps > 0){
-    my $sys = "$ploc/plink --tped $dosfile_tped_strict --tfam $famfile --make-bed --out $dosfile.qc2";
+    my $sys = "$ploc/plink --memory 2000 --tped $dosfile_tped_strict --tfam $famfile --make-bed --out $dosfile.qc2";
     &mysystem($sys);
     &mysystem("cp $dosfile.qc2.bed $outdir/bgs/");
     &mysystem("cp $dosfile.qc2.bim $outdir/bgs/");
     &mysystem("cp $dosfile.qc2.fam $outdir/bgs/");
 }
 if ($ntpn > 0){
-    my $sys = "$ploc/plink --tped $dosfile_tped_noqc --tfam $famfile --make-bed --out $dosfile.noqc";
+    my $sys = "$ploc/plink --memory 2000 --tped $dosfile_tped_noqc --tfam $famfile --make-bed --out $dosfile.noqc";
     &mysystem($sys);
     &mysystem("cp $dosfile.noqc.bed $outdir/bgn/");
     &mysystem("cp $dosfile.noqc.bim $outdir/bgn/");
@@ -727,7 +727,7 @@ exit;
 ###########################################
 ### here run for INFO and Freq
 ############################################
-my $sys = "$ploc/plink --dosage $dosfile_clean.gz format=2 --fam $famfile --allow-no-sex --out $workname --map $mapfile ";
+my $sys = "$ploc/plink --memory 2000 --dosage $dosfile_clean.gz format=2 --fam $famfile --allow-no-sex --out $workname --map $mapfile ";
 #my $sys = "$ploc/plink --dosage $dosfile format=2 Zin --fam $famfile --allow-no-sex --out $workname --map $mapfile ";
 # $sys = "$ploc/plink --dosage $dosfile format=2 Zin --fam $famfile.pt --allow-no-sex --logistic --out $workname --map $mapfile $cov_str $idex_str $idin_str";
 
@@ -735,6 +735,18 @@ my $sys = "$ploc/plink --dosage $dosfile_clean.gz format=2 --fam $famfile --allo
 &mysystem($sys);
 
 exit;
+
+
+
+
+
+
+
+
+
+
+
+
 
 my $assoc_file = "$workname.assoc.dosage";
 my $mapout = "$mapfile.extract";

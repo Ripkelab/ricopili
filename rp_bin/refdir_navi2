@@ -4,6 +4,10 @@ use strict;
 srand(0);
 
 
+
+### on LISA: sjamem up to 2000 means with 16 cores the 32 GB machines
+### if sjamem more than 2000 -> 64 GB nodes and reduced number of cores
+
 #######################################################################################
 ###
 ###  GENE ANNOTATION:
@@ -34,7 +38,7 @@ srand(0);
 #       
 #
 #  my.prepvcf_filtnorm (bcftools_filtnorm):
-#        - create filtnorm-vcf with mac 4 and normalize multiallelic SNPs
+#        - create filtnorm-vcf with mac > 4 and normalize multiallelic SNPs
 #
 #
 #  prepare_ref_mm (prep_minimac):
@@ -103,7 +107,7 @@ sub trans {
 my $ploc = &trans("p2loc");
 my $qloc = &trans("queue");
 my $hmloc = &trans("hmloc");
-my $vloc = &trans("vloc");
+#my $vloc = &trans("vloc");
 
 my $email = &trans("email");
 my $loloc = &trans("loloc");
@@ -212,7 +216,7 @@ my $wget_script = "my.wget";                          ### my.pipeline_tar
 my $prepvcf_script_filtnorm = "my.prepvcf_filtnorm";  ### my.pipeline_tar
 my $prepvcf_script_imp2 = "my.prepvcf_imp2";          ### my.pipeline_tar
 my $prepmm_script = "prepare_ref_mm";                 ### my.pipeline_tar
-my $vcf_script = "$vloc/vcftools";                    ### 
+#my $vcf_script = "$vloc/vcftools";                    ### 
 my $annot_hg19pos_script = "annot_hg19pos";           ### 
 my $impute2beagle_script = "impute2beagle2";          ### not needed for now
 my $prepare_hm_ref_2_script = "prepare_hm_ref_2";     ### my.pipeline_tar
@@ -797,6 +801,11 @@ if ($subname){
 
 
 
+my $now = localtime time;
+
+my @cells = split /\s+/, $now;
+my $date = "$cells[1]"."_"."$cells[4]";
+
 
 
 ##############################################################################
@@ -811,17 +820,17 @@ if (@refgene_files == 0) {
     print "********************************\n";
     print "no refGene file found\n";
     print "********************************\n";
-    print "here is an old one: /psych/genetics_data/ripke/1000Genomes_reference/1KG_Oct14/1000GP_Phase3_sr/subchr/refGene_1214.txt.out\n";
+#    print "here is an old one: /psych/genetics_data/ripke/1000Genomes_reference/1KG_Oct14/1000GP_Phase3_sr/subchr/refGene_XXX.txt.out\n";
     print "********************************\n";
     print "\its better to create an updated one yourself:\n";
     print "********************************\n";
 #    print "cd $subchr_dir\n";
 
     print "wget http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz\n";
-    print "zcat refGene.txt.gz > refGene_1114.txt\n";
-    print "$preprefgene_script refGene_1114.txt\n";
+    print "zcat refGene.txt.gz > refGene.txt\n";
+    print "$preprefgene_script refGene.txt\n";
     print "mv refGene.txt.gz sich.refGene.txt.gz\n";
-    print "rm refGene_1114.txt\n";
+#    print "rm refGene_1114.txt\n";
 #    print "cd $rootdir\n";
     print "********************************\n";
 
@@ -835,10 +844,7 @@ if (@refgene_files == 0) {
     chomp $answer;
     if ($answer eq "y" || $answer eq "Y"){
 
-	my $now = localtime time;
-	
-	my @cells = split /\s+/, $now;
-	my $date = "$cells[1]"."_"."$cells[4]";
+
 	
 
 	print "downloading most recent file...\n";
@@ -892,6 +898,19 @@ if (@refgene_files == 0) {
 }
 
 
+##############################################
+### double check
+##################################################
+
+
+my @refgene_files = `ls refGene*`;
+if (@refgene_files != 1) {
+    print "Error: there is not exactly one refGene - file\n";
+    print "@refgene_files\n";
+    exit;
+}
+my $refgene_file = $refgene_files[0];
+chomp($refgene_file);
 
 
 ##############################################################################
@@ -900,7 +919,7 @@ if (@refgene_files == 0) {
 
 
 #my @refgene_files = `ls $subchr_dir/refGene*`;
-my @cat_files = `ls gwascatalog.rp.txt`;
+my @cat_files = `ls gwascatalog.$date.rp.txt`;
 if (@cat_files == 0) {
     
     print "********************************\n";
@@ -914,7 +933,7 @@ if (@cat_files == 0) {
     print 'tr " " "_" < full > gwascatalog.txt.ow'."\n";
     print 'cat gwascatalog.txt.ow | cut -f2,8,12,13,21,22,28 > gwascatalog.txt.ow.short'."\n";
     print 'awk \'$7<5.0e-08{if (length($2)> 25 ) {$2 = substr($2,1,15)"..."}; print $6,$3,$4,$4,$7,$2"("$1")"}\' gwascatalog.txt.ow.short | awk \'NF > 5\' > gwascatalog.txt.ow.short.ow'."\n";
-    print 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short.ow > gwascatalog.rp.txt'."\n";
+    print 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short.ow > '."gwascatalog.$date.rp.txt\n";
     print 'gzip full'."\n";
 #    print ''."\n";
  #   print ''."\n";
@@ -974,9 +993,9 @@ if (@cat_files == 0) {
 	}
 
 	print "sort...\n";
-	$sys = 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short > gwascatalog.rp.txt';	
+	$sys = 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short > gwascatalog.'.$date.'.rp.txt';	
 	&mysystem ($sys);
-        $sys = 'gzip full';
+        $sys = 'gzip -f full';
 	&mysystem ($sys);
 	
 #	print "debug gwascatalog.rp.txt\n";	
@@ -1835,6 +1854,7 @@ unless (-e "$rootdir/rootdir_done"){
 
     }
 
+    
 
     if (@job_vcf_dl > 0 ) {
 
@@ -1843,7 +1863,7 @@ unless (-e "$rootdir/rootdir_done"){
 	$sjadir = $rootdir;
 	$sjaname = "vcf_download";
 	$sjatime = 2;
-	$sjamem = 2000;
+	$sjamem = 2000; 
 	@sjaarray = @job_vcf_dl;
 	
 	&send_jobarray;
@@ -1904,7 +1924,7 @@ unless (-e "$rootdir/rootdir_done"){
 	$sjadir = $rootdir;
 	$sjaname = "bcftools_filtnorm";
 	$sjatime = 2;
-	$sjamem = 4000;
+	$sjamem = 2000;
 	@sjaarray = @job_btools1;
 	
 	&send_jobarray;
@@ -1940,7 +1960,7 @@ unless (-e "$rootdir/rootdir_done"){
 	$sjadir = $rootdir;
 	$sjaname = "bcftools_impute2";
 	$sjatime = 2;
-	$sjamem = 4000;
+	$sjamem = 2000;
 	@sjaarray = @job_btools2;
 	
 	&send_jobarray;
@@ -1977,7 +1997,7 @@ unless (-e "$rootdir/rootdir_done"){
 	$sjadir = $rootdir;
 	$sjaname = "vcf2plink";
 	$sjatime = 2;
-	$sjamem = 4000;
+	$sjamem = 2000;
 	@sjaarray = @job_plink;
 	
 	&send_jobarray;
@@ -1990,7 +2010,7 @@ unless (-e "$rootdir/rootdir_done"){
 	$sjadir = $rootdir;
 	$sjaname = "refformat";
 	$sjatime = 2;
-	$sjamem = 4000;
+	$sjamem = 2000;
 	@sjaarray = @job_refformat;
 	
 	&send_jobarray;
@@ -2134,45 +2154,71 @@ unless (-e "$rootdir/rootdir_done"){
 
 
 
-unless (-e "popdirs_done") {
+#unless (-e "popdirs_done") {
 
+
+foreach my $pf_loc (@pop_fams) {
+    
+    unless (-e "pop_$pf_loc") {&mysystem ("mkdir pop_$pf_loc")};#
+
+    print "----------------------------------------------\n";
+    print "----------------------------------------------\n";
+    print "work on ancestry subdir pop_$pf_loc\n";
+    print "----------------------------------------------\n";   
+
+    print "create reference_templ to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/reference_templ") {
+	print "create file reference_templ\n";
+	die $! unless open RT, "> pop_$pf_loc/reference_templ";
+	print RT "vcf_site      $vcf_site\n";
+	print RT "vcf_template  $vcf_templ\n";
+	print RT "out_template  $out_templ\n";
+	print RT "bfile_template  $out_templ.impute.plink.$pf_loc\n";
+	close RT;
+    }
+
+    print "copy chunkinfo to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/infosum_pos.chunks") {
+	&mysystem ("cp infosum_pos.chunks pop_$pf_loc/");
+    }
+ 
+    print "copy gwascatalog to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/gwascatalog.$date.rp.txt") {
+	&mysystem ("cp gwascatalog.$date.rp.txt pop_$pf_loc/");
+    }
+
+    print "copy refGene to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/$refgene_file") {
+	&mysystem ("cp $refgene_file pop_$pf_loc/");
+    }
+    
+    
+    
+    foreach my $chr ($chr_start..$chr_end){
 	
-	foreach my $pf_loc (@pop_fams) {
-
-	    unless (-e "pop_$pf_loc") {&mysystem ("mkdir pop_$pf_loc")};#
-
-	    unless (-e "pop_$pf_loc/reference_templ") {
-		print "create file reference_templ\n";
-		die $! unless open RT, "> pop_$pf_loc/reference_templ";
-		print RT "vcf_site      $vcf_site\n";
-		print RT "vcf_template  $vcf_templ\n";
-		print RT "out_template  $out_templ\n";
-		print RT "bfile_template  $out_templ.impute.plink.$pf_loc\n";
-		close RT;
-	    }
-	    unless (-e "pop_$pf_loc/infosum_pos.chunks") {
-		&mysystem ("cp infosum_pos.chunks pop_$pf_loc/");
-	    }
-
-
-	    foreach my $chr ($chr_start..$chr_end){
-		
-		$hapout_name = $out_templ.".impute";
-		$hapout_name =~ s/XXX/$chr/g;
-		my $plink_name = $hapout_name.".plink";	    
-		my $bfile_pf = "$plink_name.$pf_loc";
-
-		unless (-e "pop_$pf_loc/$bfile_pf.fam") {
-		    print "moving $bfile_pf.bed/bim/fam\n";
-		    system ("mv $bfile_pf.bed pop_$pf_loc/");
-		    system ("mv $bfile_pf.bim pop_$pf_loc/");
-		    system ("mv $bfile_pf.fam pop_$pf_loc/");
-		}
-		
-	    }
+	$hapout_name = $out_templ.".impute";
+	$hapout_name =~ s/XXX/$chr/g;
+	my $plink_name = $hapout_name.".plink";	    
+	my $bfile_pf = "$plink_name.$pf_loc";
+	
+	unless (-e "pop_$pf_loc/$bfile_pf.fam") {
+	    print "moving $bfile_pf.bed/bim/fam\n";
+	    system ("mv $bfile_pf.bed pop_$pf_loc/");
+	    system ("mv $bfile_pf.bim pop_$pf_loc/");
+	    system ("mv $bfile_pf.fam pop_$pf_loc/");
 	}
+
+	$gm_name = $gm_template;
+	$gm_name =~ s/XXX/$chr/g;
+	unless (-e "pop_$pf_loc/$gm_name") {
+	    system ("ln -s $rootdir/$gm_name pop_$pf_loc/$gm_name");
+	}
+#	print "$rootdir/$gm_name\n";
+	
+    }
 }
-&mysystem ("touch $rootdir/popdirs_done");
+#}
+#&mysystem ("touch $rootdir/popdirs_done");
 
 
 

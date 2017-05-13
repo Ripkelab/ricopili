@@ -68,7 +68,7 @@ if ($parn ne "") {
 
 #    my @job_array;
     die "$jobfile: ".$! unless open FILE, "< $jobfile";
-    die "$jobfile.sub$num: ".$! unless open OUT, "> $jobfile.sub$num";
+    die "$jobfile.sub$num.sh: ".$! unless open OUT, "> $jobfile.sub$num.sh";
     while (my $cmd  = <FILE>){
 	chomp ($cmd);
 
@@ -84,10 +84,10 @@ if ($parn ne "") {
     print OUT "wait\n";
     close OUT;
 
-    system ("chmod u+x $jobfile.sub$num");  
+    system ("chmod u+x $jobfile.sub$num.sh");  
 
 #    exit;
-    system ("./$jobfile.sub$num");
+    system ("./$jobfile.sub$num.sh");
 
     exit;
 

@@ -99,12 +99,21 @@ if ($sc == 0 ) {
 else {
     my $last_line = `tail -n 3 $outname.log`;
 
+    my $empty = 0;
     if ($last_line =~ /Error: No variants remaining after --extract/){
+	$empty = 1;
+    }
+    
+    if ($last_line =~ /Error: All variants excluded./){
+	$empty = 1;
+    }
 
+    if ($empty == 1) {
 	system ("touch $emptyname.empty");
 	system ("touch $outname.fini");
 	print "empty dataset detected\n";
     }
+    
 }
 
 

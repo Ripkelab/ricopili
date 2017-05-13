@@ -98,7 +98,7 @@ sub split_line_ref {
 ##########################################
 
 
-my $sys = "$p2loc/plink --vcf $vcffile --make-bed --out $out\n";
+my $sys = "$p2loc/plink --memory 2000 --vcf $vcffile --make-bed --out $out\n";
 print ("$sys\n");
 &mysystem ("$sys");
 

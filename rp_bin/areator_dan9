@@ -715,6 +715,7 @@ unless (-e "refGene.loc") {
     while (my $line = <GI>){
 	my @cells = @{&split_line_ref(\$line)};
 	$cells[0] =~ s/chr//;
+	$cells[0] =~ s/_random//;
 
 	print GO "$cells[0]";
 	print GO " $cells[2]";

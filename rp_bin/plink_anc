@@ -101,7 +101,7 @@ sub mysystem(){
 ##########################################
 
 
-my $sys = "$p2loc/plink --bfile $bfile --keep $keep --freq gz --out $out --make-bed\n";
+my $sys = "$p2loc/plink --memory 2000 --bfile $bfile --keep $keep --freq gz --out $out --make-bed\n";
 print ("$sys\n");
 &mysystem ("$sys");
 
