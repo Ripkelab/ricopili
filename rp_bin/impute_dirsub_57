@@ -530,7 +530,7 @@ my $cleandir_script = "my.cleandir";       ### my.pipeline_tar
 my $cleanerrandout_script = "my.cleanerrandout";  ### my.pipeline_tar
 my $pdflatex_script = "pdflatex";          ### my.pipeline_tar
 my $mystart_script = "my.start_job";       ### my.pipeline_tar
-my $mutt_script = "mutt";                  ### my.pipeline_tar
+my $mutt_script = "mail";                  ### my.pipeline_tar
 my $du_script = "my.du";                  ### my.pipeline_tar
 my $blue_script = "blueprint";         ### my.pipeline_tar
 my $preploo_script = "my.preploo2";         ### my.pipeline_tar
@@ -616,6 +616,7 @@ if (@miss_scripts > 0) {
 print ".......testing email program....\n";
 
 my $err_scr = 0;
+my $noti =1;
 {
     my $scr_path = '';
     
@@ -628,9 +629,9 @@ my $err_scr = 0;
     }
     unless ( $scr_path ) {
 
-	print "!!Warning!! : No $mutt_script command available, trying mail\n" ;
+	print "!!Warning!! : No $mutt_script command available, trying mutt\n" ;
 
-	$mutt_script = "mail";
+	$mutt_script = "mutt";
 	for my $path ( split /:/, $ENV{PATH} ) {
 	    if ( -f "$path/$mutt_script" && -x _ ) {
 		print "$mutt_script\tfound in $path\n";
@@ -639,8 +640,10 @@ my $err_scr = 0;
 	    }
 	}
 	unless ( $scr_path ) {
-	    $err_scr = 1;
-	    print "!!Error!! : No $mutt_script command available\n" ;
+	    #	    $err_scr = 1;
+	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" ;
+	    $noti = 0;
+	    sleep (3);
 	}
     }
  
@@ -948,8 +951,12 @@ sub send_jobarray {
 	print SUC $fini_message."\n";
 	close SUC;
 
-	&mysystem ('cat success_file | '.$mutt_script.' -s RP_pipeline_finished '.$email) ;
-
+	if ($noti == 1) {
+	    
+	    my $sys_success = 'cat success_file | '.$mutt_script.' -s RP_pipeline_finished '.$email ;
+	    &mysystem ($sys_success) ;
+	}
+    
 	my $sjarow      = $sjainfotxt."\t$sjaname\t$now";
 	&a2filenew_app("$sjainfofile",$sjarow);
 
@@ -1061,7 +1068,11 @@ sub send_jobarray {
 	    close ERR;
 
 
-	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_pipeline_error '.$email) ;
+	    if ($noti == 1) {
+		
+		&mysystem ('cat error_file | '.$mutt_script.' -s RP_pipeline_error '.$email) ;
+
+	    }
 
 	    unless ($serial) {
 		exit;
@@ -1569,10 +1580,8 @@ if ($suminfo_s_v2_sw) {
     foreach my $chrloc(1..22) {
 	my $reffi ="$refdir/$suminfo_s.$chrloc.gz";
 	
-	if ($suminfo_s_v2_sw == 1) {
-	    $reffi ="$refdir/$suminfo_s_v2.impute.plink.$popname_uc.frq2.gz";
-	    $reffi =~ s/XXX/$chrloc/;
-	}
+	$reffi ="$refdir/$suminfo_s_v2.impute.plink.$popname_uc.frq2.gz";
+	$reffi =~ s/XXX/$chrloc/;
 	
 	if (-e $reffi) {
 	    push @chr_in, $chrloc;
@@ -1580,9 +1589,32 @@ if ($suminfo_s_v2_sw) {
 	else {
 	    print "Warning: $reffi is not existing, skipping this chromosome\n";
 	}
-
-	    
     }
+
+    if (@chr_in == 0) {
+
+	### test chr23
+	my $chrloc = 23;
+	my $reffi ="$refdir/$suminfo_s.$chrloc.gz";
+	
+	$reffi ="$refdir/$suminfo_s_v2.impute.plink.$popname_uc.frq2.gz";
+	$reffi =~ s/XXX/$chrloc/;
+	
+	if (-e $reffi) {
+	    push @chr_in, $chrloc;
+	    print "found $reffi, this seems to be chrX imputation\n";
+	}
+	else {
+	    print "Warning: $reffi is not existing, skipping this chromosome\n";
+	}
+	
+	if (@chr_in == 0) {
+	    print "Error: no frq2.gz file for this population found\n";
+	    exit;
+	}
+
+    }
+    
 }
 
 
@@ -1703,6 +1735,9 @@ if ($suminfo_s_v2_sw == 1) {
     }
 }
 
+#print "debug\n";
+#exit;
+
 ###################################
 ### sum readref
 ###################################
@@ -1777,7 +1812,7 @@ unless (-e "$rootdir/posing_done") {
 	my $accfli ="$bfile".".hg19.ch.bim";
 
 	if (-e $locref) {
-	    print "locref $locref is existing! safes some time\n";
+#	    print "locref $locref is existing! safes some time\n";
 	    unless (exists $bimpos_array{$accfli}) {
 		push @chepos_arr, "$checkpos_script --dbcol 1,2,3,4,5 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim" ;#
 #		print "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim\n" ;#
@@ -1839,7 +1874,7 @@ my $chefli_fini = 0;
 	    my $locref = $bfile.".hg19.bim.ref.sum";
 
 	    if (-e $locref) {
-		print "locref $locref is existing! safes some time\n";
+#		print "locref $locref is existing! safes some time\n";
 		unless (exists $bimfli_array{$accfli}) {
 		    my $systmp = "$checkflip_script --dbcol 0,3,4,5 --fth $fth_th --sfh $sec_freq --info $rootdir/$impute_dir/$locref $bfile.hg19.ch.bim" ;
 		    push @chefli_arr, $systmp ;
@@ -2342,6 +2377,7 @@ my $spliha_n_2= $spliha_n * 2;
 
 
 my @preph_arr = ();
+#my @preph_arr2 = ();
 my $preph_fini = 0;
 my @preph_arr_mu1 = ();
 my @preph_arr_mu2 = ();
@@ -2568,7 +2604,7 @@ if ($prephase_done == 0) {
 	$sjaname = "preph";
 	$sjatime = 2;
 #	$sjatime = 4 if ($preph_fini > 0);
-	$sjamem = 4000;
+	$sjamem = 2000;
 	@sjaarray = @preph_arr;
 
 
@@ -2660,8 +2696,12 @@ if ($prephase_done == 0) {
 		die $! unless open ERR, "> error_file";
 		print ERR $err_message."\n";
 		close ERR;
-		
-		&mysystem ('cat error_file | '.$mutt_script.' -s RP_pipeline_error '.$email) ;
+
+		if ($noti == 1) {
+		    
+		    &mysystem ('cat error_file | '.$mutt_script.' -s RP_pipeline_error '.$email) ;
+
+		}
 		exit;
 	    }
 	} else {

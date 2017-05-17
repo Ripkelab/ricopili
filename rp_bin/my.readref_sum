@@ -84,13 +84,14 @@ print "sum ref-files\n";
 die "$outfile".$! unless open FD , "> $outfile";
 
 my $tt=0;
-foreach my $chrloc(1..22) {
+my $nn=0;
+foreach my $chrloc(1..23) {
 
     unless (-e "$bimfile.ref.chr$chrloc") {
 	print "Warning: $bimfile.ref.chr$chrloc is not existing\n";
     }
     else {    
-    
+	$nn++;
 	die $!."$bimfile.ref.chr$chrloc" unless open FILE, "< $bimfile.ref.chr$chrloc";
 	my $line = <FILE>;
 	if ($tt == 0){
@@ -104,6 +105,10 @@ foreach my $chrloc(1..22) {
 
     }
 
+}
+if ($nn==0) {
+    print "Error: no readref files found\n";
+    exit;
 }
 
 close FD;

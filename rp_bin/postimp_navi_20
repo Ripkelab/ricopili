@@ -460,7 +460,7 @@ my $replicator_script = "replicator13";        ### my.pipeline_tar
 my $replicmeta_script = "replicator_meta11";   ### my.pipeline_tar
 my $damecat_script = "my.dameta_cat";          ### my.pipeline_tar
 
-my $mutt_script = "mutt";
+my $mutt_script = "mail";
 
 push @test_scripts, $pdflatex_script ;
 push @test_scripts, $metaber_script ;
@@ -544,7 +544,7 @@ if (@miss_scripts > 0) {
 
 
 print ".......testing email program....\n";
-
+my $noti = 1;
 my $err_scr = 0;
 {
     my $scr_path = '';
@@ -558,9 +558,9 @@ my $err_scr = 0;
     }
     unless ( $scr_path ) {
 
-	print "!!Warning!! : No $mutt_script command available, trying mail\n" ;
+	print "!!Warning!! : No $mutt_script command available, trying mutt\n" ;
 
-	$mutt_script = "mail";
+	$mutt_script = "mutt";
 	for my $path ( split /:/, $ENV{PATH} ) {
 	    if ( -f "$path/$mutt_script" && -x _ ) {
 		print "$mutt_script\tfound in $path\n";
@@ -569,8 +569,11 @@ my $err_scr = 0;
 	    }
 	}
 	unless ( $scr_path ) {
-	    $err_scr = 1;
-	    print "!!Error!! : No $mutt_script command available\n" ;
+	    #	    $err_scr = 1;
+	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" ;
+	    $noti = 0;
+	    sleep (3);
+	    
 	}
     }
  
@@ -866,8 +869,13 @@ sub send_jobarray {
 	print SUC $fini_message."\n";
 	close SUC;
 
-	&mysystem ('cat success_file | '.$mutt_script.' -s RP_postimp_finished '.$email) ;
+	if ($noti == 1) {
+	    
+	    my $sys_email = 'cat success_file | '.$mutt_script.' -s RP_postimp_finished '.$email;
+	    print "$sys_email\n";
+	    &mysystem ($sys_email) ;
 
+	}
 	my $sjarow      = $sjainfotxt."\t$sjaname\t$now";
 	&a2filenew_app("$sjainfofile",$sjarow);
 
@@ -943,7 +951,11 @@ sub send_jobarray {
 	    close ERR;
 
 
-	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_postimp_error '.$email) ;
+	    if ($noti == 1) {
+
+		&mysystem ('cat error_file | '.$mutt_script.' -s RP_postimp_error '.$email) ;
+
+	    }
 #	    unless ($serial) {
 	    exit;
 #	    }
@@ -4174,8 +4186,12 @@ if ($gwclump) {
 		unless (-e "$areator_all.summary") {
 		    &mysystem ("$comp1mhc_script --pth 1.0e-04 $areator_all | column -t > $areator_all.summary") ;
 		}
-		
-		&mysystem ('cat '.$areator_all.'.summary | '.$mutt_script.' -s Daner_results_ready_'.$outname.'  '.$email) ;
+
+		if ($noti == 1) {
+		    
+		    &mysystem ('cat '.$areator_all.'.summary | '.$mutt_script.' -s Daner_results_ready_'.$outname.'  '.$email) ;
+
+		}
 		
 		&mysystem ("$sb_script manhattan.nog.$outname.pdf") ;
 		&mysystem ("$sb_script $areator_all.xls") ;
@@ -4612,7 +4628,11 @@ unless (-e "$areator_all.summary") {
     &mysystem ("$comp1mhc_script --pth 1.0e-04 $areator_all | column -t > $areator_all.summary") ;
 }
 
-&mysystem ('cat '.$areator_all.'.summary | '.$mutt_script.' -s Daner_results_ready_'.$outname.' '.$email) ;
+if ($noti == 1) {
+    
+    &mysystem ('cat '.$areator_all.'.summary | '.$mutt_script.' -s Daner_results_ready_'.$outname.' '.$email) ;
+
+}
 
 #&mysystem ("$senddropbox_script manhattan.v2.$outname.pdf") ;
 #&mysystem ("$senddropbox_script $areator_all.xls") ;
