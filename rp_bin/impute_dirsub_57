@@ -253,6 +253,7 @@ my $sec_freq = .2;  ## secure freq distance around 50%
 
 
 my $popname = "eur";
+my $buffer = 500;
 
 ##### help message
 my $usage = "
@@ -302,6 +303,11 @@ version: $version
   --fth FLOAT         frequency-diff to exclude SNPs, default $fth_th
                                 for checkflip (compare to reference)
 
+
+
+#### imputation:
+
+  --buffer  INT       buffer in kb, default = $buffer
 
 
  
@@ -467,6 +473,8 @@ GetOptions(
     "help"=> \my $help,
     "serial"=> \my $serial,
     "sleep=i"=> \my $sleep_sw,
+
+    "buffer=i"=> \$buffer,
 
 
 
@@ -2292,8 +2300,10 @@ if ($chucking_done == 0) {
 
 
 	    my $extract_txt = "";
-
+#	    my $buffer = 1000;
+	    
 	    if ($suminfo_s_v2_sw ==1) {
+#		$buffer = 500;
 		$extract_txt = "--refind $refind";
 	    }
 	    else {
@@ -2320,7 +2330,7 @@ if ($chucking_done == 0) {
 	   	    
 	    
 	    unless (exists $finifiles_hash{$plink_ch_out_fini} ) {
-		push @chuck_arr, "$chuck_script --out $plink_ch_out --in $bprefix $extract_txt $mendel_sw --empty $empty_ch_out";
+		push @chuck_arr, "$chuck_script --buffer $buffer --out $plink_ch_out --in $bprefix $extract_txt $mendel_sw --empty $empty_ch_out";
 	    }
 	    else {
 		$chuck_fini++;
@@ -2960,7 +2970,7 @@ if ($imp2_done == 0) {
 
 	    my $rf = $reffiles[$ccc];
 	    my $refchunk = "$refdir/$rf";
-	    my $buffer = 1000;
+#	    my $buffer = 1000;
 
 	    
 	    
@@ -2972,7 +2982,7 @@ if ($imp2_done == 0) {
 #		$haps_ch_out = "$subdir_in/plink.$bprefix.$refchr";
 		$refchunk = "$refdir/$suminfo_s_v2.impute";
 		$refchunk =~ s/XXX/$refchr/;
-		$buffer = 500;
+#		$buffer = 500;
 	    }
 
 	    

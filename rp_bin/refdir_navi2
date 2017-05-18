@@ -1401,7 +1401,7 @@ unless (-e "$rootdir/rootdir_done"){
 	    $vcf_name_loc = "loc.".$vcf_name;
 	}
 	else {
-	    my @vcf_files = `ls *chr$chr.samples | grep -v impute`;
+	    my @vcf_files = `ls *chr$chr.samples 2>/dev/null | grep -v impute`;
 	    if (@vcf_files == 1) {
 		my $vcf_found = $vcf_files[0];
 		chomp ($vcf_found);

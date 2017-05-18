@@ -39,6 +39,7 @@ my $emptyname = "";
 my $inname = "";
 my $sfile = "";
 my $refind = "";
+my $buffer = 1000;
 
 use Getopt::Long;
 GetOptions( 
@@ -48,6 +49,7 @@ GetOptions(
     "in=s"=> \ $inname,
     "sfile=s"=> \ $sfile,
     "refind=s"=> \ $refind,
+    "buffer=i"=> \ $buffer,
     "mendel"=> \my $mendel_sw,
     );
 
@@ -81,8 +83,8 @@ my $sys = "$ploc/plink --memory 2000 --bfile $inname --out $outname --make-bed -
 
 if ($refind) {
     my @tcells = split /_/, $refind;
-    my $kb_start = ($tcells[1]-1)*1000;
-    my $kb_end = ($tcells[2]+1)*1000;
+    my $kb_start = ($tcells[1])*1000 - $buffer;
+    my $kb_end = ($tcells[2])*1000 + $buffer;
     
     my $chrind = $tcells[0];
     $chrind =~ s/chr//;

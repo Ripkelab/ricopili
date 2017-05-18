@@ -69,12 +69,12 @@ if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $reffile eq "" || $re
 
 
 unless (-e "$inname") {
-    if (-e "$inname.haps.gz"){
-	$inname = "$inname.haps.gz";
+    if (-e "$inname.gz"){
+	$inname = "$inname.gz";
 	print "changed inname to $inname\n";
     }
     else {
-	print "error: no $inname\n";
+	print "Error: no $inname and no $inname.gz found\n";
 	exit;
     }
 }
