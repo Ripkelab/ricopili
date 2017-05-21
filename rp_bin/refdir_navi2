@@ -1632,7 +1632,9 @@ unless (-e "$rootdir/rootdir_done"){
 	    ####################################
 
 	    unless (-e $vcf_name_loc_filtnorm_prep_fini) {
-		push @job_prepmm, "$prepmm_script --cpus 4 $vcf_name_loc_filtnorm";
+		my $sys = "$prepmm_script --cpus 4 $vcf_name_loc_filtnorm";
+		push @job_prepmm, $sys;
+		print "$sys\n";
 	    }
 
 
@@ -1877,6 +1879,10 @@ unless (-e "$rootdir/rootdir_done"){
 	}
     }
 
+#    print "debug\n";
+#    exit;
+
+    
     if ($exit == 1) {
 	print "exit due to error\n";
 	exit;

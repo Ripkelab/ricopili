@@ -17,6 +17,9 @@ use Ricopili::Utils qw(trans);
 
 my $ploc = &trans("p2loc");
 
+
+my $buffer = 1000;
+
 ###########################################
 ##### help message
 my $usage = "
@@ -28,6 +31,7 @@ Usage : my.chuck --out BFILE --in BFILE --sfile SNPFILE
  --refind          identifier for extracting chr_start_end (in Mb)
  --empty STRING    name of empty-file
  --mendel          clean for mendel errors
+ --buffer INT      buffer around refind, default $buffer
 
 
 either --refind or --sfile is mandatory
@@ -39,7 +43,7 @@ my $emptyname = "";
 my $inname = "";
 my $sfile = "";
 my $refind = "";
-my $buffer = 1000;
+
 
 use Getopt::Long;
 GetOptions( 

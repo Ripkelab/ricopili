@@ -19,6 +19,8 @@ my $shloc = &trans("shloc");
 my $p2loc = &trans("p2loc");
 my $ealoc = "";
 
+my $buffer = 1000;
+
 
 ###########################################
 ##### help message
@@ -37,6 +39,13 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --ref STRING      path to the reference vcf.gz file (required for --eagle_vcf; otherwise not used)
  --nospli          do not perform second task (splitting into smaller chunks)
 
+ --refind          identifier for extracting chr_start_end (in Mb)
+ --empty STRING    name of empty-file
+ --buffer INT      buffer around refind, default $buffer
+ --mendel          clean for mendel errors
+ --sfile STRING    file containing SNPs to exptract
+
+
 ";
 
 my $outname = "";
@@ -45,6 +54,9 @@ my $gemafile = "";
 my $famfile = "";
 my $multi = 0;
 my $spliha = 0;
+my $emptyname = "";
+my $sfile = "";
+my $refind = "";
 
 use Getopt::Long;
 GetOptions( 
@@ -60,9 +72,21 @@ GetOptions(
     "eaglvcf"=> \my $eagle_vcf,
     "ref:s"=>\my $ref,
     "nospli"=> \my $nospli,
+    "sfile=s"=> \ $sfile,
+    "refind=s"=> \ $refind,
+    "buffer=i"=> \ $buffer,
+    "mendel"=> \my $mendel_sw,
+    "empty=s"=> \ $emptyname,
+
+    
     );
 
-if ($outname eq "" || $inname eq ""  || $gemafile eq "" || !($eagle_sw || $eagle_vcf) && ($famfile eq "" || $spliha == 0)){
+if ($outname eq "" || $inname eq ""  || $emptyname eq "" || $gemafile eq "" || !($eagle_sw || $eagle_vcf) && ($famfile eq "" || $spliha == 0)){
+    print "$usage\n";
+    die;
+}
+
+if ($sfile eq "" && $refind eq ""){
     print "$usage\n";
     die;
 }
@@ -76,10 +100,20 @@ unless (-e "$inname.bim") {
     exit;
 }
 
+
 #my $shapeit_bin = "shapeit.v2.r644.linux.x86_64";
 my $shapeit_bin = "shapeit.v2.r837.linux.x86_64";
 #my $eagle_bin = "eagle_v2.2a";
 my $eagle_bin = "eagle";
+
+
+
+my $mendel_clean = "";
+if ($mendel_sw) {
+    $mendel_clean = "--set-me-missing --me 1 1";
+}
+
+
 
 my $xtxt = "";
 if ($chrx) {
@@ -92,16 +126,8 @@ if ($multi > 1 ) {
     if ($eagle_sw || $eagle_vcf) {
 	$multi_txt = "--numThreads=$multi";
     }
-
-    
 }
 
-
-
-system ("touch $outname.multi.$multi");
-if (-e "$outname.fini") {
-    system ("rm $outname.fini");
-}
 
 ##########################################
 # subroutine to split a plink-output-line with references
@@ -116,6 +142,77 @@ sub split_line_ref {
 }
 
 
+
+
+
+if (-e "$outname.fini") {
+    system ("rm $outname.fini");
+}
+
+
+
+
+
+######################
+# extract chunk
+##############################
+
+
+
+
+my $sys = "";
+
+if ($refind) {
+    my @tcells = split /_/, $refind;
+    my $kb_start = ($tcells[1])*1000 - $buffer;
+    my $kb_end = ($tcells[2])*1000 + $buffer;
+    
+    my $chrind = $tcells[0];
+    $chrind =~ s/chr//;
+
+    $sys = "$p2loc/plink --memory 2000 --bfile $inname --out $outname --make-bed --chr $chrind --from-kb $kb_start --to-kb $kb_end $mendel_clean";
+}
+else {
+    $sys = "$p2loc/plink --memory 2000 --bfile $inname --out $outname --make-bed --extract $sfile $mendel_clean";
+}
+
+
+my $sc = system ($sys);
+
+if ($sc != 0 ) {
+    print "Error with running plink: $sys\n";
+    exit;
+}
+
+
+
+my $last_line = `tail -n 3 $outname.log`;
+
+my $empty = 0;
+if ($last_line =~ /Error: No variants remaining after --extract/){
+    $empty = 1;
+}
+
+if ($last_line =~ /Error: All variants excluded./){
+    $empty = 1;
+}
+
+if ($empty == 1) {
+    system ("touch $emptyname.empty");
+    system ("touch $outname.fini");
+    print "empty dataset detected\n";
+    exit;
+}
+
+
+
+print "chunk successfully extracted\n";
+
+
+
+system ("touch $outname.multi.$multi");
+
+
 ######################
 # BEGIN
 ##############################
@@ -123,13 +220,14 @@ sub split_line_ref {
 die $!."$outname.phase.cmd" unless open BC, "> $outname.phase.cmd";
 
 
-my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $inname.bim $famfile --output-max $outname.haps $outname.sample --output-log $outname.shape.log --input-map $gemafile $multi_txt > /dev/null";
+my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $outname.bed $outname.bim $famfile --output-max $outname.haps $outname.sample --output-log $outname.shape.log --input-map $gemafile $multi_txt > /dev/null";
+#my $sys_loc = "$shloc/$shapeit_bin --seed 123454 $xtxt --input-bed $inname.bed $inname.bim $famfile --output-max $outname.haps $outname.sample --output-log $outname.shape.log --input-map $gemafile $multi_txt > /dev/null";
 
 if ($eagle_sw or $eagle_vcf) {
     $gemafile =~ s/.txt$/.chr.txt/;
 }
 if ($eagle_sw) {
-    $sys_loc = "$ealoc/$eagle_bin --bfile=$inname --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt > $outname.log 2> $outname.loge";
+    $sys_loc = "$ealoc/$eagle_bin --maxMissingPerIndiv=1.0 --maxMissingPerSnp=1.0  --bfile=$outname --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt > $outname.log 2> $outname.loge";
 }
 
 
@@ -146,14 +244,15 @@ if ($eagle_vcf) {
     # NOTE: the temporary name is 'unphased0' because Eagle itself writes a file
     # out.unphased.vcf.gz
     $sys_loc = qq{
-      { $p2loc/plink --bfile "$inname" --recode vcf-iid bgz --out "$outname.unphased0" &&
+      { $p2loc/plink --bfile "$outname" --recode vcf-iid bgz --out "$outname.unphased0" &&
         $tabix -f "$outname.unphased0.vcf.gz" &&
         $ealoc/$eagle_bin --vcfRef "$ref" --vcfTarget "$outname.unphased0.vcf.gz" --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt
       } > $outname.log 2> $outname.loge
     };
 }
 
-my $sc = 0;
+
+$sc = 0;
 unless (-e "$outname.first.fini"){
     print "$sys_loc\n";
     $sc = system ($sys_loc) ;
@@ -217,6 +316,10 @@ if ($sc == 0 ) {
     }
     else {
 	system ("touch $outname.fini");
+	system ("rm $outname.bed");
+	system ("rm $outname.bim");
+	system ("rm $outname.fam");
+	
     }
     
 }

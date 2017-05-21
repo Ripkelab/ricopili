@@ -1354,39 +1354,39 @@ my @reffiles;
 
 
 #if ($suminfo_s_v2 eq "") {
-    print "read $refdir/$suminfo_n....\n";
-    die $!." <$refdir/$suminfo_n>" unless open IN, "< $refdir/$suminfo_n";
-    while (my $line = <IN>){
-	my @cells = &split_line($line);
-	die "problem with $refdir/$suminfo_n" if (@cells < 2);
-	my $bgl_file = $cells[1];
-	$bgl_file =~ s/.info_pos$//;
-
-	if ($refiex_file) {
-
-	    my $refind = $bgl_file;
-	    if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
-		$refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
-	    }
-	    else {
-		$refind =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
-	    }
-
-	    if (exists $refiex{$refind}){
-		print "exclude: $bgl_file\n" ;
-		next;
-	    }
-
+print "read $refdir/$suminfo_n....\n";
+die $!." <$refdir/$suminfo_n>" unless open IN, "< $refdir/$suminfo_n";
+while (my $line = <IN>){
+    my @cells = &split_line($line);
+    die "problem with $refdir/$suminfo_n" if (@cells < 2);
+    my $bgl_file = $cells[1];
+    $bgl_file =~ s/.info_pos$//;
+    
+    if ($refiex_file) {
+	
+	my $refind = $bgl_file;
+	if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
+	    $refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
 	}
-
-	next if ($bgl_file eq "total");
-
-#	print "reffile: $bgl_file\n";
-	push @reffiles, $bgl_file;
-	$cc++;
+	else {
+	    $refind =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
+	}
+	
+	if (exists $refiex{$refind}){
+	    print "exclude: $bgl_file\n" ;
+	    next;
+	}
+	
     }
-    close IN;
-    die "reference directory <$refdir> empty (no sc.*bgl)" if (@reffiles == 0);
+    
+    next if ($bgl_file eq "total");
+    
+    #	print "reffile: $bgl_file\n";
+    push @reffiles, $bgl_file;
+    $cc++;
+}
+close IN;
+die "reference directory <$refdir> empty (no sc.*bgl)" if (@reffiles == 0);
 #}
 
 
@@ -1651,7 +1651,7 @@ unless (-e "$rootdir/buigue_done") {
 	    my $bfile = $_;
 	    $bfile =~ s/.bim$//;
 	    my $fini ="$bfile".".bim.fini";
-	    print "he: $fini\n";
+#	    print "he: $fini\n";
 #	    exit;
 	    unless (exists $fini_array{$fini}) {
 		push @buigue_arr, "$buigue_script --lift19 $bfile.bim" ;#
@@ -2093,6 +2093,8 @@ if ($suminfo_s_v2_sw == 0) {
 	else {
 	    $refind =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
 	}
+
+	
 	
 	push @refind_arr, $refind;
 	print "refind: $refind\n";
@@ -2152,7 +2154,16 @@ if ($suminfo_s_v2_sw == 1) {
     die $!." <$refdir/$suminfo_c>" unless open IN, "< $refdir/$suminfo_c";
     while (my $line = <IN>){
 	my @cells = &split_line($line);
-	push  @refind_arr_v2, "chr$cells[0]"."_".$cells[1]."_".$cells[2];
+
+	my $refind_loc = "chr$cells[0]"."_".$cells[1]."_".$cells[2];
+
+	if (exists $refiex{$refind_loc}){
+	    print "exclude chunk $refind_loc\n" ;
+	    next;
+	}
+
+	
+	push  @refind_arr_v2, $refind_loc;
 	push  @refstart_arr_v2, $cells[1];
 	push  @refend_arr_v2, $cells[2];
 	push  @refchr_arr_v2, $cells[0];
@@ -2171,7 +2182,8 @@ if ($suminfo_s_v2_sw == 1) {
 
 }
 
-
+#print "debug\n";
+#exit;
 
 if ($suminfo_s_v2_sw == 1) {
     
@@ -2246,7 +2258,7 @@ unless (-e "$rootdir/reference_info") {
 #############################################################
 
 
-my $chucking_done = 0;
+my $chucking_done = 1;
 if (-e "$rootdir/chucking_done") {
     $chucking_done = 1;
 }
@@ -2400,10 +2412,14 @@ if ($prephase_done == 0) {
 	$bprefix =~ s/.bim$//;
 
 	my $subdir = "haps_$bprefix";
-	my $subdir_in = "subbfile_$bprefix";
+#	my $subdir_in = "subbfile_$bprefix";
+
 	my $subdir_empty = "empty_$bprefix";
 	unless (-e $subdir) {
 	    &mysystem ("mkdir $subdir");
+	}
+	unless (-e $subdir_empty) {
+	    &mysystem ("mkdir $subdir_empty");
 	}
 
 	my $trio_sw = 0;
@@ -2461,6 +2477,14 @@ if ($prephase_done == 0) {
 #
 #	}
 
+	my $mendel_sw = "";
+	my $famfile = "$bprefix.fam.idnum";
+	if ($trio_sw ==1) {
+	    $mendel_sw = "--mendel";
+	    $famfile = "$bprefix.fam.shape";
+	}
+
+
 	print "start refdirloop....\n";
 	#### loop for reference chunks
 	foreach my $ccc (0..$#refind_arr) {
@@ -2472,6 +2496,21 @@ if ($prephase_done == 0) {
 	    my $rf = $reffiles[$ccc];
 	    my $gema_file = $gema_arr[$ccc];
 	    my $bgz_file = $bgz_arr[$ccc];
+
+
+	    my $extract_txt = "";
+	    
+	    if ($suminfo_s_v2_sw ==1) {
+		$extract_txt = "--refind $refind";
+	    }
+	    else {
+		my $snps_extract = "$refdir/$rf.info_pos";
+		unless (-e $snps_extract) {
+		    print "Error: $snps_extract is not existing\n";
+		    exit;
+		}
+		$extract_txt = "--sfile $snps_extract";
+	    }
 
 
 #	    print "bgz_file: $bgz_file\n";
@@ -2494,17 +2533,14 @@ if ($prephase_done == 0) {
 #	    print "$gema_file\n";
 #	    exit;
 
-	    my $plink_ch_out = "$subdir_in/plink.$bprefix.$refind";
+#	    my $plink_in = "$bprefix";
 	    my $empty_ch_out = "$bprefix.$refind.empty";
 	    my $haps_ch_out = "$subdir/plink.$bprefix.$refind";
 	    my $haps_ch_out_fini = "plink.$bprefix.$refind.fini";
 	    my $haps_ch_out_mu0 = "plink.$bprefix.$refind.multi.0";
 	    my $haps_ch_out_mu1 = "plink.$bprefix.$refind.multi.$multithread1";
 
-	    my $famfile = "$bprefix.fam.idnum";
-	    if ($trio_sw ==1) {
-		$famfile = "$bprefix.fam.shape";
-	    }
+
 #	    print "famfile: $famfile\n";
 	    my $xtxt = "";
 	    if ($phas == 923 || $phas == 9123 || $phas == 91231) {
@@ -2534,7 +2570,8 @@ if ($prephase_done == 0) {
 #
 #		}
 		################################## work on this here!!!!!
-		    my $backbone = "$preph_script $xtxt --spliha $spliha_n_2 --out $haps_ch_out --in $plink_ch_out --fam $famfile --gema $gema_file";
+		    my $backbone = "$preph_script $xtxt --spliha $spliha_n_2 --out $haps_ch_out --in $bprefix --fam $famfile --gema $gema_file --buffer $buffer $extract_txt $mendel_sw --empty $empty_ch_out";
+		    
 		    if ($eagle_sw) { 
 			$backbone .= " --eagle";
 		    }
@@ -2553,6 +2590,7 @@ if ($prephase_done == 0) {
 		    }
 
 #		    print "$backbone\n";
+#		    exit;
 #		    print "$multi_sw\n";
 		    if ($multi_sw == 0) {
 			push @preph_arr, $backbone;
@@ -2568,23 +2606,23 @@ if ($prephase_done == 0) {
 		    if ($multi_sw == 2) {
 			my $lastlog = `tail -1 $haps_ch_out.shape.log`;
 
-			my $bimn = `wc -l $plink_ch_out.bim`;
-			$bimn = $bimn * 1;
-			print "$lastlog: $bimn\n";
-			if ($lastlog =~ /fully missing individuals/) {
-			    if ($bimn < 20) {
-				print "setting empty: $bprefix.$refind.empty\n";
-				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
-			    }
-			    else {
-				print "Warning setting empty: $bprefix.$refind.empty\n";
-				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
-				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty.error.nsnps");
-			    }
-			}
-			else {
+#			my $bimn = `wc -l $plink_ch_out.bim`;
+#			$bimn = $bimn * 1;
+#			print "$lastlog: $bimn\n";
+#			if ($lastlog =~ /fully missing individuals/) {
+#			    if ($bimn < 20) {
+#				print "setting empty: $bprefix.$refind.empty\n";
+#				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
+#			    }
+#			    else {
+#				print "Warning setting empty: $bprefix.$refind.empty\n";
+#				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
+#				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty.error.nsnps");
+#			    }
+#			}
+#			else {
 			    push @preph_arr_mu2, $backbone." $multi_txt";
-			}
+#			}
 		    }
 
 		    
@@ -3236,8 +3274,11 @@ if ($dos_done == 0) {
 
 
 		if ($suminfo_s_v2_sw == 1) {
-#		    $plink_ch_out = "subbfile_$bprefix/plink.$bprefix.$refchr";
-		    $plink_ch_out = "subbfile_$bprefix/plink.$bprefix.$refind";
+
+
+		    $plink_ch_out = $bprefix;
+
+
 		    $famname_loc = "$plink_ch_out.fam";
 		    $puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp2.gz";
 		}

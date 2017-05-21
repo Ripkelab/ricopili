@@ -16,6 +16,7 @@ use Ricopili::Utils qw(trans);
 #############################
 
 my $i2loc = &trans("i2loc");
+#my $i4loc = &trans("i4loc");
 
 
 my $buff = 1000;
@@ -33,6 +34,8 @@ Usage : my.imp2 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
  --refend INT      Mb of end
  --chrX STRING     for X chromosome, noting sample-file
  --buff INT        buffer, default $buff
+ --impute4         use impute4 instead of impute2
+
 ";
 
 my $outname = "";
@@ -53,6 +56,7 @@ GetOptions(
     "refend=s"=> \ $refend,
     "buff=i"=> \ $buff,
     "chrX=s"=> \my $chrx,
+    "imp4"=> \my $imp4,
     );
 
 if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $reffile eq "" || $refstart eq ""|| $refend eq ""){
@@ -85,6 +89,7 @@ if ($chrx) {
 }
 
 my $imp2_bin = "impute2";
+my $imp4_bin = "impute4.r240";
 
 system ("touch $outname.hour");
 if (-e "$outname.fini") {
@@ -116,7 +121,18 @@ if ($refend - $refstart > 6) {
 }
 
 
+
 my $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str";
+
+
+#if ($imp4) {
+#    $sys_loc = "$i4loc/$imp4_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str -no_maf_align -snp_blocks";
+
+#}
+
+#print "$sys_loc\n";
+#exit;
+
 
 ## for now without best guess
 #my $sys_loc = "$i2loc/$imp2_bin -phase -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer 1000 -o $outname $allow_str";
