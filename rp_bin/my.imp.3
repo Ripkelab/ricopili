@@ -17,6 +17,7 @@ use Ricopili::Utils qw(trans);
 
 my $i2loc = &trans("i2loc");
 #my $i4loc = &trans("i4loc");
+my $m3loc = &trans("minimac3loc");
 
 
 my $buff = 1000;
@@ -26,16 +27,18 @@ my $buff = 1000;
 my $usage = "
 Usage : my.imp2 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
 
- --out STRING      name of out file
- --in STRING       name of haps file 
+ --out STRING      name of out file, or output prefix for Minimac3
+ --in STRING       name of haps file, or vcf file for Minimac3
  --gema STRING     gema-file
- --reffile STRING  name of ref file
+ --reffile STRING  name of ref file, for Minimac3, a processed (m3vcf) version is recommended
  --refstart INT    Mb of start
  --refend INT      Mb of end
  --chrX STRING     for X chromosome, noting sample-file
  --buff INT        buffer, default $buff
  --impute4         use impute4 instead of impute2
 
+ --minimac         perform the imputation using Minimac3
+ --chr             chromosome number; required for Minimac3
 ";
 
 my $outname = "";
@@ -57,9 +60,12 @@ GetOptions(
     "buff=i"=> \ $buff,
     "chrX=s"=> \my $chrx,
     "imp4"=> \my $imp4,
+    "minimac"=> \my $minimac,
+    "chrind=i"=> \my $chr,
     );
 
-if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $reffile eq "" || $refstart eq ""|| $refend eq ""){
+
+if ($outname eq "" || $inname eq ""  || (!$minimac && $gemafile eq "") || $reffile eq "" || $refstart eq ""|| $refend eq ""  || ($minimac && $chr == 0)){
     print "$usage\n";
     print "$outname\n";
     print "$inname\n";
@@ -67,8 +73,15 @@ if ($outname eq "" || $inname eq ""  || $gemafile eq "" || $reffile eq "" || $re
     print "$reffile\n";
     print "$refstart\n";
     print "$refend\n";
+    print "$minimac\n";
+    print "$chr\n";
 
     die;
+}
+
+
+if ($minimac and $reffile !~ /m3vcf/) {
+    warn "$0: using an un-processed reference file. This will be much slower than using a processed one (.m3vcf.gz)\n";
 }
 
 
@@ -103,7 +116,13 @@ if (-e "$outname.fini") {
 my $allow_str = "";
 my $start_loc = $refstart *1.0e06;
 my $end_loc =  $refend *1.0e06;
+my $buff_mm =  $buff *1.0e03;
 
+
+# Minimac3 doesn't accept 0 for --start
+if ($start_loc ==0 ){
+    $start_loc =1;
+}
 
 #print "$start_loc\n";
 #print "$end_loc\n";
@@ -121,8 +140,35 @@ if ($refend - $refstart > 6) {
 }
 
 
+my $sys_loc;
 
-my $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str";
+
+
+
+
+if ($minimac) {
+  $sys_loc = qq{
+    $m3loc/Minimac3 \\
+    --refHaps "$reffile" \\
+    --format DS,GT,GP \\
+    --haps "$inname" \\
+    --prefix "$outname" \\
+    --start "$start_loc" \\
+    --end "$end_loc" \\
+    --window "$buff_mm" \\
+    --chr "$chr" \\
+    --cpus 4 \\
+    > "$outname.dose.vcf.log"
+  };
+} else {
+
+    
+    $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str";
+
+}
+
+#print "$sys_loc\n";
+#exit;
 
 
 #if ($imp4) {
@@ -143,7 +189,7 @@ my $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffi
 #print "$sys_loc\n";
 #sleep(2);
 
-die $!."$outname.imp2.cmd" unless open BC, "> $outname.imp2.cmd";
+die $!."$outname.cmd" unless open BC, "> $outname.cmd";
 print BC "$sys_loc\n";
 close BC;
 

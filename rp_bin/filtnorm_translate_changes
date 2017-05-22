@@ -1,0 +1,204 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.1.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
+use lib $ENV{rp_perlpackages};
+use Compress::Zlib ;
+
+
+
+###############################################
+
+
+
+##### help message
+my $usage = "
+Usage : $progname 
+
+version: $version
+
+  --fitnorm STRING     mandatory, vcf coming out of filtnorm step
+  --changes STRING     mandatory, changes file
+  --help               print this message and exit
+
+
+ rewrites filtnorm with legend changes from refdir_navi2
+
+ created by Stephan Ripke 2017 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+
+my $prefix = "";
+my $refstart = "";
+my $refend = "";
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "filtnorm=s"=> \my $filtnorm_file,
+    "changes=s"=> \my $changes_file,
+
+    );
+
+die ($usage) if $help;
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references, tab based
+##########################################
+
+sub split_line_ref_tab {
+    my ($line)=${$_[0]};
+    chomp($line);
+    my @cols=  split /\t/, $line;
+    \@cols;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+############################################
+######### BEGIN
+########################################
+
+
+
+
+my $trans_out = $changes_file;
+$trans_out =~ s/legend.gz.rf.gz.changes.gz/vcf.gz/;
+if ($trans_out eq $changes_file) {
+    print "Error: inputfile equals outputfile\n";
+    exit;
+}
+
+
+####################################################
+## read changes file
+##############################################
+
+
+print "reading into hash file: $changes_file\n";
+
+
+my %changes;
+my $igz = gzopen("$changes_file", "rb")  or die "Cannot open file $changes_file: $gzerrno\n" ;
+
+while ($igz->gzreadline(my $line)){
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+    my $key = $cells[0];
+    $key .= " ".$cells[1];
+    $key .= " ".$cells[2];
+    $key .= " ".$cells[3];
+
+    my $value = $cells[5];
+    $value .= " ".$cells[6];
+    $value .= " ".$cells[7];
+    $value .= " ".$cells[8];
+
+#    print $key."\n";
+#    print $value."\n";
+#    exit;
+    
+    $changes{$key} = $value;
+
+}
+
+$igz->gzclose();
+
+
+
+####################################################
+## translate vcf file
+##############################################
+
+my $igz = gzopen("$filtnorm_file", "rb")  or die "Cannot open file $filtnorm_file: $gzerrno\n" ;
+my $ogz = gzopen("$trans_out", "wb")  or die "Cannot open file $trans_out: $gzerrno\n" ;
+
+#rs62224611                                   16051453  A    G      ->  22:16051453_A_G      16051453  A  G
+#22      16050115        rs587755077     G       A
+
+print "translating $filtnorm_file into $trans_out\n";
+
+
+while ($igz->gzreadline(my $line)){
+    chomp($line);
+    my @cells = @{&split_line_ref_tab(\$line)};
+    my $key = $cells[2];
+    $key .= " ".$cells[1];
+    $key .= " ".$cells[3];
+    $key .= " ".$cells[4];
+
+
+    if (exists $changes{$key}) {
+	my @cols=  split " ", $changes{$key};
+	$cells[2] = $cols[0];
+	$cells[1] = $cols[1];
+	$cells[3] = $cols[2];
+	$cells[4] = $cols[3];
+#	print "replacing $key\n";
+	delete $changes{$key};
+    }
+
+    my $out_str = @cells[0];
+    foreach my $cc (1..$#cells) {
+	$out_str .= "\t".$cells[$cc];
+    }
+    $ogz->gzwrite("$out_str\n");
+    
+}
+
+$igz->gzclose();
+$ogz->gzclose();
+
+
+if (keys %changes > 0) {
+    print "Error: there are changes left\n";
+    foreach my $key (%changes) {
+	print "$key -> $changes{$key}\n";
+    }
+}
+
+&mysystem ("touch $trans_out.fini");

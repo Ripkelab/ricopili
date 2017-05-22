@@ -72,7 +72,7 @@ use strict;
 ## 39 with cleanup (not finished yet)
 ## 40 with buildguessing and liftover, also testing for binaries
 ## 41 error message an success message, cleaning finished, 
-## 42 with my.imp2.2 (including best guess haplotypes) 
+## 42 with my.imp.2 (including best guess haplotypes) 
 ##     change bcomb_3 into bcomp_3_p2
 ## 43 and 44: bug fixes
 ## 45 increase mem
@@ -276,7 +276,13 @@ version: $version
 ## differen prephasing algorithm
 
  --eagle           use eagle for prephasing: https://data.broadinstitute.org/alkesgroup/Eagle/
- --eaglvcf         use eagle for prephasing with vcf_output (for minimac)
+                   will still be using impute2 for imputation 
+
+
+ --minimac3        use minimac3 for imputation, here eagle will be used for prephasing
+                   prephasing will happen reference informed with phased vcf
+
+
 
 
 #### for trio datasets
@@ -451,8 +457,8 @@ my $phase_txt = "
 
 
 
-   HM3(imp2):        39 -> $ref_coll[39]
-   HM3(imp2).3mb:        399 -> $ref_coll[399]
+   HM3(imp):        39 -> $ref_coll[39]
+   HM3(imp).3mb:        399 -> $ref_coll[399]
 
 
 
@@ -489,7 +495,8 @@ GetOptions(
     "noclean"=> \my $noclean,
     "force1"=> \my $force1,
     "eagle"=> \my $eagle_sw,
-    "eaglvcf"=> \my $eagle_vcf_sw,
+#    "eaglvcf"=> \my $eagle_vcf_sw,
+    "minimac3"=> \my $mm3_sw,
 
 
     "popname=s"=> \$popname,
@@ -522,8 +529,9 @@ my $checkpos_script = "checkpos6";         ### my.pipeline_tar
 my $checkflip_script = "checkflip4";       ### my.pipeline_tar
 my $chuck_script = "my.chuck2";            ### my.pipeline_tar
 my $preph_script = "my.preph3";             ### my.pipeline_tar
-my $imp2_script = "my.imp2.3";             ### my.pipeline_tar
+my $imp_script = "my.imp.3";             ### my.pipeline_tar
 my $dos_script = "haps2dos4";              ### my.pipeline_tar
+my $vcf2dos_script = "vcf2dos";            ### my.pipeline_tar
 my $impprob_script = "impprob_to_2dos";    ### my.pipeline_tar
 my $dabg_script = "daner_bg3";             ### my.pipeline_tar
 my $cobg_script = "bcomb_5_p2";            ### my.pipeline_tar
@@ -553,8 +561,9 @@ push @test_scripts, $checkpos_script ;
 push @test_scripts, $checkflip_script ;
 push @test_scripts, $chuck_script ;
 push @test_scripts, $preph_script ;
-push @test_scripts, $imp2_script ;
+push @test_scripts, $imp_script ;
 push @test_scripts, $dos_script ;
+push @test_scripts, $vcf2dos_script ;
 push @test_scripts, $dabg_script ;
 push @test_scripts, $cobg_script ;
 push @test_scripts, $cobg_gw_script ;
@@ -2076,7 +2085,7 @@ my @refend_arr;
 my @refchr_arr; ## safes the chromosomes in same order
 my @gema_arr; ## safes the gema_files in same order
 
-my @bgz_arr; ## safes the bgz files in same order, needed for eagle / minimac
+#my @bgz_arr; ## safes the bgz files in same order, needed for eagle / minimac
 
 
 my %gema_hash; ## contains the gema-files for each chromosome
@@ -2120,11 +2129,8 @@ if ($suminfo_s_v2_sw == 0) {
 	push @gema_arr, $gema_file;
 	
 	
-	#    my $bgz_file = "$refdir/$refvcf_s_v2"; switched off for now, since no eagle or minimac
-	my $bgz_file = "";
-	$bgz_file =~ s/XXX/$chrind/;
-	push @bgz_arr, $bgz_file;
-	#    print $bgz_file."\n";
+
+	
 	
 	
 	### test existence once per chromosome
@@ -2147,7 +2153,7 @@ my @refend_arr_v2;
 
 my @refchr_arr_v2; ## safes the chromosomes in same order
 my @gema_arr_v2; ## safes the gema_files in same order
-my @bgz_arr_v2; ## safes the gema_files in same order
+#my @bgz_arr_v2; ## safes the gema_files in same order
 
 if ($suminfo_s_v2_sw == 1) {
     
@@ -2495,8 +2501,13 @@ if ($prephase_done == 0) {
 	    my $chrind = $refchr_arr[$ccc];
 	    my $rf = $reffiles[$ccc];
 	    my $gema_file = $gema_arr[$ccc];
-	    my $bgz_file = $bgz_arr[$ccc];
 
+
+#	    my $bgz_file = $bgz_arr[$ccc];
+	    my $bgz_file = "$refdir/$suminfo_s_v2.impute.vcf.bgz"; 
+	    $bgz_file =~ s/XXX/$chrind/;
+#	    push @bgz_arr, $bgz_file;
+	    print $bgz_file."\n";
 
 	    my $extract_txt = "";
 	    
@@ -2576,13 +2587,12 @@ if ($prephase_done == 0) {
 			$backbone .= " --eagle";
 		    }
 		    
-		    if ($eagle_vcf_sw) { 
+		    if ($mm3_sw) { 
 			$backbone .= " --eaglvcf";
 			$backbone .= " --ref $bgz_file";
 		    }
 
 		    
-
 		    if ($suminfo_s_v2_sw == 1) {
 			$backbone .= " --nospli";
 #			print "v2 found\n";
@@ -2591,6 +2601,8 @@ if ($prephase_done == 0) {
 
 #		    print "$backbone\n";
 #		    exit;
+
+
 #		    print "$multi_sw\n";
 		    if ($multi_sw == 0) {
 			push @preph_arr, $backbone;
@@ -2923,21 +2935,24 @@ if ($pseudo_done == 0) {
 
 
 ############################################################
-### impute2
+### impute
 #############################################################
 
 
 
 
-my $imp2_done = 0;
-if (-e "$rootdir/imp2_done") {
-    $imp2_done = 1;
+my $imp_done = 0;
+if (-e "$rootdir/imp_done") {
+    $imp_done = 1;
 }
 
-my $n_imp2_done = 0;
-my @imp2_arr = ();
-my $imp2_fini = 0;
-if ($imp2_done == 0) {
+my $n_imp_done = 0;
+my $n_vcf2dos_done = 0;
+my @imp_arr = ();
+my @vcf2dos_arr = ();
+my $imp_fini = 0;
+my $vcf2dos_fini = 0;
+if ($imp_done == 0) {
 
 
 
@@ -2990,7 +3005,7 @@ if ($imp2_done == 0) {
 	my %finifiles_hash = map { $_ => 1 } @finifiles;
 	my %sumfiles_hash = map { $_ => 1 } @sumfiles;
 
-	print "start imp2 refdirloop....\n";
+	print "start imp refdirloop....\n";
 	#### loop for reference chunks
 
 
@@ -3008,6 +3023,7 @@ if ($imp2_done == 0) {
 
 	    my $rf = $reffiles[$ccc];
 	    my $refchunk = "$refdir/$rf";
+	    my $legend_file = "$refdir/$rf";
 #	    my $buffer = 1000;
 
 	    
@@ -3020,6 +3036,8 @@ if ($imp2_done == 0) {
 #		$haps_ch_out = "$subdir_in/plink.$bprefix.$refchr";
 		$refchunk = "$refdir/$suminfo_s_v2.impute";
 		$refchunk =~ s/XXX/$refchr/;
+		$legend_file = $refchunk;
+		$legend_file .= ".legend.gz";
 #		$buffer = 500;
 	    }
 
@@ -3044,9 +3062,10 @@ if ($imp2_done == 0) {
 #			$haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.trio.sample";
 #		    }
 
-		    my $pi_ch_out = "$subdir/plink.$bprefix.$refind.imp2";
-		    my $pi_ch_out_fini = "plink.$bprefix.$refind.imp2.fini";
-		    my $pi_ch_out_summary = "plink.$bprefix.$refind.imp2_summary";
+		    my $pi_ch_out = "$subdir/plink.$bprefix.$refind.imp";
+		    my $pi_ch_out_fini = "plink.$bprefix.$refind.imp.fini";
+		    my $vcf2dos_fini = "plink.$bprefix.$refind.imp.GP.gz.fini";
+		    my $pi_ch_out_summary = "plink.$bprefix.$refind.imp_summary";
 
 		    my $xtxt = "";
 		    
@@ -3054,6 +3073,10 @@ if ($imp2_done == 0) {
 			$xtxt = "--chrX $haps_file_loc_sample";
 		    }
 
+
+
+
+#		    print "not found (mm_out): $pi_ch_out_fini\n";
 		    
 		    unless (exists $finifiles_hash{$pi_ch_out_fini} ) {
 
@@ -3070,27 +3093,67 @@ if ($imp2_done == 0) {
 #			    exit;
 			}
 
+
+			## couple different options with Minimac3
+			my $mm3_txt = "";
+			my $chr_txt = "";
+			if ($mm3_sw) {
+			    $haps_file_loc =~ s/haps$/vcf.gz/;
+			    $refchunk .= ".m3vcf.gz";
+			    $mm3_txt = "--minimac";
+			    $chr_txt = "--chrind $refchr";
+			}
+
 			if ($empty) {
 			    &mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
 			}
 			else {
-			    my $sys_loc = "$imp2_script $xtxt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk --buff $buffer --gema $gema_file";
-			    #			print "$sys_loc\n";
-			    push @imp2_arr, $sys_loc;
+			    my $sys_loc = "$imp_script $xtxt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk --buff $buffer --gema $gema_file $mm3_txt $chr_txt";
+#			    print "$sys_loc\n";
+#			    exit;
+			    
+			    push @imp_arr, $sys_loc;
 			}
 #			exit;
 		    }
 		    else {
-			$imp2_fini++;
-			$n_imp2_done++;
+			$imp_fini++;
+			$n_imp_done++;
 		    }
 
-		    
+		    ####################################################
+		    #### rewrite stuff if imputed with minimac3
+		    ###################################################
+		    if ($mm3_sw) {
+
+
+#			print "not found (vcf2dosout): $vcf2dos_fini\n";
+			
+			unless (exists $finifiles_hash{$vcf2dos_fini} ) {
+
+			    
+			    my $vcf_file = $pi_ch_out.".dose.vcf.gz";
+
+			    my $keep_txt = "";
+			    $keep_txt = "--keepvcf" if ($noclean);
+			    
+			    my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend";
+#			    print "$sys_loc\n";
+#			    exit;
+			    
+			    push @vcf2dos_arr, $sys_loc;
+			    
+			}
+			else {
+			    $vcf2dos_fini++;
+			    $n_vcf2dos_done++;
+			}
+		    }	
 		}
 		else {
 		    #		print "N:$splitn\n";
 		    foreach my $spn (1..$splitn) {
-			
+			    
 			my $haps_file_loc = "$haps_ch_out.haps.spli$spn";
 			my $haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.sample";
 			
@@ -3109,14 +3172,14 @@ if ($imp2_done == 0) {
 			}
 			
 			unless (exists $finifiles_hash{$pi_ch_out_fini} ) {
-			    my $sys_loc = "$imp2_script $xtxt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk  --gema $gema_file";
+			    my $sys_loc = "$imp_script $xtxt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk  --gema $gema_file";
 #			    print "$sys_loc\n";
-			    push @imp2_arr, $sys_loc;
+			    push @imp_arr, $sys_loc;
 			    #			exit;
 			}
 			else {
-			    $imp2_fini++;
-			    $n_imp2_done++;
+			    $imp_fini++;
+			    $n_imp_done++;
 			}
 		    }
 		}
@@ -3130,20 +3193,24 @@ if ($imp2_done == 0) {
 
 
 ###################################
-### send impute2 jobs
+### send impute jobs
 ###################################
     
-    if (@imp2_arr > 0) {
+    if (@imp_arr > 0) {
 	
 	$sjadir = $impute_dir;
-	$sjaname = "imp2";
+	$sjaname = "imp";
 	$sjatime = 2;
 	$sjamem = 16000;
-#	if ($imp2_fini > 0) {
+#	if ($imp_fini > 0) {
 #	    $sjamem = 16000;
 #	    $sjatime = 4;
-#	}
-	@sjaarray = @imp2_arr;
+	#	}
+	if ($mm3_sw) {
+	    $sjamulti = 4;
+	}
+	
+	@sjaarray = @imp_arr;
 	
 #	print "$sjaarray[0]\n";
 #	print "debug\n";
@@ -3151,12 +3218,34 @@ if ($imp2_done == 0) {
 	&send_jobarray;
 	
     }
-    else {
-	&mysystem ("touch $rootdir/imp2_done");
-	print "imp2 done\n";
+
+
+
+
+###################################
+### send vcf2dos jobs (only for minimac3
+###################################
+    
+    if (@vcf2dos_arr > 0) {
+	
+	$sjadir = $impute_dir;
+	$sjaname = "vcf2dos";
+	$sjatime = 2;
+	$sjamem = 2000;
+	
+	@sjaarray = @vcf2dos_arr;
+	
+	&send_jobarray;
+	
     }
 
+    
+    &mysystem ("touch $rootdir/imp_done");
+    print "imp done\n";
+
 }
+
+
 
 #print "debug3\n";
 #exit;
@@ -3280,16 +3369,27 @@ if ($dos_done == 0) {
 
 
 		    $famname_loc = "$plink_ch_out.fam";
-		    $puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp2.gz";
+		    $puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp.gz";
+
+		    if ($mm3_sw) {
+			$puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp.GP.gz";
+		    }
+		    
 		}
+		
+
 
 		   		    
 		unless (exists $finifiles_hash{$dos_ch_out_fini} ) {
 #		    print "really not existing: $dos_ch_out_fini\n ";
 #		    exit;
 		    ################################## work on this here!!!!!
-		    my $sys_loc = "$dos_script $prefix_loc --outname $dos_ch_out --outdir $dasudir_loc  --chr $refchr --fam $famname_loc --bim $plink_ch_out.bim $puter_out_arr";
-#		    my $sys_loc = "my.imp2 --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk  --gema $gema_file";
+		    my $sys_loc = "";
+		    $sys_loc = "$dos_script $prefix_loc --outname $dos_ch_out --outdir $dasudir_loc  --chr $refchr --fam $famname_loc --bim $plink_ch_out.bim $puter_out_arr";
+
+#		    print "$sys_loc\n";
+#		    exit;
+#		    my $sys_loc = "my.imp --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk  --gema $gema_file";
 		    #		    print "$sys_loc\n";
 #		    print "$sys_loc\n";
 #		    exit;
@@ -3304,7 +3404,8 @@ if ($dos_done == 0) {
 	}
     }
 
-    
+#    print "debug\n";
+#    exit;    
 
 
 ###################################

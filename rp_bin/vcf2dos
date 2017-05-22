@@ -1,0 +1,272 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.3.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
+use lib $ENV{rp_perlpackages};
+use Compress::Zlib ;
+
+#############################
+# read config file
+#############################
+
+
+###############################################
+
+
+#my $buff = 1000;
+
+##### help message
+my $usage = "
+Usage : $progname --vcf FILE --legend FILE
+
+version: $version
+
+  --vcf STRING     coming out of minimac3
+  --legend STRING  legend file for SNP names
+
+#  --chr INT           chromosome
+  --help              print this message and exit
+
+  --refstart INT       Mb of start
+  --refend INT         Mb of end
+#  --buff INT           buffer, default  ## minimac takes the buffer out anyway
+
+  --keepvcf            keep the vcf version of minimac output
+
+ created by Stephan Ripke 2017 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "keepvcf"=> \my $keepvcf,
+    "vcf=s"=> \my $vcf_file,
+    "legend=s"=> \my $legend_file,
+    "refstart=s"=> \my $refstart,
+    "refend=s"=> \my $refend,
+#    "buff=i"=> \ $buff,
+    
+    );
+
+die ($usage) if $help;
+die ($usage) unless $vcf_file;
+die ($usage) unless $legend_file;
+die ($usage) unless $refstart;
+die ($usage) unless $refend;
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references, only tabs
+##########################################
+
+sub split_line_ref_tab {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\t/, $line;
+    \@cols;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+my @cmd_collect;
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+    push @cmd_collect, $systemstr;
+
+}
+
+
+
+
+
+############################################
+######### BEGIN
+########################################
+
+my $start_loc = $refstart * 1.0e06 ; #- $buff * 1.0e03;
+my $end_loc =  $refend * 1.0e06 ; #+ $buff * 1.0e-03;
+
+
+my $outvcf = $vcf_file;
+$outvcf =~ s/.dose.vcf.gz$/.vcf.gz/;
+
+my $outdos = $vcf_file;
+$outdos =~ s/.dose.vcf.gz$/.GP.gz/;
+
+if ($vcf_file eq $outdos || $vcf_file eq $outvcf ) {
+    print "Error: inputfile equals outputfile\n";
+    exit;
+}
+
+
+
+####################################################
+## read legend file
+##############################################
+
+
+print "reading into hash file: $legend_file\n";
+
+
+my %snp;
+my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $gzerrno\n" ;
+
+while ($igz->gzreadline(my $line)){
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+    if ($cells[1] > $start_loc && $cells[1] < $end_loc){
+
+	my $key = $cells[1];
+	$key .= " ".$cells[2];
+	$key .= " ".$cells[3];
+	
+	$snp{$key} = $cells[0];
+
+    }
+
+}
+
+$igz->gzclose();
+
+
+
+
+
+####################################################
+## translate vcf file
+##############################################
+
+my $igz = gzopen("$vcf_file", "rb")  or die "Cannot open file $vcf_file: $gzerrno\n" ;
+my $ovgz = gzopen("$outvcf", "wb")  or die "Cannot open file $outvcf: $gzerrno\n" ;
+my $odgz = gzopen("$outdos", "wb")  or die "Cannot open file $outdos: $gzerrno\n" ;
+
+
+
+
+print "translating $vcf_file into $outvcf and $outdos\n";
+
+
+while ($igz->gzreadline(my $line)){
+    chomp($line);
+    my @cells = @{&split_line_ref_tab(\$line)};
+    
+    
+    unless ($keepvcf) {
+	unless ($cells[0] =~ /^#/) {
+	    my $key = $cells[1];
+	    $key .= " ".$cells[3];
+	    $key .= " ".$cells[4];
+	    
+	    if (exists $snp{$key}) {
+		$cells[2]= $snp{$key};
+		delete $snp{$key};
+	    }
+	    else {
+		print "Error: <$key> not found in $legend_file\n";
+		exit;
+	    }
+	}
+	
+	
+	my $outv_str = $cells[0];
+	foreach my $cc (1..$#cells) {
+	    $outv_str .= "\t".$cells[$cc];
+	}
+	$ovgz->gzwrite("$outv_str\n");
+    }
+
+
+    unless ($cells[0] =~ /^#/) {
+	my $outd_str = "---";
+	$outd_str .= " ".$cells[2];
+	$outd_str .= " ".$cells[1];
+	$outd_str .= " ".$cells[3];
+	$outd_str .= " ".$cells[4];
+	
+	foreach my $cc (9..$#cells) {
+	    my ($gt,$ds,$gp) = split ":",$cells[$cc];
+	    my ($gp1,$gp2,$gp3) = split ",",$gp;
+	    
+	    $outd_str .= " ".$gp1;
+	    $outd_str .= " ".$gp2;
+	    $outd_str .= " ".$gp3;
+	    
+	}
+	$odgz->gzwrite("$outd_str\n");
+    }
+
+    
+}
+
+$igz->gzclose();
+$ovgz->gzclose();
+$odgz->gzclose();
+
+
+#if (0) {
+    if (keys %snp > 0) {
+	my $kcc = keys %snp;
+	print "Error: there are $kcc snpnames left\n";
+	my $ccn = 0;
+	foreach my $key (%snp) {
+	    print "$key -> $snp{$key}\n";
+	    $ccn++;
+	    last if ($ccn == 10);
+	}
+    }
+#}
+
+
+
+
+
+
+
+
+&mysystem ("touch $outdos.fini");
+
+unless ($keepvcf) {
+    &mysystem ("rm $outvcf");
+}
+
+#&mysystem ("rm $vcf_file");
+
+    
+print "done\n";

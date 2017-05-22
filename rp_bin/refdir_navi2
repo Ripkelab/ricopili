@@ -216,6 +216,7 @@ my $wget_script = "my.wget";                          ### my.pipeline_tar
 my $prepvcf_script_filtnorm = "my.prepvcf_filtnorm";  ### my.pipeline_tar
 my $prepvcf_script_imp2 = "my.prepvcf_imp2";          ### my.pipeline_tar
 my $prepmm_script = "prepare_ref_mm";                 ### my.pipeline_tar
+my $filtnorm_translate_script = "filtnorm_translate_changes";                 ### my.pipeline_tar
 #my $vcf_script = "$vloc/vcftools";                    ### 
 my $annot_hg19pos_script = "annot_hg19pos";           ### 
 my $impute2beagle_script = "impute2beagle2";          ### not needed for now
@@ -235,6 +236,7 @@ my $blue_script = "blueprint";                        ### my.pipeline_tar
 #push @test_scripts, $annot_hg19pos_script ;
 #push @test_scripts, $impute2beagle_script ;
 push @test_scripts, $prepare_hm_ref_2_script ;
+push @test_scripts, $filtnorm_translate_script ;
 push @test_scripts, $refformat_script ;
 push @test_scripts, $chunk_script ;
 push @test_scripts, $vcf2plink_script ;
@@ -779,6 +781,7 @@ $sjainfotxt = "$rootdir\t$command_line";
 my @job_vtools = ();
 my @job_btools1 = ();
 my @job_prepmm = ();
+my @job_filtnormtra = ();
 my @job_btools2 = ();
 my @job_count = ();
 my @job_soll = ();
@@ -1627,18 +1630,18 @@ unless (-e "$rootdir/rootdir_done"){
 
 
 
+
+
+
+
+	    
+
+
 	    ###################################
 	    # filter and convert vcf with bcftools
 	    ####################################
 
-	    unless (-e $vcf_name_loc_filtnorm_prep_fini) {
-		my $sys = "$prepmm_script --cpus 4 $vcf_name_loc_filtnorm";
-		push @job_prepmm, $sys;
-		print "$sys\n";
-	    }
 
-
-	    
 
 	    
 	    ###################################
@@ -1745,7 +1748,11 @@ unless (-e "$rootdir/rootdir_done"){
 
 	    }
 	}
+
 	
+
+
+	    	
 
 	if (0) {
 	    ###################################
@@ -1815,6 +1822,39 @@ unless (-e "$rootdir/rootdir_done"){
 	    push @job_refformat, "$refformat_script --root $hapout_name --sample $sample_root.fam --gm $gm_name";
 	}
 
+
+	######################################################################
+
+
+	my $changes_file = "$hapout_name.legend.gz.rf.gz.changes.gz";
+	my $filtnorm_trans_fini = $changes_file;
+	$filtnorm_trans_fini =~ s/legend.gz.rf.gz.changes.gz/vcf.gz.fini/;
+	
+	unless (-e $filtnorm_trans_fini) {
+
+	    my $sys = "$filtnorm_translate_script --filtnorm $vcf_name_loc_filtnorm --changes $changes_file";
+	    push @job_filtnormtra, $sys;
+	    print "$sys\n";
+	}
+
+
+
+	###############################################################
+
+	my $filtnorm_trans_file = $changes_file;
+	$filtnorm_trans_file =~ s/legend.gz.rf.gz.changes.gz/vcf.gz/;
+	my $vcf_name_loc_filtnorm_prep_fini = $filtnorm_trans_file.".prep.fini";
+
+	unless (-e $vcf_name_loc_filtnorm_prep_fini) {
+
+	    my $sys = "$prepmm_script --cpus 4 $filtnorm_trans_file";
+	    push @job_prepmm, $sys;
+	    print "$sys\n";
+	}
+
+
+	########################################################################
+
 	my $chunk_fini = $hapout_name.".legend.gz.chunks.fini";
 	unless (-e $chunk_fini) {
 #	    print "plink: $plink_name\n";
@@ -1879,8 +1919,6 @@ unless (-e "$rootdir/rootdir_done"){
 	}
     }
 
-#    print "debug\n";
-#    exit;
 
     
     if ($exit == 1) {
@@ -1967,23 +2005,43 @@ unless (-e "$rootdir/rootdir_done"){
 
     }
 
-    if (0) {
-	if (@job_prepmm > 0 ) {
-	    
-	    
-	    $sjaweek = 1;
-	    $sjadir = $rootdir;
-	    $sjaname = "prep_minimac";
-	    $sjatime = 2;
-	    $sjamulti = 4;
-	    $sjamem = 12000;
-	    @sjaarray = @job_prepmm;
-	    
-	    &send_jobarray;
-	    
-	    
-	}
+
+    if (@job_filtnormtra > 0 ) {
+	
+	
+	$sjaweek = 1;
+	$sjadir = $rootdir;
+	$sjaname = "trans_filtnorm";
+	$sjatime = 10;
+	$sjamem = 2000;
+	@sjaarray = @job_filtnormtra;
+	
+	&send_jobarray;
+	
+	
     }
+
+
+#    print "debug\n";
+#    exit;
+    
+    
+    if (@job_prepmm > 0 ) {
+	
+	
+	$sjaweek = 1;
+	$sjadir = $rootdir;
+	$sjaname = "prep_minimac";
+	$sjatime = 2;
+	$sjamulti = 4;
+	$sjamem = 12000;
+	@sjaarray = @job_prepmm;
+	
+	&send_jobarray;
+	
+	
+    }
+
 
 
     
