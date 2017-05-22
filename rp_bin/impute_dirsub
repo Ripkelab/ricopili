@@ -87,7 +87,7 @@ use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
 
-my $version = "1.0.24";
+my $version = "1.0.30";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 my $command_line = "$progname @ARGV";
@@ -1077,6 +1077,7 @@ sub send_jobarray {
 	    $err_message .= "##### have a look at the wiki page\n"; 
 	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	    $err_message .= "##### or contact the developers\n";
+	    $err_message .= "##### version: $version\n";
 	    $err_message .= "##################################################################\n";
 	    print "$err_message\n";
 
