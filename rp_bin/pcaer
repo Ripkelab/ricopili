@@ -118,7 +118,7 @@ my $cc =0;
 my $rel_th =.2;
 my $ov_count_max =25;
 
-my $version = "2.7.2";
+my $version = "2.0.1";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 my $command_line = "$progname @ARGV";
@@ -498,6 +498,7 @@ sub send_jobarray {
 	    $err_message .= "##### have a look at the wiki paged\n"; 
 	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	    $err_message .= "##### or contact the developers\n";
+	    $err_message .= "##### version: $version\n";
 	    $err_message .= "##################################################################\n";
 	    print "$err_message\n";
 
