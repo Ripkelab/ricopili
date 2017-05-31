@@ -1,0 +1,339 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "1.1.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
+use lib $ENV{rp_perlpackages};
+use Compress::Zlib ;
+
+
+
+###############################################
+
+
+
+##### help message
+my $usage = "
+Usage : $progname 
+
+version: $version
+
+  --filtnorm STRING    mandatory, vcf coming out of filtnorm step
+  --help               print this message and exit
+
+
+ filters and reformats the filtnorm vcf
+
+ created by Stephan Ripke 2017 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "filtnorm=s"=> \my $filtnorm_file,
+
+    );
+
+die ($usage) if $help;
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+##########################################
+# subroutine to split a plink-output-line with references, tab based
+##########################################
+
+sub split_line_ref_tab {
+    my ($line)=${$_[0]};
+    chomp($line);
+    my @cols=  split /\t/, $line;
+    \@cols;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+############################################
+######### BEGIN
+########################################
+
+
+
+
+my $filtnorm_info = $filtnorm_file.".info.gz";
+my $filtnorm_info_tmp = $filtnorm_file.".info.tmp.gz";
+my $filtnorm_out = $filtnorm_file.".reform.gz";
+my $filtnorm_ex = $filtnorm_file.".ex.gz";
+my $filtnorm_out_tmp = $filtnorm_file.".reform.tmp.gz";
+
+
+
+
+
+####################################################
+## get the crucial info out
+##############################################
+
+unless (-e $filtnorm_info) {
+    my $igz = gzopen("$filtnorm_file", "rb")  or die "Cannot open file $filtnorm_file: $gzerrno\n" ;
+    my $ogz = gzopen("$filtnorm_info_tmp", "wb")  or die "Cannot open file $filtnorm_info_tmp: $gzerrno\n" ;
+    
+    
+    print "reading info out of $filtnorm_file into $filtnorm_info\n";
+    my $icc = 0;
+    
+    $ogz->gzwrite("CHROM POS ID REF ALT QUAL FILTER INFO FORMAT\n");
+    while ($igz->gzreadline(my $line)){
+	chomp($line);
+	unless ($line =~ /^#/) {
+	    my @cells = @{&split_line_ref_tab(\$line)};
+	    my $out_str = $cells[0];
+	    foreach my $cc (1..8) {
+		$out_str .= " ".$cells[$cc];
+	    }
+	    $ogz->gzwrite("$out_str\n");
+	}
+	
+	$icc++;
+	print "$icc lines read\n" if ($icc % 10000 == 0);
+	#    last if ($icc ==10000);
+    }
+    
+    $igz->gzclose();
+    $ogz->gzclose();
+    &mysystem ("mv $filtnorm_info_tmp $filtnorm_info");
+}
+
+
+
+####################################################
+## get the crucial info out
+##############################################
+
+print "read $filtnorm_info\n";
+
+#my %pos_hash;
+my @row_arr;
+my $row_cc = 0;
+my $snp_col = 2;
+my $pos_col = 1;
+my $a1_col = 3;
+my $a2_col = 4;
+my $info_col = 7;
+
+my %pos_hash_arr;
+my %multipos;
+
+
+my $igz = gzopen("$filtnorm_info", "rb")  or die "Cannot open file $filtnorm_info: $gzerrno\n" ;
+$igz->gzreadline(my $line);
+
+
+while ($igz->gzreadline(my $line)){
+    chomp($line);
+#    push @row_arr, $line;
+    my @cells = @{&split_line_ref(\$line)};
+    my $pos_loc = $cells[$pos_col];
+
+    my $indel = 0;
+    ## check allele lengths
+    if (length($cells[$a2_col]) > 1) {
+	if (length($cells[$a1_col]) > 1) {
+	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col], $cells[$a1_col], $cells[$a2_col])\n";
+	    exit;
+	}
+	$indel = 1;
+    }
+    if (length($cells[$a1_col]) > 1) {
+	$indel = 1;
+    }    
+    
+
+    if ($indel) {
+	
+	if (exists $pos_hash_arr{$pos_loc}) {
+	    $multipos{$pos_loc}++;
+	}
+	push(@{$pos_hash_arr{$pos_loc}}, $row_cc);
+    }
+    
+    my @icells = split ";",$cells[$info_col];
+    my $ac_loc = $icells[0];
+    $ac_loc =~ s/AC=//;
+
+    my $out_str = $cells[$pos_col];
+    $out_str .= " ".$cells[$snp_col];
+    $out_str .= " ".$cells[$a1_col];
+    $out_str .= " ".$cells[$a2_col];
+    $out_str .= " ".$ac_loc;
+#    $out_str .= " ".$row_cc;
+    push @row_arr, $out_str;
+
+
+
+
+    $row_cc++;
+#    last if ($row_cc ==1000000);
+}
+$igz->gzclose();
+
+
+
+
+###########################################################
+###   go through the multi-indels and define the longest
+#############################################################
+
+print "define max allele counts of multi-indels\n";
+
+my %ac_max_hash;
+foreach my $pos_loc (keys %multipos) {
+
+    my $ac_max = 0;
+    foreach my $row_cc (@{$pos_hash_arr{$pos_loc}}){
+	my $row = $row_arr[$row_cc];
+	my @icells = split " ",$row;
+	my $ac_loc = $icells[4];
+#	print "$pos_loc $ac_loc\n" if ($ac_loc == $ac_max);
+	$ac_max = $ac_loc if ($ac_loc > $ac_max);
+    }
+    $ac_max_hash{$pos_loc} = $ac_max
+	
+}
+
+#exit;
+my %out_hash; ## records the numbers that should get excluded
+
+
+
+print "define exclusion rows\n";
+
+foreach my $pos_loc (keys %multipos) {
+
+#    print "------------------------\n";
+    my $max_defined = 0;
+    foreach my $row_cc (@{$pos_hash_arr{$pos_loc}}){
+	my $row = $row_arr[$row_cc];
+	my @icells = split " ",$row;
+	my $ac_loc = $icells[4];
+
+#	print $row_arr[$row_cc];	
+	if ($ac_loc eq $ac_max_hash{$pos_loc} && $max_defined == 0) {
+#	    print " xxxx";
+	    $max_defined = 1;
+	}
+	else {
+	    $out_hash{$row_cc} = 1;	    
+#	    print " ----";
+	}
+#	print " $row_cc\n";
+    }
+
+}
+
+
+
+####################################################
+## write the fitered filtnorm file
+##############################################
+
+print "write filtered filtnorm file\n";
+
+unless (-e $filtnorm_out) {
+    my $igz = gzopen("$filtnorm_file", "rb")  or die "Cannot open file $filtnorm_file: $gzerrno\n" ;
+    my $ogz = gzopen("$filtnorm_out_tmp", "wb")  or die "Cannot open file $filtnorm_out_tmp: $gzerrno\n" ;
+    my $oxgz = gzopen("$filtnorm_ex", "wb")  or die "Cannot open file $filtnorm_ex: $gzerrno\n" ;
+    
+    
+    print "filter $filtnorm_file into $filtnorm_out\n";
+    my $icc = 0;
+    
+#    $ogz->gzwrite("CHROM POS ID REF ALT QUAL FILTER INFO FORMAT\n");
+
+
+    while ($igz->gzreadline(my $line)){
+
+	chomp($line);
+	
+	unless ($line =~ /^#/) {
+
+	    unless (exists $out_hash{$icc}) {
+		$ogz->gzwrite("$line\n");
+	    }
+	    else {
+		my @cells = @{&split_line_ref_tab(\$line)};
+		my $out_str = $cells[0];
+		foreach my $cc (1..8) {
+		    $out_str .= " ".$cells[$cc];
+		}
+		$oxgz->gzwrite("$out_str\n");
+	    }
+	    
+	    $icc++;
+	}
+	else {
+	    $ogz->gzwrite("$line\n");
+	}
+
+
+	
+#       	print "$icc lines read\n" if ($icc % 10000 == 0);
+#	last if ($icc ==10000);
+    }
+    
+    $igz->gzclose();
+    $ogz->gzclose();
+    $oxgz->gzclose();
+    &mysystem ("mv $filtnorm_out_tmp $filtnorm_out");
+}
+
+
+
+
+
+
+
+#exit;
+
+&mysystem ("touch $filtnorm_out.fini");

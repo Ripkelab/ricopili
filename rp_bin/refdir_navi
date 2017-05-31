@@ -26,7 +26,7 @@ srand(0);
 ## ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v37.fasta.gz
 
 
-
+my $ncpus_multi = 8;
 
 ### what is done where:
 #
@@ -162,6 +162,7 @@ my @pop_fams;
 
 my $mhc_head =5;
 my $q16_head =1;
+my $walltimeplus = 0;
 
 my $job_bn_th = 1000;
 my $chunksnps = 30000; ## min number of SNPs in each chunk
@@ -191,6 +192,7 @@ GetOptions(
     "q16=s"=> \my $q16,
     "qheadd=i"=> \$q16_head,
     "mac_th=i"=> \$mac_th,
+    "walltimeplus=i"=> \$walltimeplus,
     "serial"=> \my $serial,
     );
 
@@ -217,6 +219,7 @@ my $prepvcf_script_filtnorm = "my.prepvcf_filtnorm";  ### my.pipeline_tar
 my $prepvcf_script_imp2 = "my.prepvcf_imp2";          ### my.pipeline_tar
 my $prepmm_script = "prepare_ref_mm";                 ### my.pipeline_tar
 my $filtnorm_translate_script = "filtnorm_translate_changes";                 ### my.pipeline_tar
+my $filtnorm_filter_script = "filtnorm_filter";                 ### my.pipeline_tar
 #my $vcf_script = "$vloc/vcftools";                    ### 
 my $annot_hg19pos_script = "annot_hg19pos";           ### 
 my $impute2beagle_script = "impute2beagle2";          ### not needed for now
@@ -237,6 +240,7 @@ my $blue_script = "blueprint";                        ### my.pipeline_tar
 #push @test_scripts, $impute2beagle_script ;
 push @test_scripts, $prepare_hm_ref_2_script ;
 push @test_scripts, $filtnorm_translate_script ;
+push @test_scripts, $filtnorm_filter_script ;
 push @test_scripts, $refformat_script ;
 push @test_scripts, $chunk_script ;
 push @test_scripts, $vcf2plink_script ;
@@ -382,6 +386,7 @@ version: $version
         --serial          no sending jobs to queue all in one run
                               -> usually only used for testing 
 
+        --walltimeplus INT  increase walltime by INT hours (important for bigger reference files)
 
  --out_templ is mandatory
  --outname is mandatory
@@ -638,7 +643,7 @@ sub send_jobarray {
 
     my $sjacontent = "$sjaname.".@sjaarray;
 
-    my $sjarow_part = $sjainfotxt."\t$sjacontent";
+    my $sjarow_part = $sjainfotxt."\t$sjacontent\t";
     my $sjarow      = $sjainfotxt."\t$sjacontent\t$now";
 #    $message = $info_txt."\t$message\t$now";
 
@@ -647,6 +652,7 @@ sub send_jobarray {
     if ($old_cmd =~ /$sjarow_part/){
 	unless ($force1 ){
 	    my $err_message ;
+	    
 	    $err_message .= "##################################################################\n";
 	    $err_message .= "##### Error: \n";
 	    $err_message .= "##### step $sjaname has been done repeatedly without any progress\n";
@@ -657,6 +663,8 @@ sub send_jobarray {
 	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	    $err_message .= "##### or contact the developers\n";
 	    $err_message .= "##### version: $version\n";
+	    $err_message .= "##### internal: $sjarow_part\n";
+#	    $err_message .= "##### old_cmd: $old_cmd\n";
 	    $err_message .= "##################################################################\n";
 	    print "$err_message\n";
 
@@ -783,6 +791,7 @@ my @job_vtools = ();
 my @job_btools1 = ();
 my @job_prepmm = ();
 my @job_filtnormtra = ();
+my @job_filtnormfil = ();
 my @job_btools2 = ();
 my @job_count = ();
 my @job_soll = ();
@@ -1386,9 +1395,12 @@ my $answer_gm = "";
 my $exit = 0;
 my @plink_collection;
 my @chunks_collection;
+my @chunks_collection_5;
+my @chunks_collection_10;
 my @backup_arr;
 my $gm_name;
-unless (-e "$rootdir/rootdir_done"){
+
+#unless (-e "$rootdir/rootdir_done"){
 
 
     my $answer_rename = "";
@@ -1484,6 +1496,7 @@ unless (-e "$rootdir/rootdir_done"){
 	$hapout_name = $out_templ.".impute";
 	$hapout_name =~ s/XXX/$chr/g;
 	my $vcf_name_loc_filtnorm ;
+	my $vcf_name_loc_filtnorm_reform ;
 	
 	if ($vcf_templ ne "") {
 
@@ -1512,10 +1525,11 @@ unless (-e "$rootdir/rootdir_done"){
 	    
 	    $vcf_name_loc_filtnorm = $vcf_name_loc.".filtnorm.gz";
 	    my $vcf_name_loc_filtnorm_fini = $vcf_name_loc_filtnorm.".fini";
-	    
+
+	    $vcf_name_loc_filtnorm_reform = $vcf_name_loc_filtnorm.".reform.gz";
+	    my $vcf_name_loc_filtnorm_reform_fini = $vcf_name_loc_filtnorm_reform.".fini";
 
 
-	    my $vcf_name_loc_filtnorm_prep_fini = $vcf_name_loc_filtnorm.".prep.fini";	    
 
 	    
 	    ###################################
@@ -1584,11 +1598,12 @@ unless (-e "$rootdir/rootdir_done"){
 		}
 		else {
 
+		    print "---------------------------------\n";
 		    print "$gm_name_loc not exsiting\n";
 		    #		    if (-e $vcf_name_loc) {
 
 		    unless ($answer_gm eq "y" || $answer_gm eq "Y"){
-			print "********************************\n";
+
 			print "gm-file ($gm_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
 		    }
 		    my $sys = "my.wget $gm_site $gm_name ";
@@ -1629,21 +1644,23 @@ unless (-e "$rootdir/rootdir_done"){
 	    }
 
 
-
-
-
-
-
-
 	    
-
-
 	    ###################################
-	    # filter and convert vcf with bcftools
+	    # filter indels
+	    #     if indels on same position only keep the ones with highest AC
+	    #     otherwise minimac3 gets in trouble since pipeline translates indels
+	    #        into I D as alleles and minimac doesn't care about snpnames
 	    ####################################
 
+	    unless (-e $vcf_name_loc_filtnorm_reform_fini) {
+		my $sys =  "$filtnorm_filter_script --filtnorm $vcf_name_loc_filtnorm";
+		push @job_filtnormfil, $sys;
+#		print "$sys\n";
+#		print "debug\n";
+#		exit;
+	    }
 
-
+	    
 	    
 	    ###################################
 	    # create impute-format with bcftools
@@ -1654,7 +1671,7 @@ unless (-e "$rootdir/rootdir_done"){
 	    
 	    unless (-e $hapout_name_fini) {
 		#		print "hapout: $hapout_name\n";
-		push @job_btools2, "$prepvcf_script_imp2 --vcf $vcf_name_loc_filtnorm --out $hapout_name";
+		push @job_btools2, "$prepvcf_script_imp2 --vcf $vcf_name_loc_filtnorm_reform --out $hapout_name";
 #		push @job_vtools, "$vcf_script --mac $mac_th --gzvcf $vcf_name_loc --IMPUTE --out $hap_name";
 	    }
 
@@ -1813,7 +1830,7 @@ unless (-e "$rootdir/rootdir_done"){
 
 	unless (-e $plink_name_fini) {
 #	    print "plink: $plink_name\n";
-	    push @job_plink, "$vcf2plink_script --vcf $vcf_name_loc_filtnorm --out $plink_name";
+	    push @job_plink, "$vcf2plink_script --vcf $vcf_name_loc_filtnorm_reform --out $plink_name";
 	}
 
 
@@ -1833,7 +1850,7 @@ unless (-e "$rootdir/rootdir_done"){
 	
 	unless (-e $filtnorm_trans_fini) {
 
-	    my $sys = "$filtnorm_translate_script --filtnorm $vcf_name_loc_filtnorm --changes $changes_file";
+	    my $sys = "$filtnorm_translate_script --filtnorm $vcf_name_loc_filtnorm_reform --changes $changes_file";
 	    push @job_filtnormtra, $sys;
 	    print "$sys\n";
 	}
@@ -1848,7 +1865,7 @@ unless (-e "$rootdir/rootdir_done"){
 
 	unless (-e $vcf_name_loc_filtnorm_prep_fini) {
 
-	    my $sys = "$prepmm_script --cpus 4 $filtnorm_trans_file";
+	    my $sys = "$prepmm_script --cpus $ncpus_multi $filtnorm_trans_file";
 	    push @job_prepmm, $sys;
 	    print "$sys\n";
 	}
@@ -1859,9 +1876,33 @@ unless (-e "$rootdir/rootdir_done"){
 	my $chunk_fini = $hapout_name.".legend.gz.chunks.fini";
 	unless (-e $chunk_fini) {
 #	    print "plink: $plink_name\n";
-	    push @job_chunk, "$chunk_script --nsnps $chunksnps --root $hapout_name";
+	    push @job_chunk, "$chunk_script --nsnps $chunksnps --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks";
 	}
-	push @chunks_collection, "$hapout_name.legend.gz.chunks";	
+	push @chunks_collection, "$hapout_name.legend.gz.chunks";
+
+
+	########################################################################
+	## times 5
+	my $chunksnps_5 = $chunksnps * 5;
+	my $chunk_fini_5 = $hapout_name.".legend.gz.chunks_5.fini";
+	unless (-e $chunk_fini_5) {
+#	    print "plink: $plink_name\n";
+	    push @job_chunk, "$chunk_script --nsnps $chunksnps_5 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_5";
+	}
+	push @chunks_collection_5, "$hapout_name.legend.gz.chunks_5";
+
+
+	########################################################################
+	## times 10
+	my $chunksnps_10 = $chunksnps * 10;
+	my $chunk_fini_10 = $hapout_name.".legend.gz.chunks_10.fini";
+	unless (-e $chunk_fini_10) {
+#	    print "plink: $plink_name\n";
+	    push @job_chunk, "$chunk_script --nsnps $chunksnps_10 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_10";
+	}
+	push @chunks_collection_10, "$hapout_name.legend.gz.chunks_10";
+
+	
 
 
 
@@ -1922,28 +1963,28 @@ unless (-e "$rootdir/rootdir_done"){
 
 
     
-    if ($exit == 1) {
-	print "exit due to error\n";
-	exit;
+if ($exit == 1) {
+    print "exit due to error\n";
+    exit;
 
-    }
+}
 
+
+
+if (@job_vcf_dl > 0 ) {
+
+    #	print "starting gunzip/copy jobs\n";
+
+    $sjadir = $rootdir;
+    $sjaname = "vcf_download";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000; 
+    @sjaarray = @job_vcf_dl;
     
-
-    if (@job_vcf_dl > 0 ) {
-
-#	print "starting gunzip/copy jobs\n";
-
-	$sjadir = $rootdir;
-	$sjaname = "vcf_download";
-	$sjatime = 2;
-	$sjamem = 2000; 
-	@sjaarray = @job_vcf_dl;
-	
-	&send_jobarray;
+    &send_jobarray;
 
 
-    }
+}
 
 #    if (@job_gm_dl > 0 ) {
 
@@ -1953,239 +1994,289 @@ unless (-e "$rootdir/rootdir_done"){
 #	$sjatime = 1;
 #	$sjamem = 1000;
 #	@sjaarray = @job_gm_dl;
-	
+
 #	&send_jobarray;
 
 
- #   }	
+#   }	
 
-    if (@job_cpgz > 0 ) {
+if (@job_cpgz > 0 ) {
 
-#	print "starting gunzip/copy jobs\n";
+    #	print "starting gunzip/copy jobs\n";
 
-	$sjadir = $rootdir;
-	$sjaname = "copyunzip";
-	$sjatime = 2;
-	$sjamem = 2000;
-	@sjaarray = @job_cpgz;
-	
-	&send_jobarray;
-
-
-    }
-
-
-
-    if (@job_vtools > 0 ) {
-
-#	print "starting 2impute jobs\n";
-
-	$sjadir = $rootdir;
-	$sjaname = "vcftools";
-	$sjatime = 2;
-	$sjamem = 4000;
-	@sjaarray = @job_vtools;
-	
-	&send_jobarray;
-
-
-    }
-
-    if (@job_btools1 > 0 ) {
-
-#	print "starting 2impute jobs\n";
-
-	$sjadir = $rootdir;
-	$sjaname = "bcftools_filtnorm";
-	$sjatime = 2;
-	$sjamem = 2000;
-	@sjaarray = @job_btools1;
-	
-	&send_jobarray;
-
-
-    }
-
-
-    if (@job_filtnormtra > 0 ) {
-	
-	
-	$sjaweek = 1;
-	$sjadir = $rootdir;
-	$sjaname = "trans_filtnorm";
-	$sjatime = 10;
-	$sjamem = 2000;
-	@sjaarray = @job_filtnormtra;
-	
-	&send_jobarray;
-	
-	
-    }
-
-
-#    print "debug\n";
-#    exit;
+    $sjadir = $rootdir;
+    $sjaname = "copyunzip";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000;
+    @sjaarray = @job_cpgz;
     
+    &send_jobarray;
+
+
+}
+
+
+
+if (@job_vtools > 0 ) {
+
+    #	print "starting 2impute jobs\n";
+
+    $sjadir = $rootdir;
+    $sjaname = "vcftools";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 4000;
+    @sjaarray = @job_vtools;
     
-    if (@job_prepmm > 0 ) {
-	
-	
-	$sjaweek = 1;
-	$sjadir = $rootdir;
-	$sjaname = "prep_minimac";
-	$sjatime = 2;
-	$sjamulti = 4;
-	$sjamem = 12000;
-	@sjaarray = @job_prepmm;
-	
-	&send_jobarray;
-	
-	
-    }
+    &send_jobarray;
 
 
+}
 
+if (@job_btools1 > 0 ) {
+
+    #	print "starting 2impute jobs\n";
+
+    $sjadir = $rootdir;
+    $sjaname = "bcftools_filtnorm";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000;
+    @sjaarray = @job_btools1;
     
-
-    if (@job_btools2 > 0 ) {
-
-#	print "starting 2impute jobs\n";
-
-	$sjadir = $rootdir;
-	$sjaname = "bcftools_impute2";
-	$sjatime = 2;
-	$sjamem = 2000;
-	@sjaarray = @job_btools2;
-	
-	&send_jobarray;
+    &send_jobarray;
 
 
-    }  
+}
+
+
+if (@job_filtnormfil > 0 ) {
+
+    #	print "starting 2impute jobs\n";
+
+    $sjadir = $rootdir;
+    $sjaname = "filter_filtnorm";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000;
+    @sjaarray = @job_filtnormfil;
+    
+    &send_jobarray;
+
+
+}
+
+
+
+
+
+if (@job_btools2 > 0 ) {
+
+    #	print "starting 2impute jobs\n";
+
+    $sjadir = $rootdir;
+    $sjaname = "bcftools_impute2";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000;
+    @sjaarray = @job_btools2;
+    
+    &send_jobarray;
+
+
+}  
 
 #    exit;
 
 
-    if (0) {
-	if (@job_phased > 0 ) {
-	    $sjadir = $rootdir;
-	    $sjaname = "phased";
-	    $sjatime = 2;
-	    $sjamem = 2000;
-	    @sjaarray = @job_phased;
-	    
-	    &send_jobarray;
-	}
-	if (@job_bgl > 0 ) {
-	    $sjadir = $rootdir;
-	    $sjaname = "beagle";
-	    $sjatime = 2;
-	    $sjamem = 4000;
-	    @sjaarray = @job_bgl;
-	    
-	    &send_jobarray;
-	}
-    }
-
-
-    if (@job_plink > 0 ) {
+if (0) {
+    if (@job_phased > 0 ) {
 	$sjadir = $rootdir;
-	$sjaname = "vcf2plink";
-	$sjatime = 2;
+	$sjaname = "phased";
+	$sjatime = 2 + $walltimeplus;
 	$sjamem = 2000;
-	@sjaarray = @job_plink;
+	@sjaarray = @job_phased;
 	
 	&send_jobarray;
     }
-
-
-    if (@job_refformat > 0 ) {
-
-
+    if (@job_bgl > 0 ) {
 	$sjadir = $rootdir;
-	$sjaname = "refformat";
-	$sjatime = 2;
-	$sjamem = 2000;
-	@sjaarray = @job_refformat;
+	$sjaname = "beagle";
+	$sjatime = 2 + $walltimeplus;
+	$sjamem = 4000;
+	@sjaarray = @job_bgl;
 	
 	&send_jobarray;
-
     }
+}
 
-    if (@job_chunk > 0 ) {
 
-	$sjadir = $rootdir;
-	$sjaname = "chunk";
-	$sjatime = 2;
-	$sjamem = 2000;
-	@sjaarray = @job_chunk;
-	
-	&send_jobarray;
+if (@job_plink > 0 ) {
+    $sjadir = $rootdir;
+    $sjaname = "vcf2plink";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000;
+    @sjaarray = @job_plink;
+    
+    &send_jobarray;
+}
 
-    }
+
+if (@job_refformat > 0 ) {
+
+
+    $sjadir = $rootdir;
+    $sjaname = "refformat";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000;
+    @sjaarray = @job_refformat;
+    
+    &send_jobarray;
+
+}
+
+
+
+
+if (@job_filtnormtra > 0 ) {
+    
     
 
-    if (@job_pobed > 0 ) {
-	
-	$sjadir = $rootdir;
-	$sjaname = "pobed";
-	$sjatime = 2;
-	$sjamem = 4000;
-	@sjaarray = @job_pobed;
-	
-	&send_jobarray;	
-    }
+    $sjadir = $rootdir;
+    $sjaname = "trans_filtnorm";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000;
+    @sjaarray = @job_filtnormtra;
+    
+    &send_jobarray;
+    
+    
+}
 
 
 #    print "debug\n";
 #    exit;
 
 
+if (@job_prepmm > 0 ) {
     
+    
+#    $sjaweek = 1;
+    $sjadir = $rootdir;
+    $sjaname = "prep_minimac";
+    $sjatime = 2 + $walltimeplus;
+    $sjamulti = $ncpus_multi;
+    $sjamem = 4000;  ## each core, so mem request for the node is multi that
+    @sjaarray = @job_prepmm;
+    
+    &send_jobarray;
+    
+    
+}
+
+
+
+if (@job_chunk > 0 ) {
+
+    $sjadir = $rootdir;
+    $sjaname = "chunk";
+    $sjatime = 2;
+    $sjamem = 2000;
+    @sjaarray = @job_chunk;
+    
+    &send_jobarray;
+
+}
+
+
+if (@job_pobed > 0 ) {
+    
+    $sjadir = $rootdir;
+    $sjaname = "pobed";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 4000;
+    @sjaarray = @job_pobed;
+    
+    &send_jobarray;	
+}
+
+
+#    print "debug\n";
+#    exit;
+
+
+
 #    if (@job_frq > 0 ) {
-	
-	
+
+
 #	$sjadir = $rootdir;
 #	$sjaname = "freq";
 #	$sjatime = 2;
 #	$sjamem = 4000;
 #	@sjaarray = @job_frq;
-	
-#	&send_jobarray;
-	
 
-	
+#	&send_jobarray;
+
+
+
     #   }
 
 
-    unless (-e "infosum_pos.nsnps") {
-	print "write infosum_pos.nsnps\n";
+unless (-e "infosum_pos.nsnps") {
+    print "write infosum_pos.nsnps\n";
 
-	if (-e "infosum_pos.nsnps.tmp") {
-	    &mysystem ("rm infosum_pos.nsnps.tmp");
-	}
-	&mysystem ("touch infosum_pos.nsnps.tmp");
-	
-	foreach my $p (@plink_collection) {
-	    &mysystem ("wc -l  $p.bim >> infosum_pos.nsnps.tmp");
-#	    print "$p\n";
-	}
-	&mysystem ("mv infosum_pos.nsnps.tmp infosum_pos.nsnps");
+    if (-e "infosum_pos.nsnps.tmp") {
+	&mysystem ("rm infosum_pos.nsnps.tmp");
     }
-
-    unless (-e "infosum_pos.chunks") {
-	print "write infosum_pos.chunks\n";
-	if (-e "infosum_pos.chunks.tmp") {
-	    &mysystem ("rm infosum_pos.chunks.tmp");
-	}
-	&mysystem ("touch infosum_pos.chunks.tmp");
-
-	foreach my $c (@chunks_collection) {
-#	    print "$c\n";
-	    &mysystem ("cat  $c >> infosum_pos.chunks.tmp");
-#	    print "$p\n";
-	}
-	&mysystem ("mv infosum_pos.chunks.tmp infosum_pos.chunks");
+    &mysystem ("touch infosum_pos.nsnps.tmp");
+    
+    foreach my $p (@plink_collection) {
+	&mysystem ("wc -l  $p.bim >> infosum_pos.nsnps.tmp");
+	#	    print "$p\n";
     }
+    &mysystem ("mv infosum_pos.nsnps.tmp infosum_pos.nsnps");
+}
+
+
+unless (-e "infosum_pos.chunks") {
+    print "write infosum_pos.chunks\n";
+    if (-e "infosum_pos.chunks.tmp") {
+	&mysystem ("rm infosum_pos.chunks.tmp");
+    }
+    &mysystem ("touch infosum_pos.chunks.tmp");
+
+    foreach my $c (@chunks_collection) {
+	&mysystem ("cat  $c >> infosum_pos.chunks.tmp");
+    }
+    &mysystem ("mv infosum_pos.chunks.tmp infosum_pos.chunks");
+}
+
+unless (-e "infosum_pos.chunks_5") {
+    print "write infosum_pos.chunks_5\n";
+    if (-e "infosum_pos.chunks_5.tmp") {
+	&mysystem ("rm infosum_pos.chunks_5.tmp");
+    }
+    &mysystem ("touch infosum_pos.chunks_5.tmp");
+
+    foreach my $c (@chunks_collection_5) {
+	&mysystem ("cat  $c >> infosum_pos.chunks_5.tmp");
+    }
+    &mysystem ("mv infosum_pos.chunks_5.tmp infosum_pos.chunks_5");
+}
+
+unless (-e "infosum_pos.chunks_10") {
+    print "write infosum_pos.chunks_10\n";
+    if (-e "infosum_pos.chunks_10.tmp") {
+	&mysystem ("rm infosum_pos.chunks_10.tmp");
+    }
+    &mysystem ("touch infosum_pos.chunks_10.tmp");
+
+    foreach my $c (@chunks_collection_10) {
+	&mysystem ("cat  $c >> infosum_pos.chunks_10.tmp");
+    }
+    &mysystem ("mv infosum_pos.chunks_10.tmp infosum_pos.chunks_10");
+}
+
+
+
+
+
 
 
     
@@ -2223,7 +2314,7 @@ unless (-e "$rootdir/rootdir_done"){
 	    
 	    $sjadir = $rootdir;
 	    $sjaname = "sumfreq";
-	    $sjatime = 2;
+	    $sjatime = 2 + $walltimeplus;
 	    $sjamem = 2000;
 	    @sjaarray = @job_sumfrq;
 	    
@@ -2241,10 +2332,10 @@ unless (-e "$rootdir/rootdir_done"){
 #print "$rootdir\n";
 #exit;
     
-    &mysystem ("touch $rootdir/rootdir_done");
+#    &mysystem ("touch $rootdir/rootdir_done");
 	
 
-}
+#}
 
 
 
@@ -2277,6 +2368,16 @@ foreach my $pf_loc (@pop_fams) {
     unless (-e "pop_$pf_loc/infosum_pos.chunks") {
 	&mysystem ("cp infosum_pos.chunks pop_$pf_loc/");
     }
+    print "copy chunkinfo_5 to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/infosum_pos.chunks_5") {
+	&mysystem ("cp infosum_pos.chunks_5 pop_$pf_loc/");
+    }
+    print "copy chunkinfo_10 to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/infosum_pos.chunks_10") {
+	&mysystem ("cp infosum_pos.chunks_10 pop_$pf_loc/");
+    }
+
+    
  
     print "copy gwascatalog to ancestry subdir\n";   
     unless (-e "pop_$pf_loc/gwascatalog.$date.rp.txt") {

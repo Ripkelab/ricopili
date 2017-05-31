@@ -35,7 +35,7 @@ version: $version
   --vcf STRING     coming out of minimac3
   --legend STRING  legend file for SNP names
 
-#  --chr INT           chromosome
+  --chr INT           chromosome
   --help              print this message and exit
 
   --refstart INT       Mb of start
@@ -59,7 +59,8 @@ GetOptions(
     "legend=s"=> \my $legend_file,
     "refstart=s"=> \my $refstart,
     "refend=s"=> \my $refend,
-#    "buff=i"=> \ $buff,
+    "chr=i"=> \my $chr,
+    #    "buff=i"=> \ $buff,
     
     );
 
@@ -68,6 +69,7 @@ die ($usage) unless $vcf_file;
 die ($usage) unless $legend_file;
 die ($usage) unless $refstart;
 die ($usage) unless $refend;
+die ($usage) unless $chr;
 
 
 
@@ -130,6 +132,8 @@ $outvcf =~ s/.dose.vcf.gz$/.vcf.gz/;
 my $outdos = $vcf_file;
 $outdos =~ s/.dose.vcf.gz$/.GP.gz/;
 
+my $outmap = $outdos.".map";
+
 if ($vcf_file eq $outdos || $vcf_file eq $outvcf ) {
     print "Error: inputfile equals outputfile\n";
     exit;
@@ -151,7 +155,7 @@ my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $
 while ($igz->gzreadline(my $line)){
     chomp($line);
     my @cells = @{&split_line_ref(\$line)};
-    if ($cells[1] > $start_loc && $cells[1] < $end_loc){
+    if ($cells[1] >= $start_loc && $cells[1] <= $end_loc){
 
 	my $key = $cells[1];
 	$key .= " ".$cells[2];
@@ -178,6 +182,8 @@ my $ovgz = gzopen("$outvcf", "wb")  or die "Cannot open file $outvcf: $gzerrno\n
 my $odgz = gzopen("$outdos", "wb")  or die "Cannot open file $outdos: $gzerrno\n" ;
 
 
+## read out the prefix
+die $!."$outmap" unless open MAP, "> $outmap";
 
 
 print "translating $vcf_file into $outvcf and $outdos\n";
@@ -196,7 +202,7 @@ while ($igz->gzreadline(my $line)){
 	    
 	    if (exists $snp{$key}) {
 		$cells[2]= $snp{$key};
-		delete $snp{$key};
+#		delete $snp{$key};
 	    }
 	    else {
 		print "Error: <$key> not found in $legend_file\n";
@@ -230,7 +236,18 @@ while ($igz->gzreadline(my $line)){
 	    
 	}
 	$odgz->gzwrite("$outd_str\n");
-    }
+
+
+	## print out map file
+	my $outm_str = "$chr";
+	$outm_str .= " ".$cells[2];
+	$outm_str .= " 0";
+	$outm_str .= " ".$cells[1];
+	
+	print MAP "$outm_str\n";
+
+
+    }    
 
     
 }
@@ -238,9 +255,10 @@ while ($igz->gzreadline(my $line)){
 $igz->gzclose();
 $ovgz->gzclose();
 $odgz->gzclose();
+close MAP;
 
 
-#if (0) {
+if (0) {
     if (keys %snp > 0) {
 	my $kcc = keys %snp;
 	print "Error: there are $kcc snpnames left\n";
@@ -251,7 +269,7 @@ $odgz->gzclose();
 	    last if ($ccn == 10);
 	}
     }
-#}
+}
 
 
 

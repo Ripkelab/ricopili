@@ -69,6 +69,8 @@ version: $version
 
 
 
+ converts cvf into hp/lagend format for impute2
+
  created by Stephan Ripke 2016 at MGH, Boston, MA
  in the frame of the PGC
 \n";

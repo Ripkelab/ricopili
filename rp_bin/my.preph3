@@ -197,8 +197,18 @@ if ($last_line =~ /Error: All variants excluded./){
     $empty = 1;
 }
 
+
+my $bimcount = `wc -l $outname.bim`;
+my @bc = split /\s+/, $bimcount;
+if ($bc[0] < 5){
+    $empty = 1;
+}
+#print "bimn: $bc[0]\n";
+#exit;
+
+
 if ($empty == 1) {
-    system ("touch $emptyname.empty");
+    system ("touch $emptyname");
     system ("touch $outname.fini");
     print "empty dataset detected\n";
     exit;

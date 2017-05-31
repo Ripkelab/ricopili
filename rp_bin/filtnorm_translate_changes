@@ -166,6 +166,14 @@ print "translating $filtnorm_file into $trans_out\n";
 while ($igz->gzreadline(my $line)){
     chomp($line);
     my @cells = @{&split_line_ref_tab(\$line)};
+
+    if ($cells[2] eq ".") {
+	$cells[2] = $cells[0].":";
+	$cells[2] .= $cells[1]."_";
+	$cells[2] .= $cells[3]."_";
+	$cells[2] .= $cells[4];
+    }
+    
     my $key = $cells[2];
     $key .= " ".$cells[1];
     $key .= " ".$cells[3];
@@ -180,6 +188,17 @@ while ($igz->gzreadline(my $line)){
 	$cells[4] = $cols[3];
 #	print "replacing $key\n";
 	delete $changes{$key};
+    }
+
+    unless ($cells[2] eq "ID") {
+	if (length ($cells[3]) > 1 || length ($cells[4]) > 1) {
+	    print "Error: found alleles with more than 1 character\n";
+	    print "Error: snp: $cells[2]\n";
+	    print "Error: pos: $cells[1]\n";
+	    print "Error: a1: $cells[3]\n";
+	    print "Error: a2: $cells[4]\n";
+	    exit;
+	}
     }
 
     my $out_str = @cells[0];

@@ -346,6 +346,14 @@ while ($igz->gzreadline(my $line)){
     if ($cells[$snp_col] =~ /;/) {
 	my @spl = split ';', $cells[$snp_col];
 	$cells[$snp_col] = $spl[0];
+
+
+#	if ($spl[0] eq ".") {
+#	    print "found a period multiname at ".$cells[$pos_col]."\n";
+#	    sleep(3);
+#	}
+
+
     }
 
 
@@ -443,12 +451,13 @@ while ($igz->gzreadline(my $line)){
     if ($cells[$snp_col] =~ /;/) {
 	my @spl = split ';', $cells[$snp_col];
 	$cells[$snp_col] = $spl[0];
+
 	$changed = 1;
     }
 
 
-    ## check out multi-occurrence
-    if ($snp_count{$cells[$snp_col]} > 1) {
+    ## check out multi-occurrence, then take position_a1_a2
+    if ($snp_count{$cells[$snp_col]} > 1 || $cells[$snp_col] eq ".") {
 	$cells[$snp_col] = $snppos_array[$cc];
 	$changed = 1;
     }
@@ -456,10 +465,12 @@ while ($igz->gzreadline(my $line)){
 
     while (exists $snp_hash{$cells[$snp_col]}) {
 
-	print "Warning: multi occurrence of $cells[$snp_col], $snppos_array[$cc], $cc\n";
-	$cells[$snp_col] .= "m";
-#	exit;
+	print "Error: multi occurrence of $cells[$snp_col], $snppos_array[$cc], $cc\n";
+#	$cells[$snp_col] .= "m";
+	exit;
     }
+
+    
     $snp_hash{$cells[$snp_col]} = 1;
 
     push @snp_array_legend, $cells[$snp_col];  # this here for bim file;

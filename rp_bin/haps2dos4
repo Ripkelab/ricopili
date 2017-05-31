@@ -112,12 +112,34 @@ sub mysystem(){
 ######### BEGIN
 ########################################
 
+
+
+
+
+
 my @haps_collection = @ARGV;
 my $nf = @ARGV - 1;
 
 my $haps_file1 = @haps_collection[0];
 my $haps_file = "$haps_file1.combined";
 my $haps_file_gz = "$haps_file1.combined.gz";
+
+
+
+my $info_file = $haps_file1;
+$info_file =~ s/.gz$//;
+#$info_file =~ s/.GP$//;
+$info_file .= "_info";
+
+#unless (-e $info_file) {
+
+#    $info_file =~ s/_info$/.info/;
+#    unless (-e $info_file) {#
+#	print "Error: $info_file does not exist\n";
+#	exit;
+#    }
+#}
+
 
 
 
@@ -192,10 +214,6 @@ else {
 # bring multiple files into one
 ########
 
-
-my $info_file = $haps_file1;
-$info_file =~ s/.gz$//;
-$info_file .= "_info";
 
 
 #print "finished big guy\n";
@@ -300,7 +318,7 @@ close FILE;
 #print "$info_file\n";
 #sleep(3);
 
-if ($info_file) {
+if (-e $info_file) {
     die $!."($info_file)" unless open IF, "< $info_file";
     die $!."($mapout)" unless open MA, "> $mapout";
     die $!."($ngtout)" unless open NGT, "> $ngtout";
@@ -323,6 +341,35 @@ if ($info_file) {
     close IF;
     close MA;
     close NGT;
+}
+else {
+    my $mapin = $haps_file1;
+    $mapin .= ".map";
+
+
+    die $!."($mapin)" unless open IF, "< $mapin";
+    die $!."($mapout)" unless open MA, "> $mapout";
+    die $!."($ngtout)" unless open NGT, "> $ngtout";
+    my $line = <IF>;
+    while (my $line = <IF>){
+	my @cells = @{&split_line_ref(\$line)};
+
+	my $snp = $cells[1];
+	my $pos = $cells[3];
+
+
+	my $bas_str = "$chr $snp 0 $pos";
+	print MA "$bas_str\n";
+	my $ngt_loc = 0;
+	if (exists $ngt{$snp}) {
+	    $ngt_loc = 1;
+	}
+	print NGT "$bas_str $ngt_loc\n";
+    }
+    close IF;
+    close MA;
+    close NGT;
+
 }
 
 

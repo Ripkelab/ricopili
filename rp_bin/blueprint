@@ -1101,7 +1101,8 @@ if ($job){
 
 
 	    my $multi_txt = "";
-	    my $threads_half = int ($threads / 2);
+#	    my $threads_half = int ($threads / 2);
+	    my $threads_half = $threads;  ## don't know why this was just half
 	    if ($threads > 1) {
 		$multi_txt = "-pe smp $threads_half -binding linear:$threads_half ";
 	    }
@@ -1130,7 +1131,7 @@ if ($job){
 	    close JOB;
 
 	    
-	    my $qsub_cmd = "qsub $multi_txt $maxpar_txt -l m_mem_free=".$mem_str."g,h_vmem=".$mem_str."g,m_mem_free=".$mem_str."g $qlong_str -v PATH,rp_perlpackages -t 1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job $hhmm $jobname";
+	    my $qsub_cmd = "qsub $multi_txt $maxpar_txt -l h_vmem=".$mem_str."g $qlong_str -v PATH,rp_perlpackages -t 1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job $hhmm $jobname";
 
 	    my $qsub_txt = "$qsub_cmd > $jobname.id";
 	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
@@ -1301,7 +1302,7 @@ if ($job){
     }
     else {
 	$mem_str = 64;
-	$cores = 4;
+	$cores = 1;  ## may 31st 2017: didn't get jobs started so I switched to cores =1 instead
     }
 
 
@@ -1335,16 +1336,14 @@ if ($job){
 
 
 
-	if ($mem_str == 64) {
-#	    print JOB "#PBS -lnodes=1:cores$cores:ppn=$cores:mem64gb\n";
-	    print JOB "#PBS -lnodes=1:mem64gb\n";
-	}
-	else {
-#	    print JOB "#PBS -lnodes=1:cores$cores:ppn=$cores\n";
+	if ($mem_str != 64) {
 	    print JOB "#PBS -lnodes=1\n";
 	}
-#	print JOB "#PBS -lmem=".$mem_str."gb\n";
-#	}
+	else {
+	    print JOB "#PBS -lnodes=1\n";
+#	    print JOB "#PBS -lnodes=1:mem64gb\n";  ## may 31st 2017: didn't get jobs started so I switched to cores =1 instead
+	}
+	
 	print JOB "#PBS -lwalltime=$wallstr\n";
 	print JOB "cd $rootdir\n";
 	print JOB "my.start_job --parn $cores -n ".'$PBS_ARRAYID'." --jobfile $jobarray\n";

@@ -344,6 +344,10 @@ version: $version
                           -> usually only used for testing  
 
 
+  --chunk5            take chunks 5  times bigger than original (for minimac and eagle)
+  --chunk10           take chunks 10 times bigger than original (for minimac and eagle)
+
+
 ### remarks 
 
   --phase is mandatory!! use --phase 0 for list of options
@@ -501,6 +505,8 @@ GetOptions(
 
     "popname=s"=> \$popname,
     "refiex=s"=> \my $refiex_file,
+    "chunk5"=> \my $chunk5,
+    "chunk10"=> \my $chunk10,
 
     );
 
@@ -513,6 +519,12 @@ if ($sleep_sw) {
   sleep ($sleep_sw);
 }
 
+if ($chunk5) {
+    $suminfo_c .= "_5";
+}
+if ($chunk10) {
+    $suminfo_c .= "_10";
+}
 
 
 
@@ -2546,7 +2558,7 @@ if ($prephase_done == 0) {
 #	    exit;
 
 #	    my $plink_in = "$bprefix";
-	    my $empty_ch_out = "$bprefix.$refind.empty";
+	    my $empty_ch_out = "$subdir_empty/$bprefix.$refind.empty";
 	    my $haps_ch_out = "$subdir/plink.$bprefix.$refind";
 	    my $haps_ch_out_fini = "plink.$bprefix.$refind.fini";
 	    my $haps_ch_out_mu0 = "plink.$bprefix.$refind.multi.0";
@@ -3138,7 +3150,7 @@ if ($imp_done == 0) {
 			    my $keep_txt = "";
 			    $keep_txt = "--keepvcf" if ($noclean);
 			    
-			    my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend";
+			    my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend --chr $refchr";
 #			    print "$sys_loc\n";
 #			    exit;
 			    

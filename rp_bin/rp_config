@@ -1104,6 +1104,10 @@ my %longvar = ("ploc","PLINK",
 	       "p2loc","PLINK2",
 	       "shloc","SHAPEIT",
 	       "ealoc","EAGLE",
+	       "bgziploc","BGZIP",
+	       "tabixloc","TABIX",
+	       "minimac3loc","Minimac3",
+	       
 	       "i2loc","IMPUTE2",
 	       "liloc","Liftover",
 	       "eloc","Eigenstrat",
@@ -1119,7 +1123,11 @@ my %longvar = ("ploc","PLINK",
 	       
 
 my %variables = ("ploc", "",
-		  "p2loc","",
+		 "p2loc","",
+		 "bgziploc","",
+		 "tabixloc","",
+		 "minimac3loc","",
+		 
 		 "shloc","",
 		 "ealoc","",
 		 "i2loc","",
@@ -1142,6 +1150,9 @@ if ($clusters{broad}){
     %variables = ("ploc", "/home/unix/sripke/plink_src/src/",
 		  "p2loc","/home/unix/sripke/plink_src/plink_1.9_newest/",
 		  "shloc","/home/unix/sripke/shapeit/",
+		  "bgziploc","/psych/genetics_data/ripke/rp_bins/tabix/tabix_rom/",
+		  "tabixloc","/psych/genetics_data/ripke/rp_bins/tabix/tabix_rom/",
+		  "minimac3loc","/psych/genetics_data/ripke/rp_bins/tabix/tabix_rom/",
 		  "ealoc","/psych/genetics_data/ripke/rp_bins/Eagle_v2.2/",
 		  "i2loc","/psych/genetics_data/ripke/references_from_debakkerscratch/impute_v2/impute_v2/impute_v2.3.2_x86_64_static/",
 		  "liloc","/home/unix/sripke/liftover/",
@@ -1162,6 +1173,9 @@ elsif ($clusters{lisa}){
 		  "p2loc","/home/gwas/plink2/plink_1.9_newest",
 		  "shloc","/home/gwas/shapeit",
 		  "ealoc","/home/gwas/eagle/Eagle_v2.2",
+		  "bgziploc","/home/gwas/rp_exec/bgzip/",
+		  "tabixloc","/home/gwas/rp_exec/tabix/",
+		  "minimac3loc","/home/gwas/rp_exec/minimac/",
 		  "i2loc","/home/gwas/bin_impute_v2/impute_v2.3.2_x86_64_static",
 		  "liloc","/home/gwas/liftover",
 		  "ldloc","/home/gwas/ldsc/",
@@ -1183,6 +1197,8 @@ elsif ($clusters{computerome}){
 		  "p2loc","/home/people/sripke/rp_external_bins/plink_1.9_newest/",
 		  "shloc","/home/people/sripke/rp_external_bins/shapeit/",
 		  "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
+
+		  
 		  "i2loc","/home/people/sripke/rp_external_bins/impute2/",
 		  "liloc","/home/people/sripke/rp_external_bins/liftover/",
 		  "ldloc","/home/people/sripke/rp_external_bins/ldsc/",
@@ -1193,6 +1209,10 @@ elsif ($clusters{computerome}){
 		  "meloc","/home/people/sripke/rp_external_bins/metal/",
 		  "bcloc","NA",
 		  "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
 #		  "hvloc","./",
 	);
 }
@@ -1213,6 +1233,10 @@ elsif ($clusters{co_ipsych}){
 		  "meloc","/data/tools/metal-20110325/",
 		  "bcloc","NA",
 		  "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
 #		  "hvloc","./",
 	);
 }
@@ -1231,6 +1255,10 @@ elsif ($clusters{genomedk}){
 		  "meloc","/project/ricopili/3rd_bins/metal/",
 		  "bcloc","NA",
 		  "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
 #		  "hvloc","./",
 	);
 }
@@ -1249,6 +1277,10 @@ elsif ($clusters{mssm}){
 		  "meloc","/hpc/users/xripkes01/ricopili/3rd_binaries/metal/",
 		  "bcloc","NA",
 		  "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
 #		  "hvloc","./",
 	);
 }
@@ -1267,6 +1299,10 @@ elsif ($clusters{mssm}){
 		      "meloc","/proj/$uppmax_project/ricopili/software/metal/generic-metal/",
 		      "bcloc","NA",
 		      "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
     	);
 }
 

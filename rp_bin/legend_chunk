@@ -22,20 +22,21 @@ use Compress::Zlib ;
 
 my $nsnps = 0;
 
+
 ##### help message
 my $usage = "
 Usage : $progname 
 
 version: $version
 
-  --root STRING       mandatory, two files must exist: ROOT.lengend.gz and ROOT.plink.bim
+  --legend STRING     mandatory, legendfile
   --nsnps INT         minimum number of SNPs after which chunk will be split
   --help              print this message and exit
-
+  --outfile STRING    mandatory, outfile
 
  creates sensible chunks for legend files 
 
- nssnps is mandatory above 10000
+ nssnps must be above 10000
 
  created by Stephan Ripke 2017 at MGH, Boston, MA
  in the frame of the PGC
@@ -48,13 +49,15 @@ use Getopt::Long;
 GetOptions( 
 
     "help"=> \my $help,
-    "root=s"=> \my $root,
+    "legend=s"=> \my $legend_file,
     "nsnps=i"=> \$nsnps,
+    "outfile=s"=> \my $outfile,
 
     );
 
 die ($usage) if $help;
-die ($usage) unless $root;
+die ($usage) unless $legend_file;
+die ($usage) unless $outfile;
 
 
 die "$usage" if ($nsnps < 10000);
@@ -115,7 +118,7 @@ sub csnp(){
 
 
 
-my $legend_file = "$root.legend.gz";
+#my $legend_file = "$root.legend.gz";
 
 
 
@@ -315,9 +318,9 @@ else {
 $nc++;
 
 #print "number of chunks: $nc\n";
-print "write output file: $legend_file.chunks\n";
+print "write output file: $outfile\n";
 
-die "$! ($legend_file.chunks)" unless open OUT, "> $legend_file.chunks";
+die "$! ($outfile)" unless open OUT, "> $outfile";
 foreach my $out_str (@out) {
     print OUT "$out_str\n";
 }
@@ -325,7 +328,7 @@ close OUT;
 
 
 
-&mysystem ("touch $legend_file.chunks.fini");
+&mysystem ("touch $outfile.fini");
 
 print "all done\n";
     
