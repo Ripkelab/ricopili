@@ -86,8 +86,12 @@ use strict;
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
+use Ricopili::Version;
 
-my $version = "1.0.30";
+
+
+
+#my $version = "1.0.30";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 my $command_line = "$progname @ARGV";
@@ -259,7 +263,7 @@ my $buffer = 500;
 my $usage = "
 Usage : $progname [options] --phase PHASE --outname OUTNAME
 
-version: $version
+version: $rp_version
 
 
  --help            print this text and exits
@@ -596,6 +600,12 @@ push @test_scripts,  $blue_script;
 #push @test_scripts, $mutt_script ;
 
 
+#print "$rp_logo\n";
+
+$rp_header =~ s/MODULE/impute_dirsub/;
+
+print "$rp_header\n";
+
 
 print ".......testing necessary binaries....\n";
 my @miss_scripts;
@@ -925,6 +935,7 @@ my $sjaname = "";
 my $sjarow = "";
 my @sjaarray;
 my $sjamem = 0;
+my $sjacores = 16;
 my $sjamaxpar = 0;
 
 my $sjatime = -1;
@@ -1055,7 +1066,7 @@ sub send_jobarray {
 	}
     }
     else { 
-	my $sys_loc = "$blue_script $sja_week_str --maxpar $sjamaxpar --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $sjaname.$outname $multi_txt";
+	my $sys_loc = "$blue_script $sja_week_str --maxpar $sjamaxpar --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --cores $sjacores --j --na $sjaname.$outname $multi_txt";
 #    print "$sys_loc\n";
 #    exit;
 
@@ -1089,7 +1100,7 @@ sub send_jobarray {
 	    $err_message .= "##### have a look at the wiki page\n"; 
 	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	    $err_message .= "##### or contact the developers\n";
-	    $err_message .= "##### version: $version\n";
+	    $err_message .= "##### version: $rp_version\n";
 	    $err_message .= "##################################################################\n";
 	    print "$err_message\n";
 
@@ -2704,11 +2715,12 @@ if ($prephase_done == 0) {
 
 	$sjadir = $impute_dir;
 	$sjaname = "preph_mu1";
-	$sjatime = 30;
+	$sjatime = 2;
 	unless ($qloc eq "qsub_b") {
 	    $sjamulti = $multithread1;
 	}
 	$sjamem = 16000;
+	$sjacores = 4;
 	@sjaarray = @preph_arr_mu1;
 
 	&send_jobarray;
@@ -2726,6 +2738,7 @@ if ($prephase_done == 0) {
 	    $sjaweek = 1;
 	}
 	$sjamem = 12000;
+	$sjacores = 4;
 	@sjaarray = @preph_arr_mu_v2;
 
 	&send_jobarray;

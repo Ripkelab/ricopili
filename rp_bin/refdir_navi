@@ -77,32 +77,18 @@ my $ncpus_multi = 8;
 #   - compare phasing with eagle
 
 
-
-
-
-
-
 #############################
-# read config file
+# load utility functions
 #############################
 
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+use Ricopili::Version;
 
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
 
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
+
+
 
 my $ploc = &trans("p2loc");
 my $qloc = &trans("queue");
@@ -119,7 +105,7 @@ my $loloc = &trans("loloc");
 # variables
 ####################################
 
-my $version = "1.0.2";
+#my $version = "1.0.2";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 my $command_line = "$progname @ARGV";
@@ -254,6 +240,9 @@ push @test_scripts, $floc2sumfrq_script2 ;
 push @test_scripts, $refinfo_script ;
 
 
+$rp_header =~ s/MODULE/refdir_navi  /;
+
+print "$rp_header\n";
 
 
 
@@ -336,7 +325,7 @@ print "------------------------------------\n";
 if ($help || $out_templ eq "" || $sample_root eq ""){
     print "usage: $progname bim1 bim2
 
-version: $version
+version: $rp_version
 
       options:
 
@@ -451,16 +440,7 @@ sub mysystem(){
 
 
 
-#############################
-# test, if plink is present
-#############################
 
-
-unless (-e "$ploc/plink" ){
-    print "\n***** Error: couldn't find the following:\n";
-    print "please check --ploc or $conf_file\n";
-    exit;
-}
 
 
 
@@ -662,7 +642,7 @@ sub send_jobarray {
 	    $err_message .= "##### have a look at the wiki page\n"; 
 	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	    $err_message .= "##### or contact the developers\n";
-	    $err_message .= "##### version: $version\n";
+	    $err_message .= "##### version: $rp_version\n";
 	    $err_message .= "##### internal: $sjarow_part\n";
 #	    $err_message .= "##### old_cmd: $old_cmd\n";
 	    $err_message .= "##################################################################\n";

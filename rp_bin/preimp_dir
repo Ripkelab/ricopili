@@ -8,8 +8,9 @@ use strict;
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans $conf_file);
+use Ricopili::Version;
 
-my $version = "1.0.2";
+#my $version = "1.0.2";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 my $command_line = "$progname @ARGV";
@@ -59,7 +60,7 @@ my $noassoc = 0;
 my $usage = "
 Usage : $progname [options]
 
-version: $version
+version: $rp_version
 
 
  --help            print this text and exits
@@ -202,6 +203,13 @@ push @test_scripts,  $pdflatex_script;
 push @test_scripts,  $mystart_script;
 
 my $mutt_script = "mail";
+
+
+$rp_header =~ s/MODULE/preimp_dir   /;
+
+print "$rp_header\n";
+
+
 
 print ".......testing necessary binaries....\n";
 my @miss_scripts;
@@ -614,7 +622,7 @@ sub send_jobarray {
 	    $err_message .= "##### have a look at the wiki page\n"; 
 	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	    $err_message .= "##### or contact the developers\n";
-	    $err_message .= "##### version: $version\n";
+	    $err_message .= "##### version: $rp_version\n";
 	    $err_message .= "##################################################################\n";
 	    print "$err_message\n";
 

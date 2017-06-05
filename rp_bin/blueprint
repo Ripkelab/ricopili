@@ -82,7 +82,7 @@ Usage : $progname [options] -b \"blueprint\"
 version: $version
 
 ##  --inst INT,INT           2 or 8 core, 16,24 gb number of instancies in one job, default=$core,$inst
-  --cores INT              on LISA, how many cores per node (default $16)
+  --cores INT              on LISA, how many cores per node (default 16)
   --walltime               walltime per job, default=$walltime
   --week INT               the first N jobs go to the week queue
   --multi INT,INT          the first N jobs getting multithreading frame, second number the number of threads, default 4
@@ -1298,12 +1298,17 @@ if ($job){
     }
     elsif ($mem_str <= 64) {
 	$mem_str = 64;
-	$cores = 8;
+	if ($cores == 16) {
+	    $cores = 8;
+	}
     }
     else {
 	$mem_str = 64;
-	$cores = 1;  ## may 31st 2017: didn't get jobs started so I switched to cores =1 instead
+	if ($cores == 16) {
+	    $cores = 1;  ## may 31st 2017: didn't get jobs started so I switched to cores =1 instead
+	}
     }
+
 
 
     if ($jobarray ne "") {

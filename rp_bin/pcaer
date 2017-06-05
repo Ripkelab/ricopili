@@ -10,6 +10,8 @@ srand(0);
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans $conf_file);
+use Ricopili::Version;
+
 
 #############################
 # read config file
@@ -118,7 +120,7 @@ my $cc =0;
 my $rel_th =.2;
 my $ov_count_max =25;
 
-my $version = "2.0.1";
+#my $version = "2.0.1";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 my $command_line = "$progname @ARGV";
@@ -243,6 +245,12 @@ push @test_scripts,  $blue_script;
 
 #print ".......search for DEBUGG in script to clean up again....\n";
 #sleep(1);
+
+
+$rp_header =~ s/MODULE/pcaer        /;
+
+print "$rp_header\n";
+
 
 print ".......testing necessary binaries....\n";
 
@@ -498,7 +506,7 @@ sub send_jobarray {
 	    $err_message .= "##### have a look at the wiki paged\n"; 
 	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	    $err_message .= "##### or contact the developers\n";
-	    $err_message .= "##### version: $version\n";
+	    $err_message .= "##### version: $rp_version\n";
 	    $err_message .= "##################################################################\n";
 	    print "$err_message\n";
 
@@ -603,7 +611,7 @@ if ($dfile) {
 if ($help || $outname eq "" || @bimfiles == 0){
     print "usage: $progname bim1 bim2
 
-version: $version
+version: $rp_version
 
       options:
 

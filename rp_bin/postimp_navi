@@ -94,8 +94,10 @@ use strict;
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
+use Ricopili::Version;
 
-my $version = "1.0.30";
+
+#my $version = "1.0.30";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 my $command_line = "$progname @ARGV";
@@ -190,7 +192,7 @@ my $prekno_file = "";
 my $usage = "
 Usage : $progname [options]
 
-version: $version
+version: $rp_version
 
  --test            testing with only one dosage file
  --chr INT         only one chromosome
@@ -495,6 +497,10 @@ push @test_scripts, $numbers_script ;
 push @test_scripts,  $mystart_script;
 
 
+
+$rp_header =~ s/MODULE/postimp_navi /;
+
+print "$rp_header\n";
 
 
 print ".......testing necessary binaries....\n";
@@ -943,7 +949,7 @@ sub send_jobarray {
 	    $err_message .= "##### have a look at the wiki page\n"; 
 	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	    $err_message .= "##### or contact the developers\n";
-	    $err_message .= "##### version: $version\n";
+	    $err_message .= "##### version: $rp_version\n";
 	    $err_message .= "##################################################################\n";
 	    print "$err_message\n";
 

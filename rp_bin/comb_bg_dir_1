@@ -144,7 +144,7 @@ close (MERGE);
 
 print "merge ".@bfile_list." chunks in the directory\n";
 
-my $system="$p2loc/plink --memory 4000  --allow-no-sex --bfile $bfile_list[0] --merge-list $merge_list_name --out $out --make-bed" ;
+my $system="$p2loc/plink --memory 8000  --allow-no-sex --bfile $bfile_list[0] --merge-list $merge_list_name --out $out --make-bed" ;
 #print "$system\n";
 #exit;
 &mysystem ("$system");

@@ -53,6 +53,18 @@ found on broad here:
 /psych/genetics_data/ripke/rp_bins/bcftools/new_0816/bcftools-1.3.1_bin/bin/bcftools
 
 
+----------------------------------------------------------------------
+
+
+bcloc /home/gwas/bcftools/
+bcrloc /home/gwas/bcftools/
+bgziploc /home/gwas/rp_exec/bgzip/
+tabixloc /home/gwas/rp_exec/tabix/
+minimac3loc /home/gwas/rp_exec/minimac/
+ealoc /home/gwas/eagle/Eagle_v2.2
+
+
+-------------------------------------------------------------
 
 
 
