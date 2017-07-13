@@ -237,6 +237,10 @@ if ($eagle_sw or $eagle_vcf) {
     $gemafile =~ s/.txt$/.chr.txt/;
 }
 if ($eagle_sw) {
+    print "---------------------------------------------------------------------\n";
+    print "Warning: eagle is not working with idnum famfile, possible dangerous\n";
+    print "---------------------------------------------------------------------\n";
+    sleep (3);
     $sys_loc = "$ealoc/$eagle_bin --maxMissingPerIndiv=1.0 --maxMissingPerSnp=1.0  --bfile=$outname --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt > $outname.log 2> $outname.loge";
 }
 
@@ -244,6 +248,7 @@ if ($eagle_sw) {
 if ($eagle_vcf) {
     # Convert plink bfile to a vcf file, then run Eagle to obtain a phased vcf file.
     # The resulting phased vcf can then be used with Minimac3.
+
 
     unless ($ref) {
       die "$0: Please specify the reference file (e.g. --ref=my/ref.vcf.gz)\n";
@@ -254,9 +259,9 @@ if ($eagle_vcf) {
     # NOTE: the temporary name is 'unphased0' because Eagle itself writes a file
     # out.unphased.vcf.gz
     $sys_loc = qq{
-      { $p2loc/plink --bfile "$outname" --recode vcf-iid bgz --out "$outname.unphased0" &&
+      { $p2loc/plink --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out "$outname.unphased0" &&
         $tabix -f "$outname.unphased0.vcf.gz" &&
-        $ealoc/$eagle_bin --vcfRef "$ref" --vcfTarget "$outname.unphased0.vcf.gz" --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt
+        $ealoc/$eagle_bin --vcfRef "$ref" --vcfTarget "$outname.unphased0.vcf.gz" --allowRefAltSwap --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt
       } > $outname.log 2> $outname.loge
     };
 }

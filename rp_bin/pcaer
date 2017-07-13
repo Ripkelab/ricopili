@@ -471,7 +471,7 @@ sub send_jobarray {
 	}
     }
     else { 
-	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $sjaname.$outname $multi_txt";
+	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";
 	&mysystem ($sys_loc);
     }
 
@@ -541,14 +541,14 @@ sub send_jobarray {
     }
 
     if ($qloc eq "qsub") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
 
     if ($qloc eq "qsub_c") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
     if ($qloc eq "qsub_b") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
 
 

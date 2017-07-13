@@ -1045,12 +1045,14 @@ if ($job){
 	#    $cores=2 if ($cores < 2);
 	
 	my $jobname;
+	
 
 	my $mem_str = ($jmem / 1000) * 1;
 	$mem_str = 1 if ($mem_str < 1);
 
 
 	$jobname="j.$NOJ";
+
 
 
 	unless ($wait_fi_file){
@@ -1121,9 +1123,10 @@ if ($job){
 	    else {
 		$qlong_str = "-q short";
 	    }
+
+
+	    
 	    die "$! ($jobname)" unless open JOB, "> $jobname";
-
-
 
 #	    print JOB "#PBS -lwalltime=$wallstr\n";
 	    print JOB "cd $rootdir\n";

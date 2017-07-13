@@ -183,10 +183,6 @@ GetOptions(
     );
 
 
-unless ($outname) {
-    print "please provide --outname\n";
-    exit;
-}
 
 ############################################################
 ## testing binaries
@@ -421,6 +417,12 @@ unless ($out_templ =~ /chrXXX/) {
     print "please out_templ with chrXXX\n";
     die;
 }
+}
+
+
+unless ($outname) {
+    print "please provide --outname\n";
+    exit;
 }
 
 
@@ -680,7 +682,7 @@ sub send_jobarray {
 	}
     }
     else { 
-	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $sjaname.$outname $multi_txt";
+	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";
 	&mysystem ($sys_loc);
     }
     
@@ -699,13 +701,13 @@ sub send_jobarray {
     }
 
     if ($qloc eq "qsub") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
     if ($qloc eq "qsub_c") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
     if ($qloc eq "qsub_b") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
 
 
@@ -2142,7 +2144,7 @@ if (@job_prepmm > 0 ) {
     $sjaname = "prep_minimac";
     $sjatime = 2 + $walltimeplus;
     $sjamulti = $ncpus_multi;
-    $sjamem = 4000;  ## each core, so mem request for the node is multi that
+    $sjamem = 8000;  ## each core, so mem request for the node is multi that
     @sjaarray = @job_prepmm;
     
     &send_jobarray;

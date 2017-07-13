@@ -43,6 +43,23 @@ if ($num_args != 2){
 	die "Require exactly 2 arguments (impprob_to_2dos.pl <input_file> <output_file>)\n" ;
 }
 
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
 # get file names
 my $input_file = $ARGV[0];
 my $output_file = $ARGV[1];
@@ -58,12 +75,16 @@ my $outstream = gzopen("$output_file", "wb")
 # init line counter
 my $n = 0;
 
+
+
+
 ### process lines of input file
 while ($instream->gzreadline(my $line)){
 	$n++;
 
 	# split line on whitespace
-	my @cells = split /\s+/, $line;
+	my @cells = @{&split_line_ref(\$line)};
+#	my @cells = split /\s+/, $line;
 
 	# verify number of entries after snp info (5 columns) is a multiple of 3 as expected
 	if ( ((scalar @cells - 5) % 3)  != 0){

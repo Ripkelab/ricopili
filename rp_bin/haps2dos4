@@ -39,8 +39,9 @@ version: $version
   --bim STRING        bim-file, mandatory
   --chr INT           chromosome
   --help              print this message and exit
+#  --transfam STRING   contains the key to translate the vcf IDs
 
-  --prefix STRING     prefix into famfile
+##  --prefix STRING     prefix into famfile
 
 
  created by Stephan Ripke 2012 at MGH, Boston, MA
@@ -58,6 +59,7 @@ GetOptions(
     "prefix=s"=> \my $prefix,
     "outdir=s"=> \my $outdir,
     "fam=s"=> \my $famname,
+#    "transfam=s"=> \my $transfamname,
     "bim=s"=> \my $bimname,
     "chr=i"=> \my $chr,
 
@@ -122,6 +124,7 @@ my $nf = @ARGV - 1;
 
 my $haps_file1 = @haps_collection[0];
 my $haps_file = "$haps_file1.combined";
+my $haps_fam = "$haps_file1.fam";
 my $haps_file_gz = "$haps_file1.combined.gz";
 
 
@@ -249,24 +252,45 @@ if ($prefix) {
     $famname_in = "$famname.pre";
     &mysystem ("cp $famname.pre $famout");
 }
-else {
-    &mysystem ("cp $famname $famout");
-}
+#else {
+#    &mysystem ("cp $famname $famout");
+#}
 
 
+
+my @famarray;
+push @famarray, "header";
 
 die $!."($famname_in)" unless open IF, "< $famname_in";
-die $!."($famname_in.ow)" unless open OF, "> $famname_in.ow";
 
 while (my $line = <IF>){
     my @cells = @{&split_line_ref(\$line)};
-    if ($cells[5] != 2 && $cells[5] != 1) {
-	$cells[5] = 1;
-    }
-    print OF "@cells\n";
+    push @famarray,"@cells";
+
+}
+close IF;
+
+
+
+die $!."($haps_fam)" unless open IF, "< $haps_fam";
+die $!."($famout.ow)" unless open OF, "> $famout";
+
+while (my $line = <IF>){
+    my @cells = @{&split_line_ref(\$line)};
+    
+#    if ($cells[5] != 2 && $cells[5] != 1) {#
+#	$cells[5] = 1;
+#    }
+
+    
+    print OF $famarray [$cells[0]]."\n";
 }
 close IF;
 close OF;
+
+
+
+
 
 
 # preprocess dosages to ensure probabilities sum to 1
@@ -295,9 +319,11 @@ unless (-e $twodos_tmp_success) {
 
 
 #my $sys_loc = "$ploc/plink --dosage $haps_file_gz noheader skip0=1 skip1=1 format=3 Z --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
-my $sys_loc = "$ploc/plink --memory 2000 --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
+my $sys_loc = "$ploc/plink --memory 2000 --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famout --allow-no-sex --write-dosage --out $dosout";
 print "$sys_loc\n";
 &mysystem ($sys_loc);
+
+#&mysystem ("rm $famout.ow");
 
 
 
@@ -350,7 +376,7 @@ else {
     die $!."($mapin)" unless open IF, "< $mapin";
     die $!."($mapout)" unless open MA, "> $mapout";
     die $!."($ngtout)" unless open NGT, "> $ngtout";
-    my $line = <IF>;
+#    my $line = <IF>;
     while (my $line = <IF>){
 	my @cells = @{&split_line_ref(\$line)};
 
@@ -391,6 +417,7 @@ close BC;
 
 &mysystem ("touch $finiout");
 &mysystem ("rm $twodos_tmp");
+&mysystem ("rm $twodos_tmp.fini");
 &mysystem("rm $haps_file_gz");
     
 print "done\n";

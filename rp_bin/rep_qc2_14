@@ -2738,20 +2738,20 @@ unless ($noassoc) {
 if ($gwa_plot) {
 
     my $systemGWA="gwa_plot_3 $prekno_txt --cols 2,9,1,3 --title GWA-Plot_nofi --sig-gwa $nofiprefix.assoc";
-#    print "$systemGWA\n";
+    print "$systemGWA\n";
 #    exit;
     &mysystem ($systemGWA) unless (-e "GWA-Plot_nofi_gwa.pdf");
 
 
 #    exit;
     my $systemGWA="gwa_plot_3 $prekno_txt --cols 2,9,1,3 --title GWA-Plot_fifi --sig-gwa $fifiprefix.assoc";
-#    print "$systemGWA\n";
+    print "$systemGWA\n";
     &mysystem ($systemGWA) unless (-e "GWA-Plot_fifi_gwa.pdf");
 
 
 #    my $systemGWA="gwa_plot_3 $prekno_txt --cols 1,4,17,18 --title GWA-Plot --sig-gwa combined_set_alt.txt_tmp";
     my $systemGWA="gwa_plot_3 $prekno_txt --cols 1,8,2,3 --title GWA-Plot --sig-gwa combined_set_alt.txt";
-#    print "$systemGWA\n";
+    print "$systemGWA\n";
     &mysystem ($systemGWA) unless (-e "GWA-Plot_gwa.pdf");
 
 
@@ -2763,7 +2763,7 @@ if ($gwa_plot) {
     die if ($la_comb > 20);
 
     my $systemGWA="gwa_plot_3 $prekno_txt --gc $la_comb --cols 1,8,2,3 --title GWA-Plot_gc --sig-gwa combined_set_alt.txt";
-#    print "$systemGWA\n";
+    print "$systemGWA\n";
     &mysystem ($systemGWA) unless (-e "GWA-Plot_gc_gwa.pdf");
 
 

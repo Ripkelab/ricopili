@@ -16,7 +16,7 @@ use Ricopili::Utils qw(trans);
 #############################
 
 my $i2loc = &trans("i2loc");
-#my $i4loc = &trans("i4loc");
+my $i4loc = &trans("i4loc");
 my $m3loc = &trans("minimac3loc");
 
 
@@ -25,7 +25,7 @@ my $buff = 1000;
 ###########################################
 ##### help message
 my $usage = "
-Usage : my.imp2 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
+Usage : my.imp.3 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
 
  --out STRING      name of out file, or output prefix for Minimac3
  --in STRING       name of haps file, or vcf file for Minimac3
@@ -35,7 +35,7 @@ Usage : my.imp2 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
  --refend INT      Mb of end
  --chrX STRING     for X chromosome, noting sample-file
  --buff INT        buffer, default $buff
- --impute4         use impute4 instead of impute2
+ --imp4            use impute4 instead of impute2
 
  --minimac         perform the imputation using Minimac3
  --chr             chromosome number; required for Minimac3
@@ -102,7 +102,7 @@ if ($chrx) {
 }
 
 my $imp2_bin = "impute2";
-my $imp4_bin = "impute4.r240";
+my $imp4_bin = "impute4.r264";
 
 system ("touch $outname.hour");
 if (-e "$outname.fini") {
@@ -148,7 +148,7 @@ my $sys_loc;
 
 if ($minimac) {
   $sys_loc = qq{
-    $m3loc/Minimac3 \\
+    $m3loc/Minimac3-omp \\
     --refHaps "$reffile" \\
     --format DS,GT,GP \\
     --haps "$inname" \\
@@ -157,10 +157,17 @@ if ($minimac) {
     --end "$end_loc" \\
     --window "$buff_mm" \\
     --chr "$chr" \\
-    --cpus 4 \\
+
     > "$outname.dose.vcf.log"
   };
-} else {
+  
+  #    --cpus 4 \\
+}
+elsif ($imp4) {
+    $sys_loc = "$i4loc/$imp4_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str -no_maf_align -snp_blocks";
+}
+
+else {
 
     
     $sys_loc = "$i2loc/$imp2_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -known_haps_g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str";
@@ -171,10 +178,7 @@ if ($minimac) {
 #exit;
 
 
-#if ($imp4) {
-#    $sys_loc = "$i4loc/$imp4_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str -no_maf_align -snp_blocks";
 
-#}
 
 #print "$sys_loc\n";
 #exit;

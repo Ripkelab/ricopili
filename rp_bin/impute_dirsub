@@ -1053,6 +1053,12 @@ sub send_jobarray {
 
 
 
+#    my $jobfile = "$sjaname.$outname";
+#    while (-e "j.$jobfile" || -e "blueprint_joblist_file-$jobfile"){
+#	$jobfile .= ".j";
+#    }
+
+    
     
     if ($serial) {
 	print "starting step $sjaname with ".@sjaarray." jobs\n";
@@ -1065,13 +1071,15 @@ sub send_jobarray {
 	    
 	}
     }
-    else { 
-	my $sys_loc = "$blue_script $sja_week_str --maxpar $sjamaxpar --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --cores $sjacores --j --na $sjaname.$outname $multi_txt";
-#    print "$sys_loc\n";
-#    exit;
+    else {
 
-	
-	&mysystem ($sys_loc);
+	my $sys_loc = "$blue_script $sja_week_str --maxpar $sjamaxpar --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --cores $sjacores --j --na $jobfile $multi_txt";
+#	print "$sys_loc\n";
+#	exit;
+
+#	if (0) {
+	    &mysystem ($sys_loc);
+#	}
     }
 #    exit;
 
@@ -1127,7 +1135,7 @@ sub send_jobarray {
     $command_line =~ s/--force1//;
 
 
-    my $wt_file = "$sjadir/blueprint_joblist_file-$sjaname.$outname";
+    my $wt_file = "$sjadir/blueprint_joblist_file-$jobfile";
     chdir "$rootdir" or die "something strange";
     if ($qloc eq "bsub") {
 	$wt_file =~ s/.*blueprint_joblist_file-//;
@@ -1138,13 +1146,13 @@ sub send_jobarray {
     }
 
     if ($qloc eq "qsub") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
     if ($qloc eq "qsub_c") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
     if ($qloc eq "qsub_b") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
     
 
@@ -1156,6 +1164,8 @@ sub send_jobarray {
     }
     else {
 	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na _if_$outname";
+#	print "$sys_re\n";
+#	exit;
 	&mysystem ($sys_re);
     }
 
@@ -2688,7 +2698,7 @@ if ($prephase_done == 0) {
 	$sjaname = "preph";
 	$sjatime = 2;
 #	$sjatime = 4 if ($preph_fini > 0);
-	$sjamem = 2000;
+	$sjamem = 4000;
 	@sjaarray = @preph_arr;
 
 
@@ -3227,14 +3237,17 @@ if ($imp_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "imp";
 	$sjatime = 2;
-	$sjamem = 16000;
+#	$sjamem = 16000;
+	$sjamem = 4000;
 #	if ($imp_fini > 0) {
 #	    $sjamem = 16000;
 #	    $sjatime = 4;
 	#	}
-	if ($mm3_sw) {
-	    $sjamulti = 4;
-	}
+	
+#	if ($mm3_sw) {
+#	    $sjamulti = 4;
+#	    $sjamem = 1000;
+#	}
 	
 	@sjaarray = @imp_arr;
 	
@@ -3388,6 +3401,8 @@ if ($dos_done == 0) {
 		}
 
 
+#		my $transfam_txt = "";
+		
 		if ($suminfo_s_v2_sw == 1) {
 
 
@@ -3395,6 +3410,9 @@ if ($dos_done == 0) {
 
 
 		    $famname_loc = "$plink_ch_out.fam";
+#		    $transfam_txt = "--transfam $famname_loc.transl";
+
+			
 		    $puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp.gz";
 
 		    if ($mm3_sw) {

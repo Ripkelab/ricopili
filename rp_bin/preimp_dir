@@ -104,7 +104,7 @@ options to change these values:
 
   --mind NUM        include only IDs with missing-rate < NUM
   --geno NUM        include only SNPs with missing-rate < NUM
-  --maf  NUM        include only SNPs with missing-rate < NUM
+  --maf  NUM        include only SNPs with missing-rate > NUM
   --midi NUM        include only SNPs with missing-rate-difference < NUM
   --pre_geno NUM    include only SNPs with missing-rate < NUM (before ID filter)
   --imend INT       number of mendelian errors per ID
@@ -591,7 +591,7 @@ sub send_jobarray {
 	}
     }
     else {    
-	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $sjaname.$outname $multi_txt";
+	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";
 	print "$sys_loc\n";
 	#    sleep(3);
 	&mysystem ($sys_loc);
@@ -657,13 +657,13 @@ sub send_jobarray {
 	$wt_file = "$sjadir/$jobfile.script.id";
     }
     if ($qloc eq "qsub") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
     if ($qloc eq "qsub_c") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
     if ($qloc eq "qsub_b") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+	$wt_file = "$sjadir/j.$jobfile.id";
     }
     
 

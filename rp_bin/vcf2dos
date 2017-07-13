@@ -133,6 +133,7 @@ my $outdos = $vcf_file;
 $outdos =~ s/.dose.vcf.gz$/.GP.gz/;
 
 my $outmap = $outdos.".map";
+my $outfam = $outdos.".fam";
 
 if ($vcf_file eq $outdos || $vcf_file eq $outvcf ) {
     print "Error: inputfile equals outputfile\n";
@@ -186,6 +187,7 @@ my $odgz = gzopen("$outdos", "wb")  or die "Cannot open file $outdos: $gzerrno\n
 die $!."$outmap" unless open MAP, "> $outmap";
 
 
+
 print "translating $vcf_file into $outvcf and $outdos\n";
 
 
@@ -219,6 +221,8 @@ while ($igz->gzreadline(my $line)){
     }
 
 
+
+    
     unless ($cells[0] =~ /^#/) {
 	my $outd_str = "---";
 	$outd_str .= " ".$cells[2];
@@ -247,7 +251,16 @@ while ($igz->gzreadline(my $line)){
 	print MAP "$outm_str\n";
 
 
-    }    
+    }
+    elsif ($cells[0] =~ /^#CHROM/) {
+
+	die $!."$outfam" unless open FAM, "> $outfam";
+	foreach my $cc (9..$#cells) {
+	    print FAM "$cells[$cc]\n";
+	}
+	close FAM;
+	
+    }
 
     
 }
@@ -256,6 +269,7 @@ $igz->gzclose();
 $ovgz->gzclose();
 $odgz->gzclose();
 close MAP;
+
 
 
 if (0) {
