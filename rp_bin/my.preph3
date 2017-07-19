@@ -181,7 +181,7 @@ my $sc = system ($sys);
 
 if ($sc != 0 ) {
     print "Error with running plink: $sys\n";
-    exit;
+#    exit;
 }
 
 
@@ -197,14 +197,15 @@ if ($last_line =~ /Error: All variants excluded./){
     $empty = 1;
 }
 
-
-my $bimcount = `wc -l $outname.bim`;
-my @bc = split /\s+/, $bimcount;
-if ($bc[0] < 5){
-    $empty = 1;
+if (-e "$outname.bim") {
+    my $bimcount = `wc -l $outname.bim`;
+    my @bc = split /\s+/, $bimcount;
+    if ($bc[0] < 5){
+	$empty = 1;
+    }
+    print "excluding chunk with less than 5 genotyped SNPs in it\n";
 }
-#print "bimn: $bc[0]\n";
-#exit;
+
 
 
 if ($empty == 1) {
