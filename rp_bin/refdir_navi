@@ -122,6 +122,7 @@ my $mach_templ ="";
 my $imp2_templ ="";
 my $hm3_templ ="";
 my $gm_template = "genetic_map_chrXXX_combined_b37.txt";
+my $gmchr_template = "genetic_map_chrXXX_combined_b37.chr.txt";
 
 my $vcf_site = "";
 my $gm_site = "http://mathgen.stats.ox.ac.uk/impute/ALL_1000G_phase1integrated_feb2012_impute/";
@@ -1574,6 +1575,12 @@ my $gm_name;
 	    unless (-e $gm_name_fini) {
 
 		if (-e $gm_name_loc) {
+
+#		    if ($chr == 23){
+#			$gm_name = $gm_template;
+#			$gm_name =~ s/XXX/23/g;
+#		    }
+		    
 		    &mysystem ("mv $gm_name_loc $gm_name");
 		    &mysystem ("touch $gm_name_fini");
 
@@ -1588,7 +1595,7 @@ my $gm_name;
 
 			print "gm-file ($gm_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
 		    }
-		    my $sys = "my.wget $gm_site $gm_name ";
+		    my $sys = "$wget_script $gm_site $gm_name ";
 #		    print "$sys\n";
 #		exit;	
 			if ($answer_gm eq "") {
@@ -2410,6 +2417,18 @@ foreach my $pf_loc (@pop_fams) {
 	    unless (-e $gm_name_target){
 		&mysystem ("cp $gm_name_source $gm_name_target")
 	    }
+
+	    my $gmchr_name_source = $gmchr_template;
+	    $gmchr_name_source =~ s/XXX/X_nonPAR/g;
+	    my $gmchr_name_target = $gmchr_template;
+	    $gmchr_name_target =~ s/XXX/$chr/g;
+	    
+	    unless (-e $gmchr_name_target){
+		&mysystem ("cp $gmchr_name_source $gmchr_name_target")
+	    }
+
+
+	    
 	}
 
 	
