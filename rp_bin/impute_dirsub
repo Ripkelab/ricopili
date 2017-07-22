@@ -3969,105 +3969,109 @@ unless (-e $cobg_out) {
 #sleep(10);
 
 
-if ($noclean) {
-    print "exit before cleanup\n";
-    exit;
-}
-
-
 
 
 
 chdir ($rootdir);
 
 
-print "start cleaning\n";
-my @clean_arr;    
+unless ($noclean) {
+    
+    print "start cleaning\n";
+    my @clean_arr;    
 
-unless (-e "$rootdir/clean_done"){
-
-
-    foreach (@bimfli_files) {
-	my $bprefix = $_;
-	$bprefix =~ s/.bim$//;
-
-	my $dasudir_loc = "$dasudir"."_$bprefix";	
-	my $dasudir_loc_qc1f = "$dasudir"."qc1_$bprefix/qc1f";
-	my $pi_loc = "$rootdir/$impute_dir"."/pi_$bprefix";
-	my $subf_loc = "$rootdir/$impute_dir"."/subbfile_$bprefix";
-	my $haps_loc = "$rootdir/$impute_dir"."/haps_$bprefix";
+    unless (-e "$rootdir/clean_done"){
 
 
-#	print "---dataset $bprefix\n";
+	foreach (@bimfli_files) {
+	    my $bprefix = $_;
+	    $bprefix =~ s/.bim$//;
 
-#	print "$dasudir_loc\n";
-#	print "$dasudir_loc_qc1f\n";
-#	print "$pi_loc\n";
-#	print "$subf_loc\n";
-#	print "$haps_loc\n";
-#	print "$pi_eo_loc\n";
+	    my $dasudir_loc = "$dasudir"."_$bprefix";	
+	    my $dasudir_loc_qc1f = "$dasudir"."qc1_$bprefix/qc1f";
+	    my $pi_loc = "$rootdir/$impute_dir"."/pi_$bprefix";
+	    my $subf_loc = "$rootdir/$impute_dir"."/subbfile_$bprefix";
+	    my $haps_loc = "$rootdir/$impute_dir"."/haps_$bprefix";
 
-	if (-e "$dasudir_loc") {
-	    push @clean_arr,  "$cleandir_script $dasudir_loc" unless (-e "$dasudir_loc/cleaned");
+
+	    #	print "---dataset $bprefix\n";
+
+	    #	print "$dasudir_loc\n";
+	    #	print "$dasudir_loc_qc1f\n";
+	    #	print "$pi_loc\n";
+	    #	print "$subf_loc\n";
+	    #	print "$haps_loc\n";
+	    #	print "$pi_eo_loc\n";
+
+	    if (-e "$dasudir_loc") {
+		push @clean_arr,  "$cleandir_script $dasudir_loc" unless (-e "$dasudir_loc/cleaned");
+	    }
+	    if (-e "$dasudir_loc_qc1f") {
+		push @clean_arr,  "$cleandir_script $dasudir_loc_qc1f" unless (-e "$dasudir_loc_qc1f/cleaned");
+	    }
+	    if (-e "$pi_loc") {
+		push @clean_arr,  "$cleandir_script $pi_loc" unless (-e "$pi_loc/cleaned");
+	    }
+	    if (-e "$subf_loc") {
+		push @clean_arr,  "$cleandir_script $subf_loc" unless (-e "$subf_loc/cleaned");
+	    }
+	    if (-e "$haps_loc") {
+		push @clean_arr,  "$cleandir_script $haps_loc" unless (-e "$haps_loc/cleaned");
+	    }
+
+
 	}
-	if (-e "$dasudir_loc_qc1f") {
-	    push @clean_arr,  "$cleandir_script $dasudir_loc_qc1f" unless (-e "$dasudir_loc_qc1f/cleaned");
-	}
-	if (-e "$pi_loc") {
-	    push @clean_arr,  "$cleandir_script $pi_loc" unless (-e "$pi_loc/cleaned");
-	}
-	if (-e "$subf_loc") {
-	    push @clean_arr,  "$cleandir_script $subf_loc" unless (-e "$subf_loc/cleaned");
-	}
-	if (-e "$haps_loc") {
-	    push @clean_arr,  "$cleandir_script $haps_loc" unless (-e "$haps_loc/cleaned");
+
+
+	my $pi_eo_loc = "$rootdir/$impute_dir"."/errandout";
+	if (-e "$pi_eo_loc") {
+	    push @clean_arr,  "$cleanerrandout_script $pi_eo_loc" unless (-e "$pi_eo_loc/cleaned");    
 	}
 
+
+	if (-e "$cobg_dir") {
+	    my $cobg_eo_loc = "$cobg_dir/errandout";
+	    if (-e "$cobg_eo_loc") {
+		push @clean_arr,  "$cleanerrandout_script $cobg_eo_loc" unless (-e "$cobg_eo_loc/cleaned");    
+	    }
+	    push @clean_arr,  "$cleandir_script --cobg $cobg_dir" unless (-e "$cobg_dir/cleaned");    
+	}
+
+
+
+	###################################
+	### send clean jobs
+	###################################
+
+	if (@clean_arr > 0) {
+
+	    	foreach (@clean_arr) {
+	    	    print "$_\n";
+	    	}
+	    	exit;
+
+
+	    $sjadir = $rootdir;
+	    $sjaname = "clean";
+	    $sjatime = 2;
+	    $sjamem = 1000;
+	    $sjamaxpar = 100;
+	    @sjaarray = @clean_arr;
+
+	    &send_jobarray;
+
+	}
+	else {
+	    &mysystem ("touch $rootdir/clean_done");
+	    print "cleaning done\n";
+	}
 
     }
-
-
-    my $pi_eo_loc = "$rootdir/$impute_dir"."/errandout";
-    if (-e "$pi_eo_loc") {
-	push @clean_arr,  "$cleanerrandout_script $pi_eo_loc" unless (-e "$pi_eo_loc/cleaned");    
-    }
-
-
-    if (-e "$cobg_dir") {
-	my $cobg_eo_loc = "$cobg_dir/errandout";
-	if (-e "$cobg_eo_loc") {
-	    push @clean_arr,  "$cleanerrandout_script $cobg_eo_loc" unless (-e "$cobg_eo_loc/cleaned");    
-	}
-	push @clean_arr,  "$cleandir_script --cobg $cobg_dir" unless (-e "$cobg_dir/cleaned");    
-    }
-
-
-
-###################################
-### send clean jobs
-###################################
-
-    if (@clean_arr > 0) {
-
-#	foreach (@clean_arr) {
-#	    print "$_\n";
-#	}
-#	exit;
-	$sjadir = $rootdir;
-	$sjaname = "clean";
-	$sjatime = 2;
-	$sjamem = 1000;
-	$sjamaxpar = 100;
-	@sjaarray = @clean_arr;
-
-	&send_jobarray;
-
-    }
-    else {
-	&mysystem ("touch $rootdir/clean_done");
-	print "cleaning done\n";
-    }
-
+}
+else {
+    print "####################################################################################################\n";
+    print "--noclean was switched on, please be aware that a lot of intermedieate files are kept right now\n";
+    print "####################################################################################################\n";
 }
 
 

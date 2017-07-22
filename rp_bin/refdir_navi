@@ -1622,7 +1622,15 @@ my $gm_name;
 	    ####################################
 
 	    unless (-e $vcf_name_loc_filtnorm_fini) {
-		push @job_btools1, "$prepvcf_script_filtnorm --vcf $vcf_name_loc --mac_th $mac_th";
+
+		######### on the X only include non-PAR
+		my $chr23_filter = "";
+		if ($chr == 23) {
+		    $chr23_filter = "--chr23 --fam $sample_root.fam";
+		}
+		push @job_btools1, "$prepvcf_script_filtnorm $chr23_filter --vcf $vcf_name_loc --mac_th $mac_th";
+#		print "$prepvcf_script_filtnorm $chr23_filter --vcf $vcf_name_loc --mac_th $mac_th\n";
+#		exit;
 	    }
 
 

@@ -48,7 +48,9 @@ my $mac_th = 4;
 use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
+    "chr23"=> \my $chr23,
     "vcf=s"=> \$vcffile,
+    "fam=s"=> \my $famfile,
     "mac_th=i"=> \$mac_th,
     );
 
@@ -64,7 +66,8 @@ version: $version
         --vcf STRING        name of vcf file
         --out STRING        prefix, haps.gz, legend.gz will be appended
         --mac_th INT        minimum minor allele count
-
+        --chr23             filter chromosome 23 for only non-PAR needs --fam
+        --fam STRING        defines the nuber of haplotypes, only used with --chr23
 
 
 
@@ -73,6 +76,23 @@ version: $version
 \n";
     exit 2;
 }
+
+
+my $chr23_filter = "";
+if ($chr23) {
+    unless (-e $famfile) {
+	print "if option --chr23 is on, please specify famfile\n";
+    }
+    my $nhaps = 0;
+    die $!."($famfile)" unless open FILE, "< $famfile";
+    while (my $line = <FILE>){
+	$nhaps += 2;
+    }
+    close FILE;
+    $chr23_filter = " & AN<".$nhaps;
+}
+
+
 
 
 
@@ -85,9 +105,10 @@ if ($bcloc =~ / /) {
 }
 
 
-my $sys = "$bcloc"."bcftools norm -m-both -f $fasta_file $vcffile | $bcftools2 filter -i \"MAC>"."$mac_th"."\" | gzip -c > $vcffile.filtnorm.gz";
+my $sys = "$bcloc"."bcftools norm -m-both -f $fasta_file $vcffile | $bcftools2 filter -i \' MAC>".$mac_th.$chr23_filter." \'| gzip -c > $vcffile.filtnorm.gz";
 
-print "$sys\n";
+#print "$sys\n";
+#exit;
 
 
 my $sc =system ($sys);
