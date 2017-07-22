@@ -3989,6 +3989,9 @@ unless ($noclean) {
 
 	    my $dasudir_loc = "$dasudir"."_$bprefix";	
 	    my $dasudir_loc_qc1f = "$dasudir"."qc1_$bprefix/qc1f";
+	    my $dasudir_loc_bg = "$dasudir"."qc1_$bprefix/bg";
+	    my $dasudir_loc_bgs = "$dasudir"."qc1_$bprefix/bgs";
+	    my $dasudir_loc_bgn = "$dasudir"."qc1_$bprefix/bgn";
 	    my $pi_loc = "$rootdir/$impute_dir"."/pi_$bprefix";
 	    my $subf_loc = "$rootdir/$impute_dir"."/subbfile_$bprefix";
 	    my $haps_loc = "$rootdir/$impute_dir"."/haps_$bprefix";
@@ -4009,6 +4012,15 @@ unless ($noclean) {
 	    if (-e "$dasudir_loc_qc1f") {
 		push @clean_arr,  "$cleandir_script $dasudir_loc_qc1f" unless (-e "$dasudir_loc_qc1f/cleaned");
 	    }
+	    if (-e "$dasudir_loc_bg") {
+		push @clean_arr,  "$cleandir_script --full $dasudir_loc_bg" unless (-e "$dasudir_loc_bg/cleaned");
+	    }
+	    if (-e "$dasudir_loc_bgs") {
+		push @clean_arr,  "$cleandir_script --full $dasudir_loc_bgs" unless (-e "$dasudir_loc_bgs/cleaned");
+	    }
+	    if (-e "$dasudir_loc_bgn") {
+		push @clean_arr,  "$cleandir_script --full $dasudir_loc_bgn" unless (-e "$dasudir_loc_bgn/cleaned");
+	    }	    
 	    if (-e "$pi_loc") {
 		push @clean_arr,  "$cleandir_script $pi_loc" unless (-e "$pi_loc/cleaned");
 	    }
@@ -4018,6 +4030,7 @@ unless ($noclean) {
 	    if (-e "$haps_loc") {
 		push @clean_arr,  "$cleandir_script $haps_loc" unless (-e "$haps_loc/cleaned");
 	    }
+	    
 
 
 	}
@@ -4045,10 +4058,10 @@ unless ($noclean) {
 
 	if (@clean_arr > 0) {
 
-	    	foreach (@clean_arr) {
-	    	    print "$_\n";
-	    	}
-	    	exit;
+#	    	foreach (@clean_arr) {
+#	    	    print "$_\n";
+#	    	}
+#	    	exit;
 
 
 	    $sjadir = $rootdir;

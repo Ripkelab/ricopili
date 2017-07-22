@@ -11,8 +11,9 @@ my $command_line = "$progname @ARGV";
 
 use Getopt::Long;
 GetOptions( 
-	    "help"=> \my $help,
-	    "cobg"=> \my $cobg,
+    "help"=> \my $help,
+    "cobg"=> \my $cobg,
+    "full"=> \my $full,
     );
 
 
@@ -25,6 +26,8 @@ version: $version
       options:
 
         --cobg          special format for cobg
+
+        --full          delete the whole directory
 
         --help          print this message then quit
 
@@ -80,6 +83,18 @@ die unless (-e $target_dir);
 print "cleaning $target_dir\n";
 
 chdir ($target_dir);
+
+
+
+if ($full) {
+
+    &mysystem ("rm *");
+    &mysystem ("touch cleaned");
+    exit;
+}
+
+
+
 
 my $deldir = "deldir";
 my $safedir = "safedir";
@@ -215,6 +230,13 @@ foreach my $fi (@files) {
 	    print EX $size."\t".$fi."\n";
 	    push @ex_files, $fi;
 	}
+
+	
+#	elsif ($fi =~ /.dosage.ngt$/) {
+#	    print EX $size."\t".$fi."\n";
+#	    push @ex_files, $fi;
+#	}
+	
 	elsif ($fi =~ /.fam$/) {
 	    print EX $size."\t".$fi."\n";
 	    push @ex_files, $fi;
@@ -229,6 +251,16 @@ foreach my $fi (@files) {
 	    push @ex_files, $fi;
 	}
 
+	elsif ($fi =~ /.vcf.gz$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+
+	elsif ($fi =~ /.vcf.gz.tbi$/) {
+	    print EX $size."\t".$fi."\n";
+	    push @ex_files, $fi;
+	}
+	
 	elsif ($fi =~ /.done$/) {
 #	print EX $size."\t".$fi."\n";
 	    push @ex_files, $fi;
