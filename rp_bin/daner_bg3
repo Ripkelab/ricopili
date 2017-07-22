@@ -25,6 +25,8 @@ use warnings;
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
+use Compress::Zlib ;
+
 
 #############################
 # read config file
@@ -252,7 +254,8 @@ my $famfile = "$t1$bind$t2.fam";
 my $mapfile = "$t1$bind$t2.map";
 my $dosfile = "$t1$bind$t2.gz";
 my $emptyfile = "$indir/$t1$bind$t2.gz.empty";
-my $dosfile_nogz = "$t1$bind$t2";
+#my $dosfile_nogz = "$t1$bind$t2";
+my $root = "$t1$bind$t2";
 my $ngtfile = "$t1$bind$t2.ngt";
 my $infofile = "$t1$bind$t2.info";
 
@@ -352,7 +355,7 @@ while (my $line = <FILE>){
 close FILE;
 
 print "...finished\n";
-print "now perform best guess.....\n";
+print "now perform best guess and filtering.....\n";
 
 #exit;
 
@@ -373,27 +376,31 @@ sub calc_variance_qs {
 
 
 
-&mysystem("gunzip -c $dosfile > $dosfile_nogz");
+#&mysystem("gunzip -c $dosfile > $dosfile_nogz");
 
 ###########################################
 ### here write new dosage file
 ############################################
 
-my $dosfile_clean = "$dosfile_nogz.qc1";
-my $dosfile_dirty = "$dosfile_nogz.qc1f";
-my $dosfile_tped = "$dosfile_nogz.qc1.tped";
-my $dosfile_tped_strict = "$dosfile_nogz.qc2.tped";
-my $dosfile_tped_noqc = "$dosfile_nogz.noqc.tped";
+my $dosfile_clean = "$root.qc1.gz";
+#my $dosfile_dirty = "$root.qc1f";
+my $dosfile_tped = "$root.qc1.tped";
+my $dosfile_tped_strict = "$root.qc2.tped";
+my $dosfile_tped_noqc = "$root.noqc.tped";
 
-die "$dosfile_clean: ".$! unless open DO, "> $dosfile_clean";
-die "$dosfile_dirty: ".$! unless open DOX, "> $dosfile_dirty";
+my $igz = gzopen("$dosfile", "rb")  or die "Cannot open file $dosfile: $gzerrno\n" ;
+my $ogz = gzopen("$dosfile_clean", "wb")  or die "Cannot open file $dosfile_clean: $gzerrno\n" ;
+
+#die "$dosfile_clean: ".$! unless open DO, "> $dosfile_clean";
+#die "$dosfile_dirty: ".$! unless open DOX, "> $dosfile_dirty";
 die "$dosfile_tped: ".$! unless open TP, "> $dosfile_tped";
 die "$dosfile_tped_noqc: ".$! unless open TPN, "> $dosfile_tped_noqc";
 die "$dosfile_tped_strict: ".$! unless open TPS, "> $dosfile_tped_strict";
-die "$dosfile_nogz: ".$! unless open DI, "< $dosfile_nogz";
-my $line = <DI>;
-print DO $line;
-print DOX $line;
+#die "$dosfile_nogz: ".$! unless open DI, "< $dosfile_nogz";
+$igz->gzreadline(my $line);
+$ogz->gzwrite($line);
+#print DO $line;
+#print DOX $line;
 
 my %qc_in ;
 my %snp_info ;
@@ -406,8 +413,23 @@ my %snp_a2 ;
 my $ntp = 0;
 my $ntps = 0;
 my $ntpn = 0;
+my $cc = 0;
 
-while ($line = <DI>){
+my $sec_start = time;
+#print "$sec_start se\n";
+
+
+while ($igz->gzreadline(my $line)){
+    if ($cc % 1000 == 0) {
+	#	print "$cc rows done...\n";
+	
+	my $sec_diff = time - $sec_start;
+	if ($sec_diff > 0) {
+	    my $row_per_sec = sprintf "%d", $cc/$sec_diff;
+	    print "got $row_per_sec rows per second processed since beginning, now $cc rows\n" ;
+	}
+    }
+    $cc++;
     my @cells = @{&split_line_ref(\$line)};
     my $sname = shift (@cells);
     my $a1 = shift (@cells);
@@ -517,7 +539,8 @@ while ($line = <DI>){
 
     # write out lines (dosage and bg)
     if ($in ==1) {
-	print DO "$sname $a1 $a2 @cells\n";
+	$ogz->gzwrite("$sname $a1 $a2 @cells\n");
+#	print DO "$sname $a1 $a2 @cells\n";
 	if ($miss_rate < 0.02) {
 	    if ($gt_count [1] != ($nc-$gt_count[0]) && $gt_count [3] != ($nc-$gt_count[0])){
 		print TP "$tped_out\n";
@@ -541,9 +564,12 @@ while ($line = <DI>){
 
 	$qc_in{$sname} = 1;
     }
-    else {
-	print DOX "$sname $a1 $a2 @cells\n";
-    }
+
+    
+#    if you want to keep excluded SNPs, please remove commenting here
+#    else {
+#	print DOX "$sname $a1 $a2 @cells\n";
+#    }
 
 
 
@@ -556,15 +582,15 @@ while ($line = <DI>){
 #    }
 }
 
-close DI;
-close DO;
-close DOX;
+#close DI;
+#close DO;
+#close DOX;
 close TP;
 close TPS;
 close TPN;
 
-&mysystem("gzip -f $dosfile_clean");
-&mysystem("gzip -f $dosfile_dirty");
+#&mysystem("gzip -f $dosfile_clean");
+#&mysystem("gzip -f $dosfile_dirty");
 
 #&mysystem("gzip -f $dosfile_tped");
 #&mysystem("gzip -f $dosfile_tped_strict");
@@ -684,7 +710,7 @@ if ($ntpn > 0){
 &mysystem("cp $info_out $outdir/info/$infofile");
 
 
-&mysystem("cp $dosfile_dirty.gz $outdir/qc1f/$dosfile");
+#&mysystem("cp $dosfile_dirty.gz $outdir/qc1f/$dosfile");
 &mysystem("cp $ngt_out $outdir/qc1f/$ngtfile");
 &mysystem("cp $map_out $outdir/qc1f/$mapfile");
 &mysystem("cp $famfile $outdir/qc1f/$famfile");
@@ -699,7 +725,7 @@ if (keys (%qc_in) == 0 ){
     exit;
 }
 
-&mysystem("cp $dosfile_clean.gz $outdir/qc1/$dosfile");
+&mysystem("cp $dosfile_clean $outdir/qc1/$dosfile");
 &mysystem("cp $ngt_in $outdir/qc1/$ngtfile");
 &mysystem("cp $map_in $outdir/qc1/$mapfile");
 &mysystem("cp $famfile $outdir/qc1/$famfile");
@@ -715,7 +741,7 @@ foreach (@cmd_collect) {
 close BC;
 
 
-
+chdir ($outdir);
 &mysystem("rm -fr $workdir");
 
 exit;
