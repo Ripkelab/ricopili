@@ -195,8 +195,8 @@ while ($igz->gzreadline(my $line)){
 	    print "Error: found alleles with more than 1 character\n";
 	    print "Error: snp: $cells[2]\n";
 	    print "Error: pos: $cells[1]\n";
-	    print "Error: a1: $cells[3]\n";
-	    print "Error: a2: $cells[4]\n";
+	    print "Error: a1: <$cells[3]>\n";
+	    print "Error: a2: <$cells[4]>\n";
 	    exit;
 	}
     }
