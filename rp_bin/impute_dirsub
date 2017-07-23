@@ -2272,6 +2272,13 @@ unless (-e "$rootdir/reference_info") {
     
     close REF;
     &mysystem ("mv reference_info.tmp $rootdir/reference_info");
+
+    foreach (@bimfli_files) {
+	my $bprefix = $_;
+	$bprefix =~ s/.bim$//;
+	&mysystem ("cp $rootdir/reference_info $rootdir/$bprefix.ref");
+
+    }
 }
 
 
