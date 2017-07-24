@@ -81,6 +81,8 @@ version: $version
 
 
 my $sys = "$bcloc"."bcftools convert --vcf-ids -h  $outprefix $vcffile";
+print "$sys\n";
+#exit;
 
 my $sc =system ($sys);
 

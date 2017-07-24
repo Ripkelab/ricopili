@@ -589,6 +589,10 @@ close TP;
 close TPS;
 close TPN;
 
+$igz->gzclose();
+$ogz->gzclose();
+
+
 #&mysystem("gzip -f $dosfile_clean");
 #&mysystem("gzip -f $dosfile_dirty");
 

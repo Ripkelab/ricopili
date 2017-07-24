@@ -985,12 +985,12 @@ if (@cat_files == 0) {
 			$cells[7] .= "...";
 		    }
 
-		    if ($cells[11] eq "X") {
-			$cells[11] = 23;
-		    }
-		    if ($cells[11] eq "Y") {
-			$cells[11] = 24;
-		    }		    
+#		    if ($cells[11] eq "X") {
+#			$cells[11] = 23;
+#		    }
+#		    if ($cells[11] eq "Y") {
+#			$cells[11] = 24;
+#		    }		    
 		    print OUT $cells[21];
 		    print OUT "\t".$cells[11];  ## chromosome
 		    print OUT "\t".$cells[12];
@@ -1386,162 +1386,254 @@ my $gm_name;
 #unless (-e "$rootdir/rootdir_done"){
 
 
-    my $answer_rename = "";
+my $answer_rename = "";
 
-    foreach my $chr ($chr_start..$chr_end){
-	my $vcf_name = $vcf_templ;
-	$vcf_name =~ s/XXX/$chr/g;
-	my $vcf_name_loc;
-	
-	if (-e $vcf_name) {
-	    $vcf_name_loc = $vcf_name;
-	}
-	elsif (-e "loc.".$vcf_name) {
-	    $vcf_name_loc = "loc.".$vcf_name;
-	}
-	else {
-	    my @vcf_files = `ls *chr$chr.samples 2>/dev/null | grep -v impute`;
-	    if (@vcf_files == 1) {
-		my $vcf_found = $vcf_files[0];
-		chomp ($vcf_found);
-		unless ($answer_rename eq "y" || $answer_rename eq "Y"){
-		    print "********************************\n";
-		    print "vcf-file ($vcf_name) not found, but I found another possibility ($vcf_found).\n";
-		    print "do you want to rename into matching template $vcf_templ (old names are lost) for all chromosomes?\n";
-		}
-		
-		if ($answer_rename eq "") {
-		    $answer_rename = lc <>;
-		    chomp $answer_rename;
-		}
+foreach my $chrint ($chr_start..$chr_end){
 
-		if ($answer_rename eq "y" || $answer_rename eq "Y"){
-		    my $vcf_new = $vcf_templ;
-		    $vcf_name =~ s/XXX/$chr/g;
-		    my $samples_name_old = $vcf_found;
-		    my $samples_name_new = $vcf_name;
-		    $samples_name_new =~ s/.haplotypes.vcf.gz$/.samples/;
-		    &mysystem ("mv $samples_name_old $samples_name_new");
-		    push @backup_arr, "mv $samples_name_new $samples_name_old\n";
-		    
-		    my $vcf_name_old = $vcf_found;
-		    my $vcf_name_new = $vcf_name;
-		    $vcf_name_old =~ s/.samples$/.haplotypes.vcf.gz/;
-		    &mysystem ("mv $vcf_name_old $vcf_name_new");
-		    push @backup_arr, "mv $vcf_name_new $vcf_name_old\n";
-
-		    my $legend_name_old = $vcf_found;
-		    my $legend_name_new = $vcf_name;
-		    $legend_name_new =~ s/.haplotypes.vcf.gz$/.legend.gz/;
-		    $legend_name_old =~ s/.samples$/.legend.gz/;
-		    &mysystem ("mv $legend_name_old $legend_name_new");
-		    push @backup_arr, "mv $legend_name_new $legend_name_old\n";		    
-		}
-
-
-	    }
-	    if (@vcf_files == 0) {
-		print "Warning: cannot find any matching samples filenames\n";
-	    }
-	    if (@vcf_files > 1) {
-		print "Error: too many matching samples filenames\n";
-		exit;
-	    }	    
-#	    print "here we go: @vcf_files\n";
-	}    
+    my $chr = $chrint;
+    
+    if ($chrint == 23) {
+	$chr = "X";
     }
-
-    if (@backup_arr > 0) {
-	die $!."($vcf_templ.backup)" unless open BA, "> $vcf_templ.backup";
-	foreach (@backup_arr) {
-	    print BA$_;
-	}
-	close BA;
-	
-	print "-----------------------------------------------\n";
-	print "renamed many files\n";
-	print "if you want to undo, please have a look at $vcf_templ.backup\n";
-	print "please check if you are happy with the results\n";
-	print "if yes, then restart\n";
-	exit;	
-    }
-
+    
 
 
     
-    foreach my $chr ($chr_start..$chr_end){
-
-#
-        ###################################
-        # copy here
-        ####################################
-	
-	$hapout_name = $out_templ.".impute";
-	$hapout_name =~ s/XXX/$chr/g;
-	my $vcf_name_loc_filtnorm ;
-	my $vcf_name_loc_filtnorm_reform ;
-	
-	if ($vcf_templ ne "") {
-
-
-	    
-
-	    my $vcf_name = $vcf_templ;
-	    if ($chr == 23) {
-		$vcf_name =~ s/XXX/X/g;
+    my $vcf_name = $vcf_templ;
+    $vcf_name =~ s/XXX/$chr/g;
+    my $vcf_name_loc;
+    
+    if (-e $vcf_name) {
+	$vcf_name_loc = $vcf_name;
+    }
+    elsif (-e "loc.".$vcf_name) {
+	$vcf_name_loc = "loc.".$vcf_name;
+    }
+    else {
+	my @vcf_files = `ls *chr$chr.samples 2>/dev/null | grep -v impute`;
+	if (@vcf_files == 1) {
+	    my $vcf_found = $vcf_files[0];
+	    chomp ($vcf_found);
+	    unless ($answer_rename eq "y" || $answer_rename eq "Y"){
+		print "********************************\n";
+		print "vcf-file ($vcf_name) not found, but I found another possibility ($vcf_found).\n";
+		print "do you want to rename into matching template $vcf_templ (old names are lost) for all chromosomes?\n";
 	    }
-	    else {
+	    
+	    if ($answer_rename eq "") {
+		$answer_rename = lc <>;
+		chomp $answer_rename;
+	    }
+
+	    if ($answer_rename eq "y" || $answer_rename eq "Y"){
+		my $vcf_new = $vcf_templ;
 		$vcf_name =~ s/XXX/$chr/g;
-	    }
-	    my $vcf_name_loc;
+		my $samples_name_old = $vcf_found;
+		my $samples_name_new = $vcf_name;
+		$samples_name_new =~ s/.haplotypes.vcf.gz$/.samples/;
+		&mysystem ("mv $samples_name_old $samples_name_new");
+		push @backup_arr, "mv $samples_name_new $samples_name_old\n";
+		
+		my $vcf_name_old = $vcf_found;
+		my $vcf_name_new = $vcf_name;
+		$vcf_name_old =~ s/.samples$/.haplotypes.vcf.gz/;
+		&mysystem ("mv $vcf_name_old $vcf_name_new");
+		push @backup_arr, "mv $vcf_name_new $vcf_name_old\n";
 
-	    if (-e $vcf_name) {
-		$vcf_name_loc = $vcf_name;
+		my $legend_name_old = $vcf_found;
+		my $legend_name_new = $vcf_name;
+		$legend_name_new =~ s/.haplotypes.vcf.gz$/.legend.gz/;
+		$legend_name_old =~ s/.samples$/.legend.gz/;
+		&mysystem ("mv $legend_name_old $legend_name_new");
+		push @backup_arr, "mv $legend_name_new $legend_name_old\n";		    
+	    }
+
+
+	}
+	if (@vcf_files == 0) {
+	    print "Warning: cannot find any matching samples filenames\n";
+	}
+	if (@vcf_files > 1) {
+	    print "Error: too many matching samples filenames\n";
+	    exit;
+	}	    
+	#	    print "here we go: @vcf_files\n";
+    }    
+}
+
+if (@backup_arr > 0) {
+    die $!."($vcf_templ.backup)" unless open BA, "> $vcf_templ.backup";
+    foreach (@backup_arr) {
+	print BA$_;
+    }
+    close BA;
+    
+    print "-----------------------------------------------\n";
+    print "renamed many files\n";
+    print "if you want to undo, please have a look at $vcf_templ.backup\n";
+    print "please check if you are happy with the results\n";
+    print "if yes, then restart\n";
+    exit;	
+}
+
+
+
+
+foreach my $chrint ($chr_start..$chr_end){
+
+    #
+    ###################################
+    # copy here
+    ####################################
+    my $chr = $chrint;
+    
+    if ($chrint == 23) {
+	$chr = "X";
+    }
+    
+    $hapout_name = $out_templ.".impute";
+    $hapout_name =~ s/XXX/$chr/g;
+    my $vcf_name_loc_filtnorm ;
+    my $vcf_name_loc_filtnorm_reform ;
+    
+    if ($vcf_templ ne "") {
+
+
+	
+
+	my $vcf_name = $vcf_templ;
+
+
+
+#	if ($chr == 23) {
+#	    $vcf_name =~ s/XXX/X/g;
+#	}
+#	else {
+	    $vcf_name =~ s/XXX/$chr/g;
+#	}
+
+
+
+
+	my $vcf_name_loc;
+
+	if (-e $vcf_name) {
+	    $vcf_name_loc = $vcf_name;
+	}
+	else {
+	    $vcf_name_loc = "loc.".$vcf_name;
+	    #		my @cat_files = `ls gwascatalog.rp.txt`;
+	}
+
+
+	my $vcf_name_remote = $vcf_templ;
+	
+	$vcf_name_loc_filtnorm = $vcf_name_loc.".filtnorm.gz";
+	my $vcf_name_loc_filtnorm_fini = $vcf_name_loc_filtnorm.".fini";
+
+	$vcf_name_loc_filtnorm_reform = $vcf_name_loc_filtnorm.".reform.gz";
+	my $vcf_name_loc_filtnorm_reform_fini = $vcf_name_loc_filtnorm_reform.".fini";
+
+
+
+	
+	###################################
+	# download vcf files
+	####################################
+
+	
+	unless (-e $vcf_name_loc) {
+
+	    unless ($answer eq "y" || $answer eq "Y"){
+		print "********************************\n";
+		print "vcf-file ($vcf_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
+	    }
+	    
+	    my $sys = "my.wget $vcf_site $vcf_name ";
+	    #		print "$sys\n";
+
+
+	    if ($answer eq "") {
+		$answer = lc <>;
+		chomp $answer;
+	    }
+
+
+	    if ($answer eq "y" || $answer eq "Y"){
+		
+		print "will put this into parallel jobs:\t$sys\n";
+		push @job_vcf_dl, $sys;
+
+		
 	    }
 	    else {
-		$vcf_name_loc = "loc.".$vcf_name;
-#		my @cat_files = `ls gwascatalog.rp.txt`;
+		$exit = 1;
+		print "I would suggest this:\n";
+		print "$sys\n";
+		#			print "exit now\n";
+		#			exit;
 	    }
-
-
-	    my $vcf_name_remote = $vcf_templ;
-	    
-	    $vcf_name_loc_filtnorm = $vcf_name_loc.".filtnorm.gz";
-	    my $vcf_name_loc_filtnorm_fini = $vcf_name_loc_filtnorm.".fini";
-
-	    $vcf_name_loc_filtnorm_reform = $vcf_name_loc_filtnorm.".reform.gz";
-	    my $vcf_name_loc_filtnorm_reform_fini = $vcf_name_loc_filtnorm_reform.".fini";
+	}
 
 
 
-	    
-	    ###################################
-	    # download vcf files
-	    ####################################
 
-	    
-	    unless (-e $vcf_name_loc) {
+	###################################
+	# download genetic map files.
+	####################################
 
-		unless ($answer eq "y" || $answer eq "Y"){
-		    print "********************************\n";
-		    print "vcf-file ($vcf_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
+	$gm_name = $gm_template;
+
+	if ($chr == "X"){
+	    $gm_name =~ s/XXX/X_nonPAR/g;
+	}
+	else {
+	    $gm_name =~ s/XXX/$chr/g;
+	}
+
+
+
+	my $gm_name_loc = "loc.".$gm_name;
+	my $gm_name_fini = $gm_name.".fini";
+
+	#	    print "$gm_name_loc now2\n";	    
+	unless (-e $gm_name_fini) {
+
+	    if (-e $gm_name_loc) {
+
+		#		    if ($chr == 23){
+		#			$gm_name = $gm_template;
+		#			$gm_name =~ s/XXX/23/g;
+		#		    }
+		
+		&mysystem ("mv $gm_name_loc $gm_name");
+		&mysystem ("touch $gm_name_fini");
+
+	    }
+	    else {
+
+		print "---------------------------------\n";
+		print "$gm_name_loc not exsiting\n";
+		#		    if (-e $vcf_name_loc) {
+
+		unless ($answer_gm eq "y" || $answer_gm eq "Y"){
+
+		    print "gm-file ($gm_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
+		}
+		my $sys = "$wget_script $gm_site $gm_name ";
+		#		    print "$sys\n";
+		#		exit;	
+		if ($answer_gm eq "") {
+		    $answer_gm = lc <>;
+		    chomp $answer_gm;
 		}
 		
-		my $sys = "my.wget $vcf_site $vcf_name ";
-#		print "$sys\n";
-
-
-		if ($answer eq "") {
-		    $answer = lc <>;
-		    chomp $answer;
-		}
-
-
-		if ($answer eq "y" || $answer eq "Y"){
+		
+		if ($answer_gm eq "y" || $answer_gm eq "Y"){
 		    
 		    print "will put this into parallel jobs:\t$sys\n";
 		    push @job_vcf_dl, $sys;
-
+		    
 		    
 		}
 		else {
@@ -1551,415 +1643,348 @@ my $gm_name;
 		    #			print "exit now\n";
 		    #			exit;
 		}
+		#		    }
 	    }
+	}
 
 
 
+	###################################
+	# filter and convert vcf with bcftools
+	####################################
 
-	    ###################################
-	    # download genetic map files.
-	    ####################################
+	unless (-e $vcf_name_loc_filtnorm_fini) {
 
-	    $gm_name = $gm_template;
-
-	    if ($chr == 23){
-		$gm_name =~ s/XXX/X_nonPAR/g;
+	    ######### on the X only include non-PAR
+	    my $chrX_filter = "";
+	    if ($chr == "X") {
+		$chrX_filter = "--chrX --fam $sample_root.fam";
 	    }
-	    else {
-		$gm_name =~ s/XXX/$chr/g;
+	    push @job_btools1, "$prepvcf_script_filtnorm $chrX_filter --vcf $vcf_name_loc --mac_th $mac_th";
+	    #		print "$prepvcf_script_filtnorm $chr23_filter --vcf $vcf_name_loc --mac_th $mac_th\n";
+	    #		exit;
+	}
+
+
+	
+	###################################
+	# filter indels
+	#     if indels on same position only keep the ones with highest AC
+	#     otherwise minimac3 gets in trouble since pipeline translates indels
+	#        into I D as alleles and minimac doesn't care about snpnames
+	####################################
+
+	unless (-e $vcf_name_loc_filtnorm_reform_fini) {
+	    my $sys =  "$filtnorm_filter_script --filtnorm $vcf_name_loc_filtnorm";
+	    push @job_filtnormfil, $sys;
+	    #		print "$sys\n";
+	    #		print "debug\n";
+	    #		exit;
+	}
+
+	
+	
+	###################################
+	# create impute-format with bcftools
+	####################################
+	
+
+	my $hapout_name_fini = $hapout_name.".fini";
+	
+	unless (-e $hapout_name_fini) {
+	    #		print "hapout: $hapout_name\n";
+	    push @job_btools2, "$prepvcf_script_imp2 --vcf $vcf_name_loc_filtnorm_reform --out $hapout_name";
+	    #		push @job_vtools, "$vcf_script --mac $mac_th --gzvcf $vcf_name_loc --IMPUTE --out $hap_name";
+	}
+
+	
+	#	    else {#
+	#		### control log-file
+	#		die $!."($hap_name.log)" unless open LOG, "< $hap_name.log";
+	#		my $line;
+	#		my $last;
+	#		while ($line = <LOG>){
+	#		    $last = $line;
+	#		    chomp($last);
+	#		}
+	#		unless ($last =~ /^Run Time/){
+	#		    print "********************************\n";
+	#		    print "Error: check log (did not finish): $hap_name.log\nplease remove $hapout_name\n";
+	#		    exit;
+	#		}
+	#		close LOG;
+	#	    }
+
+
+	
+
+    }
+
+    else {
+	print "right now only starting from vcffiles\n";
+	exit;
+    }
+
+    if (0) {
+	if ($mach_templ ne "") {
+
+	    my $mach_name = $mach_templ.".hap";
+	    $mach_name =~ s/XXX/$chr/g;
+
+
+	    #	    print "phased: $out_templ$imp_phased_postfix\n";
+	    
+	    unless (-e $mach_name) {
+		#		print "mach_name: $mach_name\n";
+		die unless ("$mach_name.gz");
+		push @job_cpgz, "zcat $mach_name.gz > $mach_name.tmp; mv $mach_name.tmp $mach_name";
 	    }
-	    my $gm_name_loc = "loc.".$gm_name;
-	    my $gm_name_fini = $gm_name.".fini";
-
-#	    print "$gm_name_loc now2\n";	    
-	    unless (-e $gm_name_fini) {
-
-		if (-e $gm_name_loc) {
-
-#		    if ($chr == 23){
-#			$gm_name = $gm_template;
-#			$gm_name =~ s/XXX/23/g;
-#		    }
-		    
-		    &mysystem ("mv $gm_name_loc $gm_name");
-		    &mysystem ("touch $gm_name_fini");
-
-		}
-		else {
-
-		    print "---------------------------------\n";
-		    print "$gm_name_loc not exsiting\n";
-		    #		    if (-e $vcf_name_loc) {
-
-		    unless ($answer_gm eq "y" || $answer_gm eq "Y"){
-
-			print "gm-file ($gm_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
-		    }
-		    my $sys = "$wget_script $gm_site $gm_name ";
-#		    print "$sys\n";
-#		exit;	
-			if ($answer_gm eq "") {
-			    $answer_gm = lc <>;
-			    chomp $answer_gm;
-			}
-			
-			
-			if ($answer_gm eq "y" || $answer_gm eq "Y"){
-			    
-			    print "will put this into parallel jobs:\t$sys\n";
-			    push @job_vcf_dl, $sys;
-			    
-			    
-			}
-			else {
-			    $exit = 1;
-			    print "I would suggest this:\n";
-			    print "$sys\n";
-			    #			print "exit now\n";
-			    #			exit;
-			}
-#		    }
-		}
-	    }
-
-
-
-	    ###################################
-	    # filter and convert vcf with bcftools
-	    ####################################
-
-	    unless (-e $vcf_name_loc_filtnorm_fini) {
-
-		######### on the X only include non-PAR
-		my $chr23_filter = "";
-		if ($chr == 23) {
-		    $chr23_filter = "--chr23 --fam $sample_root.fam";
-		}
-		push @job_btools1, "$prepvcf_script_filtnorm $chr23_filter --vcf $vcf_name_loc --mac_th $mac_th";
-#		print "$prepvcf_script_filtnorm $chr23_filter --vcf $vcf_name_loc --mac_th $mac_th\n";
-#		exit;
-	    }
-
 
 	    
 	    ###################################
-	    # filter indels
-	    #     if indels on same position only keep the ones with highest AC
-	    #     otherwise minimac3 gets in trouble since pipeline translates indels
-	    #        into I D as alleles and minimac doesn't care about snpnames
-	    ####################################
-
-	    unless (-e $vcf_name_loc_filtnorm_reform_fini) {
-		my $sys =  "$filtnorm_filter_script --filtnorm $vcf_name_loc_filtnorm";
-		push @job_filtnormfil, $sys;
-#		print "$sys\n";
-#		print "debug\n";
-#		exit;
-	    }
-
-	    
-	    
-	    ###################################
-	    # create impute-format with bcftools
+	    # create impute-format with mach2impute
 	    ####################################
 	    
+	    $hapout_name = "$mach_name.hap";
+	    my $map_name = $mach_templ.".map";
+	    $map_name =~ s/XXX/$chr/g;
+	    my $anno_name = "chrXXX.annotation.txt";
+	    $anno_name =~ s/XXX/$chr/g;
 
-	    my $hapout_name_fini = $hapout_name.".fini";
+
 	    
-	    unless (-e $hapout_name_fini) {
+	    unless (-e $hapout_name) {
 		#		print "hapout: $hapout_name\n";
-		push @job_btools2, "$prepvcf_script_imp2 --vcf $vcf_name_loc_filtnorm_reform --out $hapout_name";
-#		push @job_vtools, "$vcf_script --mac $mac_th --gzvcf $vcf_name_loc --IMPUTE --out $hap_name";
+		push @job_vtools, "$mach2impute_script --hap $mach_name --anno $anno_name --map $map_name"
 	    }
-
-	    
-#	    else {#
-#		### control log-file
-#		die $!."($hap_name.log)" unless open LOG, "< $hap_name.log";
-#		my $line;
-#		my $last;
-#		while ($line = <LOG>){
-#		    $last = $line;
-#		    chomp($last);
-#		}
-#		unless ($last =~ /^Run Time/){
-#		    print "********************************\n";
-#		    print "Error: check log (did not finish): $hap_name.log\nplease remove $hapout_name\n";
-#		    exit;
-#		}
-#		close LOG;
-#	    }
-
-
-	    
 
 	}
 
+
+
+	if ($imp2_templ ne "") {
+
+	    my $imp2_name = $imp2_templ.".hap";
+	    $imp2_name =~ s/XXX/$chr/g;
+
+	    $hapout_name = "$imp2_name";
+
+	    unless (-e $imp2_name) {
+		die unless ("$imp2_name.gz");
+		push @job_cpgz, "zcat $imp2_name.gz > $imp2_name.tmp; mv $imp2_name.tmp $imp2_name";
+	    }
+
+	    my $imp2_lname = $imp2_templ.".legend";
+	    $imp2_lname =~ s/XXX/$chr/g;
+
+
+	    unless (-e $imp2_lname) {
+		die unless ("$imp2_lname.gz");
+		push @job_cpgz, "zcat $imp2_lname.gz > $imp2_lname.tmp; mv $imp2_lname.tmp $imp2_lname";
+	    }
+
+
+
+
+	}
+    }
+
+    
+
+
+    
+
+    if (0) {
+	###################################
+	# create beagle - format (not done any more)
+	####################################
+	
+
+	my $phased_name = $out_templ.$imp_phased_postfix;
+	$phased_name =~ s/XXX/$chr/g;
+	my $phased_name_count = $phased_name.".count";
+
+	#	print "$phased_name\n";
+	#	print "$hapout_name\n";
+
+	unless (-e $phased_name) {
+	    #	    print "phased_name: $phased_name\n";
+	    push @job_phased, "$impute2beagle_script --out $phased_name --chr $chr $hapout_name";
+	    #	    print "$impute2beagle_script --out $phased_name --chr $chr $hapout_name\n";
+	    #	    push @job_phased, "impute2beagle --exclude $multi_name $hapout_name\n";
+	}
 	else {
-	    print "right now only starting from vcffiles\n";
-	    exit;
-	}
-
-	if (0) {
-	    if ($mach_templ ne "") {
-
-		my $mach_name = $mach_templ.".hap";
-		$mach_name =~ s/XXX/$chr/g;
-
-
-		#	    print "phased: $out_templ$imp_phased_postfix\n";
-		
-		unless (-e $mach_name) {
-		    #		print "mach_name: $mach_name\n";
-		    die unless ("$mach_name.gz");
-		    push @job_cpgz, "zcat $mach_name.gz > $mach_name.tmp; mv $mach_name.tmp $mach_name";
-		}
-
-		
-		###################################
-		# create impute-format with mach2impute
-		####################################
-		
-		$hapout_name = "$mach_name.hap";
-		my $map_name = $mach_templ.".map";
-		$map_name =~ s/XXX/$chr/g;
-		my $anno_name = "chrXXX.annotation.txt";
-		$anno_name =~ s/XXX/$chr/g;
-
-
-		
-		unless (-e $hapout_name) {
-		    #		print "hapout: $hapout_name\n";
-		    push @job_vtools, "$mach2impute_script --hap $mach_name --anno $anno_name --map $map_name"
-		}
-
-	    }
-
-
-
-	    if ($imp2_templ ne "") {
-
-		my $imp2_name = $imp2_templ.".hap";
-		$imp2_name =~ s/XXX/$chr/g;
-
-		$hapout_name = "$imp2_name";
-
-		unless (-e $imp2_name) {
-		    die unless ("$imp2_name.gz");
-		    push @job_cpgz, "zcat $imp2_name.gz > $imp2_name.tmp; mv $imp2_name.tmp $imp2_name";
-		}
-
-		my $imp2_lname = $imp2_templ.".legend";
-		$imp2_lname =~ s/XXX/$chr/g;
-
-
-		unless (-e $imp2_lname) {
-		    die unless ("$imp2_lname.gz");
-		    push @job_cpgz, "zcat $imp2_lname.gz > $imp2_lname.tmp; mv $imp2_lname.tmp $imp2_lname";
-		}
-
-
-
-
+	    unless (-e $phased_name_count) {
+		my $sys = "wc -l $phased_name > $phased_name_count";
+		print "$sys\n";
+		&mysystem ($sys);
 	    }
 	}
 
 	
-
-
-	    	
-
-	if (0) {
-	    ###################################
-	    # create beagle - format (not done any more)
-	    ####################################
-	    
-
-	    my $phased_name = $out_templ.$imp_phased_postfix;
-	    $phased_name =~ s/XXX/$chr/g;
-	    my $phased_name_count = $phased_name.".count";
-
-	    #	print "$phased_name\n";
-	    #	print "$hapout_name\n";
-
-	    unless (-e $phased_name) {
-		#	    print "phased_name: $phased_name\n";
-		push @job_phased, "$impute2beagle_script --out $phased_name --chr $chr $hapout_name";
-		#	    print "$impute2beagle_script --out $phased_name --chr $chr $hapout_name\n";
-		#	    push @job_phased, "impute2beagle --exclude $multi_name $hapout_name\n";
-	    }
-	    else {
-		unless (-e $phased_name_count) {
-		    my $sys = "wc -l $phased_name > $phased_name_count";
-		    print "$sys\n";
-		    &mysystem ($sys);
-		}
-	    }
-
-	    
-	    
-	    my $infopos_name = $out_templ.$imp_phased_postfix.".bgl.info_pos";
-	    $infopos_name =~ s/XXX/$chr/g;
-	    my $bgl_name_count = $out_templ.$imp_phased_postfix.".bgl.count";
-	    $bgl_name_count =~ s/XXX/$chr/g;
-	    unless (-e $infopos_name) {
-		#	    print "infopos: $infopos_name\n";
-		#	    push @job_bgl, "$prepare_hm_ref_2_script --mac_th $mac_th --not --noaffy $phased_name";
-		push @job_bgl, "$prepare_hm_ref_2_script --not --noaffy $phased_name";
-	    }
-	    else {
-		unless (-e $phased_name_count) {
-		    my $sys = "wc -l $phased_name.annot.markers $phased_name.mono $phased_name.multi > $bgl_name_count";
-		    print "$sys\n";
-		    &mysystem ($sys);
-		}
-	    }
-	}
-
-
-	my $plink_name = $hapout_name.".plink";
-	push @plink_collection, $plink_name;
-	my $plink_name_fini = $plink_name.".fini";
-
-
-#	my $bgl_name = $out_templ."$imp_phased_postfix.bgl";
-#	$bgl_name =~ s/XXX/$chr/g;
-
-	unless (-e $plink_name_fini) {
-#	    print "plink: $plink_name\n";
-	    push @job_plink, "$vcf2plink_script --vcf $vcf_name_loc_filtnorm_reform --out $plink_name";
-	}
-
-
-	my $refformat_fini = $hapout_name.".rf.fini";
-	unless (-e $refformat_fini) {
-#	    print "plink: $plink_name\n";
-	    push @job_refformat, "$refformat_script --root $hapout_name --sample $sample_root.fam --gm $gm_name";
-	}
-
-
-	######################################################################
-
-
-	my $changes_file = "$hapout_name.legend.gz.rf.gz.changes.gz";
-	my $filtnorm_trans_fini = $changes_file;
-	$filtnorm_trans_fini =~ s/legend.gz.rf.gz.changes.gz/vcf.gz.fini/;
 	
-	unless (-e $filtnorm_trans_fini) {
-
-	    my $sys = "$filtnorm_translate_script --filtnorm $vcf_name_loc_filtnorm_reform --changes $changes_file";
-	    push @job_filtnormtra, $sys;
-	    print "$sys\n";
+	my $infopos_name = $out_templ.$imp_phased_postfix.".bgl.info_pos";
+	$infopos_name =~ s/XXX/$chr/g;
+	my $bgl_name_count = $out_templ.$imp_phased_postfix.".bgl.count";
+	$bgl_name_count =~ s/XXX/$chr/g;
+	unless (-e $infopos_name) {
+	    #	    print "infopos: $infopos_name\n";
+	    #	    push @job_bgl, "$prepare_hm_ref_2_script --mac_th $mac_th --not --noaffy $phased_name";
+	    push @job_bgl, "$prepare_hm_ref_2_script --not --noaffy $phased_name";
 	}
-
-
-
-	###############################################################
-
-	my $filtnorm_trans_file = $changes_file;
-	$filtnorm_trans_file =~ s/legend.gz.rf.gz.changes.gz/vcf.gz/;
-	my $vcf_name_loc_filtnorm_prep_fini = $filtnorm_trans_file.".prep.fini";
-
-	unless (-e $vcf_name_loc_filtnorm_prep_fini) {
-
-	    my $sys = "$prepmm_script --cpus $ncpus_multi $filtnorm_trans_file";
-	    push @job_prepmm, $sys;
-	    print "$sys\n";
-	}
-
-
-	########################################################################
-
-	my $chunk_fini = $hapout_name.".legend.gz.chunks.fini";
-	unless (-e $chunk_fini) {
-#	    print "plink: $plink_name\n";
-	    push @job_chunk, "$chunk_script --nsnps $chunksnps --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks";
-	}
-	push @chunks_collection, "$hapout_name.legend.gz.chunks";
-
-
-	########################################################################
-	## times 5
-	my $chunksnps_5 = $chunksnps * 5;
-	my $chunk_fini_5 = $hapout_name.".legend.gz.chunks_5.fini";
-	unless (-e $chunk_fini_5) {
-#	    print "plink: $plink_name\n";
-	    push @job_chunk, "$chunk_script --nsnps $chunksnps_5 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_5";
-	}
-	push @chunks_collection_5, "$hapout_name.legend.gz.chunks_5";
-
-
-	########################################################################
-	## times 10
-	my $chunksnps_10 = $chunksnps * 10;
-	my $chunk_fini_10 = $hapout_name.".legend.gz.chunks_10.fini";
-	unless (-e $chunk_fini_10) {
-#	    print "plink: $plink_name\n";
-	    push @job_chunk, "$chunk_script --nsnps $chunksnps_10 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_10";
-	}
-	push @chunks_collection_10, "$hapout_name.legend.gz.chunks_10";
-
-	
-
-
-
-
-	if (1) {
-	    foreach my $pf_loc (@pop_fams) {
-		
-		my $freq_root = "$plink_name.freq.$pf_loc";
-		my $keep_file = "$sample_fam.$pf_loc";
-
-		my $bfile_pf = "$plink_name.$pf_loc";
-
-
-#		print "$pf_loc -> $bfile_pf\n";
-		
-		unless (-e "$bfile_pf.fini"){
-#		    push @job_pobed, "$plink_script --bfile $plink_name --out $bfile_pf --keep $keep_file --make-bed --freq";
-		    push @job_pobed, "$plinkanc_script --bfile $plink_name --out $bfile_pf --keep $keep_file";
-		}
-		
-
-
-#		unless (-e "$freq_root.frq"){
-
-#		    my $sys_f = "$plink_script --bfile $bfile_pf --out $freq_root --freq";
-#		    push @job_frq, "$sys_f";
-		    
-#		    if (0) {
-#			unless (-e "$keep_file.sex") {
-#			    print "create $keep_file.sex\n";
-#			    die $!."($keep_file)" unless open KI, "< $keep_file";
-#			    die $!."($keep_file.sex)" unless open KO, "> $keep_file.sex";
-#			    while (my $line = <KI>){
-#				my @cells = split /\s+/, $line;
-#				print KO "$cells[0]";
-#			    print KO "\t$cells[1]";
-#				print KO "\t$cells[9]";
-#				print KO "\n";
-#			    }
-#			    close KI;
-#			    close KO;
-#			}
-			
-#			my $sys_f = "$plink_script --bfile $bgl_name --out $freq_root --keep $keep_file --freq --update-sex $keep_file.sex";
-#			push @job_frq, "$sys_f";
-#		    }
-#		    else {
-
-#		    }
-#		}
-
-
-
-
+	else {
+	    unless (-e $phased_name_count) {
+		my $sys = "wc -l $phased_name.annot.markers $phased_name.mono $phased_name.multi > $bgl_name_count";
+		print "$sys\n";
+		&mysystem ($sys);
 	    }
 	}
     }
 
 
+    my $plink_name = $hapout_name.".plink";
+    push @plink_collection, $plink_name;
+    my $plink_name_fini = $plink_name.".fini";
+
+
+    #	my $bgl_name = $out_templ."$imp_phased_postfix.bgl";
+    #	$bgl_name =~ s/XXX/$chr/g;
+
+    unless (-e $plink_name_fini) {
+	#	    print "plink: $plink_name\n";
+	push @job_plink, "$vcf2plink_script --vcf $vcf_name_loc_filtnorm_reform --out $plink_name";
+    }
+
+
+    my $refformat_fini = $hapout_name.".rf.fini";
+    unless (-e $refformat_fini) {
+	#	    print "plink: $plink_name\n";
+	push @job_refformat, "$refformat_script --root $hapout_name --sample $sample_root.fam --gm $gm_name";
+    }
+
+
+    ######################################################################
+
+
+    my $changes_file = "$hapout_name.legend.gz.rf.gz.changes.gz";
+    my $filtnorm_trans_fini = $changes_file;
+    $filtnorm_trans_fini =~ s/legend.gz.rf.gz.changes.gz/vcf.gz.fini/;
     
+    unless (-e $filtnorm_trans_fini) {
+
+	my $sys = "$filtnorm_translate_script --filtnorm $vcf_name_loc_filtnorm_reform --changes $changes_file";
+	push @job_filtnormtra, $sys;
+	print "$sys\n";
+    }
+
+
+
+    ###############################################################
+
+    my $filtnorm_trans_file = $changes_file;
+    $filtnorm_trans_file =~ s/legend.gz.rf.gz.changes.gz/vcf.gz/;
+    my $vcf_name_loc_filtnorm_prep_fini = $filtnorm_trans_file.".prep.fini";
+
+    unless (-e $vcf_name_loc_filtnorm_prep_fini) {
+
+	my $sys = "$prepmm_script --cpus $ncpus_multi $filtnorm_trans_file";
+	push @job_prepmm, $sys;
+	print "$sys\n";
+    }
+
+
+    ########################################################################
+
+    my $chunk_fini = $hapout_name.".legend.gz.chunks.fini";
+    unless (-e $chunk_fini) {
+	#	    print "plink: $plink_name\n";
+	push @job_chunk, "$chunk_script --nsnps $chunksnps --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks";
+    }
+    push @chunks_collection, "$hapout_name.legend.gz.chunks";
+
+
+    ########################################################################
+    ## times 5
+    my $chunksnps_5 = $chunksnps * 5;
+    my $chunk_fini_5 = $hapout_name.".legend.gz.chunks_5.fini";
+    unless (-e $chunk_fini_5) {
+	#	    print "plink: $plink_name\n";
+	push @job_chunk, "$chunk_script --nsnps $chunksnps_5 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_5";
+    }
+    push @chunks_collection_5, "$hapout_name.legend.gz.chunks_5";
+
+
+    ########################################################################
+    ## times 10
+    my $chunksnps_10 = $chunksnps * 10;
+    my $chunk_fini_10 = $hapout_name.".legend.gz.chunks_10.fini";
+    unless (-e $chunk_fini_10) {
+	#	    print "plink: $plink_name\n";
+	push @job_chunk, "$chunk_script --nsnps $chunksnps_10 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_10";
+    }
+    push @chunks_collection_10, "$hapout_name.legend.gz.chunks_10";
+
+    
+
+
+
+
+    if (1) {
+	foreach my $pf_loc (@pop_fams) {
+	    
+	    my $freq_root = "$plink_name.freq.$pf_loc";
+	    my $keep_file = "$sample_fam.$pf_loc";
+
+	    my $bfile_pf = "$plink_name.$pf_loc";
+
+
+	    #		print "$pf_loc -> $bfile_pf\n";
+	    
+	    unless (-e "$bfile_pf.fini"){
+		#		    push @job_pobed, "$plink_script --bfile $plink_name --out $bfile_pf --keep $keep_file --make-bed --freq";
+		push @job_pobed, "$plinkanc_script --bfile $plink_name --out $bfile_pf --keep $keep_file";
+	    }
+	    
+
+
+	    #		unless (-e "$freq_root.frq"){
+
+	    #		    my $sys_f = "$plink_script --bfile $bfile_pf --out $freq_root --freq";
+	    #		    push @job_frq, "$sys_f";
+	    
+	    #		    if (0) {
+	    #			unless (-e "$keep_file.sex") {
+	    #			    print "create $keep_file.sex\n";
+	    #			    die $!."($keep_file)" unless open KI, "< $keep_file";
+	    #			    die $!."($keep_file.sex)" unless open KO, "> $keep_file.sex";
+	    #			    while (my $line = <KI>){
+	    #				my @cells = split /\s+/, $line;
+	    #				print KO "$cells[0]";
+	    #			    print KO "\t$cells[1]";
+	    #				print KO "\t$cells[9]";
+	    #				print KO "\n";
+	    #			    }
+	    #			    close KI;
+	    #			    close KO;
+	    #			}
+	    
+	    #			my $sys_f = "$plink_script --bfile $bgl_name --out $freq_root --keep $keep_file --freq --update-sex $keep_file.sex";
+	    #			push @job_frq, "$sys_f";
+	    #		    }
+	    #		    else {
+
+	    #		    }
+	    #		}
+
+
+
+
+	}
+    }
+}
+
+
+
 if ($exit == 1) {
     print "exit due to error\n";
     exit;
@@ -2388,7 +2413,13 @@ foreach my $pf_loc (@pop_fams) {
     
     
     
-    foreach my $chr ($chr_start..$chr_end){
+    foreach my $chrint ($chr_start..$chr_end){
+
+	my $chr = $chrint;
+	
+	if ($chrint == 23) {
+	    $chr = "X";
+	}
 	
 	$hapout_name = $out_templ.".impute";
 	$hapout_name =~ s/XXX/$chr/g;
@@ -2408,11 +2439,11 @@ foreach my $pf_loc (@pop_fams) {
 	### copy genetic map file for chrX
 	##############################################
 
-	if ($chr == 23){
+	if ($chr == "X"){
 	    my $gm_name_source = $gm_template;
 	    $gm_name_source =~ s/XXX/X_nonPAR/g;
 	    my $gm_name_target = $gm_template;
-	    $gm_name_target =~ s/XXX/$chr/g;
+	    $gm_name_target =~ s/XXX/X/g;
 	    
 	    unless (-e $gm_name_target){
 		&mysystem ("cp $gm_name_source $gm_name_target")
@@ -2421,7 +2452,7 @@ foreach my $pf_loc (@pop_fams) {
 	    my $gmchr_name_source = $gmchr_template;
 	    $gmchr_name_source =~ s/XXX/X_nonPAR/g;
 	    my $gmchr_name_target = $gmchr_template;
-	    $gmchr_name_target =~ s/XXX/$chr/g;
+	    $gmchr_name_target =~ s/XXX/X/g;
 	    
 	    unless (-e $gmchr_name_target){
 		&mysystem ("cp $gmchr_name_source $gmchr_name_target")

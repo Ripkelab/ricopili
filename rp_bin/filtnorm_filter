@@ -128,12 +128,12 @@ unless (-e $filtnorm_info) {
 	chomp($line);
 	unless ($line =~ /^#/) {
 	    my @cells = @{&split_line_ref_tab(\$line)};
-	    if ($cells[0] eq "X") {
-		$cells[0] = "23";
-	    }
-	    if ($cells[0] eq "Y") {
-		$cells[0] = "24";
-	    }	    
+#	    if ($cells[0] eq "X") {
+#		$cells[0] = "23";
+#	    }
+#	    if ($cells[0] eq "Y") {
+#		$cells[0] = "24";
+#	    }	    
 	    my $out_str = $cells[0];
 	    foreach my $cc (1..8) {
 		$out_str .= " ".$cells[$cc];
@@ -311,12 +311,12 @@ unless (-e $filtnorm_out) {
 		my @cells = @{&split_line_ref_tab(\$line)};
 
 		my @cells = @{&split_line_ref_tab(\$line)};
-		if ($cells[0] eq "X") {
-		    $cells[0] = "23";
-		}
-		if ($cells[0] eq "Y") {
-		    $cells[0] = "24";
-		}	 
+#		if ($cells[0] eq "X") {
+#		    $cells[0] = "23";
+#		}
+#		if ($cells[0] eq "Y") {
+#		    $cells[0] = "24";
+#		}	 
 		
 		my $out_str = $cells[0];
 		foreach my $cc (1..8) {
