@@ -286,6 +286,8 @@ version: $rp_version
  --minimac3        use minimac3 for imputation, here eagle will be used for prephasing
                    prephasing will happen reference informed with phased vcf
 
+ --noref           use minimac3 and eagle but no reference during prephasing 
+                      (some SNPs are not well matched with eagle but are with minimac)
 
 
 
@@ -505,6 +507,7 @@ GetOptions(
     "eagle"=> \my $eagle_sw,
 #    "eaglvcf"=> \my $eagle_vcf_sw,
     "minimac3"=> \my $mm3_sw,
+    "noref"=> \my $noref,
 
 
     "popname=s"=> \$popname,
@@ -2621,7 +2624,8 @@ if ($prephase_done == 0) {
 #		if (exists $finifiles_hash{$haps_ch_out_fini} ) {
 #
 #		}
-		################################## work on this here!!!!!
+		    ################################## work on this here!!!!!
+
 		    my $backbone = "$preph_script $xtxt --spliha $spliha_n_2 --out $haps_ch_out --in $bprefix --fam $famfile --gema $gema_file --buffer $buffer $extract_txt $mendel_sw --empty $empty_ch_out";
 		    
 		    if ($eagle_sw) { 
@@ -2629,8 +2633,15 @@ if ($prephase_done == 0) {
 		    }
 		    
 		    if ($mm3_sw) { 
+
 			$backbone .= " --eaglvcf";
 			$backbone .= " --ref $bgz_file";
+
+			if ($noref) {
+			    $backbone .= " --noref";
+			}
+
+
 		    }
 
 		    

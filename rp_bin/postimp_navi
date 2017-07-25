@@ -1677,6 +1677,8 @@ unless ($result_name){
 		print "$bf as trio, so not checked for IDs\n";
 		next;
 	    }
+
+#	    exit;
 #	    my $famloc = "$impute_dir/$famfile_loc";
 	    my $famloc = $famfile_loc;
 	    $famloc =~ s/hg19.ch.fl.fam$/fam/;
@@ -1842,6 +1844,8 @@ unless ($result_name){
 
 
 }
+
+#exit;
 
 
 #my @tmp = keys %mds_ids;

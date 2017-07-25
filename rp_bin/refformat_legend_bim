@@ -128,9 +128,16 @@ my $samples_out = $samples_file.".rf";
 
 
 my $chrind = $legend_file;
-$chrind =~ s/.*(chr[0-9]*).*/\1/;
-$chrind =~ s/chr//;
 
+if ($legend_file =~ /chrX/){
+    $chrind = "X";
+}
+else {
+    $chrind =~ s/.*(chr[0-9]*).*/\1/;
+    $chrind =~ s/chr//;
+}
+#print "chr: $chrind\n";
+#exit;
 
 
 ### first fam and samples file since its quicker
@@ -244,6 +251,7 @@ $gm_out =~ s/.txt$/.chr.txt/;
 #my $chrind = $gm_file;
 #$chrind =~ s/.*(chr[0-9]*).*/\1/;
 #$chrind =~ s/chr//;
+
 
 
 print "translate $gm_file\n";
@@ -465,7 +473,7 @@ while ($igz->gzreadline(my $line)){
 
     while (exists $snp_hash{$cells[$snp_col]}) {
 
-	if ($chrind == 23) {
+	if ($chrind == "X") {
 	    print "Warning: multi occurrence of $cells[$snp_col], $snppos_array[$cc], $cc, is accepted for chrX\n";
 	    $cells[$snp_col] .= "m";
 	}

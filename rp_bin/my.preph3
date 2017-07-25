@@ -36,6 +36,8 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --spliha INT      for splitter
  --eagle           use eagle instead of shapeit
  --eaglvcf         use eagle with VCF output (suitable for Minimac3)
+ --noref           do not use reference when using eaglevcf (saving important SNPs)
+
  --ref STRING      path to the reference vcf.gz file (required for --eagle_vcf; otherwise not used)
  --nospli          do not perform second task (splitting into smaller chunks)
 
@@ -76,6 +78,7 @@ GetOptions(
     "refind=s"=> \ $refind,
     "buffer=i"=> \ $buffer,
     "mendel"=> \my $mendel_sw,
+    "noref"=> \my $noref,
     "empty=s"=> \ $emptyname,
 
     
@@ -249,22 +252,44 @@ if ($eagle_sw) {
 if ($eagle_vcf) {
     # Convert plink bfile to a vcf file, then run Eagle to obtain a phased vcf file.
     # The resulting phased vcf can then be used with Minimac3.
+    
+    
+    
+    
+    
 
-
-    unless ($ref) {
-      die "$0: Please specify the reference file (e.g. --ref=my/ref.vcf.gz)\n";
+    my $opt_txt = "--vcf $outname.unphased0.vcf.gz";
+    unless ($noref) {
+	unless ($ref) {
+	    die "$0: Please specify the reference file (e.g. --ref=my/ref.vcf.gz)\n";
+	}
+	$opt_txt = "--vcfRef $ref --vcfTarget $outname.unphased0.vcf.gz  --allowRefAltSwap";
     }
+#    else {
+#	print "noref is on\n";
+#	sleep (3);
+ #   }
 
+    
+    
+    
     my $tabix = trans("tabixloc") . "/tabix";
-
+    
     # NOTE: the temporary name is 'unphased0' because Eagle itself writes a file
     # out.unphased.vcf.gz
     $sys_loc = qq{
       { $p2loc/plink --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out "$outname.unphased0" &&
         $tabix -f "$outname.unphased0.vcf.gz" &&
-        $ealoc/$eagle_bin --vcfRef "$ref" --vcfTarget "$outname.unphased0.vcf.gz" --allowRefAltSwap --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt
+        $ealoc/$eagle_bin $opt_txt --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt 
       } > $outname.log 2> $outname.loge
     };
+    
+    #}
+    #    else {
+    #	my $sys_loc = "$ealoc/$eagle_bin $ref_txt --bed $outname.bed --bim $outname.bim --fam $famfile --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt";
+    #   }
+    
+    
 }
 
 
