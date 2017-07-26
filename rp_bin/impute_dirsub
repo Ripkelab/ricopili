@@ -127,6 +127,7 @@ my $job_bn_th = 1000;
 
 my @ref_coll = ();
 
+my $chunkind = 10;
 
 
 #my $hapmap_ref_root = "/home/gwas/pgc-samples/hapmap_ref/";
@@ -349,9 +350,9 @@ version: $rp_version
   --serial            no sending jobs to queue all in one run
                           -> usually only used for testing  
 
+  --chunk INT         take chunks INT times bigger than original (default is 10)
+                            possilbe values are 1,2,5,10,20
 
-  --chunk5            take chunks 5  times bigger than original (for minimac and eagle)
-  --chunk10           take chunks 10 times bigger than original (for minimac and eagle)
 
 
 ### remarks 
@@ -512,8 +513,8 @@ GetOptions(
 
     "popname=s"=> \$popname,
     "refiex=s"=> \my $refiex_file,
-    "chunk5"=> \my $chunk5,
-    "chunk10"=> \my $chunk10,
+    "chunk=i"=> \$chunkind,
+#    "chunk10"=> \my $chunk10,
 
     );
 
@@ -526,13 +527,9 @@ if ($sleep_sw) {
   sleep ($sleep_sw);
 }
 
-if ($chunk5) {
-    $suminfo_c .= "_5";
-}
-if ($chunk10) {
-    $suminfo_c .= "_10";
-}
 
+
+$suminfo_c .= "_$chunkind";
 
 
 ############################################################
@@ -1648,7 +1645,7 @@ if ($suminfo_s_v2_sw) {
     if (@chr_in == 0) {
 
 	### test chr23
-	my $chrloc = 23;
+	my $chrloc = "X";
 	my $reffi ="$refdir/$suminfo_s.$chrloc.gz";
 	
 	$reffi ="$refdir/$suminfo_s_v2.impute.plink.$popname_uc.frq2.gz";
@@ -1754,6 +1751,10 @@ if ($suminfo_s_v2_sw == 1) {
 		$popname = uc $popname;
 		$reffi ="$refdir/$suminfo_s_v2.impute.plink.$popname_uc.frq2.gz";
 		$reffi =~ s/XXX/$chrloc/;
+
+		if ($chrloc eq "X") {
+		    $bimref ="$accfli".".ref.chr23";
+		}
 
 		unless (-e $reffi) {
 		    print "Error: $reffi not existing\n";

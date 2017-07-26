@@ -37,7 +37,7 @@ GetOptions(
 #    "col=i"=> \ $coln,
 #    "th=i"=> \ $th,
     "ref=s"=> \my $reffile,
-    "chr=i"=> \my $chrstr,
+    "chr=s"=> \my $chrstr,
     );
 
 die $usage if $help;
@@ -55,6 +55,11 @@ unless ($chrstr) {
     print "ERROR: please specify chromosome --chr\n";
     exit;
 }
+
+if ($chrstr == "X") {
+    $chrstr = 23;
+}
+
 my $outfile = $bimfile.".ref.chr$chrstr"; 
 
 print "$bimfile\n$reffile\t$chrstr\n";

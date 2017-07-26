@@ -1377,9 +1377,11 @@ my $answer = "";
 my $answer_gm = "";
 my $exit = 0;
 my @plink_collection;
-my @chunks_collection;
+my @chunks_collection_1;
+my @chunks_collection_2;
 my @chunks_collection_5;
 my @chunks_collection_10;
+my @chunks_collection_20;
 my @backup_arr;
 my $gm_name;
 
@@ -1895,12 +1897,38 @@ foreach my $chrint ($chr_start..$chr_end){
 
     ########################################################################
 
-    my $chunk_fini = $hapout_name.".legend.gz.chunks.fini";
-    unless (-e $chunk_fini) {
+#    my $chunk_fini = $hapout_name.".legend.gz.chunks.fini";
+#    unless (-e $chunk_fini) {#
 	#	    print "plink: $plink_name\n";
-	push @job_chunk, "$chunk_script --nsnps $chunksnps --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks";
+#	push @job_chunk, "$chunk_script --nsnps $chunksnps --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks";
+#    }
+#    push @chunks_collection, "$hapout_name.legend.gz.chunks";
+
+
+    ########################################################################
+    ## times 1
+    my $chunksnps_1 = $chunksnps * 1;
+    my $chunk_fini_1 = $hapout_name.".legend.gz.chunks_1.fini";
+    unless (-e $chunk_fini_1) {
+	#	    print "plink: $plink_name\n";
+	push @job_chunk, "$chunk_script --nsnps $chunksnps_1 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_1";
     }
-    push @chunks_collection, "$hapout_name.legend.gz.chunks";
+    push @chunks_collection_1, "$hapout_name.legend.gz.chunks_1";
+
+
+    
+    ########################################################################
+    ## times 2
+    my $chunksnps_2 = $chunksnps * 2;
+    my $chunk_fini_2 = $hapout_name.".legend.gz.chunks_2.fini";
+    unless (-e $chunk_fini_2) {
+	#	    print "plink: $plink_name\n";
+	push @job_chunk, "$chunk_script --nsnps $chunksnps_2 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_2";
+    }
+    push @chunks_collection_2, "$hapout_name.legend.gz.chunks_2";
+
+
+
 
 
     ########################################################################
@@ -1925,6 +1953,15 @@ foreach my $chrint ($chr_start..$chr_end){
     push @chunks_collection_10, "$hapout_name.legend.gz.chunks_10";
 
     
+    ########################################################################
+    ## times 20
+    my $chunksnps_20 = $chunksnps * 20;
+    my $chunk_fini_20 = $hapout_name.".legend.gz.chunks_20.fini";
+    unless (-e $chunk_fini_20) {
+	#	    print "plink: $plink_name\n";
+	push @job_chunk, "$chunk_script --nsnps $chunksnps_20 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_20";
+    }
+    push @chunks_collection_20, "$hapout_name.legend.gz.chunks_20";
 
 
 
@@ -2256,18 +2293,34 @@ unless (-e "infosum_pos.nsnps") {
 }
 
 
-unless (-e "infosum_pos.chunks") {
-    print "write infosum_pos.chunks\n";
-    if (-e "infosum_pos.chunks.tmp") {
-	&mysystem ("rm infosum_pos.chunks.tmp");
-    }
-    &mysystem ("touch infosum_pos.chunks.tmp");
 
-    foreach my $c (@chunks_collection) {
-	&mysystem ("cat  $c >> infosum_pos.chunks.tmp");
+unless (-e "infosum_pos.chunks_1") {
+    print "write infosum_pos.chunks_1\n";
+    if (-e "infosum_pos.chunks_1.tmp") {
+	&mysystem ("rm infosum_pos.chunks_1.tmp");
     }
-    &mysystem ("mv infosum_pos.chunks.tmp infosum_pos.chunks");
+    &mysystem ("touch infosum_pos.chunks_1.tmp");
+
+    foreach my $c (@chunks_collection_1) {
+	&mysystem ("cat  $c >> infosum_pos.chunks_1.tmp");
+    }
+    &mysystem ("mv infosum_pos.chunks_1.tmp infosum_pos.chunks_1");
 }
+
+
+unless (-e "infosum_pos.chunks_2") {
+    print "write infosum_pos.chunks_2\n";
+    if (-e "infosum_pos.chunks_2.tmp") {
+	&mysystem ("rm infosum_pos.chunks_2.tmp");
+    }
+    &mysystem ("touch infosum_pos.chunks_2.tmp");
+
+    foreach my $c (@chunks_collection_2) {
+	&mysystem ("cat  $c >> infosum_pos.chunks_2.tmp");
+    }
+    &mysystem ("mv infosum_pos.chunks_2.tmp infosum_pos.chunks_2");
+}
+
 
 unless (-e "infosum_pos.chunks_5") {
     print "write infosum_pos.chunks_5\n";
@@ -2282,6 +2335,7 @@ unless (-e "infosum_pos.chunks_5") {
     &mysystem ("mv infosum_pos.chunks_5.tmp infosum_pos.chunks_5");
 }
 
+
 unless (-e "infosum_pos.chunks_10") {
     print "write infosum_pos.chunks_10\n";
     if (-e "infosum_pos.chunks_10.tmp") {
@@ -2293,6 +2347,20 @@ unless (-e "infosum_pos.chunks_10") {
 	&mysystem ("cat  $c >> infosum_pos.chunks_10.tmp");
     }
     &mysystem ("mv infosum_pos.chunks_10.tmp infosum_pos.chunks_10");
+}
+
+
+unless (-e "infosum_pos.chunks_20") {
+    print "write infosum_pos.chunks_20\n";
+    if (-e "infosum_pos.chunks_20.tmp") {
+	&mysystem ("rm infosum_pos.chunks_20.tmp");
+    }
+    &mysystem ("touch infosum_pos.chunks_20.tmp");
+
+    foreach my $c (@chunks_collection_20) {
+	&mysystem ("cat  $c >> infosum_pos.chunks_20.tmp");
+    }
+    &mysystem ("mv infosum_pos.chunks_20.tmp infosum_pos.chunks_20");
 }
 
 
@@ -2387,8 +2455,14 @@ foreach my $pf_loc (@pop_fams) {
     }
 
     print "copy chunkinfo to ancestry subdir\n";   
-    unless (-e "pop_$pf_loc/infosum_pos.chunks") {
-	&mysystem ("cp infosum_pos.chunks pop_$pf_loc/");
+    
+    print "copy chunkinfo_1 to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/infosum_pos.chunks_1") {
+	&mysystem ("cp infosum_pos.chunks_1 pop_$pf_loc/");
+    }
+    print "copy chunkinfo_2 to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/infosum_pos.chunks_2") {
+	&mysystem ("cp infosum_pos.chunks_2 pop_$pf_loc/");
     }
     print "copy chunkinfo_5 to ancestry subdir\n";   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_5") {
@@ -2398,7 +2472,10 @@ foreach my $pf_loc (@pop_fams) {
     unless (-e "pop_$pf_loc/infosum_pos.chunks_10") {
 	&mysystem ("cp infosum_pos.chunks_10 pop_$pf_loc/");
     }
-
+    print "copy chunkinfo_20 to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/infosum_pos.chunks_20") {
+	&mysystem ("cp infosum_pos.chunks_10 pop_$pf_loc/");
+    }
     
  
     print "copy gwascatalog to ancestry subdir\n";   
