@@ -789,13 +789,17 @@ if ($dandir) {
 	
     }
 
-    if (-e "$refdir/infosum_pos.chunks"){
-	print "ref-version2: read info_collection out of infosum_pos.chunks...\n";
-	&error ("$refdir/infosum_pos.chunks") unless open IF, "< $refdir/infosum_pos.chunks";
+    if (-e "$refdir/infosum_pos.chunks_10"){
+	print "ref-version2: read info_collection out of infosum_pos.chunks_10...\n";
+	&error ("$refdir/infosum_pos.chunks_10") unless open IF, "< $refdir/infosum_pos.chunks_10";
 	while (my $line =<IF>){
 	    $line =~ s/^[\s]+//g;
 	    my @cells=  split /\s+/, $line;
+	    if ($cells[0] eq "X") {
+		$cells[0] = 23;
+	    }
 	    my $floc = $cells[0]."_".$cells[1]."_".$cells[2];
+	    print "$floc\n";
 	    push @info_files,$floc;
 	}
 	close IF;
@@ -848,6 +852,7 @@ if ($dandir) {
     #    print "$chr\t$beg\t$end\t$beg_str\t$end_str\n";
     print "create daner collection.....\n";
 
+    
     foreach my $df (@daner_files) {
 	chomp($df);
 #	print "$df\n";
@@ -875,11 +880,14 @@ if ($dandir) {
 	my $mega_start_M = $mega_start*1000000;
 	my $mega_end_M = $mega_end*1000000;
 
-#	    exit;
+	#	    exit;
+	if ($tcells[0] eq "X") {
+	    $tcells[0] = 23;
+	}
 	next if ($tcells[0] ne $chr);
 	next if ($mega_start_M > $end);
 	next if ($mega_end_M < $beg);
-#	print "$df\n";
+	print "$df\n";
 
 	push @daner_files_loc, $df;
     }
@@ -1182,6 +1190,9 @@ my $cwindow = sprintf "%i",($end - $beg)/1000;
 #my $cwindow = 250;
 
 
+#print "chromosome: $chr\n";
+#exit;
+
 
 my $bfile_sc = "";
 
@@ -1191,7 +1202,13 @@ if (-e "$refdir/reference_templ") {
     chomp($out_template);
     #		print "out: $out_template\n";
     $bfile_sc = "$refdir/$out_template";
-    $bfile_sc =~ s/XXX/$chr/;
+
+    if ($chr = 23) {
+	$bfile_sc =~ s/XXX/X/;
+    }
+    else {
+	$bfile_sc =~ s/XXX/$chr/;
+    }
     #		$bfile_sc .= ".impute.plink.$popname.bed";
     #		print "bf: $bfile_sc\n";
     
@@ -1209,6 +1226,10 @@ else {
     chomp($bfile_sc);
     $bfile_sc =~ s/.bed$//;
 }
+
+#if ($chr = 23) {
+#    $bfile_sc =~ s/chr23/chrX/;
+#}
 
 
 

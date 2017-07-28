@@ -59,7 +59,7 @@ GetOptions(
     "legend=s"=> \my $legend_file,
     "refstart=s"=> \my $refstart,
     "refend=s"=> \my $refend,
-    "chr=i"=> \my $chr,
+    "chr=s"=> \my $chr,
     #    "buff=i"=> \ $buff,
     
     );

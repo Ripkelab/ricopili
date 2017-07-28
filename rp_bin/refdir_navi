@@ -123,6 +123,7 @@ my $imp2_templ ="";
 my $hm3_templ ="";
 my $gm_template = "genetic_map_chrXXX_combined_b37.txt";
 my $gmchr_template = "genetic_map_chrXXX_combined_b37.chr.txt";
+my $gmchr_template_23 = "genetic_map_chrXXX_combined_b37.chr.txt.23";
 
 my $vcf_site = "";
 my $gm_site = "http://mathgen.stats.ox.ac.uk/impute/ALL_1000G_phase1integrated_feb2012_impute/";
@@ -2474,7 +2475,7 @@ foreach my $pf_loc (@pop_fams) {
     }
     print "copy chunkinfo_20 to ancestry subdir\n";   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_20") {
-	&mysystem ("cp infosum_pos.chunks_10 pop_$pf_loc/");
+	&mysystem ("cp infosum_pos.chunks_20 pop_$pf_loc/");
     }
     
  
@@ -2534,6 +2535,17 @@ foreach my $pf_loc (@pop_fams) {
 	    unless (-e $gmchr_name_target){
 		&mysystem ("cp $gmchr_name_source $gmchr_name_target")
 	    }
+
+	    
+	    my $gmchr_name_source = $gmchr_template_23;
+	    $gmchr_name_source =~ s/XXX/X_nonPAR/g;
+	    my $gmchr_name_target = $gmchr_template_23;
+	    $gmchr_name_target =~ s/XXX/X/g;
+	    
+	    unless (-e $gmchr_name_target){
+		&mysystem ("cp $gmchr_name_source $gmchr_name_target")
+	    }
+
 
 
 	    

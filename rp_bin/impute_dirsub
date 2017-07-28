@@ -350,7 +350,7 @@ version: $rp_version
   --serial            no sending jobs to queue all in one run
                           -> usually only used for testing  
 
-  --chunk INT         take chunks INT times bigger than original (default is 10)
+  --chunk INT         take chunks INT times bigger than original (default is $chunkind)
                             possilbe values are 1,2,5,10,20
 
 

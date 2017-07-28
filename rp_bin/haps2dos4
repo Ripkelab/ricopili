@@ -61,7 +61,7 @@ GetOptions(
     "fam=s"=> \my $famname,
 #    "transfam=s"=> \my $transfamname,
     "bim=s"=> \my $bimname,
-    "chr=i"=> \my $chr,
+    "chr=s"=> \my $chr,
 
     );
 

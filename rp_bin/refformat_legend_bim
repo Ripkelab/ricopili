@@ -274,6 +274,40 @@ close IFILE;
 close OFILE;
 
 
+####################################################
+## here a second run for chr23
+##############################################
+
+if ($chrind eq "X") {
+
+
+    my $gm_out = $gm_file;
+    $gm_out =~ s/.txt$/.chr.txt.23/;
+    
+    print "create $gm_file\n";
+    
+    if ($gm_file eq $gm_out) {
+	print "Error: in and out file ($gm_file) are the same\n";
+	exit;
+    }
+    
+    die $!."($gm_file)" unless open IFILE, "< $gm_file";
+    die $!."($gm_out)" unless open OFILE, "> $gm_out";
+    
+    my $line = <IFILE>;
+    print OFILE "chr $line";
+    
+    while ($line = <IFILE>){
+	print OFILE "23 $line";
+    }
+    close IFILE;
+    close OFILE;
+    
+
+
+
+}
+
 
 
 #print "debug\n";

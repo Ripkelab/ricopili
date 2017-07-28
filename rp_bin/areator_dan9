@@ -793,6 +793,12 @@ if ($pliclu) {
 
 
 	    my $bfile_sc = "";
+
+	    if ($chr == 23) {
+		$chr = "X";
+	    }
+	    print "trying to find reference for $chr\n";
+	    
 		
 	    if (-e "$refdir/reference_templ") {
 		my $out_template = `grep bfile_template $refdir/reference_templ`;

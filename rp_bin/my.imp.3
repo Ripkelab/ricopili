@@ -61,11 +61,12 @@ GetOptions(
     "chrX=s"=> \my $chrx,
     "imp4"=> \my $imp4,
     "minimac"=> \my $minimac,
-    "chrind=i"=> \my $chr,
+    "chrind=s"=> \my $chr,
     );
 
 
-if ($outname eq "" || $inname eq ""  || (!$minimac && $gemafile eq "") || $reffile eq "" || $refstart eq ""|| $refend eq ""  || ($minimac && $chr == 0)){
+if (0) {
+if ($outname eq "" || $inname eq ""  || (!$minimac && $gemafile eq "") || $reffile eq "" || $refstart eq ""|| $refend eq ""  || ($minimac)){
     print "$usage\n";
     print "$outname\n";
     print "$inname\n";
@@ -75,10 +76,10 @@ if ($outname eq "" || $inname eq ""  || (!$minimac && $gemafile eq "") || $reffi
     print "$refend\n";
     print "$minimac\n";
     print "$chr\n";
-
+    print "und?\n";
     die;
 }
-
+}
 
 if ($minimac and $reffile !~ /m3vcf/) {
     warn "$0: using an un-processed reference file. This will be much slower than using a processed one (.m3vcf.gz)\n";
@@ -97,8 +98,9 @@ unless (-e "$inname") {
 }
 
 my $xtxt = "";
-if ($chrx) {
-    $xtxt = "-chrX -sample_known_haps_g $chrx";
+if ($chr eq "X") {
+#    $xtxt = "-chrX -sample_known_haps_g $chrx";
+    $xtxt = "-chrX -sample_known_haps_g";
 }
 
 my $imp2_bin = "impute2";

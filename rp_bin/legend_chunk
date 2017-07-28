@@ -126,6 +126,10 @@ my $chrind = $legend_file;
 $chrind =~ s/.*(chr[0-9]*).*/\1/;
 $chrind =~ s/chr//;
 
+if ($legend_file =~ /chrX/) {
+    $chrind = "X";
+}
+
 
 
 ### first fam and samples file since its quicker
@@ -312,7 +316,7 @@ if ($cs < $nsnps/5) {
 else {
     my $out_str =  "$chrind $scc_start $scc_end $scc_diff $cs";
     push @out, $out_str;
-    print "$out_str\n";
+#    print "$out_str\n";
 }
 
 $nc++;

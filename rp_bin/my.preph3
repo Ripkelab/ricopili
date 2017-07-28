@@ -164,29 +164,59 @@ if (-e "$outname.fini") {
 
 
 my $sys = "";
+my $sc = 0;
+my $chrx_sw = 0;
 
 if ($refind) {
     my @tcells = split /_/, $refind;
+
+    my $chromosome = $tcells[0];
+    if ($chromosome eq "chrX") {
+	$chrx_sw = 1 ;
+	$noref = 1;
+	print "on chrX I do not do it with reference files\n";
+    }
     my $kb_start = ($tcells[1])*1000 - $buffer;
     my $kb_end = ($tcells[2])*1000 + $buffer;
     
     my $chrind = $tcells[0];
-    $chrind =~ s/chr//;
+    $chrind =~ s/chr//;    
 
     $sys = "$p2loc/plink --memory 2000 --bfile $inname --out $outname --make-bed --chr $chrind --from-kb $kb_start --to-kb $kb_end $mendel_clean";
+    $sc = system ($sys);
+
+    
+#    if ($chromosome eq "chrX") {
+#	die $!."($outname.bim)" unless open FILE, "< $outname.bim";
+#	die $!."($outname.bim.X)" unless open OF, "> $outname.bim.X";
+#	while (my $line = <FILE>){
+#	    my @cells = @{&split_line_ref(\$line)};
+#	    $cells[0] = "X";
+#	    print OF join ("\t",@cells)."\n";
+#	}
+#	close FILE;
+#	close OF;
+#	system ("mv $outname.bim.X $outname.bim");
+ #   }
+
+
+
+    
 }
 else {
     $sys = "$p2loc/plink --memory 2000 --bfile $inname --out $outname --make-bed --extract $sfile $mendel_clean";
+    $sc = system ($sys);
 }
 
-
-my $sc = system ($sys);
 
 if ($sc != 0 ) {
     print "Error with running plink: $sys\n";
-#    exit;
+    exit;
 }
 
+
+#    print "debug\n";
+#    exit;
 
 
 my $last_line = `tail -n 3 $outname.log`;
@@ -205,8 +235,9 @@ if (-e "$outname.bim") {
     my @bc = split /\s+/, $bimcount;
     if ($bc[0] < 5){
 	$empty = 1;
+	print "excluding chunk with less than 5 genotyped SNPs in it\n";
     }
-    print "excluding chunk with less than 5 genotyped SNPs in it\n";
+
 }
 
 
@@ -226,6 +257,9 @@ print "chunk successfully extracted\n";
 
 system ("touch $outname.multi.$multi");
 
+
+#print "debug\n";
+#exit;
 
 ######################
 # BEGIN
@@ -249,13 +283,13 @@ if ($eagle_sw) {
 }
 
 
+
+
+
+
 if ($eagle_vcf) {
     # Convert plink bfile to a vcf file, then run Eagle to obtain a phased vcf file.
     # The resulting phased vcf can then be used with Minimac3.
-    
-    
-    
-    
     
 
     my $opt_txt = "--vcf $outname.unphased0.vcf.gz";
@@ -265,40 +299,57 @@ if ($eagle_vcf) {
 	}
 	$opt_txt = "--vcfRef $ref --vcfTarget $outname.unphased0.vcf.gz  --allowRefAltSwap";
     }
-#    else {
-#	print "noref is on\n";
-#	sleep (3);
- #   }
+    
 
-    
-    
-    
-    my $tabix = trans("tabixloc") . "/tabix";
     
     # NOTE: the temporary name is 'unphased0' because Eagle itself writes a file
     # out.unphased.vcf.gz
-    $sys_loc = qq{
-      { $p2loc/plink --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out "$outname.unphased0" &&
-        $tabix -f "$outname.unphased0.vcf.gz" &&
-        $ealoc/$eagle_bin $opt_txt --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt 
-      } > $outname.log 2> $outname.loge
-    };
+    my $sys_loc_plink = "$p2loc/plink --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out $outname.unphased0";
+    print BC "$sys_loc_plink\n";
+    print "starting: $sys_loc_plink\n";
+    $sc += system ($sys_loc_plink) ;
+
+    
+    my $tabix = trans("tabixloc") . "/tabix";    
+    my $sys_loc_tabix = "$tabix -f $outname.unphased0.vcf.gz";
+    print BC "$sys_loc_tabix\n";
+    print "starting: $sys_loc_tabix\n";
+    $sc += system ($sys_loc_tabix) ;
+
+
+    if ($chrx_sw == 1) {
+	print "on chrX I use a differenct genetic map file\n";
+	$gemafile .= ".23";
+    }
+    
+    my $sys_loc_eagle = "$ealoc/$eagle_bin $opt_txt --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt > $outname.eag.log 2> $outname.eag.loge";
+    print BC "$sys_loc_eagle\n";
+    print "starting: $sys_loc_eagle\n";
+    $sc += system ($sys_loc_eagle) ;
+
+
+    
+#    $sys_loc = qq{
+#      { $p2loc/plink --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out "$outname.unphased0" &&
+#        $tabix -f "$outname.unphased0.vcf.gz" &&
+#        $ealoc/$eagle_bin $opt_txt --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt 
+#      } > $outname.log 2> $outname.loge
+#    };
     
     #}
     #    else {
     #	my $sys_loc = "$ealoc/$eagle_bin $ref_txt --bed $outname.bed --bim $outname.bim --fam $famfile --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt";
     #   }
-    
-    
+
+
+
 }
+else {
 
-
-$sc = 0;
-unless (-e "$outname.first.fini"){
-    print "$sys_loc\n";
     $sc = system ($sys_loc) ;
-    print BC "$sys_loc\n";
 }
+
+
 
 
 close BC;
