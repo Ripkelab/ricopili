@@ -2073,6 +2073,7 @@ close BASIC;
 print "create gwas_sub\n";
 my $gwas_sub = "$gwas.$out_name.sub";
 
+my $ngwas = 0;
 unless (-e $gwas_sub) {
 
 
@@ -2091,6 +2092,7 @@ unless (-e $gwas_sub) {
 #	else {
 	    if (exists $arsnps{$cells[1]}){
 		print FILE $line."\n";
+		$ngwas++;
 	    }
 #	}
     }
@@ -2098,9 +2100,17 @@ unless (-e $gwas_sub) {
     $ggz -> gzclose();
     close FILE;
 
+    if ($ngwas == 0) {
+	print "gwas file does not seem to fit to 1mhc file, please check command\n";
+	exit;
+    }
+
     &mysystem("mv $gwas_sub.tmp $gwas_sub");
 
 }
+
+
+
 
 print "read gwas_sub into memory: $gwas_sub\n";
 

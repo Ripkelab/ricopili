@@ -1408,7 +1408,8 @@ foreach my $repout (@dfile_arr) {
 
     my $info_repname = $repname;
     $info_repname =~ s/SCZ52_0513.sh2_nodenmaarhirwtgrasswe6caticou3lie2mgs2.//;
-#    $info_repname =~ s///;
+    #    $info_repname =~ s///;
+    print "ninf:".@inf_coll_all."\n";
     &info_comp ("info.all.$info_repname",@inf_coll_all);
     push @info_pdf_collection, "info.all.$info_repname.pdf";
     
