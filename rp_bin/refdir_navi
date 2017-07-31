@@ -1378,6 +1378,7 @@ my $answer = "";
 my $answer_gm = "";
 my $exit = 0;
 my @plink_collection;
+my @chunks_collection_T3;
 my @chunks_collection_1;
 my @chunks_collection_2;
 my @chunks_collection_5;
@@ -1906,6 +1907,19 @@ foreach my $chrint ($chr_start..$chr_end){
 #    push @chunks_collection, "$hapout_name.legend.gz.chunks";
 
 
+
+    ########################################################################
+    ## times 1
+    my $chunksnps_T3 = sprintf "%d", $chunksnps / 3;
+    my $chunk_fini_T3 = $hapout_name.".legend.gz.chunks_T3.fini";
+    unless (-e $chunk_fini_T3) {
+	#	    print "plink: $plink_name\n";
+	push @job_chunk, "$chunk_script --nsnps $chunksnps_T3 --legend $hapout_name.legend.gz --out $hapout_name.legend.gz.chunks_T3";
+    }
+    push @chunks_collection_T3, "$hapout_name.legend.gz.chunks_T3";
+
+
+    
     ########################################################################
     ## times 1
     my $chunksnps_1 = $chunksnps * 1;
@@ -2294,6 +2308,20 @@ unless (-e "infosum_pos.nsnps") {
 }
 
 
+unless (-e "infosum_pos.chunks_T3") {
+    print "write infosum_pos.chunks_T3\n";
+    if (-e "infosum_pos.chunks_T3.tmp") {
+	&mysystem ("rm infosum_pos.chunks_T3.tmp");
+    }
+    &mysystem ("touch infosum_pos.chunks_T3.tmp");
+
+    foreach my $c (@chunks_collection_T3) {
+	&mysystem ("cat  $c >> infosum_pos.chunks_T3.tmp");
+    }
+    &mysystem ("mv infosum_pos.chunks_T3.tmp infosum_pos.chunks_T3");
+}
+
+
 
 unless (-e "infosum_pos.chunks_1") {
     print "write infosum_pos.chunks_1\n";
@@ -2456,11 +2484,17 @@ foreach my $pf_loc (@pop_fams) {
     }
 
     print "copy chunkinfo to ancestry subdir\n";   
+
+    print "copy chunkinfo_T3 to ancestry subdir\n";   
+    unless (-e "pop_$pf_loc/infosum_pos.chunks_T3") {
+	&mysystem ("cp infosum_pos.chunks_T3 pop_$pf_loc/");
+    }
     
     print "copy chunkinfo_1 to ancestry subdir\n";   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_1") {
 	&mysystem ("cp infosum_pos.chunks_1 pop_$pf_loc/");
     }
+    
     print "copy chunkinfo_2 to ancestry subdir\n";   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_2") {
 	&mysystem ("cp infosum_pos.chunks_2 pop_$pf_loc/");
