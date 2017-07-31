@@ -513,7 +513,7 @@ GetOptions(
 
     "popname=s"=> \$popname,
     "refiex=s"=> \my $refiex_file,
-    "chunk=i"=> \$chunkind,
+    "chunk=s"=> \$chunkind,
 #    "chunk10"=> \my $chunk10,
 
     );
