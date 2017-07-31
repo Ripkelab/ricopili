@@ -538,7 +538,7 @@ if ($areastr eq "0,0,0" || $areastr eq "NOAREA") {
 
 if ($areastr eq "NOAREA") {
 
-    &error ("$pfile not existing") unless open PF, "< $pfile";
+    &error ("pfile $pfile not existing") unless open PF, "< $pfile";
     my $found_loc = 0;
     while (my $line =<PF>){
 	my @cells = @{&split_line_ref(\$line)};
@@ -900,6 +900,7 @@ if ($dandir) {
 
 
     if (@daner_files_loc > 0 ) {
+	print "daner_files_loc: @daner_files_loc\n";
 	$pfile = "$out.dandir";
 	my $cc = 0;
 
@@ -913,7 +914,7 @@ if ($dandir) {
 	    }
 
 
-	    &error ("$df_out not existing") unless open DO, "< $df_out";
+	    &error ("df_out $df_out not existing") unless open DO, "< $df_out";
 	    &error ("$pfile") unless open PF, ">> $pfile";
 	    my $line =<DO>;
 	    if ($cc == 0) {
@@ -974,8 +975,8 @@ if ($dandir) {
 
     
 	    
-    &error ("$pfile file not existing") unless open PF, "< $pfile";
-    &error ("$pfile file not existing") unless open PFS, "> $pfile.sub";
+    &error ("pfile $pfile file not existing") unless open PF, "< $pfile";
+    &error ("pfile.sub $pfile.sub file not existing") unless open PFS, "> $pfile.sub";
     my $line =<PF>;
     print PFS "$line";
     while (my $line =<PF>){
@@ -1034,8 +1035,8 @@ if ($dandir) {
 	my $lc = 0;
 	## read info-info in detail
 	if (-e "$refdir/$df"){
-	    &error ("$refdir/$df not existing") unless open DF, "< $refdir/$df";
-	    &error ("$info_file not existing") unless open IF, ">> $info_file";
+	    &error ("df2 $refdir/$df not existing") unless open DF, "< $refdir/$df";
+	    &error ("info $info_file not existing") unless open IF, ">> $info_file";
 	    while (my $line =<DF>){
 		my @cells = @{&split_line_ref(\$line)};
 		if ($cells[8] >= $beg && $cells[8] <= $end){
@@ -1241,8 +1242,8 @@ my $sc = 0;
 #my $found_s = 0;
 
 print "SNP-MARK: $snp_mark\n";
-&error ("$pfile.sub not existing") unless open PF, "< $pfile.sub";
-&error ("$pfile.local not existing") unless open LO, "> $pfile.local";
+&error ("pf_sub $pfile.sub not existing") unless open PF, "< $pfile.sub";
+&error ("pf_loc $pfile.local not existing") unless open LO, "> $pfile.local";
 print P4 "SNP\tP\n";
 while (my $line =<PF>){
     my @cells = @{&split_line_ref(\$line)};
@@ -1288,8 +1289,8 @@ if ($clump && $nclump > 1) {
 
 
     my $sc = 0;
-    &error ("$pfile.sub not existing") unless open PF, "< $pfile.sub";
-    &error ("$pfile.p4 not existing") unless open P4, "> $pfile.p4";
+    &error ("pf_sub2 $pfile.sub not existing") unless open PF, "< $pfile.sub";
+    &error ("p4 $pfile.p4 not existing") unless open P4, "> $pfile.p4";
     print P4 "SNP\tP\n";
     while (my $line =<PF>){
 	my @cells = @{&split_line_ref(\$line)};
@@ -1321,7 +1322,7 @@ if ($clump && $nclump > 1) {
 #    print "plink finished\n";
 #    sleep(4);
 
-    &error ("$pfile.p4.clumped not existing") unless open CL, "< $pfile.p4.clumped";
+    &error ("clump $pfile.p4.clumped not existing") unless open CL, "< $pfile.p4.clumped";
     my $cc = 0;
     my $line =<CL>;
     $line =<CL>;

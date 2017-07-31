@@ -213,7 +213,7 @@ else {
 
 if ($sc != 0 ) {
     print "Error with running plink: $sys\n";
-    exit;
+#    exit;
 }
 
 
