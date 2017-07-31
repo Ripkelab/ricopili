@@ -1467,6 +1467,19 @@ if ($rformat == 0) {
 
     my $rep_name_ffile = "$rep_name.format.txt";
     unless (-e "$rep_name_ffile") {
+	my %head_hash;
+	$head_hash{"SNP"}=1;
+	$head_hash{"P"}=1;
+	$head_hash{"A1"}=1;
+	$head_hash{"A2"}=1;
+	$head_hash{"FRQ_U"}=1;
+	$head_hash{"FRQ_A"}=1;
+	$head_hash{"SE"}=1;
+	$head_hash{"OR"}=1;
+	$head_hash{"INFO"}=1;
+	$head_hash{"CHR"}=1;
+	$head_hash{"BP"}=1;
+	
 	my $ggz = gzopen("$rep_name", "rb")  or die "Cannot open $rep_name: $gzerrno\n" ;
 	$ggz->gzreadline(my $header);
 	$ggz->gzreadline(my $row1);
@@ -1477,15 +1490,26 @@ if ($rformat == 0) {
         print  "write new format_file\n";
 	die "$!" unless open RFF, "> $rep_name_ffile";  
 
-	print RFF "## please replace NA with the following: SNP P A1 A2 OR FA1 SE INFO CHR BP\n";
+	print RFF "## please replace the second column with the following: SNP P A1 A2 OR FRQ_U FRQ_A SE INFO CHR BP\n";
 	print RFF "## do not change the order of rows\n";
 	my @cells = @{&split_line_ref(\$header)};
 	foreach (@cells){
-	    print RFF $_." NA\n";
+	    my $second = "NA";
+	    if (exists $head_hash{$_}) {
+		$second = $_;
+	    }
+	    print RFF $_." $second\n";
 	}
-	print RFF "## row1: $row1\n";
-	print RFF "## row1: $row2\n";
-	print RFF "## row1: $row3\n";
+	print RFF "-----------------------------------\n";
+	print RFF "here the first three data rows\n";
+	print RFF "-----------------------------------\n";
+	print RFF "## row1: $row1";
+	print RFF "## row1: $row2";
+	print RFF "## row1: $row3";
+	print RFF "------------------------\n";
+	print RFF "FRQ_U is frequency of controls for A1\n";
+	print RFF "FRQ_A is frequency of cases for A1 (if not kown, take the one for controls)\n";
+	
 	close RFF;
 	
         print  "please edit $rep_name_ffile and restart\n";
@@ -1517,10 +1541,10 @@ if ($rformat == 0) {
 		if ($cells[1] eq "OR") {
 		    $or_col = $rcc;
 		}
-		if ($cells[1] eq "FA1") {
+		if ($cells[1] eq "FRQ_U") {
 		    $f_col = $rcc;
 		}
-		if ($cells[1] eq "FA1_A") {
+		if ($cells[1] eq "FRQ_A") {
 		    $fa_col = $rcc;
 		}
 		if ($cells[1] eq "CHR") {

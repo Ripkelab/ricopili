@@ -121,7 +121,8 @@ die "$!:$bim_file" unless open BIM, "< $bim_file";
 while (<BIM>) {
     my @cells = @{&split_line_ref(\$_)};
     my $pos = $cells[0]." ".$cells[3];
-    $bpos{$cells[1]} = $pos;
+#    $bpos{$cells[1]} = $pos;
+    $bpos{$pos} = 1;
 }
 close BIM;
 
@@ -129,8 +130,11 @@ my $nbim=keys(%bpos);
 print "size of bim-file: $nbim\n\n";
 
 
+
+
 my $max_comp = 50000000;
 my $min_noma = 100000000;
+my $max_ma = 0;
 my $buig;
 
 print "start comparison\n";
@@ -141,8 +145,8 @@ die $!."($bim_file).buigue.noma_comp" unless open NC, "> $bim_file.buigue.noma_c
 
 
 print NC "build";
-print NC "\tN_comp";
-print NC "\tN_nocomp";
+#print NC "\tN_comp";
+#print NC "\tN_nocomp";
 print NC "\tN_match";
 print NC "\tN_nomatch";
 print NC "\n";
@@ -154,6 +158,8 @@ my @noma_files;
 foreach my $bufile (@bu_files) {
     ## compare with snp-collection
 
+
+    my %test_bpos = %bpos;
     my $bush = $bufile;
     $bush =~ s/.*snp/snp/;
     $bush =~ s/.txt.pos.gz//;
@@ -163,8 +169,8 @@ foreach my $bufile (@bu_files) {
     
     my $nmatch= 0;
     my $nnomatch= 0;
-    my $ncomp= 0;
-    my $nnocomp= 0;
+#    my $ncomp= 0;
+#    my $nnocomp= 0;
 
     my $sc = gzopen($bufile, "rb")  or die "Cannot open $bufile: $gzerrno\n" ;
     die $!."($bim_file).$bush.noma" unless open NOMA, "> $bim_file.$bush.noma";
@@ -175,46 +181,63 @@ foreach my $bufile (@bu_files) {
 	my @cells = @{&split_line_ref(\$line)};
 
 
-	if (exists $bpos{$cells[0]}) {
-	    my $pos = $cells[1]." ".$cells[3];
+#	if (exists $bpos{$cells[0]}) {
+	my $pos = $cells[1]." ".$cells[3];
 
 #	    if ($cells[0] eq "rs3131972") {
 #		print "rs3131972:\n";
 #		print "$pos\n";
 #		print "$bpos{$cells[0]}\n";
 #	    }
-	    if ($pos eq $bpos{$cells[0]}) {
-		$nmatch++;
-	    }
-	    else {
-		$nnomatch++;
-		print NOMA "$cells[0] $bpos{$cells[0]} $pos\n";
-	    }
-	    $ncomp++;
+
+
+
+	if (exists $test_bpos{$pos}) {
+#	    if ($pos eq $bpos{$cells[0]}) {
+	    $nmatch++;
+	    delete $test_bpos{$pos};
 	}
-	else {
-	    $nnocomp++;
-	}
-	last if ($ncomp == $max_comp);
-    }	    
+	#	    $ncomp++;
+	#	}
+	#	else {
+	#	    $nnocomp++;
+	#	}
+	#	last if ($ncomp == $max_comp);
+    }
+    foreach my $posx (keys %test_bpos) {
+	print NOMA "$posx\n";
+	$nnomatch++;
+    }
     close NOMA;
     $sc->gzclose();
 
+#    if ($ncomp == 0) {
+#	print "Error: no SNPs were compared to reference SNPs, check format of your bim file $bim_file\n";
+#	exit;
+ #   }
+
     print NC "$bufile";
-    print NC "\t$ncomp";
-    print NC "\t$nnocomp";
+#    print NC "\t$ncomp";
+#    print NC "\t$nnocomp";
     print NC "\t$nmatch";
     print NC "\t$nnomatch";
     print NC "\n";
-    if ($nnomatch < $min_noma) {
+    if ($nmatch > $max_ma) {
+#    if ($nnomatch < $min_noma) {
 	$min_noma = $nnomatch;
 	$buig = $bush;
 	$licount = $bucount;
+	$max_ma = $nmatch;
     }
 
     $bucount++;
 }
 close NC;
+
+if ($max_ma == 0) {
+    print "Error: maximum of matched positions is 0, plese check format of $bim_file\n";
+    exit;
+}
 
 
 my $cmd_out = "no liftover necessary to get to hg19\n";

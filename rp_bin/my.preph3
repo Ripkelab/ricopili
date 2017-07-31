@@ -10,6 +10,8 @@ use warnings;
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
+use Compress::Zlib ;
+
 
 #############################
 # read config file
@@ -327,7 +329,28 @@ if ($eagle_vcf) {
     print "starting: $sys_loc_eagle\n";
     $sc += system ($sys_loc_eagle) ;
 
+    
+    if ($chrx_sw == 1) {
+	$sc += system ("mv $outname.vcf.gz $outname.vcf.23.gz") ;
+	my $igz = gzopen("$outname.vcf.23.gz", "rb")  or die "Cannot open file $outname.vcf.23.gz: $gzerrno\n" ;
+	my $ogz = gzopen("$outname.vcf.gz", "wb")  or die "Cannot open file $outname.vcf.gz: $gzerrno\n" ;
 
+	while ($igz->gzreadline(my $line)){
+	    chomp($line);
+	    my @cells = @{&split_line_ref(\$line)};
+	    if ($cells[0] eq "23") {
+		$cells[0] = "X";
+		$ogz->gzwrite(join("\t",@cells)."\n");
+	    }
+	    else {
+		$ogz->gzwrite("$line\n");
+	    }
+
+	}
+	$igz->gzclose();
+	$ogz->gzclose();
+	$sc += system ("rm $outname.vcf.23.gz") ;
+    }
     
 #    $sys_loc = qq{
 #      { $p2loc/plink --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out "$outname.unphased0" &&
