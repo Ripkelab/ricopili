@@ -211,6 +211,7 @@ my $clump = .0001;
 my $genestr = "nogene";
 
 my $ylimu = 0;
+my $dandir = 0;
 
 use Getopt::Long;
 GetOptions( 
@@ -233,7 +234,7 @@ GetOptions(
     "help"=> \my $help,
     "phase2"=> \my $phase2,
     "refdir=s"=> \my $refdir,
-    "dandir=s"=> \my $dandir,
+    "dandir=s"=> \$dandir,
     "prekno=s"=> \my $prekno_file,
     "web"=> \my $web,
     "gene=s"=> \$genestr,
@@ -293,13 +294,18 @@ sub error {
 
 $anonym=1 if $anonym_tmp;
 
-if ($dandir) {
+if ($dandir == 0) {
+    print "$dandir\n";
+}
+
+if ($dandir != 0) {
     my @dadi_f = `ls -f $dandir`;
     my $ndadi = @dadi_f;
 #    print "$ndadi\n";
  #   print "sleep\n";
     if ($ndadi < 3){
-	undef $dandir;
+	$dandir =0;
+#	undef $dandir;
     }
  #   sleep(3);
 }
@@ -760,18 +766,21 @@ foreach my $snp_loc1 (@multiarea) {
 }
 
 
-
+my @daner_files;
 if ($dandir) {
  
 #    print "yes I a m here\n";
 #    sleep(3);
 
-    my @daner_files = `cd $dandir; ls -U dan*chr*gz`;
+    @daner_files = `cd $dandir; ls -U dan*chr*gz`;
     if (@daner_files == 0) {
 	@daner_files = `cd $dandir; ls -U prim*chr*gz`;
     }
 
-
+}
+else {
+    $dandir = $rootdir;
+}
 
     my @info_files ;
 
@@ -847,15 +856,17 @@ if ($dandir) {
     my $end_str =  sprintf "%d", ($end / 1000000);
     
     my @daner_files_loc ;
+    
 #    my @info_files_loc ;
     
     #    print "$chr\t$beg\t$end\t$beg_str\t$end_str\n";
-    print "create daner collection.....\n";
+print "create daner collection.....\n";
+#print "@daner_files\n";
 
     
     foreach my $df (@daner_files) {
 	chomp($df);
-#	print "$df\n";
+	print "in: $df\n";
 #	sleep(3);
 	my $bind = $df;
 #	    print $bind."\n";
@@ -880,14 +891,21 @@ if ($dandir) {
 	my $mega_start_M = $mega_start*1000000;
 	my $mega_end_M = $mega_end*1000000;
 
+	print "in2: $df\n";
 	#	    exit;
 	if ($tcells[0] eq "X") {
 	    $tcells[0] = 23;
 	}
-	next if ($tcells[0] ne $chr);
-	next if ($mega_start_M > $end);
-	next if ($mega_end_M < $beg);
-	print "$df\n";
+	print "in3: $df\n";
+	if ($dandir != 0) {
+	    next if ($tcells[0] ne $chr);
+	    next if ($mega_start_M > $end);
+	    next if ($mega_end_M < $beg);
+	}
+	print "in4: $df\n";
+	print "-----------------------------------\n";
+	print "this one is in:$df\n";
+	print "-----------------------------------\n";
 
 	push @daner_files_loc, $df;
     }
@@ -1125,7 +1143,7 @@ if ($dandir) {
 	
 #    my @daner_files_loc_uz ;
 
-    if (0) {
+if (0) {
     if (@daner_files_loc > 0 ) {
 	$pfile = "$out.dandir";
 	my $cc = 0;
@@ -1143,23 +1161,23 @@ if ($dandir) {
 	    else {
 		&mysystem ("tail -n +2 $df_out >> $pfile");
 	    }
-#	push @daner_files_loc_uz, $df_out;
+	    #	push @daner_files_loc_uz, $df_out;
 	    $cc++;
 	}
 	$noloc = 0;
     }
     else {
 	&error ("specified region without data, please revisit");
-#	print "0 daner_loc\n";
-#	sleep(5);
+	#	print "0 daner_loc\n";
+	#	sleep(5);
     }
-    }
+}
 #    print "tped: $ref_tped_file\n";
 #    print "information collected\n";
 #    print "sleep....\n";
 #    sleep(4);
 
-}
+#}
 
 #print "$pfile\n";
 #print "sleep\n";
@@ -1642,13 +1660,16 @@ if (1){
 		my $in = 1;
 #		print "@gname_arr\n";
 		foreach my $cc (0..$#gstart_arr){
-		    print "testing $gname_arr[$cc]\n";
+#		    print "testing $gname_arr[$cc]\n";
 		    if ($gname eq $gname_arr[$cc]) {
 #			print "found $gname $gstart $gend $gname_arr[$cc] $gstart_arr[$cc] $gend_arr[$cc]\n";
 			#### if this one gets swallowed by a former one, do nothing
 			if ($gend <= $gend_arr[$cc] && $gstart => $gstart_arr[$cc]) {
 			    $in = 0;
 #			    print "$gend with $gstart and $gend is out\n";
+			}
+			else {
+			    print "$gend with $gstart and $gend is in\n";
 			}
 		    }
 		    #### if in then safe it
