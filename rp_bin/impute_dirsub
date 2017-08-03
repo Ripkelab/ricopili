@@ -2942,14 +2942,17 @@ if ($pseudo_done == 0) {
 #		print "N:$splitn\n";
 		foreach my $spn (1..$splitn) {
 		    
-		    my $haps_file_loc = "$haps_ch_out.haps.spli$spn";
-		    my $haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.sample";
+		    my $haps_file_loc = "$haps_ch_out.haps";
+		    my $haps_file_loc_sample = "$haps_ch_out.sample";
+#		    my $haps_file_loc = "$haps_ch_out.haps.spli$spn";
+#		    my $haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.sample";
 		    my $pseudo_ch_out = "$haps_ch_out.haps.spli$spn.trio";
 		    my $pseudo_ch_out_fini = "plink.$bprefix.$refind.haps.spli$spn.trio.haps.fini";
 		    my $chrX_txt  = "";
 		    if ($phas == 923 || $phas == 9123 || $phas == 91231) {
 			$chrX_txt  = "--chrX";
 		    }
+
 		    unless (exists $finifiles_hash{$pseudo_ch_out_fini} ) {
 			my $sys_loc = "$pseudo_script $chrX_txt --out $pseudo_ch_out $haps_file_loc $haps_file_loc_sample";
 #			print "$pseudo_ch_out_fini\n";
@@ -3114,10 +3117,10 @@ if ($imp_done == 0) {
 		    my $haps_file_loc = "$haps_ch_out.haps";
 		    my $haps_file_loc_sample = "$haps_ch_out.sample";
 
-#		    if ($trio_sw) {
-#			$haps_file_loc = "$haps_ch_out.haps.spli$spn.trio.haps";
-#			$haps_file_loc_sample = "$haps_ch_out.haps.spli$spn.trio.sample";
-#		    }
+		    if ($trio_sw) {
+			$haps_file_loc = "$haps_ch_out.haps.spli1.trio.haps";
+			$haps_file_loc_sample = "$haps_ch_out.haps.spli1.trio.sample";
+		    }
 
 		    my $pi_ch_out = "$subdir/plink.$bprefix.$refind.imp";
 		    my $pi_ch_out_fini = "plink.$bprefix.$refind.imp.fini";
@@ -3404,10 +3407,7 @@ if ($dos_done == 0) {
 	    my $famname_loc = "$plink_ch_out.fam";
 
 	    my $prefix_loc = "";
-	    if ($trio_sw == 1){
-		$famname_loc = "haps_$bprefix/plink.$bprefix.$refind.haps.spli1.trio.fam";
-		$prefix_loc = "--prefix $trio_prefix";
-	    }
+
 
 
 	    if (exists $indirempty_hash{$empty_ch_out} ) {
@@ -3433,6 +3433,14 @@ if ($dos_done == 0) {
 		    $famname_loc = "$plink_ch_out.fam";
 #		    $transfam_txt = "--transfam $famname_loc.transl";
 
+		    if ($trio_sw == 1){
+			$famname_loc = "haps_$bprefix/plink.$bprefix.$refind.haps.spli1.trio.fam";
+			$prefix_loc = "--prefix $trio_prefix --nodosfam";
+
+		    }
+		    
+#		    print "famname_loc: $famname_loc\n";
+#		    exit;
 			
 		    $puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp.gz";
 
@@ -3452,8 +3460,11 @@ if ($dos_done == 0) {
 		    my $sys_loc = "";
 		    $sys_loc = "$dos_script $prefix_loc --outname $dos_ch_out --outdir $dasudir_loc  --chr $refchr --fam $famname_loc --bim $plink_ch_out.bim $puter_out_arr";
 
+
 #		    print "$sys_loc\n";
 #		    exit;
+
+
 #		    my $sys_loc = "my.imp --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk  --gema $gema_file";
 		    #		    print "$sys_loc\n";
 #		    print "$sys_loc\n";

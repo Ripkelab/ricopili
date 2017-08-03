@@ -39,6 +39,8 @@ version: $version
   --bim STRING        bim-file, mandatory
   --chr INT           chromosome
   --help              print this message and exit
+
+  --nodosfam          if there is not a separata dosagefamfile
 #  --transfam STRING   contains the key to translate the vcf IDs
 
 ##  --prefix STRING     prefix into famfile
@@ -62,6 +64,7 @@ GetOptions(
 #    "transfam=s"=> \my $transfamname,
     "bim=s"=> \my $bimname,
     "chr=s"=> \my $chr,
+    "nodosfam"=> \my $nodosfam,
 
     );
 
@@ -261,32 +264,50 @@ if ($prefix) {
 my @famarray;
 push @famarray, "header";
 
-die $!."($famname_in)" unless open IF, "< $famname_in";
-
-while (my $line = <IF>){
-    my @cells = @{&split_line_ref(\$line)};
-    push @famarray,"@cells";
-
-}
-close IF;
 
 
 
-die $!."($haps_fam)" unless open IF, "< $haps_fam";
-die $!."($famout.ow)" unless open OF, "> $famout";
-
-while (my $line = <IF>){
-    my @cells = @{&split_line_ref(\$line)};
+unless ($nodosfam) {
+    die $!."($famname_in)" unless open IF, "< $famname_in";
     
-#    if ($cells[5] != 2 && $cells[5] != 1) {#
-#	$cells[5] = 1;
-#    }
-
+    while (my $line = <IF>){
+	my @cells = @{&split_line_ref(\$line)};
+	push @famarray,"@cells";
+	
+    }
+    close IF;
     
-    print OF $famarray [$cells[0]]."\n";
+    die $!."($haps_fam)" unless open IF, "< $haps_fam";
+    die $!."($famout.ow)" unless open OF, "> $famout";
+    
+    while (my $line = <IF>){
+	my @cells = @{&split_line_ref(\$line)};
+	
+	#    if ($cells[5] != 2 && $cells[5] != 1) {#
+	#	$cells[5] = 1;
+	#    }
+	
+	
+	print OF $famarray [$cells[0]]."\n";
+    }
+    close IF;
+    close OF;
 }
-close IF;
-close OF;
+else {
+    die $!."($famout.ow)" unless open OF, "> $famout";
+    die $!."($famname_in)" unless open IF, "< $famname_in";
+
+
+    while (my $line = <IF>){
+	my @cells = @{&split_line_ref(\$line)};
+	print OF "@cells\n";
+	
+    }
+    close IF;
+
+    close IF;
+    close OF;
+}
 
 
 

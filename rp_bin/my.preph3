@@ -87,12 +87,12 @@ GetOptions(
     );
 
 if ($outname eq "" || $inname eq ""  || $emptyname eq "" || $gemafile eq "" || !($eagle_sw || $eagle_vcf) && ($famfile eq "" || $spliha == 0)){
-    print "$usage\n";
+    print "Error_1: $usage\n";
     die;
 }
 
 if ($sfile eq "" && $refind eq ""){
-    print "$usage\n";
+    print "Error_2: $usage\n";
     die;
 }
 
