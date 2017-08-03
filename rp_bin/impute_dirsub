@@ -243,7 +243,7 @@ my $sjamem_incr = 0;
 
 my $multithread1 = 4;
 my $multithread2 = 8;
-my $multithread_v2 = 16;
+my $multithread_v2 = 0;
 if ($qloc eq "qsub_b"){
     $multithread1 = 1;
 }
@@ -353,11 +353,14 @@ version: $rp_version
   --chunk INT         take chunks INT times bigger than original (default is $chunkind)
                             possilbe values are 1,2,5,10,20
 
+  --multi INT         use multithreading of INT cores for prephasing (maybe later also for imputation
+                      
+
 
 
 ### remarks 
 
-  --phase is mandatory!! use --phase 0 for list of options
+  --phase is not mandatory any more, refdir is fine as well
 
   --outname is mandatory!!
 
@@ -514,6 +517,7 @@ GetOptions(
     "popname=s"=> \$popname,
     "refiex=s"=> \my $refiex_file,
     "chunk=s"=> \$chunkind,
+    "multi=i"=> \$multithread_v2,
 #    "chunk10"=> \my $chunk10,
 
     );
@@ -2551,7 +2555,7 @@ if ($prephase_done == 0) {
 
 
 #	    my $bgz_file = $bgz_arr[$ccc];
-	    my $bgz_file = "$refdir/$suminfo_s_v2.impute.vcf.bgz"; 
+	    my $bgz_file = "$refdir/$suminfo_s_v2.impute.bcf.bgz"; 
 	    $bgz_file =~ s/XXX/$chrind/;
 #	    push @bgz_arr, $bgz_file;
 	    print $bgz_file."\n";
@@ -2640,6 +2644,11 @@ if ($prephase_done == 0) {
 			$backbone .= " --eaglvcf";
 			$backbone .= " --ref $bgz_file";
 
+			if ($multithread_v2 > 0) {
+			    $backbone .= " --multi $multithread_v2";
+#			    $sjamulti = $multithread_v2;
+			}
+
 			if ($noref) {
 			    $backbone .= " --noref";
 			}
@@ -2697,7 +2706,7 @@ if ($prephase_done == 0) {
 #		    exit;
 		}
 		else {
-		    print "found this one: $haps_ch_out_fini\n";
+#		    print "found this one: $haps_ch_out_fini\n";
 		    $preph_fini++;
 		}
 	    }
@@ -2719,7 +2728,13 @@ if ($prephase_done == 0) {
 	$sjaname = "preph";
 	$sjatime = 2;
 #	$sjatime = 4 if ($preph_fini > 0);
-	$sjamem = 4000;
+	$sjamem = 2000;
+	if ($multithread_v2 > 0) {
+	    $sjamulti = $multithread_v2;
+	}
+
+
+	
 	@sjaarray = @preph_arr;
 
 
@@ -2741,39 +2756,40 @@ if ($prephase_done == 0) {
 
 
 
-    
-    if (@preph_arr_mu1 > 0) {
+    if (0) {
+	if (@preph_arr_mu1 > 0) {
+	    
+	    $sjadir = $impute_dir;
+	    $sjaname = "preph_mu1";
+	    $sjatime = 2;
+	    unless ($qloc eq "qsub_b") {
+		$sjamulti = $multithread1;
+	    }
+	    $sjamem = 16000;
+	    $sjacores = 4;
+	    @sjaarray = @preph_arr_mu1;
 
-	$sjadir = $impute_dir;
-	$sjaname = "preph_mu1";
-	$sjatime = 2;
-	unless ($qloc eq "qsub_b") {
-	    $sjamulti = $multithread1;
+	    &send_jobarray;
+
 	}
-	$sjamem = 16000;
-	$sjacores = 4;
-	@sjaarray = @preph_arr_mu1;
 
-	&send_jobarray;
+	if (@preph_arr_mu_v2 > 0) {
 
-    }
+	    $sjadir = $impute_dir;
+	    $sjaname = "preph_mu_v2";
+	    $sjatime = 2;
+	    $sjamulti = $multithread_v2;
 
-    if (@preph_arr_mu_v2 > 0) {
+	    if ($preph_fini > 0) {
+		$sjaweek = 1;
+	    }
+	    $sjamem = 12000;
+	    $sjacores = 4;
+	    @sjaarray = @preph_arr_mu_v2;
 
-	$sjadir = $impute_dir;
-	$sjaname = "preph_mu_v2";
-	$sjatime = 2;
-	$sjamulti = $multithread_v2;
+	    &send_jobarray;
 
-	if ($preph_fini > 0) {
-	    $sjaweek = 1;
 	}
-	$sjamem = 12000;
-	$sjacores = 4;
-	@sjaarray = @preph_arr_mu_v2;
-
-	&send_jobarray;
-
     }
 
 #    print "full stop after preph_v2\n";

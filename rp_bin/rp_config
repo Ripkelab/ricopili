@@ -61,7 +61,7 @@ bcrloc /home/gwas/bcftools/
 bgziploc /home/gwas/rp_exec/bgzip/
 tabixloc /home/gwas/rp_exec/tabix/
 minimac3loc /home/gwas/rp_exec/minimac/
-ealoc /home/gwas/eagle/Eagle_v2.2
+ealoc /home/gwas/eagle/Eagle_v2.2.3.5
 
 
 -------------------------------------------------------------
@@ -1167,7 +1167,7 @@ if ($clusters{broad}){
 		  "bgziploc","/psych/genetics_data/ripke/rp_bins/tabix/tabix_rom/",
 		  "tabixloc","/psych/genetics_data/ripke/rp_bins/tabix/tabix_rom/",
 		  "minimac3loc","/psych/genetics_data/ripke/rp_bins/tabix/tabix_rom/",
-		  "ealoc","/psych/genetics_data/ripke/rp_bins/Eagle_v2.2/",
+		  "ealoc","/psych/genetics_data/ripke/rp_bins/Eagle_v2.3.5/",
 		  "i2loc","/psych/genetics_data/ripke/references_from_debakkerscratch/impute_v2/impute_v2/impute_v2.3.2_x86_64_static/",
 		  "i4loc","/psych/genetics_data/ripke/rp_bins/impute_v4/",
 		  "liloc","/home/unix/sripke/liftover/",
@@ -1187,7 +1187,7 @@ elsif ($clusters{lisa}){
     %variables = ("ploc", "/home/gwas/plink/1.08/src",
 		  "p2loc","/home/gwas/plink2/plink_1.9_newest",
 		  "shloc","/home/gwas/shapeit",
-		  "ealoc","/home/gwas/eagle/Eagle_v2.2",
+		  "ealoc","/home/gwas/eagle/Eagle_v2.2.3.5/",
 		  "bgziploc","/home/gwas/rp_exec/bgzip/",
 		  "tabixloc","/home/gwas/rp_exec/tabix/",
 		  "minimac3loc","/home/gwas/rp_exec/minimac/",

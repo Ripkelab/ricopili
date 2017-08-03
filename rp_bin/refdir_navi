@@ -202,6 +202,7 @@ my $wget_script = "my.wget";                          ### my.pipeline_tar
 my $prepvcf_script_filtnorm = "my.prepvcf_filtnorm";  ### my.pipeline_tar
 my $prepvcf_script_imp2 = "my.prepvcf_imp2";          ### my.pipeline_tar
 my $prepmm_script = "prepare_ref_mm";                 ### my.pipeline_tar
+my $vcf2bcf_script = "vcf2bcf";                       ### my.pipeline_tar
 my $filtnorm_translate_script = "filtnorm_translate_changes";                 ### my.pipeline_tar
 my $filtnorm_filter_script = "filtnorm_filter";                 ### my.pipeline_tar
 #my $vcf_script = "$vloc/vcftools";                    ### 
@@ -774,6 +775,7 @@ $sjainfotxt = "$rootdir\t$command_line";
 my @job_vtools = ();
 my @job_btools1 = ();
 my @job_prepmm = ();
+my @job_vcf2bcf = ();
 my @job_filtnormtra = ();
 my @job_filtnormfil = ();
 my @job_btools2 = ();
@@ -1897,6 +1899,24 @@ foreach my $chrint ($chr_start..$chr_end){
     }
 
 
+    ###############################################################
+    
+
+    my $vcf_name_loc = $filtnorm_trans_file;
+    $vcf_name_loc =~ s/\.vcf\.gz/.vcf.bgz/;;
+    my $bcf_name_loc = $filtnorm_trans_file;
+    $bcf_name_loc =~ s/\.vcf\.gz/.bcf.bgz/;;
+    my $bcf_name_loc_fini = $bcf_name_loc.".fini";
+
+    unless (-e $bcf_name_loc_fini) {
+
+	my $sys = "$vcf2bcf_script $vcf_name_loc";
+	push @job_vcf2bcf, $sys;
+	print "$sys\n";
+    }
+#    print "debug: $bcf_name_loc_fini\n";
+#    exit;
+
     ########################################################################
 
 #    my $chunk_fini = $hapout_name.".legend.gz.chunks.fini";
@@ -2244,6 +2264,20 @@ if (@job_prepmm > 0 ) {
     
 }
 
+if (@job_vcf2bcf > 0 ) {
+    
+    
+#    $sjaweek = 1;
+    $sjadir = $rootdir;
+    $sjaname = "vcf2bcf";
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000;  ## each core, so mem request for the node is multi that
+    @sjaarray = @job_vcf2bcf;
+    
+    &send_jobarray;
+    
+    
+}
 
 
 if (@job_chunk > 0 ) {

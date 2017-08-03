@@ -1,0 +1,85 @@
+#!/usr/bin/perl -l
+# vim:sw=4
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+# Command-line options
+
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+my $cpus = 1;
+
+GetOptions( 
+    "help" => \my $help,
+#    "cpus=i" => \$cpus,
+    );
+
+
+if ($help || @ARGV == 0){
+    print STDERR <<EOF;
+SYNOPSIS
+
+    $progname [--help] FILE.vcf.gz ...
+
+DESCRIPTION
+
+convert vcf to bcf, improves efficiency of prephasing by a lot
+also tabix is used to index the resulting file afterwards
+
+EOF
+    exit 2;
+}
+
+# Reading the config file
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    if (@cells > 1) {
+        $conf{$cells[0]} = $cells[1];
+    }
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+        die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+foreach (@ARGV) {
+    /vcf\.bgz$/ and -f or die "Argument $_ is not a compressed vcf file; aborting";
+}
+
+
+
+
+my $tabix = trans("tabixloc") . "/tabix";
+my $bcftools = trans("bcloc") . "/bcftools";
+
+
+foreach my $file (@ARGV) {
+    my $outfile = $file;
+    $outfile =~ s/\.vcf\.bgz$/.bcf.bgz/;
+
+    print STDERR "$progname: transferring $file into $outfile";
+    system("$bcftools view -Ob $file > $outfile") == 0
+#    system("zcat " . shell_quote($file) . " | " . shell_quote($bgzip) . " > " . shell_quote($file_bgz)) == 0
+        or die "bgzipping failed; aborting\n";
+
+    print STDERR "$progname: indexing $outfile";
+    system("$tabix -f $outfile") == 0 or die "Indexing failed; aborting";
+#        system($tabix, "-f", $file_bgz) == 0 or die "Indexing failed; aborting";
+
+
+    system("touch",
+	   "$outfile.fini");
+}
