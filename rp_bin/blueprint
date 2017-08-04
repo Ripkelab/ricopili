@@ -1040,7 +1040,7 @@ if ($job){
 	my $inst_n=0;
 	my $job_n=0;
 	my $sum=0;
-	($multi,$threads) = split ',', $multi_str if ($multi_str ne "");
+	($multi,$threads) = split ',', $multi_str if ($multi_str ne "");  #multi is outdated not used any more
 	#    my $cores=$inst;
 	#    $cores=2 if ($cores < 2);
 	
@@ -1292,7 +1292,10 @@ if ($job){
 
     ###### see different kinds of nodes
     #####  https://userinfo.surfsara.nl/systems/lisa/description
-
+    ($multi,$threads) = split ',', $multi_str if ($multi_str ne "");  #multi is outdated not used any more
+    my $cores_multi = sprintf "%d",16/$threads;
+    
+    
     my $mem_str = ($jmem / 1000) * 1;
     $mem_str = $mem_str * $cores;
 
@@ -1310,6 +1313,12 @@ if ($job){
 	if ($cores == 16) {
 	    $cores = 1;  ## may 31st 2017: didn't get jobs started so I switched to cores =1 instead
 	}
+    }
+    if ($cores_multi < $cores) {
+	$cores = $cores_multi;
+    }
+    if ($cores < 1){
+	$cores = 1;
     }
 
 

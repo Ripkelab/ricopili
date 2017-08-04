@@ -355,7 +355,7 @@ version: $rp_version
 
   --multi INT         use multithreading of INT cores for prephasing (maybe later also for imputation
                       
-
+  --minilong          use long jobs for minimac imputation (is better than multithreaded according to gonzalo)
 
 
 ### remarks 
@@ -518,6 +518,7 @@ GetOptions(
     "refiex=s"=> \my $refiex_file,
     "chunk=s"=> \$chunkind,
     "multi=i"=> \$multithread_v2,
+    "minilong"=> \my $minilong,
 #    "chunk10"=> \my $chunk10,
 
     );
@@ -3185,6 +3186,16 @@ if ($imp_done == 0) {
 			}
 			else {
 			    my $sys_loc = "$imp_script $xtxt --out $pi_ch_out --in $haps_file_loc --refstart $refstart --refend $refend  --reffile $refchunk --buff $buffer --gema $gema_file $mm3_txt $chr_txt";
+
+
+			    ##
+			    ## multithread is not very efficient according to gonzalo
+			    ##
+#			    if ($multithread_v2 > 0) {
+#				$sys_loc .= " --multi $multithread_v2";
+#			    }
+
+
 #			    print "$sys_loc\n";
 #			    exit;
 			    
@@ -3279,6 +3290,17 @@ if ($imp_done == 0) {
 	$sjatime = 2;
 #	$sjamem = 16000;
 	$sjamem = 4000;
+
+
+#	if ($multithread_v2 > 0) {
+#	    $sjamulti = $multithread_v2;
+#	    $sjamem = 2000;
+#	}
+
+	if ($minilong) {
+	    $sjatime = 24;
+	}
+
 #	if ($imp_fini > 0) {
 #	    $sjamem = 16000;
 #	    $sjatime = 4;

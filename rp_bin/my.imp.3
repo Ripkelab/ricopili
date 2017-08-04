@@ -21,11 +21,12 @@ my $m3loc = &trans("minimac3loc");
 
 
 my $buff = 1000;
+my $chr = "";
 
 ###########################################
 ##### help message
 my $usage = "
-Usage : my.imp.3 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
+Usage : my.imp.3 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE --multi INT
 
  --out STRING      name of out file, or output prefix for Minimac3
  --in STRING       name of haps file, or vcf file for Minimac3
@@ -38,6 +39,7 @@ Usage : my.imp.3 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE
  --imp4            use impute4 instead of impute2
 
  --minimac         perform the imputation using Minimac3
+ --multi INT       use multithreading in minimac3
  --chr             chromosome number; required for Minimac3
 ";
 
@@ -47,6 +49,7 @@ my $gemafile = "";
 my $reffile = "";
 my $refstart = "";
 my $refend = "";
+my $multi = 1;
 
 use Getopt::Long;
 GetOptions( 
@@ -58,10 +61,11 @@ GetOptions(
     "refstart=s"=> \ $refstart,
     "refend=s"=> \ $refend,
     "buff=i"=> \ $buff,
+    "multi=i"=> \ $multi,
     "chrX=s"=> \my $chrx,
     "imp4"=> \my $imp4,
     "minimac"=> \my $minimac,
-    "chrind=s"=> \my $chr,
+    "chrind=s"=> \$chr,
     );
 
 
@@ -159,11 +163,11 @@ if ($minimac) {
     --end "$end_loc" \\
     --window "$buff_mm" \\
     --chr "$chr" \\
-
+    --cpus $multi \\
     > "$outname.dose.vcf.log"
   };
   
-  #    --cpus 4 \\
+
 }
 elsif ($imp4) {
     $sys_loc = "$i4loc/$imp4_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str -no_maf_align -snp_blocks";
