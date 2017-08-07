@@ -26,7 +26,8 @@ srand(0);
 ## ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v37.fasta.gz
 
 
-my $ncpus_multi = 8;
+# trying now without multithreading minimac
+#my $ncpus_multi = 8;
 
 ### what is done where:
 #
@@ -375,6 +376,7 @@ version: $rp_version
                               -> usually only used for testing 
 
         --walltimeplus INT  increase walltime by INT hours (important for bigger reference files)
+                                 prep_mm gets five times this amount since minimac is now single threaded 
 
  --out_templ is mandatory
  --outname is mandatory
@@ -1893,7 +1895,8 @@ foreach my $chrint ($chr_start..$chr_end){
 
     unless (-e $vcf_name_loc_filtnorm_prep_fini) {
 
-	my $sys = "$prepmm_script --cpus $ncpus_multi $filtnorm_trans_file";
+#	my $sys = "$prepmm_script --cpus $ncpus_multi $filtnorm_trans_file";
+	my $sys = "$prepmm_script $filtnorm_trans_file";
 	push @job_prepmm, $sys;
 	print "$sys\n";
     }
@@ -2254,8 +2257,9 @@ if (@job_prepmm > 0 ) {
 #    $sjaweek = 1;
     $sjadir = $rootdir;
     $sjaname = "prep_minimac";
-    $sjatime = 2 + $walltimeplus;
-    $sjamulti = $ncpus_multi;
+#    $sjatime = 2 + $walltimeplus;
+    $sjatime = 2 + $walltimeplus*5;
+#    $sjamulti = $ncpus_multi;
     $sjamem = 8000;  ## each core, so mem request for the node is multi that
     @sjaarray = @job_prepmm;
     

@@ -338,6 +338,7 @@ version: $rp_version
   --refiex            file containing refinds to exclude
 
   --sjamem_incr INT   increase all memore requests by INT Mb in steps of 1000 (1000 is 1Gb)
+                           definitely necessary when not imputing with minimac3, since chunks are much bigger now
 
   --noclean           do not clean up intermediate files at the very end
 
@@ -3289,7 +3290,7 @@ if ($imp_done == 0) {
 	$sjaname = "imp";
 	$sjatime = 2;
 #	$sjamem = 16000;
-	$sjamem = 4000;
+	$sjamem = 2000;
 
 
 #	if ($multithread_v2 > 0) {
@@ -3332,7 +3333,11 @@ if ($imp_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "vcf2dos";
 	$sjatime = 2;
-	$sjamem = 2000;
+	$sjamem = 4000;
+
+	if ($minilong) {
+	    $sjatime = 24;
+	}
 	
 	@sjaarray = @vcf2dos_arr;
 	
@@ -3531,7 +3536,12 @@ if ($dos_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "dos";
 	$sjatime = 2;
-#	$sjatime = 4 if ($dos_fini > 0);
+	#	$sjatime = 4 if ($dos_fini > 0);
+
+	if ($minilong) {
+	    $sjatime = 24;
+	}
+	
 	$sjamem = 2000;
 	$sjamaxpar = 100;
 	@sjaarray = @dos_arr;
@@ -3642,7 +3652,12 @@ if ($dabg_done == 0) {
 	$sjadir = $impute_dir;
 	$sjaname = "dabg";
 	$sjatime = 2;
-#	$sjatime = 20 if ($dabg_fini == 0);
+	#	$sjatime = 20 if ($dabg_fini == 0);
+	
+	if ($minilong) {
+	    $sjatime = 24;
+	}
+	
 	$sjamem = 1000;
 	$sjamaxpar = 100;
 	@sjaarray = @dabg_arr;
