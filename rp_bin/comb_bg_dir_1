@@ -35,6 +35,7 @@ Usage : $progname --out OUTNAME DIR
 version: $version
 
   --out STRING        outname, mandatory
+  --targetdir STRING  target diretory, mandatory
   --help              print help massage and exits
 
  created by Stephan Ripke 2014 at MGH, Boston, MA
@@ -81,11 +82,13 @@ sub mysystem(){
 
 use Getopt::Long;
 GetOptions( "out=s"=> \my $out,
+	    "targetdir=s"=> \my $targetdir,
 	    "help"=> \my $help );
 
 
 die "$usage" if $help;
 die "$usage" unless $out;
+die "$usage" unless $targetdir;
 
 
 my @bfile_list= ();
@@ -114,6 +117,8 @@ foreach (0..$#bfile_list){
 
 use File::Path;
 use Cwd;
+
+
 
 
 my $merge_list_name="MERGE-LIST-$out";
@@ -149,7 +154,7 @@ my $system="$p2loc/plink --memory 8000  --allow-no-sex --bfile $bfile_list[0] --
 #exit;
 &mysystem ("$system");
 
-chdir ($rootdir);
+chdir ($targetdir);
 &mysystem ("mv $workdir/$out.bed .");
 &mysystem ("mv $workdir/$out.bim .");
 &mysystem ("mv $workdir/$out.fam .");
@@ -166,7 +171,7 @@ close BC;
 
 
 
-&mysystem ("touch $out.fini");
+&mysystem ("touch $targetdir/$out.fini");
 
 
 

@@ -1170,7 +1170,7 @@ if ($job){
 	    close JOB;
 
 	    
-	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages -l m_mem_free=".$mem_str."g,h_vmem=".$mem_str."g  -hold_jid $id_str -e $ENV{PWD}/$errname/ -o $ENV{PWD}/$errname/ $name_of_job $hhmm $jobname";
+	    my $qsub_cmd = "qsub -v PATH,rp_perlpackages -l h_vmem=".$mem_str."g -q short  -hold_jid $id_str -e $ENV{PWD}/$errname/ -o $ENV{PWD}/$errname/ $name_of_job $hhmm $jobname";
 
 	    my $qsub_txt = "$qsub_cmd > $jobname.id";
 	    my $qsub_log = "echo $qsub_cmd > $jobname.log";

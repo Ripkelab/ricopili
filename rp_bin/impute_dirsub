@@ -1752,29 +1752,36 @@ if ($suminfo_s_v2_sw == 1) {
 	    my $bfile = $bimfile;
 	    $bfile =~ s/.bim$//;
 	    my $accfli ="$bfile".".hg19.bim";
-
-	    
-	    foreach my $chrloc(@chr_in) {
-		my $bimref ="$accfli".".ref.chr$chrloc";
-		my $reffi ="$refdir/$suminfo_s.$chrloc.gz";
-
-
-		$popname = uc $popname;
-		$reffi ="$refdir/$suminfo_s_v2.impute.plink.$popname_uc.frq2.gz";
-		$reffi =~ s/XXX/$chrloc/;
-
-		if ($chrloc eq "X") {
-		    $bimref ="$accfli".".ref.chr23";
-		}
-
-		unless (-e $reffi) {
-		    print "Error: $reffi not existing\n";
-		}
+	    my $bimref_done ="$accfli".".ref.sum.done";
+	    unless (exists $bimref_array{$bimref_done}) {
 
 		
-		unless (exists $bimref_array{$bimref}) {
-		    push @readref_arr, "$readref_script --chr $chrloc --ref $reffi $accfli" ;#
-		    #		print "$readref_script --chr $chrloc --ref $reffi $bimfile\n" ;#
+		foreach my $chrloc(@chr_in) {
+		    my $bimref ="$accfli".".ref.chr$chrloc";
+		    my $reffi ="$refdir/$suminfo_s.$chrloc.gz";
+
+
+		    $popname = uc $popname;
+		    $reffi ="$refdir/$suminfo_s_v2.impute.plink.$popname_uc.frq2.gz";
+		    $reffi =~ s/XXX/$chrloc/;
+
+
+
+
+		    
+		    if ($chrloc eq "X") {
+			$bimref ="$accfli".".ref.chr23";
+		    }
+
+		    unless (-e $reffi) {
+			print "Error: $reffi not existing\n";
+		    }
+
+		    
+		    unless (exists $bimref_array{$bimref}) {
+			push @readref_arr, "$readref_script --chr $chrloc --ref $reffi $accfli" ;#
+			#		print "$readref_script --chr $chrloc --ref $reffi $bimfile\n" ;#
+		    }
 		}
 	    }
 	}
@@ -3756,7 +3763,7 @@ unless (-e "$rootdir/cobg_done"){
 	}
 #	print "$refind\n";
 	
-	my $cobg_fini = "$cobg_dir/cobg.$outname.$refind.fini";
+	my $cobg_fini = "$impute_dir/cobg.$outname.$refind.fini";
 
 	my $arrs = @cobg_arr;
 #	print "$cobg_fini, n = $arrs\n";
@@ -3784,7 +3791,7 @@ unless (-e "$rootdir/cobg_done"){
 		}
 	    }
 
-	    my $sys_loc = "$cobg_script --out cobg.$outname.$refind $in_list";
+	    my $sys_loc = "$cobg_script --targetdir $rootdir/cobg_dir_$outname --out cobg.$outname.$refind $in_list";
 #	    print "inist: $sys_loc\n";
 #	    exit;
 
@@ -3952,7 +3959,7 @@ unless (-e "$rootdir/cobg_gw_done"){
 	my $cobg_bgn_fini = "$cobg_gw_dir/$bprefix.bgn.fini";
 	unless (-e $cobg_bgn_fini) {	    
 	    my $dasudir_loc_bgn = "$dasudir"."qc1_$bprefix/bgn";
-	    my $sys_loc = "$cobg_gw_script --out $bprefix.bgn $dasudir_loc_bgn";
+	    my $sys_loc = "$cobg_gw_script --targetdir $cobg_gw_dir --out $bprefix.bgn $dasudir_loc_bgn";
 #	    print "$sys_loc\n";
 	    push @cobg_gw_arr,$sys_loc;
 	}
@@ -3964,7 +3971,7 @@ unless (-e "$rootdir/cobg_gw_done"){
 	my $cobg_bg_fini = "$cobg_gw_dir/$bprefix.bg.fini";
 	unless (-e $cobg_bg_fini) {	    
 	    my $dasudir_loc_bg = "$dasudir"."qc1_$bprefix/bg";
-	    my $sys_loc = "$cobg_gw_script --out $bprefix.bg $dasudir_loc_bg";
+	    my $sys_loc = "$cobg_gw_script --targetdir $cobg_gw_dir --out $bprefix.bg $dasudir_loc_bg";
 #	    print "$sys_loc\n";
 	    push @cobg_gw_arr,$sys_loc;
 	}
@@ -3975,7 +3982,7 @@ unless (-e "$rootdir/cobg_gw_done"){
 	my $cobg_bgs_fini = "$cobg_gw_dir/$bprefix.bgs.fini";
 	unless (-e $cobg_bgs_fini) {	    
 	    my $dasudir_loc_bgs = "$dasudir"."qc1_$bprefix/bgs";
-	    my $sys_loc = "$cobg_gw_script --out $bprefix.bgs $dasudir_loc_bgs";
+	    my $sys_loc = "$cobg_gw_script --targetdir $cobg_gw_dir --out $bprefix.bgs $dasudir_loc_bgs";
 #	    print "$sys_loc\n";
 	    push @cobg_gw_arr,$sys_loc;
 	    
@@ -3987,7 +3994,9 @@ unless (-e "$rootdir/cobg_gw_done"){
 }
 
 
-chdir ($impute_dir);
+
+#print "$impute_dir\n";
+#exit;
 
 #exit;
 ###################################
@@ -3996,7 +4005,7 @@ chdir ($impute_dir);
 
 if (@cobg_gw_arr > 0) {
     
-    $sjadir = $cobg_gw_dir;
+    $sjadir = $impute_dir;
     $sjaname = "cobg_gw";
     $sjatime = 2;
 #    $sjatime = 4 if ($cobg_gw_fini > 0);
@@ -4011,13 +4020,6 @@ else {
 	
     print "cobg done\n";
 }
-
-
-
-
-
-
-
 
 
 
@@ -4043,7 +4045,7 @@ unless (-e $cobg_out) {
 	$blist .= " $bprefix.bgs";
     }
     
-    my $pcaer_sys = "pcaer_[VERSION] --noproject --prefercase --preferfam --out cobg_gw.$outname $blist";
+    my $pcaer_sys = "pcaer --noproject --prefercase --preferfam --out cobg_gw.$outname $blist";
     &mysystem ("echo $pcaer_sys > README.pcaer");#
     
     

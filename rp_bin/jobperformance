@@ -7,29 +7,32 @@ my $version = "1.0.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 
+my $out = "jobperformance";
 
 use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
     "takeold"=> \my $takeold_sw,
+    "out=s"=> \$out,
     );
 
 use File::Basename;
 
 if ($help){
-    print "usage: $progname JOBID
+    print "usage: $progname DIR1 DIR2
 
 version: $version
 
 
 SYNOPSIS
-        searches working directory for files j.*.id, and reads out hardwareusage for jobs
+        searches directories in argumentlist for files j.*.id, and reads out hardwareusage for jobs
 
 
       options:
 
         --help          print this message then quit
         --takeold       take old qacct files if possible
+        --out STRING    outname
 
 
  created by Stephan Ripke 2016 at MGH, Boston, MA
@@ -87,19 +90,38 @@ sub mysystem(){
 ###### BEGIN  ###########################################
 ##########################################################
 
-
+my @searchdirs = @ARGV;
+if (@ARGV == 0){
+    @searchdirs = "./";
+}
 
 ###############################################
 ## find jobfiles
 ###########################################
-my @files = ();
-opendir(DIR, ".") || die "can't opendir .: $!";
-@files = readdir(DIR);
-closedir DIR;
 
 
-my @id1_files = grep {/.id$/} @files;
-my @id2_files = grep {/^j./} @id1_files;
+
+my @ids = ();
+foreach my $locdir (@searchdirs){
+    opendir(DIR, "$locdir") || die "can't opendir $locdir: $!";
+    my $idloc = "NA";
+    foreach my $jfile (readdir (DIR)) {
+	next unless ($jfile =~ /.id$/);
+	next unless ($jfile =~ /^j./);
+	die $!." <$locdir/$jfile>" unless open IN, "< $locdir/$jfile";
+	my $line = <IN>;
+	my @cells = @{&split_line_ref(\$line)};
+	my @jarr=  split /\./, $cells[2];
+	$idloc = $jarr[0];
+	push @ids, $idloc;
+#	print "$idloc\n";
+	close IN;
+    }
+
+    closedir DIR;
+}
+#exit;
+
 
 
 
@@ -114,22 +136,17 @@ if ($takeold_sw){
 }
 
 my @out_collections;
-foreach my $jfile (@id2_files) {
-    die $!." <$jfile>" unless open IN, "< $jfile";
-    my $line = <IN>;
-    my @cells = @{&split_line_ref(\$line)};
-    my @jarr=  split /\./, $cells[2];
-    
-    chomp ($line);
-    print "$jfile\t$jarr[0]\t$line\n";
-    &mysystem ("my.qacct $takeold_txt $jarr[0] > $jfile.qacct");
-    push @out_collections, "$jfile.qacct";
+foreach my $jid (@ids) {
+    print ("my.qacct of $jid\n");
+    &mysystem ("my.qacct $takeold_txt $jid > perf.$jid.qacct");
+
+    push @out_collections, "perf.$jid.qacct";
     close IN;
 }
 
-&mysystem ("grep SUMMARY-HEADER $out_collections[0] > jobperformance.head") ;
-&mysystem ("grep SUMMARY-Data @out_collections > jobperformance.data");
-&mysystem ("cat jobperformance.head jobperformance.data | column -t > jobperformance.table");
+&mysystem ("grep SUMMARY-HEADER $out_collections[0] > $out.head") ;
+&mysystem ("grep SUMMARY-Data @out_collections > $out.data");
+&mysystem ("cat $out.head $out.data | column -t > $out.table");
 
 
 my $min_submit_time;
@@ -137,8 +154,9 @@ my $min_submit_time_min=&date2min("08/07/8017_04:55:06.274");
 my $max_end_time;
 my $max_end_time_min=0;
 my $cpuhours_dir=0;
+my $runtime=0;
 
-die $!." <jobperformance.table>" unless open IN, "< jobperformance.table";
+die $!." <$out.table>" unless open IN, "< $out.table";
 my $line = <IN>;
 while (my $line = <IN>){
 
@@ -146,6 +164,7 @@ while (my $line = <IN>){
     my $submit_time = $cells[8];
     my $end_time = $cells[10];
     $cpuhours_dir += $cells[13];
+    $runtime += $cells[11];
     
     my $submit_time_min = &date2min($submit_time);
     my $end_time_min = &date2min($end_time);
@@ -166,22 +185,23 @@ while (my $line = <IN>){
 }
 
 
-die $!." <jobperformance.README>" unless open OUT, "> jobperformance.README";
+die $!." <$out.README>" unless open OUT, "> $out.README";
 print OUT "---------------------------------------------------\n";
 print OUT "earliest starting time: $min_submit_time\n";
 print OUT " latest finishing time: $max_end_time\n";
 printf OUT " this is %.2f hours\n", ($max_end_time_min - $min_submit_time_min)/60 ;
-printf OUT "in total in this directory: %.2f CPU hours\n", $cpuhours_dir ;
+printf OUT "total active runtime, excluding manual and technical queue pauses: %.2f hours\n", $runtime ;
+printf OUT "in total: %.2f CPU hours\n", $cpuhours_dir ;
 
 print OUT "---------------------------------------------\n";
 print OUT "to sort by submit-time:\n";
-print OUT "sort -k9,9n jobperformance.table\n";
+print OUT "sort -k10,10n $out.table\n";
 close OUT;
 
 
 
 print "--------------finished-------------------------\n";
-print "have a look here: jobperformance.README\n";
+print "have a look here: $out.README\n";
 
 
 
