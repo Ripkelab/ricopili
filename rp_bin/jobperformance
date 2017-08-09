@@ -1,0 +1,195 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "takeold"=> \my $takeold_sw,
+    );
+
+use File::Basename;
+
+if ($help){
+    print "usage: $progname JOBID
+
+version: $version
+
+
+SYNOPSIS
+        searches working directory for files j.*.id, and reads out hardwareusage for jobs
+
+
+      options:
+
+        --help          print this message then quit
+        --takeold       take old qacct files if possible
+
+
+ created by Stephan Ripke 2016 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+
+
+##############################################
+## compare times
+######################################
+
+    
+sub date2min {
+   my ($date) = @_;
+   my ($m,$d,$y,$H,$M,$S,$MS) = $date =~ m{^([0-9]{2})/([0-9]{2})/([0-9]{4})_([0-9]{2}):([0-9]{2}):([0-9]{2}).([0-9]{3})\z}
+   or die;
+   my $nday = $y*365+$m*12+$d;
+   my $nhour = $nday*24 + $H;
+   my $nmins = $nhour*60 + $M;
+   
+   return $nmins;
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+###################################################
+###### BEGIN  ###########################################
+##########################################################
+
+
+
+###############################################
+## find jobfiles
+###########################################
+my @files = ();
+opendir(DIR, ".") || die "can't opendir .: $!";
+@files = readdir(DIR);
+closedir DIR;
+
+
+my @id1_files = grep {/.id$/} @files;
+my @id2_files = grep {/^j./} @id1_files;
+
+
+
+
+#################################################
+# use my.qacct in each of these
+################################################
+
+my $takeold_txt = "";
+if ($takeold_sw){
+    $takeold_txt = "--takeold";
+}
+
+my @out_collections;
+foreach my $jfile (@id2_files) {
+    die $!." <$jfile>" unless open IN, "< $jfile";
+    my $line = <IN>;
+    my @cells = @{&split_line_ref(\$line)};
+    my @jarr=  split /\./, $cells[2];
+    
+    chomp ($line);
+    print "$jfile\t$jarr[0]\t$line\n";
+    &mysystem ("my.qacct $takeold_txt $jarr[0] > $jfile.qacct");
+    push @out_collections, "$jfile.qacct";
+    close IN;
+}
+
+&mysystem ("grep SUMMARY-HEADER $out_collections[0] > jobperformance.head") ;
+&mysystem ("grep SUMMARY-Data @out_collections > jobperformance.data");
+&mysystem ("cat jobperformance.head jobperformance.data | column -t > jobperformance.table");
+
+
+my $min_submit_time;
+my $min_submit_time_min=&date2min("08/07/8017_04:55:06.274");
+my $max_end_time;
+my $max_end_time_min=0;
+my $cpuhours_dir=0;
+
+die $!." <jobperformance.table>" unless open IN, "< jobperformance.table";
+my $line = <IN>;
+while (my $line = <IN>){
+
+    my @cells = @{&split_line_ref(\$line)};
+    my $submit_time = $cells[8];
+    my $end_time = $cells[10];
+    $cpuhours_dir += $cells[13];
+    
+    my $submit_time_min = &date2min($submit_time);
+    my $end_time_min = &date2min($end_time);
+
+#    print "submit_time_min: $submit_time_min\n";
+#    print "end_time_min: $end_time_min\n";
+    
+    if ($submit_time_min < $min_submit_time_min) {
+	$min_submit_time_min  = $submit_time_min;
+	$min_submit_time = $submit_time;
+    }
+    
+    if ($end_time_min > $max_end_time_min) {
+	$max_end_time_min  = $end_time_min;
+	$max_end_time = $end_time;
+    }
+
+}
+
+
+die $!." <jobperformance.README>" unless open OUT, "> jobperformance.README";
+print OUT "---------------------------------------------------\n";
+print OUT "earliest starting time: $min_submit_time\n";
+print OUT " latest finishing time: $max_end_time\n";
+printf OUT " this is %.2f hours\n", ($max_end_time_min - $min_submit_time_min)/60 ;
+printf OUT "in total in this directory: %.2f CPU hours\n", $cpuhours_dir ;
+
+print OUT "---------------------------------------------\n";
+print OUT "to sort by submit-time:\n";
+print OUT "sort -k9,9n jobperformance.table\n";
+close OUT;
+
+
+
+print "--------------finished-------------------------\n";
+print "have a look here: jobperformance.README\n";
+
+
+
+
+
+
+
+
+
+
+exit;

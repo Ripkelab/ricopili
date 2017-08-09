@@ -570,9 +570,11 @@ my $cleanerrandout_script = "my.cleanerrandout";  ### my.pipeline_tar
 my $pdflatex_script = "pdflatex";          ### my.pipeline_tar
 my $mystart_script = "my.start_job";       ### my.pipeline_tar
 my $mutt_script = "mail";                  ### my.pipeline_tar
-my $du_script = "my.du";                  ### my.pipeline_tar
-my $blue_script = "blueprint";         ### my.pipeline_tar
-my $preploo_script = "my.preploo2";         ### my.pipeline_tar
+my $du_script = "my.du";                   ### my.pipeline_tar
+my $blue_script = "blueprint";             ### my.pipeline_tar
+my $preploo_script = "my.preploo2";        ### my.pipeline_tar
+my $qacct_script = "my.qacct";             ### my.pipeline_tar
+my $performance_script = "jobperformance";  ### my.pipeline_tar
 
 
 
@@ -602,7 +604,9 @@ push @test_scripts, $cleanerrandout_script ;
 push @test_scripts, $du_script ;
 push @test_scripts,  $mystart_script;
 push @test_scripts,  $blue_script;
-#push @test_scripts,  $preploo_script;
+push @test_scripts,  $preploo_script;
+push @test_scripts,  $qacct_script;
+push @test_scripts,  $performance_script;
 
 #push @test_scripts, $mutt_script ;
 

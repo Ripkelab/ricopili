@@ -1,0 +1,333 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "takeold"=> \my $takeold,
+    );
+
+use File::Basename;
+
+if ($help){
+    print "usage: $progname JOBID
+
+version: $version
+
+      options:
+
+        --help          print this message then quit
+        --takeold       takeold qacct.JOBID to process
+
+ created by Stephan Ripke 2016 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+##############################################
+## compare times
+######################################
+
+#$date1 = "11:56:41, 11/22/2011";
+#08/07/2017 04:40:24.823
+
+    
+sub date2min {
+   my ($date) = @_;
+   my ($m,$d,$y,$H,$M,$S,$MS) = $date =~ m{^([0-9]{2})/([0-9]{2})/([0-9]{4})_([0-9]{2}):([0-9]{2}):([0-9]{2}).([0-9]{3})\z}
+   or die;
+   my $nday = $y*365+$m*12+$d;
+   my $nhour = $nday*24 + $H;
+   my $nmins = $nhour*60 + $M;
+   
+   return $nmins;
+
+}
+
+
+
+
+
+
+my $jobstring = $ARGV[0];
+my @jobarr = split /\./, $jobstring;
+#my @jobarr = qw /hallo mein schatz/;
+my $jobarrn = @jobarr;
+#print "$jobarrn\n";
+#print $jobarr[$jobarrn-1],"\n";
+#print $jobarr[$jobarrn-2],"\n";
+my $jobnum = $jobarr[$jobarrn-2];
+$jobnum =~ s/e//;
+$jobnum =~ s/o//;
+#print $jobnum."\n";
+
+
+#exit;
+my $sys = "qacct -j $jobnum > qacct.$jobnum";
+unless (-e "qacct.$jobnum"){
+    print "read info out of qacct (takes 20 secs)\n";
+    system ($sys);
+}
+else {
+
+    unless ($takeold) {
+	print "will remove qacct.$jobnum\n";
+	print "give you 3 seconds to cancel and switch on --takeold\n";
+	sleep(3);
+	print "read info out of qacct (takes 20 secs)\n";
+	system ("rm qacct.$jobnum");
+	system ($sys);
+    }
+
+}
+#exit;
+
+
+
+#qacct -j 2016578 | awk '$1=="maxvmem" ' | head -4000 | sort -k2,2h | tail -40
+#qacct -j 2818114 | awk '$1=="ru_wallclock" ' | head -4000 | sort -k2,2n | awk '{print $1,$2/3600}'| tail -40
+
+
+
+
+
+my $maxvmem = -1;
+my $ru_wallclock = -1;
+my $max_ru_wallclock = -1;
+my $taskid = -1;
+my $wallhours = -1;
+my $cpuhours = -1;
+my $cpuhours_total = 0;
+
+my $failed = -1;
+my $exit_status = -1;
+my $mem = -1;
+my $hostname = -1;
+my $jobname = -1;
+my $jobnumber = -1;
+my $submit_cmd = -1;
+my $nslots = -1;
+my $submit_queue = -1;
+my $submit_mem = -1;
+my $submit_time = -1;
+my $submit_time_min = -1;
+my $start_time = -1;
+my $start_time_min = -1;
+my $end_time = -1;
+my $end_time_min = -1;
+my $max_end_time = -1;
+my $max_end_time_min = -1;
+my $ru_maxrss = -1;
+my $max_ru_maxrss = -1;
+my $njobs = 0;
+
+#print "HOSTNAME\tTASKID\tMAXVMEM\tRU_MAXRSS(GB)\tRU_WALLCLOCK(h)\tFAILED\tEXIT_STATUS\n";
+print "--------------------------------------------------------------------------------\n";
+
+printf "%40s","HOSTNAME";
+printf "%8s","TASKID";
+printf "%15s","MAXVMEM";
+printf "%6s","SLOTS";
+printf "%15s","RU_MAXRSS(GB)";
+printf "%17s","RU_WALLCLOCK(h)";
+printf "%11s","CPUHOURS";
+printf "%8s","FAILED";
+printf "%13s","EXIT_STATUS";
+printf "%26s","START_TIME";
+printf "%26s","END_TIME";
+printf "%13s\n","TIME-DIFF";
+	    
+
+die $!."(qacct.$jobnum)" unless open FILE, "< qacct.$jobnum";
+my $line = <FILE>;
+while (my $line = <FILE>){
+    my @cells = @{&split_line_ref(\$line)};
+    
+	    
+    if ($line =~ /^========/) {
+	$njobs++;
+	if ($ru_wallclock != -1) {
+
+	    printf "%40s",$hostname;
+	    printf "%8s",$taskid;
+	    printf "%15s",$maxvmem;
+	    printf "%6s",$nslots;
+	    printf "%15s",$ru_maxrss;
+	    printf "%17s",$wallhours;
+	    printf "%11s",$cpuhours;
+	    printf "%8s",$failed;
+	    printf "%13s",$exit_status;
+
+	    
+	    printf "%26s",$start_time;
+	    printf "%26s",$end_time;
+
+
+	    printf " %12.2f\n",($end_time_min-$start_time_min) / 60;
+	    
+	}
+    }
+    @cells = @{&split_line_ref(\$line)};
+
+    if ($cells[0] eq "maxvmem") {
+	$maxvmem = $cells[1];
+    }
+
+    if ($cells[0] eq "ru_wallclock") {
+	$ru_wallclock = $cells[1];
+	if ($ru_wallclock > $max_ru_wallclock) {
+	    $max_ru_wallclock = $ru_wallclock;
+	}
+	$wallhours = sprintf "%.2f", $ru_wallclock / 3600;
+	$cpuhours = sprintf "%.2f", $wallhours * $nslots;
+	$cpuhours_total += $cpuhours;
+    }
+
+
+    if ($cells[0] eq "taskid") {
+	$taskid = $cells[1];
+    }    
+
+    if ($cells[0] eq "failed") {
+	$failed = $cells[1];
+    }
+
+    if ($cells[0] eq "exit_status") {
+	$exit_status = $cells[1];
+    }    
+
+#    if ($cells[0] eq "mem") {
+#	$mem = $cells[1];
+#    }
+    if ($cells[0] eq "ru_maxrss") {
+	$ru_maxrss = sprintf "%.3f", $cells[1] / 1000000;
+	if ($cells[1] > $max_ru_maxrss) {
+	    $max_ru_maxrss = $cells[1];
+	}
+    }    
+
+    if ($cells[0] eq "hostname") {
+	$hostname = $cells[1];
+    }
+    if ($cells[0] eq "jobname") {
+	$jobname = $cells[1];
+    }
+    if ($cells[0] eq "jobnumber") {
+	$jobnumber = $cells[1];
+    }
+    if ($cells[0] eq "slots") {
+	$nslots = $cells[1];
+    }    
+    if ($cells[0] eq "qsub_time") {
+	
+	$submit_time = $cells[1]."_".$cells[2];
+	$submit_time_min = &date2min($submit_time);
+    }
+    if ($cells[0] eq "start_time") {
+	$start_time = $cells[1]."_".$cells[2];
+	$start_time_min = &date2min($start_time);
+    }
+    if ($cells[0] eq "end_time") {
+	$end_time = $cells[1]."_".$cells[2];
+	$end_time_min = &date2min($end_time);
+	if ($max_end_time_min < $end_time_min) {
+	    $max_end_time_min = $end_time_min;
+	    $max_end_time = $end_time;
+	}
+    }
+    
+    
+    
+    if ($cells[0] eq "submit_cmd") {
+	$cells[0] = "";
+	$submit_cmd = "@cells";
+	foreach my $cc (0..$#cells){
+	    if ($cells[$cc] eq "-q") {
+		$submit_queue = $cells[$cc+1];
+	    }
+	    if ($cells[$cc] eq "-l") {
+		$submit_mem = $cells[$cc+1];
+	    }
+	    
+	}
+    }    
+}
+
+printf "%40s",$hostname;
+printf "%8s",$taskid;
+printf "%15s",$maxvmem;
+printf "%6s",$nslots;
+printf "%15s",$ru_maxrss;
+printf "%17s",$wallhours;
+printf "%11s",$cpuhours;
+printf "%8s",$failed;
+printf "%13s",$exit_status;
+
+
+printf "%26s",$start_time;
+printf "%26s",$end_time;
+
+printf " %12.2f\n",($end_time_min-$start_time_min) / 60;
+
+
+
+
+
+#print "$hostname\t$taskid\t$maxvmem\t$ru_maxrss\t$wallhours\t$failed\t$exit_status\n";
+print "-------------------------------------------------------\n";
+print "JOBNAME: $jobname\n";
+print "JOBNUMBER: $jobnumber\n";
+print "SUBMIT_TIME: $submit_time\n";
+print "MAX_END_TIME: $max_end_time\n";
+print "NSLOTS: $nslots\n";
+
+$cpuhours_total = sprintf "%.2f", $cpuhours_total;
+print "CPUHOURS_total: $cpuhours_total\n";
+
+my $max_diff_hour = sprintf "%.2f",($max_end_time_min - $submit_time_min)/60;
+
+print "DIFF_TIME(h): $max_diff_hour\n";
+print "NJOBS: $njobs\n";
+
+$max_ru_maxrss = sprintf "%.3f", $max_ru_maxrss / 1000000;
+$max_ru_wallclock = sprintf "%.2f", $max_ru_wallclock / 3600;
+
+print "MAX_RU_MAXRSS(GB): $max_ru_maxrss\n";
+print "MAX_RU_WALLCLOCK(h): $max_ru_wallclock\n";
+print "SUBMIT_cmd: $submit_cmd\n";
+print "SUBMIT_queue: $submit_queue\n";
+print "SUBMIT_mem: $submit_mem\n";
+print "----------------------------------------------------\n";
+print "SUMMARY-HEADER: JOBNAME JOBID NJOBS MAX_RU_MAXRSS(GB) MAX_RU_WALLCLOCK(h) SUBMIT_queue SUBMIT_mem SUBMIT_time SUBMIT_time(min) MAX_END_time DIFF_TIME(h) NSLOTS CPUHOURS_total\n";
+print "SUMMARY-Data: $jobname $jobnumber $njobs $max_ru_maxrss $max_ru_wallclock $submit_queue $submit_mem $submit_time $submit_time_min $max_end_time $max_diff_hour $nslots $cpuhours_total\n";
+
+print "----------------------------------------------------\n";
+print "my.qacct  $jobnumber | sort -k3,3h | cl\n";
+
+
+
+exit;
