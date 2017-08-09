@@ -4056,6 +4056,7 @@ unless (-e $cobg_out) {
 
 
 
+
 #print "debug\n";
 #sleep(10);
 
@@ -4296,6 +4297,52 @@ print META "logfiles\t$loloc\n";
 close META;
 
 }
+
+
+
+
+
+###############################################
+## JOBPERFORMER, right now only on Broad, has to go behind CLEAN
+###################################################
+
+if ($qloc eq "qsub_b") { 
+#    my $performer_dir = "$rootdir/performer";    
+#    unless (-e $perfomer_dir) {#
+#	&mysystem ("mkdir -p $performer_dir");
+#    }
+    my @performer_arr;
+
+
+    my $performer_fini = "$impute_dir/perf.$outname.README";
+    unless (-e $performer_fini) {
+	my $sys_loc = "$performance_script --out perf.$outname $rootdir/$impute_dir $rootdir";
+#	print "$sys_loc\n";
+#	exit;
+	push @performer_arr,$sys_loc;
+    }
+
+
+    if (@performer_arr > 0) {
+	
+	$sjadir = $impute_dir;
+	$sjaname = "performer";
+	$sjatime = 2;
+	$sjamem = 2000;
+	@sjaarray = @performer_arr;
+	
+	&send_jobarray;
+	
+    }
+    else {
+	print "performer done\n";
+    }
+
+}
+
+
+
+
 
 #print "@merge_arr\n";
 #print "debug\n";

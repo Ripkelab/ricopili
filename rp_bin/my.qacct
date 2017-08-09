@@ -88,7 +88,7 @@ $jobnum =~ s/o//;
 
 #exit;
 my $sys = "qacct -j $jobnum > qacct.$jobnum";
-unless (-e "qacct.$jobnum"){
+unless (-e "qacct.$jobnum.gz"){
     print "read info out of qacct (takes 20 secs)\n";
     system ($sys);
 }
@@ -99,8 +99,11 @@ else {
 	print "give you 3 seconds to cancel and switch on --takeold\n";
 	sleep(3);
 	print "read info out of qacct (takes 20 secs)\n";
-	system ("rm qacct.$jobnum");
+	system ("rm qacct.$jobnum.gz");
 	system ($sys);
+    }
+    else {
+	system ("gunzip qacct.$jobnum.gz");
     }
 
 }
@@ -329,5 +332,7 @@ print "----------------------------------------------------\n";
 print "my.qacct  $jobnumber | sort -k3,3h | cl\n";
 
 
+$sys = "gzip qacct.$jobnum";
+system($sys);
 
 exit;
