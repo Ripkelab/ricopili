@@ -56,21 +56,40 @@ sub split_line_ref {
 #08/07/2017 04:40:24.823
 
     
-sub date2min {
+sub date2sec {
    my ($date) = @_;
    my ($m,$d,$y,$H,$M,$S,$MS) = $date =~ m{^([0-9]{2})/([0-9]{2})/([0-9]{4})_([0-9]{2}):([0-9]{2}):([0-9]{2}).([0-9]{3})\z}
    or die;
    my $nday = $y*365+$m*12+$d;
    my $nhour = $nday*24 + $H;
    my $nmins = $nhour*60 + $M;
+   my $nsecs = $nmins*60 + $S;
    
-   return $nmins;
+   return $nsecs;
 
 }
 
 
+sub sec2time {
+   my ($sec) = @_;
+   my $nhours = sprintf "%d",$sec/3600;
+   my $secs_rest = $sec % 3600;
+   my $nmins = sprintf "%d",$secs_rest/60;
+   $secs_rest = $secs_rest % 60;
+
+   my $min_txt = sprintf "%02d", $nmins;
+   my $sec_txt = sprintf "%02d", $secs_rest;
+
+   
+   return $nhours.":".$min_txt.":".$sec_txt;
+
+}
 
 
+#my $test = 4000;
+#my $test_time = &sec2time($test);
+#print "$test_time\n";
+#exit;
 
 
 my $jobstring = $ARGV[0];
@@ -137,16 +156,18 @@ my $nslots = -1;
 my $submit_queue = -1;
 my $submit_mem = -1;
 my $submit_time = -1;
-my $submit_time_min = -1;
+my $submit_time_time = -1;
+my $submit_time_sec = -1;
 my $start_time = -1;
-my $start_time_min = -1;
+my $start_time_sec = -1;
 my $end_time = -1;
-my $end_time_min = -1;
+my $end_time_sec = -1;
 my $max_end_time = -1;
-my $max_end_time_min = -1;
+my $max_end_time_sec = -1;
 my $ru_maxrss = -1;
 my $max_ru_maxrss = -1;
 my $njobs = 0;
+my $timediff = 0;
 
 #print "HOSTNAME\tTASKID\tMAXVMEM\tRU_MAXRSS(GB)\tRU_WALLCLOCK(h)\tFAILED\tEXIT_STATUS\n";
 print "--------------------------------------------------------------------------------\n";
@@ -189,8 +210,10 @@ while (my $line = <FILE>){
 	    printf "%26s",$start_time;
 	    printf "%26s",$end_time;
 
+	    $timediff = &sec2time($end_time_sec-$start_time_sec);
+	    
 
-	    printf " %12.2f\n",($end_time_min-$start_time_min) / 60;
+	    printf " %12s\n",$timediff;
 	    
 	}
     }
@@ -205,9 +228,9 @@ while (my $line = <FILE>){
 	if ($ru_wallclock > $max_ru_wallclock) {
 	    $max_ru_wallclock = $ru_wallclock;
 	}
-	$wallhours = sprintf "%.2f", $ru_wallclock / 3600;
-	$cpuhours = sprintf "%.2f", $wallhours * $nslots;
-	$cpuhours_total += $cpuhours;
+	$wallhours = sprintf "%.3g", $ru_wallclock / 3600;
+	$cpuhours = sprintf "%.3g", ($ru_wallclock * $nslots) / 3600;
+	$cpuhours_total += ($ru_wallclock * $nslots) / 3600;
     }
 
 
@@ -227,7 +250,7 @@ while (my $line = <FILE>){
 #	$mem = $cells[1];
 #    }
     if ($cells[0] eq "ru_maxrss") {
-	$ru_maxrss = sprintf "%.3f", $cells[1] / 1000000;
+	$ru_maxrss = sprintf "%.3g", $cells[1] / 1000000;
 	if ($cells[1] > $max_ru_maxrss) {
 	    $max_ru_maxrss = $cells[1];
 	}
@@ -248,17 +271,17 @@ while (my $line = <FILE>){
     if ($cells[0] eq "qsub_time") {
 	
 	$submit_time = $cells[1]."_".$cells[2];
-	$submit_time_min = &date2min($submit_time);
+	$submit_time_sec = &date2sec($submit_time);
     }
     if ($cells[0] eq "start_time") {
 	$start_time = $cells[1]."_".$cells[2];
-	$start_time_min = &date2min($start_time);
+	$start_time_sec = &date2sec($start_time);
     }
     if ($cells[0] eq "end_time") {
 	$end_time = $cells[1]."_".$cells[2];
-	$end_time_min = &date2min($end_time);
-	if ($max_end_time_min < $end_time_min) {
-	    $max_end_time_min = $end_time_min;
+	$end_time_sec = &date2sec($end_time);
+	if ($max_end_time_sec < $end_time_sec) {
+	    $max_end_time_sec = $end_time_sec;
 	    $max_end_time = $end_time;
 	}
     }
@@ -294,9 +317,9 @@ printf "%13s",$exit_status;
 printf "%26s",$start_time;
 printf "%26s",$end_time;
 
-printf " %12.2f\n",($end_time_min-$start_time_min) / 60;
 
-
+$timediff = &sec2time($end_time_sec-$start_time_sec);
+printf " %12s\n",$timediff;
 
 
 
@@ -304,20 +327,26 @@ printf " %12.2f\n",($end_time_min-$start_time_min) / 60;
 print "-------------------------------------------------------\n";
 print "JOBNAME: $jobname\n";
 print "JOBNUMBER: $jobnumber\n";
+print "NJOBS: $njobs\n";
 print "SUBMIT_TIME: $submit_time\n";
 print "MAX_END_TIME: $max_end_time\n";
+$timediff = $max_end_time_sec-$submit_time_sec;
+my $max_diff_time = &sec2time($timediff);
+print "DIFF_TIME(h:m:s): $max_diff_time\n";
+
+
 print "NSLOTS: $nslots\n";
 
-$cpuhours_total = sprintf "%.2f", $cpuhours_total;
+$cpuhours_total = sprintf "%.3f", $cpuhours_total;
 print "CPUHOURS_total: $cpuhours_total\n";
 
-my $max_diff_hour = sprintf "%.2f",($max_end_time_min - $submit_time_min)/60;
 
-print "DIFF_TIME(h): $max_diff_hour\n";
-print "NJOBS: $njobs\n";
+#my $max_diff_hour = sprintf "%.3g",($max_end_time_sec - $submit_time_sec)/3600;
 
-$max_ru_maxrss = sprintf "%.3f", $max_ru_maxrss / 1000000;
-$max_ru_wallclock = sprintf "%.2f", $max_ru_wallclock / 3600;
+
+
+$max_ru_maxrss = sprintf "%.3g", $max_ru_maxrss / 1000000;
+$max_ru_wallclock = sprintf "%.3g", $max_ru_wallclock / 3600;
 
 print "MAX_RU_MAXRSS(GB): $max_ru_maxrss\n";
 print "MAX_RU_WALLCLOCK(h): $max_ru_wallclock\n";
@@ -325,8 +354,8 @@ print "SUBMIT_cmd: $submit_cmd\n";
 print "SUBMIT_queue: $submit_queue\n";
 print "SUBMIT_mem: $submit_mem\n";
 print "----------------------------------------------------\n";
-print "SUMMARY-HEADER: JOBNAME JOBID NJOBS MAX_RU_MAXRSS(GB) MAX_RU_WALLCLOCK(h) SUBMIT_queue SUBMIT_mem SUBMIT_time SUBMIT_time(min) MAX_END_time DIFF_TIME(h) NSLOTS CPUHOURS_total\n";
-print "SUMMARY-Data: $jobname $jobnumber $njobs $max_ru_maxrss $max_ru_wallclock $submit_queue $submit_mem $submit_time $submit_time_min $max_end_time $max_diff_hour $nslots $cpuhours_total\n";
+print "SUMMARY-HEADER: JOBNAME JOBID NJOBS MAX_RU_MAXRSS(GB) MAX_RU_WALLCLOCK(h) SUBMIT_queue SUBMIT_mem SUBMIT_time SUBMIT_time(sec) MAX_END_time DIFF_TIME(h:m:s) NSLOTS CPUHOURS_total\n";
+print "SUMMARY-Data: $jobname $jobnumber $njobs $max_ru_maxrss $max_ru_wallclock $submit_queue $submit_mem $submit_time $submit_time_sec $max_end_time $max_diff_time $nslots $cpuhours_total\n";
 
 print "----------------------------------------------------\n";
 print "my.qacct  $jobnumber | sort -k3,3h | cl\n";

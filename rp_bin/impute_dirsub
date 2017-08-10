@@ -1174,7 +1174,13 @@ sub send_jobarray {
 	exit;
     }
     else {
-	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na _if_$outname";
+	my $motherjobfile = "_if_$outname";
+#	print "$motherjobfile\n";
+#	exit;
+	while (-e "j.$motherjobfile") {
+	    $motherjobfile .= ".s";
+	}
+	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na $motherjobfile";
 #	print "$sys_re\n";
 #	exit;
 	&mysystem ($sys_re);
@@ -2641,6 +2647,8 @@ if ($prephase_done == 0) {
 		unless (exists $finifiles_hash{$haps_ch_out_fini} ) {
 
 #		    print "didnt find this one: $haps_ch_out_fini\n";
+#		    exit;
+		    
 #		if (exists $finifiles_hash{$haps_ch_out_fini} ) {
 #
 #		}
@@ -2681,37 +2689,48 @@ if ($prephase_done == 0) {
 
 
 #		    print "$multi_sw\n";
-		    if ($multi_sw == 0) {
-			push @preph_arr, $backbone;
-		    }
-		    if ($multi_sw == 1) {
-		    	push @preph_arr_mu1, $backbone." $multi_txt";
-		    }
-		    if ($multi_sw == 3) {
-#			print "gets into queue\n";
-		    	push @preph_arr_mu_v2, $backbone." $multi_txt";
-		    }
-#		    print "multi: $multi_sw\n";
-		    if ($multi_sw == 2) {
-			my $lastlog = `tail -1 $haps_ch_out.shape.log`;
+#		    exit;
 
-#			my $bimn = `wc -l $plink_ch_out.bim`;
-#			$bimn = $bimn * 1;
-#			print "$lastlog: $bimn\n";
-#			if ($lastlog =~ /fully missing individuals/) {
-#			    if ($bimn < 20) {
-#				print "setting empty: $bprefix.$refind.empty\n";
-#				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
-#			    }
-#			    else {
-#				print "Warning setting empty: $bprefix.$refind.empty\n";
-#				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
-#				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty.error.nsnps");
-#			    }
-#			}
-#			else {
+### multi_sw is outdated, not used right now...
+#		    if ($multi_sw == 0) {
+			push @preph_arr, $backbone;
+#		    }
+
+
+		    if (0) {
+			
+			#		    if ($multi_sw == 1) {
+			#		    	push @preph_arr_mu1, $backbone." $multi_txt";
+			#		    }
+			#		    if ($multi_sw == 3) {
+			#		    	push @preph_arr_mu_v2, $backbone." $multi_txt";
+			#		    }
+
+
+
+			
+			#		    print "multi: $multi_sw\n";
+			if ($multi_sw == 2) {
+			    my $lastlog = `tail -1 $haps_ch_out.shape.log`;
+
+			    #			my $bimn = `wc -l $plink_ch_out.bim`;
+			    #			$bimn = $bimn * 1;
+			    #			print "$lastlog: $bimn\n";
+			    #			if ($lastlog =~ /fully missing individuals/) {
+			    #			    if ($bimn < 20) {
+			    #				print "setting empty: $bprefix.$refind.empty\n";
+			    #				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
+			    #			    }
+			    #			    else {
+			    #				print "Warning setting empty: $bprefix.$refind.empty\n";
+			    #				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
+			    #				&mysystem ("touch $subdir_empty/$bprefix.$refind.empty.error.nsnps");
+			    #			    }
+			    #			}
+			    #			else {
 			    push @preph_arr_mu2, $backbone." $multi_txt";
-#			}
+			    #			}
+			}
 		    }
 
 		    
@@ -2725,42 +2744,42 @@ if ($prephase_done == 0) {
 	    }
 	}
     }
-
-
-
-#    print "debug\n";
-#    exit;
-
-###################################
-### send prephase jobs
-###################################
-
+    
+    
+    
+    #    print "debug\n";
+    #    exit;
+    
+    ###################################
+    ### send prephase jobs
+    ###################################
+    
     if (@preph_arr > 0) {
 	
 	$sjadir = $impute_dir;
 	$sjaname = "preph";
 	$sjatime = 2;
-#	$sjatime = 4 if ($preph_fini > 0);
+	#	$sjatime = 4 if ($preph_fini > 0);
 	$sjamem = 2000;
 	if ($multithread_v2 > 0) {
 	    $sjamulti = $multithread_v2;
 	}
-
-
+	
+	
 	
 	@sjaarray = @preph_arr;
-
-
-
-#	print "here?\n";
-#	exit;
-
-
-	    
+	
+	
+	
+	#	print "here?\n";
+	#	exit;
+	
+	
+	
 	&send_jobarray;
-
+	
     }
-
+    
 
     
     
@@ -2865,6 +2884,8 @@ if ($prephase_done == 0) {
 	}
     }
     else {
+#	print "debug\n";
+#	exit;
 	&mysystem ("touch $rootdir/prephase_done");
 	print "prephasing done\n";
     }

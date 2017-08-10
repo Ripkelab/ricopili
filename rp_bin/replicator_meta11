@@ -1416,64 +1416,67 @@ foreach my $repout (@dfile_arr) {
 #    print "phi: $phi\n";
 #    exit;
 
-    if ($phi >1.0e-03) {
-	$rc++;    
-	push @repsum,"$repname\tall\t$possum\t$nsum\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio\t$nca_loc\t$nco_loc" ;
-	my $nsnps = &qqplot ("qq.all.$repname",@p_coll_all);
-	if ($nsnps > 0 ) {
-	    push @pdf_collection, "qq.all.$repname"."-qq.pdf";
+
+
+    if (0) {
+	if ($phi >1.0e-03) {
+	    $rc++;    
+	    push @repsum,"$repname\tall\t$possum\t$nsum\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio\t$nca_loc\t$nco_loc" ;
+	    my $nsnps = &qqplot ("qq.all.$repname",@p_coll_all);
+	    if ($nsnps > 0 ) {
+		push @pdf_collection, "qq.all.$repname"."-qq.pdf";
+	    }
+
 	}
 
-    }
 
+	if ($phi >1.0e-04) {
+	    $rc++;
+	    push @repsum,"$repname\t1.0e-03\t$possum_p3\t$nsum_p3\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p3\t$nca_loc\t$nco_loc";
+	    my $nsnps = &qqplot ("qq.p3.$repname",@p_coll_p3);
+	    if ($nsnps > 0 ) {
+		push @pdf_collection, "qq.p3.$repname"."-qq.pdf";
+	    }
+	}
+	if ($phi >1.0e-05) {
+	    $rc++;
+	    push @repsum,"$repname\t1.0e-04\t$possum_p4\t$nsum_p4\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p4\t$nca_loc\t$nco_loc";
 
-    if ($phi >1.0e-04) {
+	    my $nsnps = &qqplot ("qq.p4.$repname",@p_coll_p4);
+	    if ($nsnps > 0 ) {
+		push @pdf_collection, "qq.p4.$repname"."-qq.pdf";
+	    }
+	}
+	if ($phi >1.0e-06) {
+	    $rc++;
+	    push @repsum,"$repname\t1.0e-05\t$possum_p5\t$nsum_p5\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p5\t$nca_loc\t$nco_loc";
+	    my $nsnps = &qqplot ("qq.p5.$repname",@p_coll_p5);
+	    if ($nsnps > 0 ) {
+		#	    print "p5: $nsnps\n";
+		push @pdf_collection, "qq.p5.$repname"."-qq.pdf";
+		#	    print "debug\n";
+		#	    exit;
+	    }
+	}
+	
+	if ($phi >5.0e-08) {
+	    $rc++;
+	    push @repsum,"$repname\t1.0e-06\t$possum_p6\t$nsum_p6\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p6\t$nca_loc\t$nco_loc";
+	    my $nsnps = &qqplot ("qq.p6.$repname",@p_coll_p6);
+	    if ($nsnps > 0 ) {
+		push @pdf_collection, "qq.p6.$repname"."-qq.pdf";
+	    }
+	}
 	$rc++;
-	push @repsum,"$repname\t1.0e-03\t$possum_p3\t$nsum_p3\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p3\t$nca_loc\t$nco_loc";
-	my $nsnps = &qqplot ("qq.p3.$repname",@p_coll_p3);
-	if ($nsnps > 0 ) {
-	    push @pdf_collection, "qq.p3.$repname"."-qq.pdf";
-	}
-    }
-    if ($phi >1.0e-05) {
-	$rc++;
-	push @repsum,"$repname\t1.0e-04\t$possum_p4\t$nsum_p4\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p4\t$nca_loc\t$nco_loc";
+	push @repsum,"$repname\t5.0e-08\t$possum_gws\t$nsum_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_gws\t$nca_loc\t$nco_loc";
 
-	my $nsnps = &qqplot ("qq.p4.$repname",@p_coll_p4);
-	if ($nsnps > 0 ) {
-	    push @pdf_collection, "qq.p4.$repname"."-qq.pdf";
+	if (@p_coll_gws > 0 ) {
+	    my $nsnps = &qqplot ("qq.gws.$repname",@p_coll_gws);
+	    if ($nsnps > 0 ) {
+		push @pdf_collection, "qq.gws.$repname"."-qq.pdf";
+	    }
 	}
     }
-    if ($phi >1.0e-06) {
-	$rc++;
-	push @repsum,"$repname\t1.0e-05\t$possum_p5\t$nsum_p5\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p5\t$nca_loc\t$nco_loc";
-	my $nsnps = &qqplot ("qq.p5.$repname",@p_coll_p5);
-	if ($nsnps > 0 ) {
-#	    print "p5: $nsnps\n";
-	    push @pdf_collection, "qq.p5.$repname"."-qq.pdf";
-#	    print "debug\n";
-#	    exit;
-	}
-    }
-    
-    if ($phi >5.0e-08) {
-	$rc++;
-	push @repsum,"$repname\t1.0e-06\t$possum_p6\t$nsum_p6\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p6\t$nca_loc\t$nco_loc";
-	my $nsnps = &qqplot ("qq.p6.$repname",@p_coll_p6);
-	if ($nsnps > 0 ) {
-	    push @pdf_collection, "qq.p6.$repname"."-qq.pdf";
-	}
-    }
-    $rc++;
-    push @repsum,"$repname\t5.0e-08\t$possum_gws\t$nsum_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_gws\t$nca_loc\t$nco_loc";
-
-    if (@p_coll_gws > 0 ) {
-	my $nsnps = &qqplot ("qq.gws.$repname",@p_coll_gws);
-	if ($nsnps > 0 ) {
-	    push @pdf_collection, "qq.gws.$repname"."-qq.pdf";
-	}
-    }
-
 #    print "$repname\t$possum_gws\t$nsum_gws\n";
     
 #    }
@@ -2493,55 +2496,58 @@ if ($nsum_gws > 0){
 }
 
 #my $rc = $rep_count +2 ;
-if ($phi >1.0e-03) {
-    $rc++;
-    push @repsum,"REPLICATION\tall\t$possum\t$nsum\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio\t$nca_glob\t$nco_glob" ;
-    my $nsnps = &qqplot ("qq.all.comb.$out_name",@p_coll_all);
-    if ($nsnps > 0) {
-	push @pdf_collection, "qq.all.comb.$out_name"."-qq.pdf";
+
+if (0) {
+    if ($phi >1.0e-03) {
+	$rc++;
+	push @repsum,"REPLICATION\tall\t$possum\t$nsum\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio\t$nca_glob\t$nco_glob" ;
+	my $nsnps = &qqplot ("qq.all.comb.$out_name",@p_coll_all);
+	if ($nsnps > 0) {
+	    push @pdf_collection, "qq.all.comb.$out_name"."-qq.pdf";
+	}
     }
-}
-if ($phi >1.0e-04) {
-    $rc++;
-    push @repsum,"REPLICATION\t1.0e-03\t$possum_p3\t$nsum_p3\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p3\t$nca_glob\t$nco_glob" ;
-    my $nsnps = &qqplot ("qq.p3.comb.$out_name",@p_coll_p3);
-    if ($nsnps > 0) {
-	push @pdf_collection, "qq.p3.comb.$out_name"."-qq.pdf";
+    if ($phi >1.0e-04) {
+	$rc++;
+	push @repsum,"REPLICATION\t1.0e-03\t$possum_p3\t$nsum_p3\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p3\t$nca_glob\t$nco_glob" ;
+	my $nsnps = &qqplot ("qq.p3.comb.$out_name",@p_coll_p3);
+	if ($nsnps > 0) {
+	    push @pdf_collection, "qq.p3.comb.$out_name"."-qq.pdf";
+	}
     }
-}
-if ($phi >1.0e-05) {
-    $rc++;
-    push @repsum,"REPLICATION\t1.0e-04\t$possum_p4\t$nsum_p4\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p4\t$nca_glob\t$nco_glob" ;
-    my $nsnps = &qqplot ("qq.p4.comb.$out_name",@p_coll_p4);
-    if ($nsnps > 0) {
-	push @pdf_collection, "qq.p4.comb.$out_name"."-qq.pdf";
+    if ($phi >1.0e-05) {
+	$rc++;
+	push @repsum,"REPLICATION\t1.0e-04\t$possum_p4\t$nsum_p4\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p4\t$nca_glob\t$nco_glob" ;
+	my $nsnps = &qqplot ("qq.p4.comb.$out_name",@p_coll_p4);
+	if ($nsnps > 0) {
+	    push @pdf_collection, "qq.p4.comb.$out_name"."-qq.pdf";
+	}
     }
-}
-if ($phi >1.0e-06) {
-    $rc++;
-    push @repsum,"REPLICATION\t1.0e-05\t$possum_p5\t$nsum_p5\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p5\t$nca_glob\t$nco_glob" ;
-    print "debug: $phi, qq.p5.comb.$out_name\n";
-    my $nsnps = &qqplot ("qq.p5.comb.$out_name",@p_coll_p5);
-    if ($nsnps > 0) {
-	push @pdf_collection, "qq.p5.comb.$out_name"."-qq.pdf";
+    if ($phi >1.0e-06) {
+	$rc++;
+	push @repsum,"REPLICATION\t1.0e-05\t$possum_p5\t$nsum_p5\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p5\t$nca_glob\t$nco_glob" ;
+	print "debug: $phi, qq.p5.comb.$out_name\n";
+	my $nsnps = &qqplot ("qq.p5.comb.$out_name",@p_coll_p5);
+	if ($nsnps > 0) {
+	    push @pdf_collection, "qq.p5.comb.$out_name"."-qq.pdf";
+	}
     }
-}
-if ($phi >5.0e-08) {
-    $rc++;
-    push @repsum,"REPLICATION\t1.0e-06\t$possum_p6\t$nsum_p6\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p6\t$nca_glob\t$nco_glob" ;
-    my $nsnps = &qqplot ("qq.p6.comb.$out_name",@p_coll_p6);
-    if ($nsnps > 0) {
-	push @pdf_collection, "qq.p6.comb.$out_name"."-qq.pdf";
+    if ($phi >5.0e-08) {
+	$rc++;
+	push @repsum,"REPLICATION\t1.0e-06\t$possum_p6\t$nsum_p6\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p6\t$nca_glob\t$nco_glob" ;
+	my $nsnps = &qqplot ("qq.p6.comb.$out_name",@p_coll_p6);
+	if ($nsnps > 0) {
+	    push @pdf_collection, "qq.p6.comb.$out_name"."-qq.pdf";
+	}
     }
-}
 
 
-$rc++;
-push @repsum,"REPLICATION\t5.0e-08\t$possum_gws\t$nsum_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_gws\t$nca_glob\t$nco_glob";
-if (@p_coll_gws > 0 ) {
-    my $nsnps = &qqplot ("qq.gws.comb.$out_name",@p_coll_gws);
-    if ($nsnps > 0) {
-	push @pdf_collection, "qq.gws.comb.$out_name"."-qq.pdf";
+    $rc++;
+    push @repsum,"REPLICATION\t5.0e-08\t$possum_gws\t$nsum_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_gws\t$nca_glob\t$nco_glob";
+    if (@p_coll_gws > 0 ) {
+	my $nsnps = &qqplot ("qq.gws.comb.$out_name",@p_coll_gws);
+	if ($nsnps > 0) {
+	    push @pdf_collection, "qq.gws.comb.$out_name"."-qq.pdf";
+	}
     }
 }
 
@@ -2674,12 +2680,14 @@ $workbook->close();
 
 
 
-unless (-e "$out_name.qq.pdf") {
-    &mysystem ("pdfjoin --rotateoversize false --outfile $out_name.qq.pdf @pdf_collection");
-}
-
-unless (-e "$out_name.info.pdf") {
-    &mysystem ("pdfjoin --rotateoversize false --outfile $out_name.info.pdf @info_pdf_collection");
+if (0) {
+    unless (-e "$out_name.qq.pdf") {
+	&mysystem ("pdfjoin --rotateoversize false --outfile $out_name.qq.pdf @pdf_collection");
+    }
+    
+    unless (-e "$out_name.info.pdf") {
+	&mysystem ("pdfjoin --rotateoversize false --outfile $out_name.info.pdf @info_pdf_collection");
+    }
 }
 
 
