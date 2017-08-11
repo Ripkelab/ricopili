@@ -49,18 +49,48 @@ SYNOPSIS
 ######################################
 
     
-sub date2min {
-    my ($date) = @_;
-    print "$date\n";
+
     
-    if ($date eq "-1") {return -1;}
+sub date2sec {
+   my ($date) = @_;
    my ($m,$d,$y,$H,$M,$S,$MS) = $date =~ m{^([0-9]{2})/([0-9]{2})/([0-9]{4})_([0-9]{2}):([0-9]{2}):([0-9]{2}).([0-9]{3})\z}
    or die;
    my $nday = $y*365+$m*12+$d;
    my $nhour = $nday*24 + $H;
    my $nmins = $nhour*60 + $M;
+   my $nsecs = $nmins*60 + $S;
    
-   return $nmins;
+   return $nsecs;
+
+}
+
+
+
+sub time2sec {
+    my ($time) = @_;
+    my @cells = split ':', $time;
+    
+    my $secs = $cells[0]*3600 + $cells[1] * 60 + $cells[2];
+    return $secs;
+
+}
+
+
+
+
+sub sec2time {
+   my ($sec) = @_;
+   my $nhours = sprintf "%d",$sec/3600;
+   my $secs_rest = $sec % 3600;
+   my $nmins = sprintf "%d",$secs_rest/60;
+   $secs_rest = $secs_rest % 60;
+
+   my $min_txt = sprintf "%02d", $nmins;
+   my $sec_txt = sprintf "%02d", $secs_rest;
+
+   
+   return $nhours.":".$min_txt.":".$sec_txt;
+
 }
 
 
@@ -153,14 +183,17 @@ foreach my $jid (@ids) {
 &mysystem ("grep SUMMARY-HEADER $out_collections[0] > $out.head") ;
 &mysystem ("grep SUMMARY-Data @out_collections > $out.data");
 &mysystem ("cat $out.head $out.data | column -t > $out.table");
+&mysystem ("rm $out.data $out.head");
+
 
 
 my $min_submit_time;
-my $min_submit_time_min=&date2min("08/07/8017_04:55:06.274");
+my $min_submit_time_sec=&date2sec("08/07/8017_04:55:06.274");
 my $max_end_time;
-my $max_end_time_min=0;
+my $max_end_time_sec=0;
 my $cpuhours_dir=0;
-my $runtime=0;
+my $runtime_sec=0;
+my $waittime_sec=0;
 
 die $!." <$out.table>" unless open IN, "< $out.table";
 my $line = <IN>;
@@ -168,26 +201,31 @@ while (my $line = <IN>){
 
     my @cells = @{&split_line_ref(\$line)};
     my $submit_time = $cells[8];
-    my $end_time = $cells[10];
-    $cpuhours_dir += $cells[13];
-    $runtime += $cells[11];
-
-#    print "$out.table\n";
-
-    my $submit_time_min = &date2min($submit_time);
-    my $end_time_min = &date2min($end_time);
-
-#    print "submit_time_min: $submit_time_min\n";
-    #    print "end_time_min: $end_time_min\n";
-    next if ($submit_time_min == -1 || $end_time_min == -1);
+    my $end_time = $cells[11];
+    $cpuhours_dir += $cells[15];
     
-    if ($submit_time_min < $min_submit_time_min) {
-	$min_submit_time_min  = $submit_time_min;
+
+    next if ($submit_time eq "-1" || $end_time eq "-1");
+
+    $runtime_sec += &time2sec($cells[12]);
+
+    $waittime_sec += &time2sec($cells[13]);
+
+    
+    my $submit_time_sec = &date2sec($submit_time);
+    my $end_time_sec = &date2sec($end_time);
+
+#    print "submit_time_sec: $submit_time_sec\n";
+    #    print "end_time_sec: $end_time_sec\n";
+
+    
+    if ($submit_time_sec < $min_submit_time_sec) {
+	$min_submit_time_sec  = $submit_time_sec;
 	$min_submit_time = $submit_time;
     }
     
-    if ($end_time_min > $max_end_time_min) {
-	$max_end_time_min  = $end_time_min;
+    if ($end_time_sec > $max_end_time_sec) {
+	$max_end_time_sec  = $end_time_sec;
 	$max_end_time = $end_time;
     }
 
@@ -196,11 +234,26 @@ while (my $line = <IN>){
 
 die $!." <$out.README>" unless open OUT, "> $out.README";
 print OUT "---------------------------------------------------\n";
+print OUT "perfomance report on all jobs started here\n";
+foreach my $locdir (@searchdirs){
+    print OUT "    $locdir\n";
+}
+print OUT "---------------------------------------------------\n";
 print OUT "earliest starting time: $min_submit_time\n";
 print OUT " latest finishing time: $max_end_time\n";
-printf OUT " this is %.2f hours\n", ($max_end_time_min - $min_submit_time_min)/60 ;
-printf OUT "total active runtime, excluding manual and technical queue pauses: %.2f hours\n", $runtime ;
-printf OUT "in total: %.2f CPU hours\n", $cpuhours_dir ;
+
+
+my $time_txt = &sec2time ($max_end_time_sec - $min_submit_time_sec);
+printf OUT " this is (h:m:s): $time_txt\n" ;
+
+
+
+#print "runtimesec: $runtime_sec\n";
+
+printf OUT "total active runtime, excluding manual and technical queue pauses (h:m:s): %s\n", &sec2time($runtime_sec) ;
+printf OUT "total waiting time - submission till start (h:m:s): %s\n", &sec2time($waittime_sec) ;
+my $cpuhours_txt = &sec2time ($cpuhours_dir * 3600);
+printf OUT "Total CPU time (h:m:s): %s\n", $cpuhours_txt ;
 
 print OUT "---------------------------------------------\n";
 print OUT "to sort by submit-time:\n";

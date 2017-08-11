@@ -154,6 +154,7 @@ my $jobnumber = -1;
 my $submit_cmd = -1;
 my $nslots = -1;
 my $submit_queue = -1;
+my $submit_hold = 0;
 my $submit_mem = -1;
 my $submit_time = -1;
 my $submit_time_time = -1;
@@ -164,6 +165,11 @@ my $end_time = -1;
 my $end_time_sec = -1;
 my $max_end_time = -1;
 my $max_end_time_sec = -1;
+my $min_start_time = -1;
+
+my $min_start_time_sec=&date2sec("08/07/8017_04:55:06.274");
+
+
 my $ru_maxrss = -1;
 my $max_ru_maxrss = -1;
 my $njobs = 0;
@@ -185,6 +191,7 @@ printf "%26s","START_TIME";
 printf "%26s","END_TIME";
 printf "%13s\n","TIME-DIFF";
 	    
+my $fail = 0;
 
 die $!."(qacct.$jobnum)" unless open FILE, "< qacct.$jobnum";
 my $line = <FILE>;
@@ -194,7 +201,7 @@ while (my $line = <FILE>){
 	    
     if ($line =~ /^========/) {
 	$njobs++;
-	if ($ru_wallclock != -1) {
+	if ($ru_wallclock != -1 && $fail == 0) {
 
 	    printf "%40s",$hostname;
 	    printf "%8s",$taskid;
@@ -216,6 +223,7 @@ while (my $line = <FILE>){
 	    printf " %12s\n",$timediff;
 	    
 	}
+	$fail = 0;
     }
     @cells = @{&split_line_ref(\$line)};
 
@@ -274,15 +282,32 @@ while (my $line = <FILE>){
 	$submit_time_sec = &date2sec($submit_time);
     }
     if ($cells[0] eq "start_time") {
-	$start_time = $cells[1]."_".$cells[2];
-	$start_time_sec = &date2sec($start_time);
+	if  ($cells[1] eq "-/-"){
+	    $fail = 1;
+	}
+	else {
+	    
+	    $start_time = $cells[1]."_".$cells[2];
+	    
+	    $start_time_sec = &date2sec($start_time);
+	    if ($min_start_time_sec > $start_time_sec) {
+		$min_start_time_sec = $start_time_sec;
+		$min_start_time = $start_time;
+	    }
+	   
+	}
     }
     if ($cells[0] eq "end_time") {
-	$end_time = $cells[1]."_".$cells[2];
-	$end_time_sec = &date2sec($end_time);
-	if ($max_end_time_sec < $end_time_sec) {
-	    $max_end_time_sec = $end_time_sec;
-	    $max_end_time = $end_time;
+	if  ($cells[1] eq "-/-"){
+	    $fail = 1;
+	}
+	else {	
+	    $end_time = $cells[1]."_".$cells[2];
+	    $end_time_sec = &date2sec($end_time);
+	    if ($max_end_time_sec < $end_time_sec) {
+		$max_end_time_sec = $end_time_sec;
+		$max_end_time = $end_time;
+	    }
 	}
     }
     
@@ -298,28 +323,35 @@ while (my $line = <FILE>){
 	    if ($cells[$cc] eq "-l") {
 		$submit_mem = $cells[$cc+1];
 	    }
+	    if ($cells[$cc] eq "-hold_jid") {
+		$submit_hold = 1;
+	    }	    
 	    
 	}
     }    
 }
 
-printf "%40s",$hostname;
-printf "%8s",$taskid;
-printf "%15s",$maxvmem;
-printf "%6s",$nslots;
-printf "%15s",$ru_maxrss;
-printf "%17s",$wallhours;
-printf "%11s",$cpuhours;
-printf "%8s",$failed;
-printf "%13s",$exit_status;
+$njobs++;
 
+if ($ru_wallclock != -1 && $fail == 0) {
+    printf "%40s",$hostname;
+    printf "%8s",$taskid;
+    printf "%15s",$maxvmem;
+    printf "%6s",$nslots;
+    printf "%15s",$ru_maxrss;
+    printf "%17s",$wallhours;
+    printf "%11s",$cpuhours;
+    printf "%8s",$failed;
+    printf "%13s",$exit_status;
+    
+    
+    printf "%26s",$start_time;
+    printf "%26s",$end_time;
+    
 
-printf "%26s",$start_time;
-printf "%26s",$end_time;
-
-
-$timediff = &sec2time($end_time_sec-$start_time_sec);
-printf " %12s\n",$timediff;
+    $timediff = &sec2time($end_time_sec-$start_time_sec);
+    printf " %12s\n",$timediff;
+}
 
 
 
@@ -330,14 +362,32 @@ print "JOBNUMBER: $jobnumber\n";
 print "NJOBS: $njobs\n";
 print "SUBMIT_TIME: $submit_time\n";
 print "MAX_END_TIME: $max_end_time\n";
-$timediff = $max_end_time_sec-$submit_time_sec;
+print "MIN_START_TIME: $min_start_time\n";
+
+$timediff = $max_end_time_sec-$min_start_time_sec;
 my $max_diff_time = &sec2time($timediff);
-print "DIFF_TIME(h:m:s): $max_diff_time\n";
+print "RUNTIME(h:m:s): $max_diff_time\n";
+
+my $qtime_sec = $min_start_time_sec-$submit_time_sec;
+my $qtime = &sec2time($qtime_sec);
+
+if ($submit_hold == 1) {
+    $qtime = "0:00:00";
+}
+
+print "WAITTIME(h:m:s): $qtime\n";
+
+
 
 
 print "NSLOTS: $nslots\n";
 
-$cpuhours_total = sprintf "%.3f", $cpuhours_total;
+if ($cpuhours_total > 1) {
+    $cpuhours_total = sprintf "%.3f", $cpuhours_total;
+}
+else {
+    $cpuhours_total = sprintf "%.3g", $cpuhours_total;
+}
 print "CPUHOURS_total: $cpuhours_total\n";
 
 
@@ -354,8 +404,8 @@ print "SUBMIT_cmd: $submit_cmd\n";
 print "SUBMIT_queue: $submit_queue\n";
 print "SUBMIT_mem: $submit_mem\n";
 print "----------------------------------------------------\n";
-print "SUMMARY-HEADER: JOBNAME JOBID NJOBS MAX_RU_MAXRSS(GB) MAX_RU_WALLCLOCK(h) SUBMIT_queue SUBMIT_mem SUBMIT_time SUBMIT_time(sec) MAX_END_time DIFF_TIME(h:m:s) NSLOTS CPUHOURS_total\n";
-print "SUMMARY-Data: $jobname $jobnumber $njobs $max_ru_maxrss $max_ru_wallclock $submit_queue $submit_mem $submit_time $submit_time_sec $max_end_time $max_diff_time $nslots $cpuhours_total\n";
+print "SUMMARY-HEADER: JOBNAME JOBID NJOBS MAX_RU_MAXRSS(GB) MAX_RU_WALLCLOCK(h) SUBMIT_queue SUBMIT_mem SUBMIT_time SUBMIT_time(sec) MIN_START_time MAX_END_time RUNTIME(h:m:s) WAITTIME(h:m:s) NSLOTS CPUHOURS_total\n";
+print "SUMMARY-Data: $jobname $jobnumber $njobs $max_ru_maxrss $max_ru_wallclock $submit_queue $submit_mem $submit_time $submit_time_sec $min_start_time $max_end_time $max_diff_time $qtime $nslots $cpuhours_total\n";
 
 print "----------------------------------------------------\n";
 print "my.qacct  $jobnumber | sort -k3,3h | cl\n";
