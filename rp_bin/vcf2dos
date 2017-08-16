@@ -15,11 +15,14 @@ use Ricopili::Utils qw(trans);
 
 use lib $ENV{rp_perlpackages};
 use Compress::Zlib ;
+#use Time;
+
 
 #############################
 # read config file
 #############################
 
+my $t0 = time;
 
 ###############################################
 
@@ -114,9 +117,27 @@ sub mysystem(){
 
 }
 
+###################################################
+###  print time sinc beginning
+###################################################
 
 
 
+sub mytime(){
+    my $secs = time-$t0;
+    my $mins = $secs/60;
+    my $hours = $secs/3600;
+    print $secs." seconds gone since start of the script\n";
+#    print $mins." minutes gone since start of the script\n";
+#    print $hours." hours gone since start of the script\n";
+    
+}
+
+
+
+
+#print $t."\n";
+#exit;
 
 ############################################
 ######### BEGIN
@@ -141,6 +162,7 @@ if ($vcf_file eq $outdos || $vcf_file eq $outvcf ) {
 }
 
 
+&mytime();
 
 ####################################################
 ## read legend file
@@ -148,6 +170,7 @@ if ($vcf_file eq $outdos || $vcf_file eq $outvcf ) {
 
 
 print "reading into hash file: $legend_file\n";
+
 
 
 my %snp;
@@ -171,7 +194,7 @@ while ($igz->gzreadline(my $line)){
 $igz->gzclose();
 
 
-
+&mytime();
 
 
 ####################################################
@@ -196,23 +219,23 @@ while ($igz->gzreadline(my $line)){
     my @cells = @{&split_line_ref_tab(\$line)};
     
     
-    unless ($keepvcf) {
-	unless ($cells[0] =~ /^#/) {
-	    my $key = $cells[1];
-	    $key .= " ".$cells[3];
-	    $key .= " ".$cells[4];
-	    
-	    if (exists $snp{$key}) {
-		$cells[2]= $snp{$key};
-#		delete $snp{$key};
-	    }
-	    else {
-		print "Error: <$key> not found in $legend_file\n";
-		exit;
-	    }
+
+    unless ($cells[0] =~ /^#/) {
+	my $key = $cells[1];
+	$key .= " ".$cells[3];
+	$key .= " ".$cells[4];
+	
+	if (exists $snp{$key}) {
+	    $cells[2]= $snp{$key};
+	    #		delete $snp{$key};
 	}
+	else {
+	    print "Error: <$key> not found in $legend_file\n";
+	    exit;
+	}
+    }
 	
-	
+    if ($keepvcf) {	
 	my $outv_str = $cells[0];
 	foreach my $cc (1..$#cells) {
 	    $outv_str .= "\t".$cells[$cc];
@@ -269,6 +292,9 @@ $igz->gzclose();
 $ovgz->gzclose();
 $odgz->gzclose();
 close MAP;
+
+
+&mytime();
 
 
 

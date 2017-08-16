@@ -41,7 +41,8 @@ GetOptions(
 
    "help"=> \my $help,
    "nofilter"=> \my $nofilter,
-   "detout"=> \my $detout,
+    "detout"=> \my $detout,
+
    "xdf"=> \my $xdf,
 
  );
@@ -56,6 +57,7 @@ if ($help || $out_name eq "metaber"){
                              defaut $info_th
                              !!! use zero before period  !!!
         --nofilter         no filter at all
+
 #        --beta             if there is BETA instead of OR present
 
          --detout          also include a detailed out-file with all P, OR, SE
@@ -1089,15 +1091,17 @@ while (<META>){
     $out_row .= "\t".$neff_str;
 
     my $neff_ex = 0;
-    if ($neff_str < $neff_max_half) {
-	if ($neff_ex_n < 10){
-	    print "exclude $snp_name because of low Neff\n";
+    unless ($nofilter) {
+	if ($neff_str < $neff_max_half) {
+	    if ($neff_ex_n < 10){
+		print "Warning: exclude $snp_name because of low Neff\n";
+	    }
+	    if ($neff_ex_n == 10){
+		print "more exclusions not printing\n";
+	    }	
+	    $neff_ex = 1;
+	    $neff_ex_n++;
 	}
-	if ($neff_ex_n == 10){
-	    print "more exclusions not printing\n";
-	}	
-	$neff_ex = 1;
-	$neff_ex_n++;
     }
 #    for my $i (6..10) {
 #	$out_row .= "\t".$cells[$i];
