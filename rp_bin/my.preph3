@@ -48,6 +48,8 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --buffer INT      buffer around refind, default $buffer
  --mendel          clean for mendel errors
  --sfile STRING    file containing SNPs to exptract
+ --chr23male       some special options for phasing and postimputation
+
 
 
 ";
@@ -82,6 +84,7 @@ GetOptions(
     "mendel"=> \my $mendel_sw,
     "noref"=> \my $noref,
     "empty=s"=> \ $emptyname,
+    "chr23male"=> \my $chr23male,
 
     
     );
@@ -323,15 +326,23 @@ if ($eagle_vcf) {
 	print "on chrX I use a differenct genetic map file\n";
 	$gemafile .= ".23";
     }
-    
-    my $sys_loc_eagle = "$ealoc/$eagle_bin $opt_txt --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt > $outname.eag.log 2> $outname.eag.loge";
-    print BC "$sys_loc_eagle\n";
-    print "starting: $sys_loc_eagle\n";
-    $sc += system ($sys_loc_eagle) ;
+
+
+    unless ($chr23male) {
+	my $sys_loc_eagle = "$ealoc/$eagle_bin $opt_txt --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt > $outname.eag.log 2> $outname.eag.loge";
+	print BC "$sys_loc_eagle\n";
+	print "starting: $sys_loc_eagle\n";
+	$sc += system ($sys_loc_eagle) ;
+    }
 
     
     if ($chrx_sw == 1) {
-	$sc += system ("mv $outname.vcf.gz $outname.vcf.23.gz") ;
+	unless  ($chr23male) {
+	    $sc += system ("mv $outname.vcf.gz $outname.vcf.23.gz") ;
+	}
+	else {
+	    $sc += system ("mv $outname.unphased0.vcf.gz $outname.vcf.23.gz") ;
+	}
 	my $igz = gzopen("$outname.vcf.23.gz", "rb")  or die "Cannot open file $outname.vcf.23.gz: $gzerrno\n" ;
 	my $ogz = gzopen("$outname.vcf.gz", "wb")  or die "Cannot open file $outname.vcf.gz: $gzerrno\n" ;
 

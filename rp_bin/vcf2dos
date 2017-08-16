@@ -256,7 +256,16 @@ while ($igz->gzreadline(my $line)){
 	foreach my $cc (9..$#cells) {
 	    my ($gt,$ds,$gp) = split ":",$cells[$cc];
 	    my ($gp1,$gp2,$gp3) = split ",",$gp;
-	    
+
+	    if ($gp3 eq "") {
+		$gp3=$gp2;
+		$gp2="0";
+	    }	 
+#	    print "gp1: $gp1\n";
+#	    print "gp2: $gp2\n";
+#	    print "gp3: $gp3\n";
+#	    exit;
+
 	    $outd_str .= " ".$gp1;
 	    $outd_str .= " ".$gp2;
 	    $outd_str .= " ".$gp3;

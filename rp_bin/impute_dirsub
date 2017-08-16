@@ -299,6 +299,9 @@ version: $rp_version
  --spliha INT      split haplotypes with N individuals
 
 
+#### special handling of males on chr23 (haploid)
+
+ --chr23male       some special options for phasing and postimputation
 
 
 ##### alignment to reference:
@@ -357,6 +360,7 @@ version: $rp_version
   --multi INT         use multithreading of INT cores for prephasing (maybe later also for imputation
                       
   --minilong          use long jobs for minimac imputation (is better than multithreaded according to gonzalo)
+
 
 
 ### remarks 
@@ -520,6 +524,7 @@ GetOptions(
     "chunk=s"=> \$chunkind,
     "multi=i"=> \$multithread_v2,
     "minilong"=> \my $minilong,
+    "chr23male"=> \my $chr23male,
 #    "chunk10"=> \my $chunk10,
 
     );
@@ -2481,6 +2486,11 @@ my @preph_arr_mu1 = ();
 my @preph_arr_mu2 = ();
 my @preph_arr_mu_v2 = ();
 
+
+my $chr23male_txt = "";
+$chr23male_txt = "--chr23male" if ($chr23male);
+
+
 if ($prephase_done == 0) {
     ### loop for datasets
     foreach (@bimfli_files) {
@@ -2654,7 +2664,8 @@ if ($prephase_done == 0) {
 #		}
 		    ################################## work on this here!!!!!
 
-		    my $backbone = "$preph_script $xtxt --spliha $spliha_n_2 --out $haps_ch_out --in $bprefix --fam $famfile --gema $gema_file --buffer $buffer $extract_txt $mendel_sw --empty $empty_ch_out";
+
+		    my $backbone = "$preph_script $chr23male_txt $xtxt --spliha $spliha_n_2 --out $haps_ch_out --in $bprefix --fam $famfile --gema $gema_file --buffer $buffer $extract_txt $mendel_sw --empty $empty_ch_out";
 		    
 		    if ($eagle_sw) { 
 			$backbone .= " --eagle";
