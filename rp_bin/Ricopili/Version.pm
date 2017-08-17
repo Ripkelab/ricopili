@@ -15,7 +15,7 @@ our @EXPORT = qw($rp_header $rp_version);
 our ($rp_header, $rp_version);
 
 
-$rp_version = "2017_Aug_16.026" ;
+$rp_version = "2017_Aug_17.013" ;
 
 
 my $rp_logo = <<'END_TXT';
