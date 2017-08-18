@@ -188,7 +188,7 @@ GetOptions( "out=s"=> \$outname,
 	    "ldsubgr=i"=> \$ld_subgr,
             "force1"=> \my $force1,
 	    "ref=s"=> \$reffile,
-	    "noproject"=> \my $noproject,
+	    "projection"=> \my $projection,
     "dfile=s"=> \my $dfile,
 
     );
@@ -634,9 +634,8 @@ version: $rp_version
         --nref INT      size of reference set, if dataset is bigger, PCA in subgroups
                                 default $nref
 
-        --noproject     do not project but create PCA on complete set 
-                              (can take very long for big datasets)
-                              (pca will go automoatically into week queue)
+        --projection     do project (outdated, maybe try out on very big datasets
+
 
         --ldsubgr INT   number of random subset, used for LD calculation for LD pruning
 
@@ -1987,6 +1986,30 @@ unless (-e "$bfile_menv.mds") {
 	&mysystem ("ln -sf $pcaer_dir/$bfile_menv.bim .");
     }
 
+    
+    unless (-e "bim_nolong") {
+	print "remove long SNP ID names\n";
+	die "$bfile_menv.bim: ".$! unless open IN, "< $bfile_menv.bim";
+	die "$bfile_menv.bim.nolong: ".$! unless open OUT, "> $bfile_menv.bim.nolong";
+	my $cc = 0;
+	while (my $line = <IN>){
+	    my @cells = &split_line ($line);
+	    if (length ($cells[1]) > 30) {
+		$cells[1] = "rs_short.".$cc;
+	    }
+	    print OUT "@cells\n";
+	    $cc++;
+	}
+	close IN;
+	close OUT;
+	&mysystem ("mv $bfile_menv.bim.nolong $bfile_menv.bim");
+        &mysystem ("touch bim_nolong");
+    }
+    
+#    print "debug\n";
+#    exit;
+
+    
     if ($refpop){
 	unless (-e "$refpop.bim") {
 	    &mysystem ("ln -sf $pcaer_dir/$refpop.fam .");
@@ -2002,7 +2025,7 @@ unless (-e "$bfile_menv.mds") {
     my $n_noov = &count_lines ("$bfile_menv.fam");
     my $n_bim = &count_lines ("$bfile_menv.bim");
     ##### create a 1 percent reference dataset
-    if ($noproject) {
+    unless ($projection) {
 	$nref = $n_noov + 1;
     }
     my $rand_th = $nref / $n_noov;
@@ -2055,7 +2078,7 @@ unless (-e "$bfile_menv.mds") {
 	    $sjamem = 2000;
 	    @sjaarray = @job_arr;
 
-	    if ($noproject) {
+	    unless ($projection) {
 		if ($n_bim > 40000 && $n_noov > 5000) {
 		    $sjaweek = 1;
 		}
@@ -2087,6 +2110,19 @@ unless (-e "$bfile_menv.mds") {
 	unshift (@emds, $emds_header);
 	&a2file ("$bfile_menv.emds",@emds);
 
+
+	####  DEBUGG
+#	print "debug\n";
+#	exit;
+	my @wl_mds = `wc -l $bfile_menv.emds`;
+	my @split = split " ",$wl_mds[0];
+	if ($split[0] < 2) {
+	    print "something didn't go right in MDS (epca)\n";
+	}
+	copy ("$bfile_menv.emds", "$pcaer_dir/$bfile_menv.mds");
+
+
+	
 	copy ("$bfile_menv.emds", "$pcaer_dir/$bfile_menv.mds");
     }
     else {
@@ -2380,14 +2416,13 @@ unless (-e "$bfile_menv.mds") {
 	    &a2file ("$bfile_menv.emds",@emds) if (@emds > 1);
 	}
 	
-	####  DEBUGG
-	copy ("$bfile_menv.emds", "$pcaer_dir/$bfile_menv.mds");
-	
+
 	
     }
     print "$warn warnings\n";
     #    exit;
 }
+
 
 #print "debug\n";
 #exit;
@@ -2842,7 +2877,7 @@ print META "pca_qc_inv_8_7_13(hardcoded)\texcluded\n";
 print META "nwind(independent-pairwise)\t$nwind\n";
 print META "r2(hardcoded)\t0.2\n";
 
-if ($noproject) {
+unless ($projection) {
 print META "projection\toff\n";
 }
 else {

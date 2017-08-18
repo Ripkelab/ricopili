@@ -4077,7 +4077,7 @@ unless (-e $cobg_out) {
 	$blist .= " $bprefix.bgs";
     }
     
-    my $pcaer_sys = "pcaer --noproject --prefercase --preferfam --out cobg_gw.$outname $blist";
+    my $pcaer_sys = "pcaer --prefercase --preferfam --out cobg_gw.$outname $blist";
     &mysystem ("echo $pcaer_sys > README.pcaer");#
     
     
