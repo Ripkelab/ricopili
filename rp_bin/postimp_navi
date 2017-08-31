@@ -1374,6 +1374,7 @@ foreach my $bifi (@bimfli_files) {
 my $mds_name_sub = "$mds_name.sub";
 my $mds_age = -M $mds_name;
 
+
 unless ($result_name){
     if ($mds_cols eq "ALL") {
 	&mysystem ("cp $mds_name $mds_name_sub");
@@ -1436,6 +1437,7 @@ unless ($result_name){
 	}
     }
 }
+
 
 
 ###################################
@@ -1928,10 +1930,13 @@ my $idin_str = "";
 my $addcov_str = "";
 
 
+
 unless ($result_name) {
     if ($mds_name ne "NOMDS") {
+	if (-e $mds_name) {
+	    &mysystem ("rm -f $mds_name"); ## necessary since permissions do not allow for overwriting
+	}
 	&mysystem ("cp $rootdir/$mds_name .");
-#	&mysystem ("cp $rootdir/$mds_name .") unless (-e $mds_name);
 	$co_str = "--mds $mds_name --coco  $mds_cols";
     }
     
@@ -1972,11 +1977,15 @@ unless ($result_name) {
 	$pheno_file = "$mds_name.perm$siperm";
 
 	unless (-e $pheno_file){
+
 	    print "create a permuted phenotype file\n";
 	    unless (-e $mds_name) {
 		print "permutation needs a covariate file now\n";
 		exit;
 	    }
+
+
+	    
 	    my @id_arr = ();
 	    my @pt_arr = ();
 	    
