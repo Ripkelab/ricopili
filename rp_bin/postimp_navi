@@ -206,7 +206,7 @@ version: $rp_version
  --triset STRING  for subset of trio datasets (can contain bimfiles)
  --idin STRING     ID inclusion list (before imputation, while ripping)
 
- --sep_pca         create and use a separate PCA for each cohort (more precise)
+ --sep_pca         create and use a separate PCA for each cohort (will get better control over popstrat)
 
  --mds STRING      mds-file (with studyindicator, (if necessary), 
                        NOMDS if no pcaer wished and analysis without covariates
@@ -266,7 +266,7 @@ version: $rp_version
 #  --keep STRING       keep IDFILE
 
   --idex STRING       IDs to remove
-  --idin STRING       IDs to remove
+  --idin STRING       IDs to include (does not work with sep_pca)
 
   --result FILE       start with result files, named in STRING, one each row
                          must have proper header in each file
@@ -893,6 +893,39 @@ sub send_jobarray {
 	exit;
 
     }
+
+    if ($sjaname eq "paused") {
+
+	my $fini_message ;
+	$fini_message .= "\n\n##################################################################\n";
+	$fini_message .= "##### rp_pipeline_postimp paused\n";
+	$fini_message .= "##### $sjainfotxt\n";
+	$fini_message .= "##### please read and follow instructions above then restart\n";
+	$fini_message .= "##### have a look at the wiki page for more details\n"; 
+	$fini_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
+	$fini_message .= "##################################################################\n";
+	print "$fini_message\n";
+
+	
+	die $! unless open SUC, "> success_file";
+	print SUC $fini_message."\n";
+	close SUC;
+
+	if ($noti == 1) {
+	    
+	    my $sys_email = 'cat success_file | '.$mutt_script.' -s RP_postimp_paused '.$email;
+	    print "$sys_email\n";
+	    &mysystem ($sys_email) ;
+
+	}
+	my $sjarow      = $sjainfotxt."\t$sjaname\t$now";
+	&a2filenew_app("$sjainfofile",$sjarow);
+
+
+	exit;
+
+    }
+    
 
 
 
@@ -2101,69 +2134,156 @@ my %bg_in;
 ############### SEP PCA
 ###################################################################
 
+my %sep_covfile;
+my %sep_covstr;
+my $sep_idin = "";
 
 if ($sep_pca) {
-my @sep_pca_str_single;
-my $sep_pca_str_comb = "pcaer --preferfam --prefercase --out $outname";
-
-
-unless (-e "$rootdir/daner_$outname.done") {
-    unless ($result_name){
+    $sep_idin = "$outname.menv.mds_cov";
+    my $mdscov_file = "$outname.covfiles";
+    unless (-e $mdscov_file) {
+	my $pcaer_count = 0;
 	
-	#### stuff that is done on full datasets
-	foreach (@bimfli_files) {
-	    
-	    my $bfile = $_;
+	my @sep_pca_str_single;
+	my @mdsfile_txt;
+	my $sep_pca_str_comb = "pcaer --preferfam --prefercase --out $outname";
+	
+	
+	unless (-e "$rootdir/daner_$outname.done") {
+	    unless ($result_name){
+		
+		#### stuff that is done on full datasets
+		foreach (@bimfli_files) {
+		    
+		    my $bfile = $_;
 
-	    my $bfile_bgs = "$bfile.bgs";
-	    my $bgs_bed_source = "$bgdir/$bfile_bgs";
-	    my $bgs_bed_target = "$seppcadir/$bfile_bgs";
-	    print "linking $bgs_bed_source.bed/bim/fam to $seppcadir\n";
-	    unless (-e "$bgs_bed_target.bed") {
-		&mysystem ("ln -s $bgs_bed_source.bed $bgs_bed_target.bed");
+		    my $bfile_bgs = "$bfile.bgs";
+		    my $bgs_bed_source = "$bgdir/$bfile_bgs";
+		    my $bgs_bed_target = "$seppcadir/$bfile_bgs";
+		    print "linking $bgs_bed_source.bed/bim/fam to $seppcadir\n";
+		    unless (-e "$bgs_bed_target.bed") {
+			&mysystem ("ln -s $bgs_bed_source.bed $bgs_bed_target.bed");
+		    }
+		    unless (-e "$bgs_bed_target.bim") {
+			&mysystem ("ln -s $bgs_bed_source.bim $bgs_bed_target.bim");
+		    }
+		    unless (-e "$bgs_bed_target.fam") {
+			&mysystem ("ln -s $bgs_bed_source.fam $bgs_bed_target.fam");
+		    }
+
+		    unless (-e "$seppcadir/$bfile.bgs.menv.mds_cov") {
+			push @sep_pca_str_single, "pcaer --prefercase --out $bfile.bgs $bfile.bgs";
+			$pcaer_count++;
+		    }
+		    else {
+			unless (-e "$bfile.bgs.menv.trans.mds") {
+			    &mysystem ("ln -s $seppcadir/$bfile.bgs.menv.trans.mds .");
+			    &mysystem ("ln -s $seppcadir/$bfile.bgs.menv.mds.overworked.p_assoc.txt .");
+			}
+
+			my $pca_str = "1,2,3,4";
+			
+			die $!." <$bfile.bgs.menv.mds.overworked.p_assoc.txt>" unless open IN, "< $bfile.bgs.menv.mds.overworked.p_assoc.txt";
+			my $npca = 0;
+			while (my $line = <IN>){
+			    my @cells = &split_line($line);
+			    if ($npca > 4 && $cells[2] < 0.05){
+				$pca_str .= ",$npca";
+			    }
+			    $npca++;
+			}
+			close IN;
+
+			push @mdsfile_txt, "$bfile $bfile.bgs.menv.trans.mds $pca_str";
+		    }
+		    $sep_pca_str_comb .= " $bfile.bgs";		
+
+		}
+		
 	    }
-	    unless (-e "$bgs_bed_target.bim") {
-		&mysystem ("ln -s $bgs_bed_source.bim $bgs_bed_target.bim");
+
+	    unless (-e "$seppcadir/$outname.menv.mds_cov") {    
+		push @sep_pca_str_single, "$sep_pca_str_comb";
+		$pcaer_count++;
 	    }
-	    unless (-e "$bgs_bed_target.fam") {
-		&mysystem ("ln -s $bgs_bed_source.fam $bgs_bed_target.fam");
+	    else {
+		unless (-e "$outname.menv.mds_cov") {
+		    &mysystem ("ln -s $seppcadir/$outname.menv.mds_cov .");
+		}
 	    }
+	}		
+
+	if ($pcaer_count > 0) {
+	    die $! unless open FILE1, "> $seppcadir/start_pcaer.sh";
+	    foreach my $sep_pca_cmd (@sep_pca_str_single) {
+		print FILE1 "$sep_pca_cmd\n";
+	    }
+	    close FILE1;
+
+	    &mysystem ("chmod u+x $seppcadir/start_pcaer.sh");
 	    
-	    push @sep_pca_str_single, "pcaer --prefercase --out $bfile.bgs $bfile.bgs";
-	    $sep_pca_str_comb .= " $bfile.bgs";		
+	    
+	    print "\n###########################################################################\n";
+	    print "separate PCAs requested, please start these commands from the command line:\n\n";
+	    
+	    print "\tcd $seppcadir\n";
+	    print "\t./start_pcaer.sh\n\n";
+	    print "wait till all pcaer-jobs (_pc_*) ran through and restart postimp-pipeline\n";
+
+
+	    #############################################################
+	    ## SUCCESSSS
+	    #############################################################
+	    
+	    $sjadir = $rootdir;
+	    $sjaname = "paused";
+	    push @sjaarray, "tmp";
+	    $sjatime = 2;
+	    $sjamem = 1000;
+	    
+	    
+	    &send_jobarray;
 
 	}
-	
+
+	if (@mdsfile_txt == @bimfli_files) {
+	    print "---------------------------------------------------------------\n";
+	    print "Success: There are as many covariate files as there are cohorts\n";
+	    print "---------------------------------------------------------------\n";
+	    print "writing out mdscovfile: $mdscov_file\n";
+	    die $! unless open FILE1, "> $mdscov_file";
+	    foreach (@mdsfile_txt) {
+		print FILE1 "$_\n";
+	    }
+	    close FILE1;
+	    
+	}
     }
-}		
-
-
-  foreach (@miss_scripts) {
-    print FILE1 "$_";
-  }
-close FILE1;
-
-die $! unless open FILE1, "> $seppcadir/start_pcaer.sh";
-foreach my $sep_pca_cmd (@sep_pca_str_single) {
-    print FILE1 "$sep_pca_cmd\n";
+    else {
+	print "$mdscov_file exists, now going to next step\n";
+    }
+    
+    die $!." <$mdscov_file>" unless open IN, "< $mdscov_file";
+    while (my $line = <IN>){
+	my @cells = &split_line($line);
+	$sep_covfile{$cells[0]} = $cells[1];
+	$sep_covstr{$cells[0]} = $cells[2];
+    }
+    close IN;
 }
-print FILE1 "$sep_pca_str_comb\n";
-close FILE1;
-&mysystem ("chmod u+x $seppcadir/start_pcaer.sh");
-
-
-print "\n###########################################################################\n";
-print "separate PCAs requested, please start these commands from the command line:\n\n";
-
-print "\tcd $seppcadir\n";
-print "\t./start_pcaer.sh\n\n";
-print "wait till all pcaer-jobs (_pc_*) ran through and restart postimp-pipeline\n";
 
 
 
-exit;
 
-}
+
+
+
+
+
+
+
+
+#exit;
 
 
 unless (-e "$rootdir/daner_$outname.done") {
@@ -2261,8 +2381,18 @@ unless (-e "$rootdir/daner_$outname.done") {
 				$sex_str = "--females";
 			    }
 
+			    ###################################
+			    ### for sep_pca
+			    ####################################
+			    if ($sep_idin) {
+				$idin_str = "--idin $sep_idin";
+				my $sep_covfile_loc = $sep_covfile{$bfile};
+				my $sep_covstr_loc = $sep_covstr{$bfile};
+				$co_str_loc = "--mds $sep_covfile_loc --coco $sep_covstr_loc";
+			    }
+
 			    my $sys_loc = "$daner_script $sex_str --nosi --indir $dasudir_loc $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danerdir_loc $bfile.$refind";
-#			print "$sys_loc\n";
+#			    print "$sys_loc\n";
 #			    exit;
 
 			    my $mapfile = "$dasudir_loc/dos_$bfile.$refind.out.dosage.map";
@@ -2721,7 +2851,7 @@ if ($danscore_file ne "") {
 }
 
 
-
+#exit;
 
 if (@danerdir_arr > 0) {
     
