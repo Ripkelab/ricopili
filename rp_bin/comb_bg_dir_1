@@ -106,14 +106,16 @@ opendir(DIR, ".") || die "can't opendir .: $!";
 my @files = readdir(DIR);
 closedir DIR;
 @bfile_list = grep {/.bim$/} @files;
+@bfile_list = grep {!/merge.bim$/} @bfile_list;
 print "take every bim file in this directory ($workdir)\n";
 
 
 
 foreach (0..$#bfile_list){
     $bfile_list[$_]=~ s/.bim//;
+#    print "$bfile_list[$_]\n";
 }
-
+#exit;
 
 use File::Path;
 use Cwd;

@@ -205,6 +205,9 @@ version: $rp_version
  --trio            for trio data.
  --triset STRING  for subset of trio datasets (can contain bimfiles)
  --idin STRING     ID inclusion list (before imputation, while ripping)
+
+ --sep_pca         create and use a separate PCA for each cohort (more precise)
+
  --mds STRING      mds-file (with studyindicator, (if necessary), 
                        NOMDS if no pcaer wished and analysis without covariates
  --coco STRING     comma separated PCA numbers
@@ -343,6 +346,7 @@ GetOptions(
     "help"=> \my $help,
     "mach"=> \my $mach_sw,
     "mds=s"=> \my $mds_name,
+    "sep_pca"=> \my $sep_pca,
     "addcov=s"=> \my $addcov_name,
     "idex=s"=> \my $idex_name,
     "idin=s"=> \my $idin_name,
@@ -1233,6 +1237,16 @@ my $dasudir = "$rootdir/dasu";
 my $bgdir = "$rootdir/cobg_dir_genome_wide";
 
 
+###################################################
+### separate PCA preparation
+#####################################################
+
+my $seppcadir = "$rootdir/pcaer_sep_sub";
+unless (-e $seppcadir) {
+    &mysystem ("mkdir $seppcadir");
+}
+
+
 
 
 
@@ -1367,6 +1381,7 @@ foreach my $bifi (@bimfli_files) {
 
 
 
+
 ###################################
 ### create submds
 ###################################
@@ -1374,39 +1389,98 @@ foreach my $bifi (@bimfli_files) {
 my $mds_name_sub = "$mds_name.sub";
 my $mds_age = -M $mds_name;
 
+unless ($sep_pca) {
+    unless ($result_name){
+	if ($mds_cols eq "ALL") {
+	    &mysystem ("cp $mds_name $mds_name_sub");
+	}
+	else {
+	    if ($mds_name ne "NOMDS") {
+		unless (-e $mds_name) {
+		    print "Error: mds-file <$mds_name> is not existing\n";
+		    if ($mds_name eq "") {
+			print "if you want to run analysis without covariates, use --mds NOMDS\n";
+			exit;
+		    }
+		}
+		unless (-e $mds_name_sub) {
+		    die $!." <$mds_name>" unless open MDSI, "< $mds_name";
+		    die $! unless open MDSO, "> $mds_name_sub";
+		    
+		    my @mds_arr = split ',' ,$mds_cols;
+		    #print "@mds_arr\n";
+		    my $line = <MDSI>;
+		    my @cells = &split_line($line);
+		    
+		    foreach (2..$#cells){
+			push @mds_arr, ($_-2) if ($cells[$_] =~ /^st/);
+			push @mds_arr, ($_-2) if ($cells[$_] =~ /SCORE/);
+		    }
+		    print MDSO "$cells[0]";
+		    print MDSO "\t$cells[1]";
+		    
 
-unless ($result_name){
-    if ($mds_cols eq "ALL") {
-	&mysystem ("cp $mds_name $mds_name_sub");
-    }
-    else {
-	if ($mds_name ne "NOMDS") {
-	    unless (-e $mds_name) {
-		print "Error: mds-file <$mds_name> is not existing\n";
-		if ($mds_name eq "") {
-		    print "if you want to run analysis without covariates, use --mds NOMDS\n";
-		    exit;
+		    
+		    foreach (@mds_arr){
+			my $cn = $_+2;
+			print MDSO "\t$cells[$cn]";
+		    }
+		    print MDSO "\n";
+		    
+		    while (my $line = <MDSI>){
+			my @cells = &split_line($line);
+			
+			print MDSO "$cells[0]";
+			print MDSO "\t$cells[1]";
+			
+			foreach (@mds_arr){
+			    my $cn = $_+2;
+			    print MDSO "\t$cells[$cn]";
+			}
+			
+			print MDSO "\n";
+		    }
+		    
+		    
+		    close MDSI;
+		    close MDSO;
+		}
+		else {
+		    my $sub_age = -M $mds_name_sub;
+		    die "sub is older than mds-file" if ($sub_age > $mds_age);
 		}
 	    }
-	    unless (-e $mds_name_sub) {
+	}
+    }
+
+}
+
+###################################
+### create submds.mds
+###################################
+
+my $mds_name_sub_mds = "$mds_name.sub.mds";
+
+unless ($sep_pca) {
+    unless ($result_name){
+	if ($mds_cols eq "ALL") {
+	    &mysystem ("cp $mds_name_sub $mds_name_sub_mds");
+	}
+	if ($mds_name ne "NOMDS") {
+	    unless (-e $mds_name_sub_mds) {
 		die $!." <$mds_name>" unless open MDSI, "< $mds_name";
-		die $! unless open MDSO, "> $mds_name_sub";
+		die $! unless open MDSO, "> $mds_name_sub_mds";
 		
 		my @mds_arr = split ',' ,$mds_cols;
-#print "@mds_arr\n";
+		#print "@mds_arr\n";
 		my $line = <MDSI>;
 		my @cells = &split_line($line);
 		
-		foreach (2..$#cells){
-		    push @mds_arr, ($_-2) if ($cells[$_] =~ /^st/);
-		    push @mds_arr, ($_-2) if ($cells[$_] =~ /SCORE/);
-		}
 		print MDSO "$cells[0]";
 		print MDSO "\t$cells[1]";
 		
-
-		
 		foreach (@mds_arr){
+		    die "wrong mds-number" if ($_ < 1);
 		    my $cn = $_+2;
 		    print MDSO "\t$cells[$cn]";
 		}
@@ -1431,66 +1505,9 @@ unless ($result_name){
 		close MDSO;
 	    }
 	    else {
-		my $sub_age = -M $mds_name_sub;
-		die "sub is older than mds-file" if ($sub_age > $mds_age);
+		my $submds_age = -M $mds_name_sub_mds;
+		die "submds is older than mds-file" if ($submds_age > $mds_age);
 	    }
-	}
-    }
-}
-
-
-
-###################################
-### create submds.mds
-###################################
-
-my $mds_name_sub_mds = "$mds_name.sub.mds";
-
-unless ($result_name){
-    if ($mds_cols eq "ALL") {
-	&mysystem ("cp $mds_name_sub $mds_name_sub_mds");
-    }
-    if ($mds_name ne "NOMDS") {
-	unless (-e $mds_name_sub_mds) {
-	    die $!." <$mds_name>" unless open MDSI, "< $mds_name";
-	    die $! unless open MDSO, "> $mds_name_sub_mds";
-	    
-	    my @mds_arr = split ',' ,$mds_cols;
-#print "@mds_arr\n";
-	    my $line = <MDSI>;
-	    my @cells = &split_line($line);
-	    
-	    print MDSO "$cells[0]";
-	    print MDSO "\t$cells[1]";
-	    
-	    foreach (@mds_arr){
-		die "wrong mds-number" if ($_ < 1);
-		my $cn = $_+2;
-		print MDSO "\t$cells[$cn]";
-	    }
-	    print MDSO "\n";
-	    
-	    while (my $line = <MDSI>){
-		my @cells = &split_line($line);
-		
-		print MDSO "$cells[0]";
-		print MDSO "\t$cells[1]";
-		
-		foreach (@mds_arr){
-		    my $cn = $_+2;
-		    print MDSO "\t$cells[$cn]";
-		}
-		
-		print MDSO "\n";
-	    }
-	    
-	    
-	    close MDSI;
-	    close MDSO;
-	}
-	else {
-	    my $submds_age = -M $mds_name_sub_mds;
-	    die "submds is older than mds-file" if ($submds_age > $mds_age);
 	}
     }
 }
@@ -1648,7 +1665,9 @@ if ($polyto_file ne "") {
 #print "sleep\n";
 #sleep(10);
 
+unless ($sep_pca) {
 unless ($result_name){
+    
     if ($mds_name ne "NOMDS") {
 	die $!." <$mds_name>" unless open MDSI, "< $mds_name";
 	while (my $line = <MDSI>){
@@ -1838,15 +1857,8 @@ unless ($result_name){
 	@bimfli_files_tmp = ();
     }
 
-
-
-
-
-    
-
-
 }
-
+}
 #exit;
 
 
@@ -1902,6 +1914,8 @@ if ($n_cdg > 1) {
 }
 
 
+
+
 #exit;
 
 
@@ -1930,120 +1944,121 @@ my $idin_str = "";
 my $addcov_str = "";
 
 
-
-unless ($result_name) {
-    if ($mds_name ne "NOMDS") {
-	if (-e $mds_name) {
-	    &mysystem ("rm -f $mds_name"); ## necessary since permissions do not allow for overwriting
-	}
-	&mysystem ("cp $rootdir/$mds_name .");
-	$co_str = "--mds $mds_name --coco  $mds_cols";
-    }
-    
-    if ($pheno_file ne "NOPHENO") {
-	&mysystem ("cp $rootdir/$pheno_file .") ;
-	$pheno_str = "--pheno $pheno_file";
-    }
-
-    if ($danscore_file ne "") {
-#	die "range file not specified" if ($range_file eq "");
-	&mysystem ("cp $rootdir/$danscore_file .") ;
-	if ($range_file eq "") {
-	    $range_file = "range";
-	    unless (-e "$rootdir/$range_file") {
-		die $! unless open RAFILE, "> $rootdir/$range_file";
-		print RAFILE "S1 0 0.00000005\n";
-		print RAFILE "S2 0 0.000001\n";
-		print RAFILE "S3 0 0.0001\n";
-		print RAFILE "S4 0 0.001\n";
-		print RAFILE "S5 0 0.01\n";
-		print RAFILE "S6 0 0.05\n";
-		print RAFILE "S7 0 0.1\n";
-		print RAFILE "S8 0 0.2\n";
-#		print RAFILE "S7 0 0.3\n";
-#		print RAFILE "S8 0 0.4\n";
-		print RAFILE "S9 0 0.5\n";
-		print RAFILE "S10 0 1\n";
-		close RAFILE;
+unless ($sep_pca) {
+    unless ($result_name) {
+	if ($mds_name ne "NOMDS") {
+	    if (-e $mds_name) {
+		&mysystem ("rm -f $mds_name"); ## necessary since permissions do not allow for overwriting
 	    }
-	}
-	&mysystem ("cp $rootdir/$range_file .") ;
-#	$pheno_str = "--pheno $pheno_file";
-    }
-
-    ##### create a permuted phenotype-file with seed $siperm
-    if ($siperm) {
-
-	$pheno_file = "$mds_name.perm$siperm";
-
-	unless (-e $pheno_file){
-
-	    print "create a permuted phenotype file\n";
-	    unless (-e $mds_name) {
-		print "permutation needs a covariate file now\n";
-		exit;
-	    }
-
-
-	    
-	    my @id_arr = ();
-	    my @pt_arr = ();
-	    
-	    die $!." <$mds_name>" unless open MDSI, "< $mds_name";
-	    my $header = <MDSI>;
-	    while (my $line = <MDSI>){
-		my @cells = &split_line($line);
-		
-		push @id_arr, "$cells[0]\t$cells[1]";
-		my $pt_loc = -9;
-		if ($cells[0] =~ /^cas_/) {
-		    $pt_loc = 2;
-		}
-		if ($cells[0] =~ /^con_/) {
-		    $pt_loc = 1;
-		}
-		push @pt_arr, $pt_loc;
-		
-	    }
-	    close MDSI;    
-	    srand ($siperm);
-	    &fisher_yates_shuffle (\@pt_arr);
-	    
-	    die $!." <$pheno_file>" unless open PO, "> $pheno_file";
-	    foreach my $cloc (0..$#id_arr){
-		print PO $id_arr[$cloc]."\t".$pt_arr[$cloc]."\n";
-	    }
-	    close PO;
-	}
-
-	$pheno_str = "--pheno $pheno_file";
-    }
-    
-    
-    if ($idex_name) {
-	&mysystem ("cp $rootdir/$idex_name .") ;
-	$idex_str = "--idex $idex_name";
-    }
-
-    if ($idin_name) {
-	&mysystem ("cp $rootdir/$idin_name .") ;
-	$idin_str = "--idin $idin_name";
-    }
-
-
-    if ($addcov_name) {
-	&mysystem ("cp $rootdir/$addcov_name .") ;
-	die $!."($addcov_name)" unless open FILE, "< $addcov_name";
-	my $line = <FILE>;
-	my @cells = split /\s+/, $line;
-	unless ($cells[0] eq "FID" && $cells[1] eq "IID") {
-	    print "Error: $addcov_name does not contain header FID IID PT....\n";
-	    exit;
+	    &mysystem ("cp $rootdir/$mds_name .");
+	    $co_str = "--mds $mds_name --coco  $mds_cols";
 	}
 	
-	$addcov_str = "--addcov $addcov_name";
+	if ($pheno_file ne "NOPHENO") {
+	    &mysystem ("cp $rootdir/$pheno_file .") ;
+	    $pheno_str = "--pheno $pheno_file";
+	}
+
+	if ($danscore_file ne "") {
+	    #	die "range file not specified" if ($range_file eq "");
+	    &mysystem ("cp $rootdir/$danscore_file .") ;
+	    if ($range_file eq "") {
+		$range_file = "range";
+		unless (-e "$rootdir/$range_file") {
+		    die $! unless open RAFILE, "> $rootdir/$range_file";
+		    print RAFILE "S1 0 0.00000005\n";
+		    print RAFILE "S2 0 0.000001\n";
+		    print RAFILE "S3 0 0.0001\n";
+		    print RAFILE "S4 0 0.001\n";
+		    print RAFILE "S5 0 0.01\n";
+		    print RAFILE "S6 0 0.05\n";
+		    print RAFILE "S7 0 0.1\n";
+		    print RAFILE "S8 0 0.2\n";
+		    #		print RAFILE "S7 0 0.3\n";
+		    #		print RAFILE "S8 0 0.4\n";
+		    print RAFILE "S9 0 0.5\n";
+		    print RAFILE "S10 0 1\n";
+		    close RAFILE;
+		}
+	    }
+	    &mysystem ("cp $rootdir/$range_file .") ;
+	    #	$pheno_str = "--pheno $pheno_file";
+	}
+
+	##### create a permuted phenotype-file with seed $siperm
+	if ($siperm) {
+
+	    $pheno_file = "$mds_name.perm$siperm";
+
+	    unless (-e $pheno_file){
+
+		print "create a permuted phenotype file\n";
+		unless (-e $mds_name) {
+		    print "permutation needs a covariate file now\n";
+		    exit;
+		}
+
+
+		
+		my @id_arr = ();
+		my @pt_arr = ();
+		
+		die $!." <$mds_name>" unless open MDSI, "< $mds_name";
+		my $header = <MDSI>;
+		while (my $line = <MDSI>){
+		    my @cells = &split_line($line);
+		    
+		    push @id_arr, "$cells[0]\t$cells[1]";
+		    my $pt_loc = -9;
+		    if ($cells[0] =~ /^cas_/) {
+			$pt_loc = 2;
+		    }
+		    if ($cells[0] =~ /^con_/) {
+			$pt_loc = 1;
+		    }
+		    push @pt_arr, $pt_loc;
+		    
+		}
+		close MDSI;    
+		srand ($siperm);
+		&fisher_yates_shuffle (\@pt_arr);
+		
+		die $!." <$pheno_file>" unless open PO, "> $pheno_file";
+		foreach my $cloc (0..$#id_arr){
+		    print PO $id_arr[$cloc]."\t".$pt_arr[$cloc]."\n";
+		}
+		close PO;
+	    }
+
+	    $pheno_str = "--pheno $pheno_file";
+	}
+	
+	
+	if ($idex_name) {
+	    &mysystem ("cp $rootdir/$idex_name .") ;
+	    $idex_str = "--idex $idex_name";
+	}
+
+	if ($idin_name) {
+	    &mysystem ("cp $rootdir/$idin_name .") ;
+	    $idin_str = "--idin $idin_name";
+	}
+
+
+	if ($addcov_name) {
+	    &mysystem ("cp $rootdir/$addcov_name .") ;
+	    die $!."($addcov_name)" unless open FILE, "< $addcov_name";
+	    my $line = <FILE>;
+	    my @cells = split /\s+/, $line;
+	    unless ($cells[0] eq "FID" && $cells[1] eq "IID") {
+		print "Error: $addcov_name does not contain header FID IID PT....\n";
+		exit;
+	    }
+	    
+	    $addcov_str = "--addcov $addcov_name";
+	}
+	
     }
-    
 }
 
 #print "co_str: $co_str\n";
@@ -2079,8 +2094,83 @@ my $n_nomap = 0;
 
 my %bg_in;
 
+
+
+
+###################################################################
+############### SEP PCA
+###################################################################
+
+
+if ($sep_pca) {
+my @sep_pca_str_single;
+my $sep_pca_str_comb = "pcaer --preferfam --prefercase --out $outname";
+
+
 unless (-e "$rootdir/daner_$outname.done") {
     unless ($result_name){
+	
+	#### stuff that is done on full datasets
+	foreach (@bimfli_files) {
+	    
+	    my $bfile = $_;
+
+	    my $bfile_bgs = "$bfile.bgs";
+	    my $bgs_bed_source = "$bgdir/$bfile_bgs";
+	    my $bgs_bed_target = "$seppcadir/$bfile_bgs";
+	    print "linking $bgs_bed_source.bed/bim/fam to $seppcadir\n";
+	    unless (-e "$bgs_bed_target.bed") {
+		&mysystem ("ln -s $bgs_bed_source.bed $bgs_bed_target.bed");
+	    }
+	    unless (-e "$bgs_bed_target.bim") {
+		&mysystem ("ln -s $bgs_bed_source.bim $bgs_bed_target.bim");
+	    }
+	    unless (-e "$bgs_bed_target.fam") {
+		&mysystem ("ln -s $bgs_bed_source.fam $bgs_bed_target.fam");
+	    }
+	    
+	    push @sep_pca_str_single, "pcaer --prefercase --out $bfile.bgs $bfile.bgs";
+	    $sep_pca_str_comb .= " $bfile.bgs";		
+
+	}
+	
+    }
+}		
+
+
+  foreach (@miss_scripts) {
+    print FILE1 "$_";
+  }
+close FILE1;
+
+die $! unless open FILE1, "> $seppcadir/start_pcaer.sh";
+foreach my $sep_pca_cmd (@sep_pca_str_single) {
+    print FILE1 "$sep_pca_cmd\n";
+}
+print FILE1 "$sep_pca_str_comb\n";
+close FILE1;
+&mysystem ("chmod u+x $seppcadir/start_pcaer.sh");
+
+
+print "\n###########################################################################\n";
+print "separate PCAs requested, please start these commands from the command line:\n\n";
+
+print "\tcd $seppcadir\n";
+print "\t./start_pcaer.sh\n\n";
+print "wait till all pcaer-jobs (_pc_*) ran through and restart postimp-pipeline\n";
+
+
+
+exit;
+
+}
+
+
+unless (-e "$rootdir/daner_$outname.done") {
+    unless ($result_name){
+	
+
+	## walk through chunks
 	foreach my $refind (@refind_arr) {
 	    
 	    
@@ -2092,7 +2182,6 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 	    foreach (@bimfli_files) {
 
-#	    print "bfile: $_, $refind\n";
 		
 		my $bfile = $_;
 
@@ -2355,6 +2444,12 @@ unless (-e "$rootdir/daner_$outname.done") {
 #    print @danerdir_arr." debug\n";
 #    exit;
 }
+
+
+
+
+
+
 
 
 
