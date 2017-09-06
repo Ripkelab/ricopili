@@ -202,7 +202,9 @@ my $plinkanc_script = "plink_anc";                    ### my.pipeline_tar
 my $wget_script = "my.wget";                          ### my.pipeline_tar
 my $prepvcf_script_filtnorm = "my.prepvcf_filtnorm";  ### my.pipeline_tar
 my $prepvcf_script_imp2 = "my.prepvcf_imp2";          ### my.pipeline_tar
-my $prepmm_script = "prepare_ref_mm";                 ### my.pipeline_tar
+my $prepmm_script_bgz = "prepare_ref_mm_bgz";         ### my.pipeline_tar
+my $prepmm_script_tabix = "prepare_ref_mm_tabix";     ### my.pipeline_tar
+my $prepmm_script_m3vcf = "prepare_ref_mm_m3vcf";     ### my.pipeline_tar
 my $vcf2bcf_script = "vcf2bcf";                       ### my.pipeline_tar
 my $filtnorm_translate_script = "filtnorm_translate_changes";                 ### my.pipeline_tar
 my $filtnorm_filter_script = "filtnorm_filter";                 ### my.pipeline_tar
@@ -776,7 +778,9 @@ $sjainfotxt = "$rootdir\t$command_line";
 
 my @job_vtools = ();
 my @job_btools1 = ();
-my @job_prepmm = ();
+my @job_prepmm_bgz = ();
+my @job_prepmm_tabix = ();
+my @job_prepmm_m3vcf = ();
 my @job_vcf2bcf = ();
 my @job_filtnormtra = ();
 my @job_filtnormfil = ();
@@ -1873,7 +1877,6 @@ foreach my $chrint ($chr_start..$chr_end){
 
     ######################################################################
 
-
     my $changes_file = "$hapout_name.legend.gz.rf.gz.changes.gz";
     my $filtnorm_trans_fini = $changes_file;
     $filtnorm_trans_fini =~ s/legend.gz.rf.gz.changes.gz/vcf.gz.fini/;
@@ -1882,7 +1885,7 @@ foreach my $chrint ($chr_start..$chr_end){
 
 	my $sys = "$filtnorm_translate_script --filtnorm $vcf_name_loc_filtnorm_reform --changes $changes_file";
 	push @job_filtnormtra, $sys;
-#	print "$sys\n";
+	print "$sys\n";
     }
 
 
@@ -1891,14 +1894,33 @@ foreach my $chrint ($chr_start..$chr_end){
 
     my $filtnorm_trans_file = $changes_file;
     $filtnorm_trans_file =~ s/legend.gz.rf.gz.changes.gz/vcf.gz/;
-    my $vcf_name_loc_filtnorm_prep_fini = $filtnorm_trans_file.".prep.fini";
+    my $vcf_name_loc_filtnorm_prep_bgz_fini = $filtnorm_trans_file.".bgz.fini";
 
-    unless (-e $vcf_name_loc_filtnorm_prep_fini) {
+    unless (-e $vcf_name_loc_filtnorm_prep_bgz_fini) {
+	my $sys = "$prepmm_script_bgz $filtnorm_trans_file";
+	push @job_prepmm_bgz, $sys;
+    }
 
-#	my $sys = "$prepmm_script --cpus $ncpus_multi $filtnorm_trans_file";
-	my $sys = "$prepmm_script $filtnorm_trans_file";
-	push @job_prepmm, $sys;
-#	print "$sys\n";
+    ###############################################################
+
+    my $filtnorm_trans_file = $changes_file;
+    $filtnorm_trans_file =~ s/legend.gz.rf.gz.changes.gz/vcf.gz/;
+    my $vcf_name_loc_filtnorm_prep_tabix_fini = $filtnorm_trans_file.".tabix.fini";
+
+    unless (-e $vcf_name_loc_filtnorm_prep_tabix_fini) {
+	my $sys = "$prepmm_script_tabix $filtnorm_trans_file";
+	push @job_prepmm_tabix, $sys;
+    }
+
+    ###############################################################
+
+    my $filtnorm_trans_file = $changes_file;
+    $filtnorm_trans_file =~ s/legend.gz.rf.gz.changes.gz/vcf.gz/;
+    my $vcf_name_loc_filtnorm_prep_m3vcf_fini = $filtnorm_trans_file.".m3vcf.fini";
+
+    unless (-e $vcf_name_loc_filtnorm_prep_m3vcf_fini) {
+	my $sys = "$prepmm_script_m3vcf $filtnorm_trans_file";
+	push @job_prepmm_m3vcf, $sys;
     }
 
 
@@ -2251,22 +2273,45 @@ if (@job_filtnormtra > 0 ) {
 #    exit;
 
 
-if (@job_prepmm > 0 ) {
+if (@job_prepmm_bgz > 0 ) {
     
     
-#    $sjaweek = 1;
     $sjadir = $rootdir;
-    $sjaname = "prep_minimac";
-#    $sjatime = 2 + $walltimeplus;
+    $sjaname = "prep_minimac_bgz";
+    $sjatime = 2 + $walltimeplus*5;
+    $sjamem = 8000;  ## each core, so mem request for the node is multi that
+    @sjaarray = @job_prepmm_bgz;
+    
+    &send_jobarray;
+}
+
+if (@job_prepmm_tabix > 0 ) {
+    
+    
+    $sjadir = $rootdir;
+    $sjaname = "prep_minimac_tabix";
+    $sjatime = 2 ;
+    $sjamem = 8000;  ## each core, so mem request for the node is multi that
+    @sjaarray = @job_prepmm_tabix;
+    
+    &send_jobarray;
+}
+
+if (@job_prepmm_m3vcf > 0 ) {
+    
+    
+    $sjadir = $rootdir;
+    $sjaname = "prep_minimac_m3vcf";
     $sjatime = 2 + $walltimeplus*5;
 #    $sjamulti = $ncpus_multi;
     $sjamem = 8000;  ## each core, so mem request for the node is multi that
-    @sjaarray = @job_prepmm;
+    @sjaarray = @job_prepmm_m3vcf;
     
     &send_jobarray;
-    
-    
 }
+
+
+exit;
 
 if (@job_vcf2bcf > 0 ) {
     
