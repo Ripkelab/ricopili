@@ -1882,7 +1882,7 @@ foreach my $chrint ($chr_start..$chr_end){
 
 	my $sys = "$filtnorm_translate_script --filtnorm $vcf_name_loc_filtnorm_reform --changes $changes_file";
 	push @job_filtnormtra, $sys;
-	print "$sys\n";
+#	print "$sys\n";
     }
 
 
@@ -1898,7 +1898,7 @@ foreach my $chrint ($chr_start..$chr_end){
 #	my $sys = "$prepmm_script --cpus $ncpus_multi $filtnorm_trans_file";
 	my $sys = "$prepmm_script $filtnorm_trans_file";
 	push @job_prepmm, $sys;
-	print "$sys\n";
+#	print "$sys\n";
     }
 
 
@@ -1915,7 +1915,7 @@ foreach my $chrint ($chr_start..$chr_end){
 
 	my $sys = "$vcf2bcf_script $vcf_name_loc";
 	push @job_vcf2bcf, $sys;
-	print "$sys\n";
+#	print "$sys\n";
     }
 #    print "debug: $bcf_name_loc_fini\n";
 #    exit;
