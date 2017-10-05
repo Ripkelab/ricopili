@@ -1211,7 +1211,7 @@ $refdir =~ s!/home/radon01/sripke/bakker_ripke/hapmap_ref!/psych/genetics_data/r
 if (-e "$refdir/pop_$popname") {
 
     $refdir = "$refdir/pop_$popname";
-    print "found ancestry specidic reference data for clumping and such: $refdir\n";
+    print "found ancestry specific reference data for clumping and such: $refdir\n";
 
 
 
