@@ -2269,17 +2269,13 @@ if (@job_filtnormtra > 0 ) {
 }
 
 
-#    print "debug\n";
-#    exit;
-
-
 if (@job_prepmm_bgz > 0 ) {
     
     
     $sjadir = $rootdir;
     $sjaname = "prep_minimac_bgz";
-    $sjatime = 2 + $walltimeplus*5;
-    $sjamem = 8000;  ## each core, so mem request for the node is multi that
+    $sjatime = 2 + $walltimeplus;
+    $sjamem = 2000;  ## each core, so mem request for the node is multi that
     @sjaarray = @job_prepmm_bgz;
     
     &send_jobarray;
@@ -2291,7 +2287,7 @@ if (@job_prepmm_tabix > 0 ) {
     $sjadir = $rootdir;
     $sjaname = "prep_minimac_tabix";
     $sjatime = 2 ;
-    $sjamem = 8000;  ## each core, so mem request for the node is multi that
+    $sjamem = 2000;  ## each core, so mem request for the node is multi that
     @sjaarray = @job_prepmm_tabix;
     
     &send_jobarray;
@@ -2304,14 +2300,14 @@ if (@job_prepmm_m3vcf > 0 ) {
     $sjaname = "prep_minimac_m3vcf";
     $sjatime = 2 + $walltimeplus*5;
 #    $sjamulti = $ncpus_multi;
-    $sjamem = 8000;  ## each core, so mem request for the node is multi that
+    $sjamem = 24000;  ## each core, so mem request for the node is multi that
     @sjaarray = @job_prepmm_m3vcf;
     
     &send_jobarray;
 }
 
 
-exit;
+#exit;
 
 if (@job_vcf2bcf > 0 ) {
     

@@ -190,6 +190,8 @@ GetOptions( "out=s"=> \$outname,
 	    "ref=s"=> \$reffile,
 	    "projection"=> \my $projection,
     "dfile=s"=> \my $dfile,
+    "longq"=> \my $longq,
+
 
     );
 
@@ -254,9 +256,45 @@ print "$rp_header\n";
 
 print ".......testing necessary binaries....\n";
 
+my @miss_scripts;
 my $err_scr = 0;
 
-if (1) { ### DEBUGG
+foreach my $scr_name (@test_scripts) {
+    my $scr_path = '';
+    
+    for my $path ( split /:/, $ENV{PATH} ) {
+	if ( -f "$path/$scr_name" && -x _ ) {
+	    print "$scr_name\tfound in $path\n";
+	    $scr_path = "$path/$scr_name";
+	    last;
+	}
+    }
+    if ( $scr_path eq  '') {
+	push @miss_scripts, "cp /home/unix/sripke/bin/$scr_name ./\n";
+	print "!!Error!! : No $scr_name command available\n" ;
+    }
+ 
+}
+
+
+
+
+if (@miss_scripts > 0) {
+  if (-e "get_scripts_on_broad.txt") {
+    print "please remove this file and restart: get_scripts_on_broad.txt\n";
+  }
+  die $! unless open FILE1, "> get_scripts_on_broad.txt";
+  foreach (@miss_scripts) {
+    print FILE1 "$_";
+  }
+  close FILE1;
+  print "exiting now -> have a look at get_scripts_on_broad.txt\n";
+  exit;
+
+}
+
+
+if (0) { ### DEBUGG
 die $! unless open FILE1, "> get_scripts_on_broad.txt";
 foreach my $scr_name (@test_scripts) {
     my $scr_path = '';
@@ -654,6 +692,7 @@ version: $rp_version
 
         --serial          no sending jobs to queue all in one run
                                -> usually only used for testing 
+        --longq          forces long queue for some jobs (bcomb)
 
    lisa: /home/gwas/pgc-samples/hapmap_ref/subchr/infosum_pos.sorted
    broad: /psych/genetics_data/ripke/references_outdated/hapmap_ref/subchr/infosum_pos.sorted
@@ -1091,6 +1130,9 @@ unless (-e "$bfile_me300.bim") {
     $sjadir = $pcaer_dir;
     $sjaname = "me300";
     $sjatime = 1;
+    if ($longq) {
+	$sjatime = 24;
+    }
     $sjamem = 3000;
     push @sjaarray, $cmd_str;
     
@@ -1316,6 +1358,9 @@ unless (-e "$bfile_mepr.bim") {
     $sjadir = "$pcaer_dir";
     $sjaname = "mepr";
     $sjatime = 2;
+    if ($longq) {
+	$sjatime = 24;
+    }
     $sjamem = 3000;
     push @sjaarray, $cmd_str;
 

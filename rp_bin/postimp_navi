@@ -2214,20 +2214,24 @@ if ($sep_pca) {
 	}		
 
 	if ($pcaer_count > 0) {
-	    die $! unless open FILE1, "> $seppcadir/start_pcaer.sh";
+	    my $start_file = "start_pcaer.sh";
+	    while (-e "$seppcadir/$start_file") {
+		$start_file .= ".s";
+	    }
+	    die $! unless open FILE1, "> $seppcadir/$start_file";
 	    foreach my $sep_pca_cmd (@sep_pca_str_single) {
 		print FILE1 "$sep_pca_cmd\n";
 	    }
 	    close FILE1;
 
-	    &mysystem ("chmod u+x $seppcadir/start_pcaer.sh");
+	    &mysystem ("chmod u+x $seppcadir/$start_file");
 	    
 	    
 	    print "\n###########################################################################\n";
 	    print "separate PCAs requested, please start these commands from the command line:\n\n";
 	    
 	    print "\tcd $seppcadir\n";
-	    print "\t./start_pcaer.sh\n\n";
+	    print "\t./$start_file\n\n";
 	    print "wait till all pcaer-jobs (_pc_*) ran through and restart postimp-pipeline\n";
 
 
@@ -2575,6 +2579,8 @@ unless (-e "$rootdir/daner_$outname.done") {
 #    exit;
 }
 
+#print "N dameta files: ".@dameta_files."\n";
+#exit;
 
 
 
@@ -3259,7 +3265,13 @@ if (@zehn == 0 ) {
 unless (-e "$reportdir/$daner_meta") {
     unless ($cox) {   
 	print "concatenate meta-results\n";
-	die "no dameta, remove daner_done" if (@dameta_files == 0);
+	if (@dameta_files == 0){
+	    print "****\nError: no dameta files in list\n";
+	    print "please remove daner_done:\n  $rootdir/daner_$outname.done\n";
+	    print "and also resmeta_done:\n  $rootdir/resmeta_$outname.done\n";
+	    print "and restart\n";
+	    die;
+	}
 #	    print "@dameta_files\n";
 #	    exit;
 #	chdir ($dametadir);
@@ -4394,6 +4406,8 @@ if (@qq_arr > 0) {
 #    print "qq done\n";
 #}
 
+print "debug2b\n";
+
 &mysystem ("cp $outname"."-qq.pdf $distdir/qq.$outname.pdf") unless (-e "$distdir/qq.$outname.pdf");
 unless ($nohet_sw) {
     &mysystem ("cp $outname.het"."-qq.pdf $distdir/qq.$outname.het.pdf") unless (-e "$distdir/qq.$outname.het.pdf");
@@ -4401,17 +4415,21 @@ unless ($nohet_sw) {
 
 
 unless (-e "manhattan.daner_$outname.gz.nog.pdf.empty") {
-    &mysystem ("$shrinkpdf_script manhattan.daner_$outname.gz.nog.pdf") unless (-e "orig.manhattan.daner_$outname.gz.nog.pdf");
+    unless (-e "$distdir/manhattan.nog.$outname.pdf") {
+	&mysystem ("$shrinkpdf_script manhattan.daner_$outname.gz.nog.pdf") unless (-e "orig.manhattan.daner_$outname.gz.nog.pdf");
 #    exit;
-    &mysystem ("cp manhattan.daner_$outname.gz.nog.pdf $distdir/manhattan.nog.$outname.pdf") unless (-e "$distdir/manhattan.nog.$outname.pdf");
+	&mysystem ("cp manhattan.daner_$outname.gz.nog.pdf $distdir/manhattan.nog.$outname.pdf");
+    }
 }
 unless (-e "manhattan.daner_$outname.gz.nog2.pdf.empty") {
-    &mysystem ("$shrinkpdf_script manhattan.daner_$outname.gz.nog2.pdf") unless (-e "orig.manhattan.daner_$outname.gz.nog2.pdf");
-    &mysystem ("cp manhattan.daner_$outname.gz.nog2.pdf $distdir/manhattan.nog2.$outname.pdf") unless (-e "$distdir/manhattan.nog2.$outname.pdf");
+    unless (-e "$distdir/manhattan.nog2.$outname.pdf") {
+	&mysystem ("$shrinkpdf_script manhattan.daner_$outname.gz.nog2.pdf") unless (-e "orig.manhattan.daner_$outname.gz.nog2.pdf");
+	&mysystem ("cp manhattan.daner_$outname.gz.nog2.pdf $distdir/manhattan.nog2.$outname.pdf") ;
+    }
 }
 
 
-
+print "debug3\n";
 if ($gwclump) {
     chdir "$distdir";
     my $sys_tmp  = "echo $clumpnavi2_script --noindel --pfile $daner_all --hq_f .05 --hq_i .9 --out $daner_all --clu_p1 1.0 --clu_p2 1.0 --clu_window 500 --clu_r2 0.1 --refdir $areat_refdir  | $blueprint_script -b \"prefix\" --wa 4 -j --na _clumpnav_$daner_all";
@@ -4450,7 +4468,7 @@ if ($gwclump) {
 	
 }
 
-
+print "debug4\n";
 
 my $numbers_file = "basic.$outname.num.xls";
 unless (-e "$distdir/$numbers_file") {
@@ -4469,7 +4487,7 @@ unless (-e "$distdir/$numbers_file") {
 
 
 
-
+print "debug5\n";
 
 
 if ($onlymeta) {
@@ -4502,7 +4520,7 @@ if ($onlymeta) {
 
 
 
-
+print "debug6\n";
 
 
 ###################################

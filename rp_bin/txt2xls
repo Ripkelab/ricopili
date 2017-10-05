@@ -227,8 +227,8 @@ while (my $line = <FILE>){
 	}
     }
     $lc++;
-    if ($lc > 3000){
-	print "cut at 3000 rows\n";
+    if ($lc > 2000){
+	print "cut at 2000 rows\n";
 	last;
     }
 

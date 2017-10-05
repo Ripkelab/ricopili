@@ -3852,8 +3852,8 @@ while (my $line = <BASIC>){
 		print "$gwas_a1_phase, $gwas_a1_i, $ld_info_phase_gwas\n";
 		print "$snp_txt, $repsnp_name\n";
 		
-		print "Error: with R2 of greater than 0.6, this is hard to believe,\n";
-		exit;
+		print "Error: with R2 of greater than 0.6, this is hard to believe, so excluding\n";
+#		exit;
 	    }
 	    push @problem_arr, $problem;
 #	    next;

@@ -1294,10 +1294,7 @@ unless ($danscore_file) {
 
 
 
-
-
-
-exit;
+#exit;
 &mysystem("rm -fr $workdir");
 
 

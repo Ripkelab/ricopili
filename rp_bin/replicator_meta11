@@ -2373,7 +2373,7 @@ foreach my $snp_name (keys %comb_snps) {
 	print REP "@cells\n";
 
 
-	if ($counts < 3000) {	
+	if ($counts < 3500) {	
 	    $worksheet_repl->write_row($lc, 0, \@cells,);
 	    
 	    $worksheet_repl->write($lc,8,$disc_p_hash{$snp_name} , $formatred) if ($disc_p_hash{$snp_name} < .05);
@@ -2718,7 +2718,7 @@ if (0) {
 print "check sign_test_expectation_v2.xls!!!\n";
 print "check common AT/CG SNPs!!!\n";
 print "---------------------------------------------------\n";
-print "check if you have too many entries here:\nout_name.missing.txt.sorted.xls\n";
+print "check if you have too many entries here:\n$out_name.missing.txt.sorted.xls\n";
 print "this is the final output file:\n$out_name.xls\n";
 print "---------------------------------------------------\n";
 

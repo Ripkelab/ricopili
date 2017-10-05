@@ -323,6 +323,14 @@ die "$usage\n" if ($ngt_max == 0);
 
 
 
+if ($dandir ne "NA") {
+    if (-e "$dandir/refdir") {
+	$refdir = `cat $dandir/refdir`;
+	chomp ($refdir);
+    }
+}
+
+
 
 
 my @prekno_arr;
@@ -330,8 +338,24 @@ my %prekno_hash;
 my %prekno_txt;
 
 
+unless ($prekno_file) {
 
-if ($prekno_file) {
+    my @gwascat_files = `ls -rt $refdir/gwascatalog.*.rp.txt`;
+    if (@gwascat_files > 0) {
+	print "using as gwas catalog file: ".$gwascat_files[$#gwascat_files]."\n";
+	$prekno_file = $gwascat_files[$#gwascat_files];
+	chomp($prekno_file)
+	    #	$prekno_txt = "--prekno $prekno_file";
+    }
+    else {
+	$prekno_file = "/psych/genetics_data/ripke/references_outdated/hapmap_ref/gwascatalog/0413/gwascatalog.txt.ow.short.new.sorted";
+    }
+#    sleep(3);
+
+}
+#exit;
+
+#if ($prekno_file) {
 
     &error ("$prekno_file not existing") unless open PF, "< $prekno_file";
     while (my $line =<PF>){
@@ -365,7 +389,7 @@ if ($prekno_file) {
     }
     close PF;
 
-}
+#}
 
 
 
@@ -461,12 +485,6 @@ if (0) {
 }
 #10,104470832,104870832
 
-if ($dandir ne "NA") {
-    if (-e "$dandir/refdir") {
-	$refdir = `cat $dandir/refdir`;
-	chomp ($refdir);
-    }
-}
 
 
 #print "refdir: $refdir\n";
