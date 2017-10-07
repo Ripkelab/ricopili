@@ -947,6 +947,9 @@ if (@cat_files == 0) {
     print 'cat gwascatalog.txt.ow | cut -f2,8,12,13,21,22,28 > gwascatalog.txt.ow.short'."\n";
     print 'awk \'$7<5.0e-08{if (length($2)> 25 ) {$2 = substr($2,1,15)"..."}; print $6,$3,$4,$4,$7,$2"("$1")"}\' gwascatalog.txt.ow.short | awk \'NF > 5\' > gwascatalog.txt.ow.short.ow'."\n";
     print 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short.ow > '."gwascatalog.$date.rp.txt\n";
+## IMPROVE HERE
+##    sed 's/(/ /' gwascatalog.Aug_2017.rp.txt | sort -k1,1 -k6,6  -k5,5g | awk '{key=$1" "$6; if (key in u) {} else {$6=$6"("$7;$7="";print; u[key]=1}}' > gwascatalog.Oct_2017.rp.txt
+##
     print 'gzip full'."\n";
 #    print ''."\n";
  #   print ''."\n";

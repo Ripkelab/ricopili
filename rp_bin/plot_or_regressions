@@ -1,0 +1,267 @@
+#!/usr/bin/perl
+use strict;
+
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
+#############################
+# read config file
+#############################
+
+my $rloc = &trans("rloc");
+
+###############################################
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+my $pcol=9;
+my $orcol_disc=10;
+my $orcol_repl=15;
+my $out="outname";
+
+
+##### help message
+my $usage = "
+Usage : $progname [options] [p-file] 
+
+version: $version
+
+  --pcol INT          column containing pvals (starts with 1), default = $pcol
+  --orcol_disc INT    column containing OR from discovery (starts with 1), default = $orcol_disc
+  --orcol_repl INT    column containing OR from replication (starts with 1), default = $orcol_repl
+#  --thresh     plot two vertical lines in addition to 4 SEs. format: VAL,VAL
+
+  --help        print this message and exit
+
+  --out STRING  for outfile
+
+
+
+  ############ for standalone users #####################
+   
+  --rloc STRING    directory containing R binary (default: $rloc)
+                      download here: http://cran.r-project.org/
+
+
+ --out is mandatory
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ 
+";
+
+
+use Getopt::Long;
+GetOptions( 
+    "pcol=i"=> \$pcol,
+    "orcol_disc=i"=> \$orcol_disc,
+    "orcol_repl=i"=> \$orcol_repl,
+    "help"=> \my $help,
+    "out=s"=> \$out,
+    "rloc=s"=> \$rloc,
+
+    );
+
+die "$usage\n" if $help;
+
+my $file = $ARGV[0];
+
+if ($out eq "outname") {
+    $out = "$file";
+}
+
+
+
+my $r_sys = "$rloc/R";
+if ($rloc eq "broadinstitute") {
+
+    $r_sys = "source /broad/software/scripts/useuse; use R-3.4; R";
+}
+else {
+    unless (-x "$rloc/R") {
+	print "Error: R binary not found in assigned plink directory(--rloc)\n";
+	exit;
+    }
+    else {
+	print "R binary found\n";
+    }
+}
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+
+
+die "file not existing" unless (-e $file);
+
+
+my $lc = 0;
+my $mind;
+my $maxd;
+die "$file: ".$! unless open FILE, "< $file";
+die "$file.ors: ".$! unless open HP, "> $file.ors";
+
+while (my $line = <FILE>){
+    my @cells = @{&split_line_ref(\$line)};
+    my $p=$cells[$pcol-1];
+    my $or_disc=$cells[$orcol_disc-1];
+    my $or_repl=$cells[$orcol_repl-1];
+    print HP "$p\t$or_disc\t$or_repl\n";
+
+    $lc++;
+}
+close FILE;
+close HP;
+
+#exit;
+
+
+
+## template with IMISS and PDFNAME to be changed
+my $R_hist_templ='
+
+##### from vassily Trubetskoy 2017
+
+library(data.table)
+library(readr)
+library(broom)
+library(ggplot2)
+library(gridExtra)
+library(scales)
+
+comparison_grid <- function(file_path, p_thresholds = c(5e-06, 5e-08, 5e-09, 5e-10)) {
+  # read in the data
+  dat <- read_tsv(file = file_path,
+                  col_names = c("P", "OR", "OR_rep"),
+                  skip = 1,
+                  col_types = cols(P = col_double(), OR = col_double(), OR_rep = col_double()))
+
+    # flip OR
+    or_is_flipped <- dat$OR < 1.0
+    dat[which(or_is_flipped), c("OR")] <- sapply(dat[which(or_is_flipped), c("OR")], function(x) 1.0/x)
+    dat[which(or_is_flipped), c("OR_rep")] <- sapply(dat[which(or_is_flipped), c("OR_rep")], function(x) 1.0/x)
+
+  plots <- list()
+  tables <- list()
+
+  for (p_i in seq_along(p_thresholds)) {
+    # subset using p-value threshold
+    dat_p <- dat[dat$P<p_thresholds[p_i],]
+
+    # fit our model
+    fit <- lm(log(OR_rep) ~ log(OR), dat_p)
+    tidy_fit <- tidy(fit)
+
+    # put together plot
+    plt <- ggplot(dat_p, aes(OR, OR_rep)) + geom_point(alpha=0.5) +
+      geom_abline(intercept = coef(fit)[1], slope = coef(fit)[2], col="red") +
+      geom_hline(yintercept = 1, linetype="dotted") +
+      geom_vline(xintercept = 1, linetype="dotted") +
+      scale_x_continuous(trans="log", breaks = trans_breaks("log", function(x) exp(x)), labels = trans_format("log", function(x) as.character(round(x, 3)))) +
+      scale_y_continuous(trans="log", breaks = trans_breaks("log", function(x) exp(x)), labels = trans_format("log", function(x) as.character(round(x, 3)))) +
+      xlab("log(OR)") + ylab("log(OR_rep)") +
+      geom_abline(intercept = 0, slope = 1, linetype="dashed", color="gray") +
+      ggtitle(paste("Comparison for p-values < ", as.character(p_thresholds[p_i]))) +
+      theme_bw() +
+      theme(aspect.ratio=1,
+            panel.grid.minor = element_blank(),
+            plot.title = element_text(size = 6),
+            axis.title=element_text(size=5),
+            plot.margin=unit(c(1,1,1,1), "mm"))
+
+    plots[[p_i]] <- ggplotGrob(plt)
+
+    # record table entries
+    pretty_fit <- tidy_fit[,c("term", "estimate", "std.error", "p.value")]
+    pretty_fit[,2:ncol(pretty_fit)] <- sapply(pretty_fit[,2:ncol(pretty_fit)], function(x) prettyNum(x, digits=3, format="G"))
+    pretty_fit$p_threshold <-rep(p_thresholds[p_i], 2)
+
+    tables[[p_i]] <- pretty_fit
+  }
+
+  # put together final table
+  all_fits <- rbindlist(tables)
+#  print(all_fits)
+  tbl <- tableGrob(all_fits, rows = NULL)
+
+  # display table + plot together into a grid
+  grid.arrange(grobs = plots, nrow = 2, ncol=2)
+  grid.arrange(tbl, newpage = T)
+}
+
+
+pdf("OUTNAME.pdf",7.8,6)
+comparison_grid("INNAME")
+dev.off()
+
+
+' ;
+
+
+## rework template
+my $R_hist_in = $R_hist_templ;
+$R_hist_in=~ s/OUTNAME/$out/g;
+$R_hist_in=~ s/INNAME/$file.ors/g;
+
+
+&a2file ("$file.hisplo.Rin", $R_hist_in);
+
+my $system="$r_sys --quiet --vanilla < $file.hisplo.Rin 2>/dev/null >/dev/null";
+#my $system="source /broad/software/scripts/useuse; use R-2.14; R --vanilla < $file.hisplo.Rin";
+&mysystem($system);
+
+
+print "success: $out.pdf\n";
+
+
+#exit;
+
+
+
+

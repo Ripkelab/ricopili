@@ -133,7 +133,10 @@ GetOptions(
     "cleanrun"=> \my $cleanrun,
 
 #   "repest"=> \my $repest,
- );
+    );
+
+#print "test: ".$ARGV[1]."\n";;
+#exit;
 
 if ($help || @ARGV != 0 || $areat_name eq "no_name" ){
     print "usage: $0 --basic file --rep file

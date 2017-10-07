@@ -2722,6 +2722,18 @@ print "check if you have too many entries here:\n$out_name.missing.txt.sorted.xl
 print "this is the final output file:\n$out_name.xls\n";
 print "---------------------------------------------------\n";
 
+
+
+
+
+print "main replicator finished\n";
+
+
+print ("trying this commmand: \nplot_or_regressions $out_name.rep.txt\n");
+&mysystem ("plot_or_regressions $out_name.rep.txt");
+
+
+
 exit;
 
 
@@ -2779,6 +2791,7 @@ foreach my $snp_name (keys %comb_snps) {
    &mysystem ("forest_plot2  --short --out $snp_name  --snp $snp_name --nhead 3 @forest_files");
 #   exit;
 }
+
 
 
 
@@ -3548,6 +3561,8 @@ $lc = 0;
 
 
 $workbook->close();
+
+
 
 
 
