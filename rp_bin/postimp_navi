@@ -2889,7 +2889,7 @@ if (@daner_dimeta_arr > 0) {
     
     $sjadir = $danerjobdir;
     $sjaname = "dadimeta";
-    $sjatime = 0;
+    $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @daner_dimeta_arr;
     
@@ -2903,7 +2903,7 @@ if (@daner_meta_arr > 0) {
     
     $sjadir = $danerjobdir;
     $sjaname = "dameta";
-    $sjatime = 0;
+    $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @daner_meta_arr;
     
@@ -3184,7 +3184,7 @@ if (@result_meta_arr > 0) {
     
     $sjadir = $reportdir;
     $sjaname = "resmet";
-    $sjatime = 0;
+    $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @result_meta_arr;
     
@@ -3966,7 +3966,7 @@ if (@areap_arr > 0) {
     
     $sjadir = $reportdir;
     $sjaname = "areaplot";
-    $sjatime = 0;
+    $sjatime = 1;
     $sjamem = 1000;
     @sjaarray = @areap_arr;
     
@@ -4003,7 +4003,7 @@ if ($regplot_file) {
 	
 	$sjadir = $reportdir;
 	$sjaname = "regplot";
-	$sjatime = 0;
+	$sjatime = 1;
 	$sjamem = 1000;
 	@sjaarray = @regplot_arr;
 	
@@ -4086,7 +4086,7 @@ if (@forestp_arr > 0) {
     
     $sjadir = $reportdir;
     $sjaname = "forestplot";
-    $sjatime = 0;
+    $sjatime = 1;
     $sjamem = 1000;
     @sjaarray = @forestp_arr;
     
@@ -4384,7 +4384,7 @@ if (@qq_arr > 0) {
     
     $sjadir = $reportdir;
     $sjaname = "qqplot";
-    $sjatime = 2;
+    $sjatime = 1;
     $sjamem = 3000;
     @sjaarray = @qq_arr;
     

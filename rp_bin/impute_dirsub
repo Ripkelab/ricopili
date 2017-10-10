@@ -2444,7 +2444,7 @@ if ($chucking_done == 0) {
 
 	$sjadir = $impute_dir;
 	$sjaname = "chuck";
-	$sjatime = 0;
+	$sjatime = 2;
 #	$sjatime = 1 if ($chuck_fini > 0);
 	$sjamem = 2000;
 	@sjaarray = @chuck_arr;

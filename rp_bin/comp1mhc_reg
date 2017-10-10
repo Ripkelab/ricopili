@@ -48,7 +48,8 @@ GetOptions(
    "help"=> \my $help,
    "meta"=> \my $meta,
    "m2eta"=> \my $meta2,
-   "repl"=> \my $repl,
+    "repl"=> \my $repl,
+    "repdisc"=> \my $repdisc,
    "incol=i"=> \$incol,
    "ldcol=i"=> \$ldcol,
    "pth=f"=> \$pth,
@@ -78,6 +79,7 @@ if ($help){
         --meta          do the same with meta-file (different columns)
         --meta2          do the same with meta-file (different columns)
         --repl          do the same with meta-file (different columns): remeta*rep.txt
+        --repdis        discovery pvalue from remeta file
            --r6         take r2 = 0.6 (works only for repl)
 
  created by Stephan Ripke 2012 at MGH, Boston, MA
@@ -131,6 +133,33 @@ if ($repl) {
 #    $frcol = 6; # ld friend column
 
 }
+
+if ($repdisc) {
+    $incol = 0; # index column 
+
+    $pvcol = 8; # ld friend column
+    $chrcol = 1; # ld friend column
+
+
+    $leftcol = 29; # ld friend column
+    $rightcol = 30; # ld friend column
+
+    if ($r6) {
+	$leftcol = 31; # ld friend column
+	$rightcol = 32; # ld friend column
+
+    }
+
+
+    $poscol = 2; # ld friend column
+
+#    $frcol = 6; # ld friend column
+
+}
+
+
+
+
 
 
 
@@ -369,6 +398,7 @@ if ($old_pvloc <= $pth) {
     my $pos_out = sprintf "%d",$old_left/1000000;
     print OUT "$old_pvloc --title $out_name.$cc.chr$old_chr --out $out_name.$cc.chr$old_chr.$pos_out"."mb --snp $old_index --area $old_chr,$old_left,$old_right\n";
     print POU "$old_pvloc $topold_index $old_chr $old_left $old_right $old_index\n";
+    $cc++;
 }
 
 
@@ -384,6 +414,7 @@ close FOR;
 #&mysystem ("mv $txt_name_sorted.regplot.tmp $txt_name_sorted.regplot");
 
 #print "old: $old_index, $old_left, $old_right\n";
+print "$cc regions\n";
 exit;
 
 

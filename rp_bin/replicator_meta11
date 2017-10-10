@@ -1194,11 +1194,19 @@ foreach my $repout (@dfile_arr) {
     my $possum_p6 = 0;
     my $nsum_p6 = 0;
     my @p_coll_p6;
+
+    
     my $possum_gws = 0;
     my $nsum_gws = 0;
     my @p_coll_gws;
 
+    my $possum_p8 = 0;
+    my $nsum_p8 = 0;
+    my @p_coll_p8;    
 
+    my $possum_p9h = 0;
+    my $nsum_p9h = 0;
+    my @p_coll_p9h;
 
     my $fill = "";
     $fill = "\t" if ($rep_count > 0);
@@ -1325,11 +1333,23 @@ foreach my $repout (@dfile_arr) {
 	    push @p_coll_p6, $cells[$snp_col]." $p_2_loc";
 	}
 	if ($disc_p_hash{$snp_name} <= 0.00000005) {
-
 	    $possum_gws++ if ($sumdir eq "+");
 	    $nsum_gws++ if ($sumdir eq "+" || $sumdir eq "0");
 	    push @p_coll_gws, $cells[$snp_col]." $p_2_loc";
 	}
+	if ($disc_p_hash{$snp_name} <= 0.00000001) {
+	    $possum_p8++ if ($sumdir eq "+");
+	    $nsum_p8++ if ($sumdir eq "+" || $sumdir eq "0");
+	    push @p_coll_p8, $cells[$snp_col]." $p_2_loc";
+	}
+	if ($disc_p_hash{$snp_name} <= 0.000000005) {
+	    $possum_p9h++ if ($sumdir eq "+");
+	    $nsum_p9h++ if ($sumdir eq "+" || $sumdir eq "0");
+	    push @p_coll_p9h, $cells[$snp_col]." $p_2_loc";
+	}
+
+	
+	
 
 
 	if ($disc_p_hash{$snp_name} == 0) {
@@ -1400,6 +1420,15 @@ foreach my $repout (@dfile_arr) {
     if ($nsum_gws > 0){
 	$ratio_gws = sprintf "%.2f",$possum_gws/$nsum_gws;
     }
+    my $ratio_p8 = "NA";
+    if ($nsum_p8 > 0){
+	$ratio_p8 = sprintf "%.2f",$possum_p8/$nsum_p8;
+    }
+    my $ratio_p9h = "NA";
+    if ($nsum_p9h > 0){
+	$ratio_p9h = sprintf "%.2f",$possum_p9h/$nsum_p9h;
+    }
+    
     
     my $nca_loc = $dfile_arr_cas{$repout};
     my $nco_loc = $dfile_arr_con{$repout};
@@ -1916,7 +1945,15 @@ my $nsum_p6 = 0;
 my @p_coll_p6;  
 my $possum_gws = 0;
 my $nsum_gws = 0;
-my @p_coll_gws;  
+my @p_coll_gws; 
+
+my $possum_p8 = 0;
+my $nsum_p8 = 0;
+my @p_coll_p8;    
+
+my $possum_p9h = 0;
+my $nsum_p9h = 0;
+my @p_coll_p9h; 
 
 my $counts = 0 ;
 
@@ -2027,11 +2064,27 @@ foreach my $snp_name (keys %comb_snps) {
 		$nsum_p6++ if ($sumdir eq "+" || $sumdir eq "0");
 		push @p_coll_p6, $cells[$snp_col]." $p_2_loc";
 	    }
+
+
+	    
 	    if ($disc_p_hash{$snp_name} <= 0.00000005) {
 		$possum_gws++ if ($sumdir eq "+");
 		$nsum_gws++ if ($sumdir eq "+" || $sumdir eq "0");
 		push @p_coll_gws, $cells[$snp_col]." $p_2_loc";
 	    }
+
+	    if ($disc_p_hash{$snp_name} <= 0.00000001) {
+		$possum_p8++ if ($sumdir eq "+");
+		$nsum_p8++ if ($sumdir eq "+" || $sumdir eq "0");
+		push @p_coll_p8, $cells[$snp_col]." $p_2_loc";
+	    }
+	    if ($disc_p_hash{$snp_name} <= 0.000000005) {
+		$possum_p9h++ if ($sumdir eq "+");
+		$nsum_p9h++ if ($sumdir eq "+" || $sumdir eq "0");
+		push @p_coll_p9h, $cells[$snp_col]." $p_2_loc";
+	    }
+
+	    
 
 #	}
     }
@@ -2502,6 +2555,15 @@ my $ratio_gws = "NA";
 if ($nsum_gws > 0){
     $ratio_gws = sprintf "%.2f",$possum_gws/$nsum_gws;
 }
+my $ratio_p8 = "NA";
+if ($nsum_p8 > 0){
+    $ratio_p8 = sprintf "%.2f",$possum_p8/$nsum_p8;
+}
+my $ratio_p9h = "NA";
+if ($nsum_p9h > 0){
+    $ratio_p9h = sprintf "%.2f",$possum_p9h/$nsum_p9h;
+}
+
 
 #my $rc = $rep_count +2 ;
 
@@ -2562,6 +2624,44 @@ if ($phi >5.0e-08) {
 
 $rc++;
 push @repsum,"REPLICATION\t5.0e-08\t$possum_gws\t$nsum_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_gws\t$nca_glob\t$nco_glob";
+
+
+
+   
+$rc++;
+push @repsum,"REPLICATION\t1.0e-08\t$possum_p8\t$nsum_p8\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p8\t$nca_glob\t$nco_glob";
+$rc++;
+push @repsum,"REPLICATION\t5.0e-09\t$possum_p9h\t$nsum_p9h\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p9h\t$nca_glob\t$nco_glob";
+
+
+$rc++;
+my $possum_gws_p8 = $possum_gws-$possum_p8;
+my $nsum_gws_p8 = $nsum_gws-$nsum_p8;
+my $ratio_gws_p8 = "NA";
+if ($nsum_gws_p8 > 0){
+    $ratio_gws_p8 = sprintf "%.2f",$possum_gws_p8/$nsum_gws_p8;
+}
+push @repsum,"REPLICATION\t5.0e-08_to_1.0e-08\t$possum_gws_p8\t$nsum_gws_p8\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_gws_p8\t$nca_glob\t$nco_glob";
+
+$rc++;
+my $possum_p6_gws = $possum_p6-$possum_gws;
+my $nsum_p6_gws = $nsum_p6-$nsum_gws;
+my $ratio_p6_gws = "NA";
+if ($nsum_p6_gws > 0){
+    $ratio_p6_gws = sprintf "%.2f",$possum_p6_gws/$nsum_p6_gws;
+}
+push @repsum,"REPLICATION\t1.0e-06_to_1.0e-08\t$possum_p6_gws\t$nsum_p6_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p6_gws\t$nca_glob\t$nco_glob";
+
+$rc++;
+my $possum_p5_p6 = $possum_p5-$possum_p6;
+my $nsum_p5_p6 = $nsum_p5-$nsum_p6;
+my $ratio_p5_p6 = "NA";
+if ($nsum_p5_p6 > 0){
+    $ratio_p5_p6 = sprintf "%.2f",$possum_p5_p6/$nsum_p5_p6;
+}
+push @repsum,"REPLICATION\t1.0e-05_to_1.0e-06\t$possum_p5_p6\t$nsum_p5_p6\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p5_p6\t$nca_glob\t$nco_glob";
+
+
 if (0) {
     if (@p_coll_gws > 0 ) {
 	my $nsnps = &qqplot ("qq.gws.comb.$out_name",@p_coll_gws);
