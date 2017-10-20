@@ -1295,9 +1295,11 @@ unless (-e "datasets_info") {
 	my $bitemp = $_;
 	$bitemp =~ s/.bim$//;
 
+	print "bitemp: $bitemp\n";
 	my $dasudir_loc_qc1 = "$dasudir"."qc1_$bitemp";
 	$dasudir_loc_qc1 .= ".hg19.ch.fl";
 #	print "start: $dasudir_loc_qc1  \n";
+	
 	unless (-e $dasudir_loc_qc1) {
 	    my $tmpdir = $dasudir_loc_qc1;
 
@@ -1320,8 +1322,10 @@ unless (-e "datasets_info") {
     &mysystem ("cp datasets_info.tmp datasets_info");
 
 
-#    exit;
+
 }
+
+#exit;
 #else {
 
 die $! unless open BF, "< datasets_info";

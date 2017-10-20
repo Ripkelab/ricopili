@@ -24,7 +24,9 @@ $progname =~ s!^.*/!!;
 
 my $pcol=9;
 my $orcol_disc=10;
+my $secol_disc=11;
 my $orcol_repl=15;
+my $secol_repl=16;
 my $out="outname";
 
 
@@ -151,8 +153,10 @@ while (my $line = <FILE>){
     my @cells = @{&split_line_ref(\$line)};
     my $p=$cells[$pcol-1];
     my $or_disc=$cells[$orcol_disc-1];
+    my $se_disc=$cells[$secol_disc-1];
     my $or_repl=$cells[$orcol_repl-1];
-    print HP "$p\t$or_disc\t$or_repl\n";
+    my $se_repl=$cells[$secol_repl-1];
+    print HP "$p $or_disc $se_disc $or_repl $se_repl\n";
 
     $lc++;
 }
@@ -167,7 +171,6 @@ close HP;
 my $R_hist_templ='
 
 ##### from vassily Trubetskoy 2017
-
 library(data.table)
 library(readr)
 library(broom)
@@ -175,66 +178,103 @@ library(ggplot2)
 library(gridExtra)
 library(scales)
 
-comparison_grid <- function(file_path, p_thresholds = c(5e-06, 5e-08, 5e-09, 5e-10)) {
+comparison_grid <- function(file_path,
+                            p_ranges = list(c(-Inf, 1e-06), c(-Inf, 5e-08), c(-Inf, 1e-08), c(-Inf, 5e-09), c(5e-08, 1e-06), c(1e-8, 5e-08)),
+                            regression_method = \'wls\',
+                            sample_size = 65205) {
   # read in the data
-  dat <- read_tsv(file = file_path,
-                  col_names = c("P", "OR", "OR_rep"),
+  dat <- read_delim(file = file_path,
+                  delim = \' \',
+                  col_names = c(\'P\', \'OR\', \'SE\', \'OR_rep\', \'SE_rep\'),
                   skip = 1,
-                  col_types = cols(P = col_double(), OR = col_double(), OR_rep = col_double()))
+                  col_types = cols(P = col_double(), OR = col_double(), SE = col_double(), OR_rep = col_double(), SE_rep = col_double()))
 
-    # flip OR
-    or_is_flipped <- dat$OR < 1.0
-    dat[which(or_is_flipped), c("OR")] <- sapply(dat[which(or_is_flipped), c("OR")], function(x) 1.0/x)
-    dat[which(or_is_flipped), c("OR_rep")] <- sapply(dat[which(or_is_flipped), c("OR_rep")], function(x) 1.0/x)
+  # flip OR
+  or_is_flipped <- dat$OR < 1.0
+  dat[which(or_is_flipped), c(\'OR\')] <- sapply(dat[which(or_is_flipped), c(\'OR\')], function(x) 1.0/x)
+  dat[which(or_is_flipped), c(\'OR_rep\')] <- sapply(dat[which(or_is_flipped), c(\'OR_rep\')], function(x) 1.0/x)
+
+  # add OR variance
+  dat[,c(\'var_rep\')] <- sapply(dat[,c(\'SE_rep\')], function(se) sample_size * se * se)
 
   plots <- list()
   tables <- list()
 
-  for (p_i in seq_along(p_thresholds)) {
+  max_threshold <- max(unlist(lapply(p_ranges, max)))
+  max_log_OR <- max(log(dat[dat$P < max_threshold, c(\'OR\')]))
+
+  for (p_i in seq_along(p_ranges)) {
     # subset using p-value threshold
-    dat_p <- dat[dat$P<p_thresholds[p_i],]
+    dat_p <- dat[dat$P>p_ranges[[p_i]][1] & dat$P<p_ranges[[p_i]][2],]
+
+    #browser()
 
     # fit our model
-    fit <- lm(log(OR_rep) ~ log(OR), dat_p)
+    if (regression_method == \'ols\') {
+      fit <- lm(log(OR_rep) ~ log(OR), dat_p)
+    } else if (regression_method == \'wls\') {
+      # weight by inverse variance
+      # the variance of the log(OR) is the second order taylor approximation of the log transform of the OR
+      fit <- lm(log(OR_rep) ~ log(OR), dat_p, weights=1.0/(var_rep/(OR_rep^2)))
+    }
     tidy_fit <- tidy(fit)
+
+
+    # pull the slope for annotation on the plot
+    slope_data <- data.frame(label=paste0(\'slope: \', prettyNum(tidy_fit$estimate[2], digits=3),
+                                         \'(\', prettyNum(tidy_fit$std.error[2], digits=2), \')\'),
+                             x=exp(0.01),
+                             y=exp(max(log(dat_p$OR_rep))))
+
+
+    if (p_ranges[[p_i]][1] == -Inf) {
+      title <- paste0(\'p-vals < \', p_ranges[[p_i]][2], \'; N=\', nrow(dat_p), \'; \', regression_method,\' regression\')
+    } else{
+      title <- paste0(p_ranges[[p_i]][1], \' < p-vals < \', p_ranges[[p_i]][2], \'; N=\', nrow(dat_p), \'; \', regression_method,\' regression\')
+    }
 
     # put together plot
     plt <- ggplot(dat_p, aes(OR, OR_rep)) + geom_point(alpha=0.5) +
-      geom_abline(intercept = coef(fit)[1], slope = coef(fit)[2], col="red") +
-      geom_hline(yintercept = 1, linetype="dotted") +
-      geom_vline(xintercept = 1, linetype="dotted") +
-      scale_x_continuous(trans="log", breaks = trans_breaks("log", function(x) exp(x)), labels = trans_format("log", function(x) as.character(round(x, 3)))) +
+      geom_abline(intercept = coef(fit)[1], slope = coef(fit)[2], col=\'red\') +
+      geom_hline(yintercept = 1, linetype=\'dotted\') +
+      geom_vline(xintercept = 1, linetype=\'dotted\') +
+      scale_x_continuous(trans="log", breaks = trans_breaks("log", function(x) exp(x)), labels = trans_format("log", function(x) as.character(round(x, 3))),limits = c(exp(0.01), exp(max_log_OR))) +
       scale_y_continuous(trans="log", breaks = trans_breaks("log", function(x) exp(x)), labels = trans_format("log", function(x) as.character(round(x, 3)))) +
-      xlab("log(OR)") + ylab("log(OR_rep)") +
-      geom_abline(intercept = 0, slope = 1, linetype="dashed", color="gray") +
-      ggtitle(paste("Comparison for p-values < ", as.character(p_thresholds[p_i]))) +
+      xlab(\'log(OR)\') + ylab(\'log(OR_rep)\') +
+      geom_text(data=slope_data, mapping=aes(label=label, x=x, y=y), col=\'red\', size=3, hjust=\'inward\', vjust=\'inward\') +
+      geom_abline(intercept = 0, slope = 1, linetype=\'dashed\', color=\'gray\') +
+      ggtitle(title) +
       theme_bw() +
       theme(aspect.ratio=1,
             panel.grid.minor = element_blank(),
             plot.title = element_text(size = 6),
-            axis.title=element_text(size=5),
-            plot.margin=unit(c(1,1,1,1), "mm"))
+            axis.title.x = element_text(size=5, margin = margin(t = 0, r = 0, b = 0, l = 0)),
+            axis.text.x = element_text(size=5, angle=45),
+            axis.text.y = element_text(size=5),
+            axis.title.y = element_text(size=5, margin = margin(t = 0, r = 0, b = 0, l = 0)),
+            plot.margin = unit(c(1,1,1,1), "mm"))
+
+    # browser()
 
     plots[[p_i]] <- ggplotGrob(plt)
 
     # record table entries
-    pretty_fit <- tidy_fit[,c("term", "estimate", "std.error", "p.value")]
-    pretty_fit[,2:ncol(pretty_fit)] <- sapply(pretty_fit[,2:ncol(pretty_fit)], function(x) prettyNum(x, digits=3, format="G"))
-    pretty_fit$p_threshold <-rep(p_thresholds[p_i], 2)
+    pretty_fit <- tidy_fit[,c(\'term\', \'estimate\', \'std.error\', \'p.value\')]
+    pretty_fit[,2:ncol(pretty_fit)] <- sapply(pretty_fit[,2:ncol(pretty_fit)], function(x) prettyNum(x, digits=3, format=\'G\'))
+    pretty_fit$p_range <-rep(paste(p_ranges[[p_i]], collapse = \':\'), 2)
 
     tables[[p_i]] <- pretty_fit
   }
 
   # put together final table
   all_fits <- rbindlist(tables)
-#  print(all_fits)
+  print(all_fits)
   tbl <- tableGrob(all_fits, rows = NULL)
 
   # display table + plot together into a grid
-  grid.arrange(grobs = plots, nrow = 2, ncol=2)
+  grid.arrange(grobs = plots, nrow = 3, ncol=2)
   grid.arrange(tbl, newpage = T)
 }
-
 
 pdf("OUTNAME.pdf",7.8,6)
 comparison_grid("INNAME")

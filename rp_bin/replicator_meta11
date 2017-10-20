@@ -2650,7 +2650,7 @@ my $ratio_p6_gws = "NA";
 if ($nsum_p6_gws > 0){
     $ratio_p6_gws = sprintf "%.2f",$possum_p6_gws/$nsum_p6_gws;
 }
-push @repsum,"REPLICATION\t1.0e-06_to_1.0e-08\t$possum_p6_gws\t$nsum_p6_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p6_gws\t$nca_glob\t$nco_glob";
+push @repsum,"REPLICATION\t1.0e-06_to_5.0e-08\t$possum_p6_gws\t$nsum_p6_gws\t=BINOMDIST(D$rc-C$rc,D$rc,0.5,TRUE)\t$ratio_p6_gws\t$nca_glob\t$nco_glob";
 
 $rc++;
 my $possum_p5_p6 = $possum_p5-$possum_p6;
