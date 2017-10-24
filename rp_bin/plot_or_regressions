@@ -195,7 +195,9 @@ comparison_grid <- function(file_path,
   dat[which(or_is_flipped), c(\'OR_rep\')] <- sapply(dat[which(or_is_flipped), c(\'OR_rep\')], function(x) 1.0/x)
 
   # add OR variance
+  # the variance of the log(OR) is the second order taylor approximation of the log transform of the OR
   dat[,c(\'var_rep\')] <- sapply(dat[,c(\'SE_rep\')], function(se) sample_size * se * se)
+  dat[,c(\'weights\')] <- 1.0/(dat$var_rep/(dat$OR_rep^2))
 
   plots <- list()
   tables <- list()
@@ -207,15 +209,16 @@ comparison_grid <- function(file_path,
     # subset using p-value threshold
     dat_p <- dat[dat$P>p_ranges[[p_i]][1] & dat$P<p_ranges[[p_i]][2],]
 
-    #browser()
-
     # fit our model
     if (regression_method == \'ols\') {
       fit <- lm(log(OR_rep) ~ log(OR), dat_p)
+      plt <- ggplot(dat_p, aes(OR, OR_rep)) + geom_point(alpha=0.5)
     } else if (regression_method == \'wls\') {
       # weight by inverse variance
-      # the variance of the log(OR) is the second order taylor approximation of the log transform of the OR
-      fit <- lm(log(OR_rep) ~ log(OR), dat_p, weights=1.0/(var_rep/(OR_rep^2)))
+      fit <- lm(log(OR_rep) ~ log(OR), dat_p, weights=weights)
+      plt <- ggplot(dat_p, aes(OR, OR_rep)) + geom_point(alpha=0.5, aes(color=weights)) + scale_colour_gradient(low=\'steelblue\', high=\'darkred\')
+    } else {
+      stop(\'Please enter a valid valid for regression method: ols, wls\')
     }
     tidy_fit <- tidy(fit)
 
@@ -234,7 +237,7 @@ comparison_grid <- function(file_path,
     }
 
     # put together plot
-    plt <- ggplot(dat_p, aes(OR, OR_rep)) + geom_point(alpha=0.5) +
+    plt <- plt +
       geom_abline(intercept = coef(fit)[1], slope = coef(fit)[2], col=\'red\') +
       geom_hline(yintercept = 1, linetype=\'dotted\') +
       geom_vline(xintercept = 1, linetype=\'dotted\') +
@@ -253,8 +256,6 @@ comparison_grid <- function(file_path,
             axis.text.y = element_text(size=5),
             axis.title.y = element_text(size=5, margin = margin(t = 0, r = 0, b = 0, l = 0)),
             plot.margin = unit(c(1,1,1,1), "mm"))
-
-    # browser()
 
     plots[[p_i]] <- ggplotGrob(plt)
 
@@ -275,6 +276,7 @@ comparison_grid <- function(file_path,
   grid.arrange(grobs = plots, nrow = 3, ncol=2)
   grid.arrange(tbl, newpage = T)
 }
+
 
 pdf("OUTNAME.pdf",7.8,6)
 comparison_grid("INNAME")

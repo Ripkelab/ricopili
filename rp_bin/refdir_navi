@@ -2301,7 +2301,7 @@ if (@job_prepmm_m3vcf > 0 ) {
     
     $sjadir = $rootdir;
     $sjaname = "prep_minimac_m3vcf";
-    $sjatime = 2 + $walltimeplus*5;
+    $sjatime = 2 + $walltimeplus * 10;
 #    $sjamulti = $ncpus_multi;
     $sjamem = 24000;  ## each core, so mem request for the node is multi that
     @sjaarray = @job_prepmm_m3vcf;

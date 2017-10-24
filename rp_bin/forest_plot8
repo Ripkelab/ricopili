@@ -152,6 +152,10 @@ my @file_list = @ARGV;
 my @danerdirs = ();
 my @danerstr = ();
 
+if ($chr_loc == 23) {
+    $chr_loc = "X";
+}
+
 if ($danerdirs) {
     die "$! ($rootdir/$danerdirs)" unless open DD, "< $rootdir/$danerdirs";
     while (my $cd = <DD>){
@@ -168,9 +172,10 @@ if ($danerdirs) {
 #	    print "";
 	    chomp($line);    
 	    my $refind = $line;
-	    if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
-		$refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
+	    if ($refind =~ /chr[0-9X]*_[0-9]*_[0-9]*/){
+		$refind =~ s/.*(chr[0-9X]*_[0-9]*_[0-9]*).*/\1/;
 	    }
+#	    print "refind: $refind\n";
 	    my @tcells = split /_/, $refind;
 	    my $mega_start = $tcells[1];
 	    my $mega_end = $tcells[2];
@@ -193,6 +198,8 @@ if ($danerdirs) {
 		    }
 		}
 	    }
+#	    print "out: ".$cd."/".$line."\n";
+	    
 	}
 	close DL;
 	push @danerdirs, $_;
@@ -524,9 +531,13 @@ my %hr;
 
 my @farr_tmp ;
 
-print "start\n";
+#ffprint "start\n";
+if (@file_list == 0) {
+    print "Error: no input files\n";
+    exit;
+}
 foreach my $fl (@file_list) {
-#    print "fl: $fl\n";
+    print "fl: $fl\n";
     unless ($fl =~ /^\//){
 	push @farr_tmp, "$rootdir/$fl";
     }
@@ -535,6 +546,7 @@ foreach my $fl (@file_list) {
     }
 }
 @file_list = @farr_tmp;
+
 #exit;
 
 my %head_files;
@@ -591,7 +603,7 @@ foreach (0..$#file_list) {
 #exit;
 
 
-
+#print "debug3\n";
 
 ########################################
 ## meta including heterogeneity
@@ -1382,8 +1394,13 @@ $R_templ_for =~ s/LIBRARY/$lib_txt/g ;
 
 &mysystem("cp $forest_file.pdf $rootdir");
 
-&mysystem ("tar -cvzf $forest_file.pdf.tar.gz R_forest_$out.in_tmp $forest_file");
-&mysystem ("cp $forest_file.pdf.tar.gz $rootdir");
+my $tarfile = "$forest_file.pdf.tar.gz";
+$tarfile =~ s/:/_/g;
+
+&mysystem ("tar -cvzf $tarfile R_forest_$out.in_tmp $forest_file");
+&mysystem ("cp $tarfile $rootdir");
+
+chdir($rootdir);
 
 &mysystem ("rm -rf $workdir");
 

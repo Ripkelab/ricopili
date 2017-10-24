@@ -17,9 +17,37 @@ use Ricopili::Utils qw(trans);
 
 my $ldsc = &trans("ldloc");
 
+my $pop_prev = 0.01;
+use Getopt::Long;
+GetOptions( 
+    "pop_prev=f"=> \$pop_prev,
+    "help"=> \my $help,
+
+    );
+
+if ($help){
+    print "usage: my.ldsc2 danerfile
+
+      options:
+
+        --help               this help-text
+        --pop_prev FLOAT     population prevalence      
+
+ created by Stephan Ripke 2016 at MGH, Boston, MA
+ in the frame of the PGC
+";
+    exit;
+}
+
+
 ###########################################
 
 my $danerfile = $ARGV[0];
+
+if ($danerfile eq ""){
+    print "please give danerfile\n";
+    exit;
+}
 
 
 ##########################################
@@ -125,10 +153,8 @@ print "ratio: $sample_prev\n";
 
 
 #exit;
-my $pop_prev = 0.01;
-if ($danerfile =~ /mdd/ || $danerfile =~ /MDD/) {
-    $pop_prev = 0.1;
-}
+
+
 
 ## this is just one, intercept
 $sys = "$ldsc_sys"."ldsc.py --h2 $danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out ldsc.h2.$danerfile.observed";
