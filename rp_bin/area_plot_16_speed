@@ -1120,8 +1120,8 @@ print "create daner collection.....\n";
 
 	$imatch++;
     }
-    if ($imatch == 0) {
-	&mysystem ("cat $refdir/$info_files[0] >> $info_file");
+if ($imatch == 0) {
+    &mysystem ("cat $refdir/$info_files[0] >> $info_file");
 	my $tped_loc = $info_files[0];
 	my $tfam_loc = $info_files[0];
 	## write out tped file

@@ -1067,7 +1067,6 @@ print "\n";
 #############################
 # write config file to home directory
 #############################
-print "Please enter your initials (2 letters):\n";
 if ($old_initials ne "NA") {
     print " -> Do you want to use the entry found in the old $conf_file? ($old_initials) (y or n)\n";
     while (1) {
@@ -1089,8 +1088,17 @@ if ($old_initials ne "NA") {
 	}
 	else {print "Please answer with y or n.\n";}
     }
-}    
-
+}
+else {
+    print "Please enter your initials (2 letters):\n";
+    while (1) {
+	$initials = lc <>;
+	chomp $initials;
+	if (length($initials) == 2) {last;}
+	else {print "Make sure initials are 2 letters!\n";}
+    }
+}
+print "\n";
 
 print "Please enter your email address:\n";
 if ($old_email ne "NA") {
@@ -1105,6 +1113,7 @@ if ($old_email ne "NA") {
 	    while (1) {
 		$email = lc <>;
 		chomp $email;
+		last;
 	    }
 	    
 	    last;
@@ -1112,7 +1121,13 @@ if ($old_email ne "NA") {
 	else {print "Please answer with y or n.\n";}
     }
 }
+else {
 
+    my $email = <>;
+    chomp $email;
+
+}
+print "\n";
 
 
 my $defall = 0;
