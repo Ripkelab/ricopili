@@ -104,8 +104,8 @@ options to change these values:
 
   --mind NUM        include only IDs with missing-rate < NUM
   --geno NUM        include only SNPs with missing-rate < NUM
-  --maf  NUM        include only SNPs with missing-rate > NUM
-  --midi NUM        include only SNPs with missing-rate-difference < NUM
+  --maf  NUM        include only SNPs with MAF > NUM
+  --midi NUM        include only SNPs with case/control missing-rate-difference < NUM
   --pre_geno NUM    include only SNPs with missing-rate < NUM (before ID filter)
   --imend INT       number of mendelian errors per ID
   --lmend INT       max number of mendelian errors per SNP

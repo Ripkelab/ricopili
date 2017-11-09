@@ -1100,6 +1100,8 @@ else {
 }
 print "\n";
 
+
+
 print "Please enter your email address:\n";
 if ($old_email ne "NA") {
     print " -> Do you want to use the entry found in the old $conf_file? ($old_email) (y or n)\n";
@@ -1123,7 +1125,7 @@ if ($old_email ne "NA") {
 }
 else {
 
-    my $email = <>;
+    $email = <>;
     chomp $email;
 
 }

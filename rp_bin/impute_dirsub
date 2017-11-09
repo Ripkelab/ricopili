@@ -361,6 +361,7 @@ version: $rp_version
   --multi INT         use multithreading of INT cores for prephasing (maybe later also for imputation
                       
   --minilong          use long jobs for minimac imputation (is better than multithreaded according to gonzalo)
+  --phlong            use long jobs for phasing (instead of multithreading)
 
 
 
@@ -525,6 +526,7 @@ GetOptions(
     "chunk=s"=> \$chunkind,
     "multi=i"=> \$multithread_v2,
     "minilong"=> \my $minilong,
+    "phlong"=> \my $phaselong,
     "chr23male"=> \my $chr23male,
 #    "chunk10"=> \my $chunk10,
 
@@ -2776,7 +2778,10 @@ if ($prephase_done == 0) {
 	if ($multithread_v2 > 0) {
 	    $sjamulti = $multithread_v2;
 	}
-	
+	if ($phaselong) {
+	    $sjatime = 24;
+	}
+
 	
 	
 	@sjaarray = @preph_arr;
