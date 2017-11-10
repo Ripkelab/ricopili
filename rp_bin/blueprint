@@ -1305,21 +1305,35 @@ if ($job){
     my $mem_str = ($jmem / 1000) * 1;
     $mem_str = $mem_str * $cores;
 
-    if ($mem_str <= 32){
-	$mem_str = 32;
-    }
-    elsif ($mem_str <= 64) {
-	$mem_str = 64;
-	if ($cores == 16) {
-	    $cores = 8;
+
+    ###
+    ### this was only necessary when different mem options, but will concentrate on 32 GB machines
+    if (0) {
+	if ($mem_str <= 32){
+	    $mem_str = 32;
+	}
+	elsif ($mem_str <= 64) {
+	    $mem_str = 64;
+	    if ($cores == 16) {
+		$cores = 8;
+	    }
+	}
+	else {
+	    $mem_str = 64;
+	    if ($cores == 16) {
+		$cores = 1;  ## may 31st 2017: didn't get jobs started so I switched to cores =1 instead
+	    }
 	}
     }
-    else {
-	$mem_str = 64;
-	if ($cores == 16) {
-	    $cores = 1;  ## may 31st 2017: didn't get jobs started so I switched to cores =1 instead
-	}
-    }
+
+    #### this is the replacement;
+    $cores = sprintf "%d", 32000 / $jmem;
+#    print "debug, cores: $cores, $jmem, $jobarray\n";
+#    exit;
+
+
+
+    
     if ($cores_multi < $cores) {
 	$cores = $cores_multi;
     }

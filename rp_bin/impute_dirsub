@@ -1115,6 +1115,12 @@ sub send_jobarray {
 
     &a2filenew_app("$sjainfofile",$sjarow);
 
+#    print "debug\n";
+#    print "old message: $old_cmd\n";
+#    print "sjaarow_part : $sjarow_part\n";
+#    exit;
+
+    
     if ($old_cmd =~ /$sjarow_part/){
 	unless ($force1 ){
 	    my $err_message ;
@@ -2777,10 +2783,14 @@ if ($prephase_done == 0) {
 	$sjamem = 2000;
 	if ($multithread_v2 > 0) {
 	    $sjamulti = $multithread_v2;
+	    $sjamem = 4000;
+	    $sjatime = 4;
 	}
 	if ($phaselong) {
 	    $sjatime = 24;
+	    $sjamem = 4000;
 	}
+	
 
 	
 	
@@ -3349,6 +3359,7 @@ if ($imp_done == 0) {
 
 	if ($minilong) {
 	    $sjatime = 24;
+	    $sjamem = 4000;
 	}
 
 #	if ($imp_fini > 0) {
@@ -3385,7 +3396,8 @@ if ($imp_done == 0) {
 	$sjamem = 4000;
 
 	if ($minilong) {
-	    $sjatime = 24;
+	    $sjatime = 4;
+	    $sjamem = 6000;
 	}
 	
 	@sjaarray = @vcf2dos_arr;
