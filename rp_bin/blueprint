@@ -1341,7 +1341,7 @@ if ($job){
 	$cores = 1;
     }
 
-
+#    print "debug, cores: $cores, $jmem, $jobarray\n";
 
     if ($jobarray ne "") {
 
