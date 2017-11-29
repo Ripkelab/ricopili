@@ -224,7 +224,7 @@ my $transfuse_script = "transfuse_pca_3";   ### my.pipeline_tar
 my $mystart_script = "my.start_job";        ### my.pipeline_tar
 my $blue_script = "blueprint";         ### my.pipeline_tar
 
-my $mutt_script = "mutt";
+my $mutt_script = "mail";
 
 
 push @test_scripts, $pdflatex_script ;

@@ -164,7 +164,10 @@ if ($danerdirs) {
 	my $cd_str = $cd;
 	$cd_str =~ s/^.*\///;
 	push @danerstr, $cd_str;
+
 #	print "suche: $cd_str\n";
+
+
 	die "$cd/dirlist: ".$! unless open DL, "< $cd/dirlist";
 	while (my $line = <DL>){
 	    last if ($found == 1);
@@ -175,7 +178,9 @@ if ($danerdirs) {
 	    if ($refind =~ /chr[0-9X]*_[0-9]*_[0-9]*/){
 		$refind =~ s/.*(chr[0-9X]*_[0-9]*_[0-9]*).*/\1/;
 	    }
+
 #	    print "refind: $refind\n";
+
 	    my @tcells = split /_/, $refind;
 	    my $mega_start = $tcells[1];
 	    my $mega_end = $tcells[2];
@@ -187,11 +192,23 @@ if ($danerdirs) {
 	    }
 	    my $start_loc = $mega_start *1.0e06;
 	    my $end_loc = $mega_end *1.0e06;
+
+	    if ($chr_ind==23) {
+		$chr_ind = "X";
+	    }
+	    
+	    print "$chr_ind\t$chr_loc\t$pos_loc\t$start_loc\t$end_loc\t$refind\n";
+	    
 	    
 	    if ($chr_ind == $chr_loc){
 		if ($start_loc <= $pos_loc){
 		    if ($end_loc > $pos_loc){
-#			print "$start_loc\t$end_loc\t$refind\n";
+
+#			print "$$$$$$$$$$$$$$$$$$\n";
+#			print "found one!!!\n";
+#			print "$$$$$$$$$$$$$$$$$$\n";
+
+			
 			push @file_list, $cd."/".$line;
 #			print "list: ".$cd."/".$line."\n";
 			$found = 1;
