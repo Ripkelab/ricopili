@@ -247,6 +247,7 @@ my $multithread_v2 = 0;
 if ($qloc eq "qsub_b"){
     $multithread1 = 1;
 }
+my $impwallinc=0;
 
 #exit;
 
@@ -360,9 +361,10 @@ version: $rp_version
 
   --multi INT         use multithreading of INT cores for prephasing (maybe later also for imputation
                       
-  --minilong          use long jobs for minimac imputation (is better than multithreaded according to gonzalo)
+  --minilong          use long jobs for minimac imputation (is better than multithreaded according to gonzalo): 24 hours
   --phlong            use long jobs for phasing (instead of multithreading)
 
+  --impwallinc INT    add INT hour to walltime of imputation jobs (also on top of minilong)
 
 
 ### remarks 
@@ -526,6 +528,7 @@ GetOptions(
     "chunk=s"=> \$chunkind,
     "multi=i"=> \$multithread_v2,
     "minilong"=> \my $minilong,
+    "impwallinc=i"=> \$impwallinc,
     "phlong"=> \my $phaselong,
     "chr23male"=> \my $chr23male,
 #    "chunk10"=> \my $chunk10,
@@ -3361,6 +3364,8 @@ if ($imp_done == 0) {
 	    $sjatime = 24;
 	    $sjamem = 4000;
 	}
+
+	$sjatime += $impwallinc;
 
 #	if ($imp_fini > 0) {
 #	    $sjamem = 16000;
