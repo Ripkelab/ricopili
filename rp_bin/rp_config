@@ -1256,7 +1256,7 @@ elsif ($clusters{lisa}){
 		  "i4loc","/home/gwas/bin_impute_v4",
 		  "liloc","/home/gwas/liftover",
 		  "ldloc","/home/gwas/ldsc/",
-		  "eloc","/home/gwas/eigensoft/",
+		  "eloc","/sara/sw/eigensoft-5.0.1/bin/",
 		  "rloc","/sara/sw/R-3.1.2/bin/",
 		  "rpac","/home/gwas/Rlibs",
 		  "hmloc","/home/gwas/pgc-samples/hapmap_ref/",

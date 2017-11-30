@@ -197,7 +197,7 @@ if ($danerdirs) {
 		$chr_ind = "X";
 	    }
 	    
-	    print "$chr_ind\t$chr_loc\t$pos_loc\t$start_loc\t$end_loc\t$refind\n";
+#	    print "$chr_ind\t$chr_loc\t$pos_loc\t$start_loc\t$end_loc\t$refind\n";
 	    
 	    
 	    if ($chr_ind == $chr_loc){
