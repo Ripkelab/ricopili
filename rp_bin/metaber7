@@ -981,7 +981,14 @@ print DANER "\n";
 
 #print DANER "CHR\tSNP\tBP\tA1\tA2\tFRQ_A_$nca\tFRQ_U_$nco\tINFO\tOR\tSE\tP\tngt\tDirection\tHetISqt\tHetChiSq\tHetDf\tHetPVa\txdfPVa\n";
 
-my $neff_max_half = (4*$nca*$nco/($nca+$nco))/4;;
+
+
+my $neff_max_half = 0;
+if ($nca>0 || $nco > 0){
+    $neff_max_half = (4*$nca*$nco/($nca+$nco))/4;;
+}
+
+
 my $neff_ex_n =0;
 
 while (<META>){
