@@ -18,6 +18,7 @@ use Compress::Zlib ;
 #############################
 
 my $shloc = &trans("shloc");
+my $sh3loc = &trans("sh3loc");
 my $p2loc = &trans("p2loc");
 my $ealoc = "";
 
@@ -37,6 +38,7 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --chrX            for X chromosome
  --spliha INT      for splitter
  --eagle           use eagle instead of shapeit
+ --shapeit3        use shapeit3 (in combination with impute4)
  --eaglvcf         use eagle with VCF output (suitable for Minimac3)
  --noref           do not use reference when using eaglevcf (saving important SNPs)
 
@@ -76,6 +78,7 @@ GetOptions(
     "chrX"=> \my $chrx,
     "eagle"=> \my $eagle_sw,
     "eaglvcf"=> \my $eagle_vcf,
+    "shapeit3"=> \my $shapeit3,
     "ref:s"=>\my $ref,
     "nospli"=> \my $nospli,
     "sfile=s"=> \ $sfile,
@@ -111,6 +114,7 @@ unless (-e "$inname.bim") {
 
 #my $shapeit_bin = "shapeit.v2.r644.linux.x86_64";
 my $shapeit_bin = "shapeit.v2.r837.linux.x86_64";
+my $shapeit3_bin = "shapeit3.r884.1";
 #my $eagle_bin = "eagle_v2.2a";
 my $eagle_bin = "eagle";
 
@@ -288,7 +292,10 @@ if ($eagle_sw) {
 }
 
 
-
+if ($shapeit3) {
+    $sys_loc = "$sh3loc/$shapeit3_bin  --input-bed $outname.bed $outname.bim $famfile --input-map $gemafile --output-max $outname $multi_txt > $outname.log 2> $outname.loge";
+    
+}
 
 
 
@@ -379,9 +386,11 @@ if ($eagle_vcf) {
 
 }
 else {
-
+    print "$sys_loc\n";
     $sc = system ($sys_loc) ;
 }
+
+
 
 
 

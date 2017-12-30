@@ -157,8 +157,19 @@ foreach my $locdir (@searchdirs){
 }
 #exit;
 
+if (@ids == 0) {
+    print "Error: no jobids found in this directory.\n";
+    die $!." <$out.README>" unless open OUT, "> $out.README";
+    print OUT "---------------------------------------------------\n";
+    print OUT "perfomance report on all jobs started here\n";
+    print OUT "---------------------------------------------------\n";
+    print OUT "Error: no jobids found in this directories: @searchdirs\n";
 
-
+    close OUT;
+    exit;
+}
+#print "number of jobs in this directory: ".@ids."\n";
+#sleep (10);
 
 
 #################################################
@@ -169,6 +180,9 @@ my $takeold_txt = "";
 if ($takeold_sw){
     $takeold_txt = "--takeold";
 }
+
+
+
 
 my @out_collections;
 foreach my $jid (@ids) {

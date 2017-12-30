@@ -17,7 +17,7 @@ GetOptions(
 use File::Basename;
 
 if ($help){
-    print "usage: $progname JOBID
+    print "usage: $progname JOBID (or file containing jobid in first row)
 
 version: $version
 
@@ -92,7 +92,31 @@ sub sec2time {
 #exit;
 
 
+
+
 my $jobstring = $ARGV[0];
+
+
+if ($jobstring =~ m/[a-zA-Z]/) {
+
+    if (-f $jobstring) {
+	print "$jobstring is a file, trying to find a jobid in there\n";
+	my @instr = `cat $jobstring`;
+#	print "$instr[0]\n";
+	my @cells = split '\.',$instr[0];
+#	print "$cells[0]\n";
+	$cells[0] =~ s/\D//g;
+	if (length($cells[0]) > 0){
+	    print "trying jobid: $cells[0]\n";
+	}
+	else {
+	    print "Error: cannot find a jobid in $jobstring\n";
+	    exit;
+	}
+	$jobstring = $cells[0];
+    }
+}
+
 my @jobarr = split /\./, $jobstring;
 #my @jobarr = qw /hallo mein schatz/;
 my $jobarrn = @jobarr;

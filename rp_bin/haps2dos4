@@ -21,7 +21,7 @@ use Compress::Zlib ;
 #############################
 
 my $ploc = &trans("p2loc");
-
+my $t0 = time;
 
 ###############################################
 
@@ -92,6 +92,22 @@ sub split_line_ref {
 }
 
 
+###################################################
+###  print time sinc beginning
+###################################################
+
+
+
+sub mytime(){
+    my $secs = time-$t0;
+    my $mins = $secs/60;
+    my $hours = $secs/3600;
+    print $secs." seconds gone since start of the script\n";
+
+    
+}
+
+
 
 
 ###################################################
@@ -129,6 +145,7 @@ my $haps_file1 = @haps_collection[0];
 my $haps_file = "$haps_file1.combined";
 my $haps_fam = "$haps_file1.fam";
 my $haps_file_gz = "$haps_file1.combined.gz";
+my $haps_file_gz_map = "$haps_file1.combined.gz.map";
 
 
 
@@ -149,7 +166,11 @@ $info_file .= "_info";
 
 
 
-#print "merge files\n";
+print "merge files\n";
+&mytime();
+
+
+
 my @filehandles_gz;
 
 
@@ -166,8 +187,6 @@ if ($nf > 0) {
     print "open $haps_file_gz\n";
     
     my $ogz = gzopen("$haps_file_gz", "wb")  or die "Cannot open file $haps_file_gz: $gzerrno\n" ;
-    
-    
     #$ogz->gzwrite($header) ;
     
     my $igz = $filehandles_gz[0];
@@ -176,22 +195,22 @@ if ($nf > 0) {
     while ($igz->gzreadline(my $line)){
 	chomp($line);
 	my @cells = @{&split_line_ref(\$line)};
-	
+
 #	if ($nf > 0) {
-	    foreach my $igzn (1..$nf) {
-		my $igz_add = $filehandles_gz[$igzn];
-		$igz_add->gzreadline(my $line);
-		chomp($line);
-		my @cells_add = @{&split_line_ref(\$line)};
-		
-		
-		foreach (1..5) {
-		    shift (@cells_add);
-		}
-		
-		@cells = (@cells,@cells_add);
-		
+	foreach my $igzn (1..$nf) {
+	    my $igz_add = $filehandles_gz[$igzn];
+	    $igz_add->gzreadline(my $line);
+	    chomp($line);
+	    my @cells_add = @{&split_line_ref(\$line)};
+	    
+	    
+	    foreach (1..5) {
+		shift (@cells_add);
 	    }
+	    
+	    @cells = (@cells,@cells_add);
+	    
+	}
 #	}
 	$ogz->gzwrite("@cells\n");
 	
@@ -201,17 +220,17 @@ if ($nf > 0) {
 	my $igz_add = $filehandles_gz[$igzn];
 	$igz->gzclose();
     }
+
+    print "close $haps_file_gz\n";    
     $ogz->gzclose();
-    
-    print "close $haps_file_gz\n";
+
+
 }
 else {
     $haps_file_gz = $haps_collection[0];
 
 }
 
-#print "debug\n";
-#sleep(10);
 #exit;
 
 
@@ -327,6 +346,9 @@ unless (-e $twodos_tmp_success) {
     &mysystem ($imp_proc);
 }
 
+print "finished, now plink\n";
+&mytime();
+
 # check success
 # if successful, remove $haps_file_gz now to save space
 
@@ -344,9 +366,14 @@ my $sys_loc = "$ploc/plink --memory 2000 --dosage $twodos_tmp noheader skip0=1 s
 print "$sys_loc\n";
 &mysystem ($sys_loc);
 
+print "finished\n";
+&mytime();
+
 #&mysystem ("rm $famout.ow");
 
 
+#print "debug....\n";
+#sleep (10);
 
 #exit;
 
@@ -364,6 +391,11 @@ close FILE;
 #print "N:$cc\n";
 #print "$info_file\n";
 #sleep(3);
+my $mapin = $haps_file1;
+$mapin .= ".map";
+
+
+print "create various mapfiles and ngtfiles\n";
 
 if (-e $info_file) {
     die $!."($info_file)" unless open IF, "< $info_file";
@@ -389,10 +421,7 @@ if (-e $info_file) {
     close MA;
     close NGT;
 }
-else {
-    my $mapin = $haps_file1;
-    $mapin .= ".map";
-
+elsif (-e "$mapin") {
 
     die $!."($mapin)" unless open IF, "< $mapin";
     die $!."($mapout)" unless open MA, "> $mapout";
@@ -419,6 +448,41 @@ else {
 
 }
 
+else {
+    ### if no info file or mapfile you have to read it out of the original file
+    ### this happens withg impute4
+
+
+    my $igz = gzopen("$haps_collection[0]", "rb");
+    
+    die $!."($mapout)" unless open MA, "> $mapout";
+    die $!."($ngtout)" unless open NGT, "> $ngtout";
+    #    my $line = <IF>;
+
+    while ($igz->gzreadline(my $line)){
+	chomp($line);
+	my @cells = @{&split_line_ref(\$line)};
+
+	my $snp = $cells[1];
+	my $pos = $cells[2];
+
+
+	my $bas_str = "$chr $snp 0 $pos";
+	print MA "$bas_str\n";
+	my $ngt_loc = 0;
+	if (exists $ngt{$snp}) {
+	    $ngt_loc = 1;
+	}
+	print NGT "$bas_str $ngt_loc\n";
+    }
+    close IF;
+    close MA;
+    close NGT;
+
+
+}
+
+&mytime();
 
 #&mysystem ("gzip -c $dosout.out.dosage > $dosout.out.dosage.tmp.gz");
 #&mysystem ("rm $dosout.out.dosage");
@@ -435,7 +499,7 @@ foreach (@cmd_collect) {
 close BC;
 
 
-
+#exit;
 &mysystem ("touch $finiout");
 &mysystem ("rm $twodos_tmp");
 &mysystem ("rm $twodos_tmp.fini");

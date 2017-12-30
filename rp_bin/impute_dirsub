@@ -100,7 +100,7 @@ my $command_line = "$progname @ARGV";
 
 my $jnum = 7; ### number of imputation job per node
 
-my $spliha_n = 1500; ## split haplotypes with N individuals
+my $spliha_n = 1500000; ## split haplotypes with N individuals
 
 my $best_lahunt = 5;
 
@@ -288,6 +288,9 @@ version: $rp_version
  --minimac3        use minimac3 for imputation, here eagle will be used for prephasing
                    prephasing will happen reference informed with phased vcf
 
+ --impute4         use impute4/shapeit3 for prephasing / imputation 
+                       (right now done with shapeit2, since trios do not work with shapeit3)
+
  --noref           use minimac3 and eagle but no reference during prephasing 
                       (some SNPs are not well matched with eagle but are with minimac)
 
@@ -297,7 +300,7 @@ version: $rp_version
 
  --triset STRING  for subset of trio datasets (can contain bimfiles)
 
- --spliha INT      split haplotypes with N individuals
+## outdated (switched off): --spliha INT      split haplotypes with N individuals
 
 
 #### special handling of males on chr23 (haploid)
@@ -520,6 +523,7 @@ GetOptions(
     "eagle"=> \my $eagle_sw,
 #    "eaglvcf"=> \my $eagle_vcf_sw,
     "minimac3"=> \my $mm3_sw,
+    "impute4"=> \my $imp4_sw,
     "noref"=> \my $noref,
 
 
@@ -2700,6 +2704,10 @@ if ($prephase_done == 0) {
 
 		    }
 
+#		    elsif ($imp4_sw) {
+#			$backbone .= " --shapeit3";
+#		    }
+
 		    
 		    if ($suminfo_s_v2_sw == 1) {
 			$backbone .= " --nospli";
@@ -3242,6 +3250,9 @@ if ($imp_done == 0) {
 			    $refchunk .= ".m3vcf.gz";
 			    $mm3_txt = "--minimac";
 			    $chr_txt = "--chrind $refchr";
+			}
+			elsif ($imp4_sw) {
+			    $mm3_txt = "--imp4";
 			}
 
 			if ($empty) {

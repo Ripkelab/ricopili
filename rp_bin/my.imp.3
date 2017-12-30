@@ -69,6 +69,8 @@ GetOptions(
     );
 
 
+
+
 if (0) {
 if ($outname eq "" || $inname eq ""  || (!$minimac && $gemafile eq "") || $reffile eq "" || $refstart eq ""|| $refend eq ""  || ($minimac)){
     print "$usage\n";
@@ -108,7 +110,7 @@ if ($chr eq "X") {
 }
 
 my $imp2_bin = "impute2";
-my $imp4_bin = "impute4.r264";
+my $imp4_bin = "impute4.r265.2";
 
 system ("touch $outname.hour");
 if (-e "$outname.fini") {
@@ -171,6 +173,9 @@ if ($minimac) {
 }
 elsif ($imp4) {
     $sys_loc = "$i4loc/$imp4_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str -no_maf_align -snp_blocks";
+#    $sys_loc .= "; gunzip -c $reffile.legend.gz > $outname.map";
+
+    
 }
 
 else {
@@ -206,6 +211,15 @@ close BC;
 
 
 my  $sc = system ($sys_loc) ;
+
+
+if ($imp4) {
+    system ("mv $outname.gen.gz $outname.gz");
+
+}
+
+
+
 
 if ($sc == 0 ) { 
     system ("touch $outname.fini");

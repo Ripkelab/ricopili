@@ -122,9 +122,8 @@ print "$outfam\n";
 
 die $!."($sfile)" unless open IFILE, "< $sfile";
 my $line = <IFILE>;
-print OFILE "$line";
 my $line = <IFILE>;
-print OFILE "$line";
+
 
 my $tc =0;
 while (my $line = <IFILE>){
