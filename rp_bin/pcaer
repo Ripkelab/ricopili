@@ -694,23 +694,37 @@ version: $rp_version
                                -> usually only used for testing 
         --longq          forces long queue for some jobs (bcomb)
 
-   lisa: /home/gwas/pgc-samples/hapmap_ref/subchr/infosum_pos.sorted
-   broad: /psych/genetics_data/ripke/references_outdated/hapmap_ref/subchr/infosum_pos.sorted
 
 
  --out is mandatory
 
 
-#you can use this as reference
-# $hm3_ceu
 
+to include reference datasets from 1000Genomes
 
 ## world wide 1KG populations:
+################################
+# @BROAD
 ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_4pop_mix_SEQ.* .
+# @LISA
+ln -s /home/gwas/pgc-samples/hapmap_ref/pop/1KG/pop_4pop_mix_SEQ.* .
+
 
 
 ## european 1KG countries:
+##########################
+# @BROAD
 ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_euro_eur_SEQ.det.* .
+# @LISA
+ln -s /home/gwas/pgc-samples/hapmap_ref/pop/1KG/pop_euro_eur_SEQ.det.* .
+
+
+
+
+### outdated information  ################################################################################
+##   lisa: /home/gwas/pgc-samples/hapmap_ref/subchr/infosum_pos.sorted
+##   broad: /psych/genetics_data/ripke/references_outdated/hapmap_ref/subchr/infosum_pos.sorted
+#########################################################################################################
 
 
 

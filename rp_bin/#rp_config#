@@ -1,0 +1,1630 @@
+#!/usr/bin/env perl
+use strict;
+use File::Basename;
+use Cwd;
+use Data::Dumper;
+
+### Script to configure settings for ricopili pipeline
+### Jackie Goldstein, Jan 2014 & stephan ripke 2016
+
+
+my $version = "2.0.0";
+my $progname = $0;
+
+$progname =~ s!^.*/!!;
+
+
+
+##### help message
+my $usage = "
+Usage : $progname [options] --help
+
+
+
+
+ --help            print this text and exits
+
+
+ this script is trying to make installation of ricopili pipeline more convenient.
+ you still neeed to install most binaries manually for now
+
+
+ 
+
+
+
+
+
+most recent addition: 
+
+-----------------------------------------------------------
+in location of bcrloc needs to be this file
+ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v37.fasta.gz
+
+found on broad here:
+/psych/genetics_data/ripke/rp_bins/bcftools/bcftools-1.3.1/resources/human_g1k_v37.fasta
+    
+--------------------------------------------------------------
+
+in location of bcloc needs to be this binray:
+bcftools
+
+found on broad here:
+/psych/genetics_data/ripke/rp_bins/bcftools/new_0816/bcftools-1.3.1_bin/bin/bcftools
+
+
+----------------------------------------------------------------------
+
+
+bcloc /home/gwas/bcftools/
+bcrloc /home/gwas/bcftools/
+bgziploc /home/gwas/rp_exec/bgzip/
+tabixloc /home/gwas/rp_exec/tabix/
+minimac3loc /home/gwas/rp_exec/minimac/
+ealoc /home/gwas/eagle/Eagle_v2.2.3.5
+
+
+-------------------------------------------------------------
+
+
+
+### Jackie Goldstein, Jan 2014 & stephan ripke 2016
+########################################################
+
+";
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+
+        );
+
+
+
+die $usage if $help;
+
+###################################################
+###  waiting for y to continue
+###################################################
+sub cont(){
+    print "continue?";
+    my $answer = lc <>;
+    chomp $answer;
+    unless ($answer eq "y") {
+	print "exiting.....\n";
+	exit;
+    }
+}
+
+
+
+########################################
+## out for now
+############################################
+if (0) {
+
+#my $external_bin_dir;
+    my $rp_installation_file = "rp_config.variables";
+    my %conf;
+
+
+if (-e $rp_installation_file) {
+    die $!."($rp_installation_file)" unless open FILE, "< $rp_installation_file";
+    while (my $line = <FILE>){
+	my @cells = split /\s+/, $line;
+	$conf{$cells[0]} = $cells[1];
+    }
+    close FILE;
+}
+else {
+    print "$rp_installation_file not found\n";
+    print "will create a template for you\n";
+    print "please replace PLACEHOLDER\n";
+
+    die $!."($rp_installation_file)" unless open FILE, "> $rp_installation_file";
+    print FILE "variable value remarks\n";
+    print FILE "-----------------------------------------\n";
+    print FILE "exbin_dir PLACEHOLDER ## directory in which all downloaded external binaries will be installed to\n";
+    close FILE;
+    
+}
+
+print "------------------------------------------------------------------\n";
+print "------------------------------------------------------------------\n";
+
+print "Process for Downloading, Configuration, Installation of Ricopili\n";
+print "------------------------------------------------------------------\n";
+print "------------------------------------------------------------------\n";
+print "starting to download install\n";
+print "------------------------------------------------------------------\n";
+
+print "you will be asked in each step for confirmation\n"; 
+print "and you can interrupt the process anytime with command-c\n";
+print "are you ready?\n";
+&cont();
+
+print "using this here as directory for external bins: ".$conf{"exbin_dir"}."\n";
+&cont();
+#exit;
+
+
+my %bin_names;
+my %bin_locs;
+
+
+
+
+#####################
+# plink: just download
+#####################
+$bin_names{"plink"} = "plink";
+$bin_locs{"plink"} = "https://www.cog-genomics.org/static/bin/plink170330/plink_linux_x86_64.zip";
+
+########################
+# shapeit: download and detar and copy binary from bin subdir to root
+###########################
+$bin_names{"shapeit"} = "shapeit.v2.r837.linux.x86_64";
+$bin_locs{"shapeit"} = "https://mathgen.stats.ox.ac.uk/genetics_software/shapeit/shapeit.v2.r837.GLIBCv2.12.Linux.static.tgz";
+
+########################
+# impute: download, detar and point to subdir
+###########################
+$bin_names{"impute"} = "impute_v2.3.2_x86_64_static/impute2";
+$bin_locs{"impute2"} = "https://mathgen.stats.ox.ac.uk/impute/impute_v2.3.2_x86_64_static.tgz";
+
+
+################################
+# eigenstrat
+################################
+$bin_names{"eigenstrat"} = "bin/smartpca";
+$bin_locs{"eigenstrat"} = "https://data.broadinstitute.org/alkesgroup/EIGENSOFT/EIG-6.1.4.tar.gz";
+
+
+############
+## LDSCORE????
+######################
+
+
+############
+## liftOver
+######################
+$bin_names{"liftover"} = "liftOver";
+$bin_locs{"liftover"} = "http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/liftOver";
+
+
+
+
+
+    #############################################################
+    ### for better installation
+    #########################################################
+    
+#  http://hgdownload.soe.ucsc.edu/goldenPath/hg17/liftOver/hg17ToHg19.over.chain.gz
+#  http://hgdownload.soe.ucsc.edu/goldenPath/hg18/liftOver/hg18ToHg19.over.chain.gz
+#  http://hgdownload.soe.ucsc.edu/goldenPath/hg16/liftOver/hg16ToHg19.over.chain.gz
+#  http://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz
+    
+#  http://hgdownload.soe.ucsc.edu/goldenPath/hg19/liftOver/hg19ToHg18.over.chain.gz
+
+#    grep in rp_bin for other liloc files:
+#    grep liloc *
+
+
+
+
+    
+#print "fasta file to bcftools directory:\n";
+#print "/psych/genetics_data/ripke/rp_bins/bcftools/bcftools-1.3.1/resources/human_g1k_v37.fasta:\n";
+#print "## ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v37.fasta.gz\n";
+#exit;
+
+}
+
+
+my $cdir = cwd();
+my $home = $ENV{HOME};
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my $command_line = "$progname @ARGV";
+
+#############################
+# Ask user what cluster they're using
+#############################
+#my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"other",0);
+#my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"other",0);
+my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"other",0);
+my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","uppmax","other");
+print "Please enter your cluster name from the following options:\n";
+my $i = 1;
+foreach (@cluster_names){
+    print "\t($i) $_\n";
+    $i += 1;
+}
+print "\n";
+my $cluster = "other";
+while (1) {    
+    $cluster = lc <>;
+    chomp $cluster;
+    if (exists $clusters{$cluster}){$clusters{$cluster} = 1;last;}
+    else {
+	$cluster =~ s/(\)|\()//g;
+	if ($cluster >= 1 && $cluster <= $i){$cluster -= 1; $cluster = $cluster_names[$cluster];$clusters{$cluster} = 1;last;}
+	else {
+	    print "Did not recognize option. Please enter a cluster name from the options below:\n";
+	    my $i = 1;
+	    foreach (@cluster_names){
+		print "\t($i) $_\n";
+		$i += 1;
+	    }
+	    print "\n";
+	    my $cluster = "other";
+	}
+    }
+}
+print "\nUsing the following cluster: $cluster\n\n";
+
+# If on an Uppmax cluster, determine which one, and which account to use.
+# Uses code from the projinfo utility on Uppmax
+my $uppmax_project;
+my $uppmax_cluster;
+my $username;
+if ($clusters{uppmax}) {
+    # get username
+    $username = getlogin || getpwuid($<);
+
+    # get cluster name
+    open CONFIG, "scontrol show conf 2>&1 |"
+      or die "Error: Cannot find SLURM configuration.\n";
+    while (<CONFIG>) {
+        chomp;
+        my $line = lc $_;
+
+        if ($line =~ /^clustername\s+=\s+(\S+)\s*$/) {
+            $uppmax_cluster = $1;
+            last
+        }
+    }
+    close CONFIG;
+
+    # get user's current projects
+    my $grantfile = "/sw/share/slurm/$uppmax_cluster/grantfile";
+    my @uppmax_projects;
+
+    open GRANTFILE, "< $grantfile"
+      or die "Error: Cannot read file $grantfile.\n";
+    while (<GRANTFILE>) {
+        chomp;
+        my $line = $_;
+        next if /^\s*$/;        # Empty line
+        next if /^\s*#/;        # Comment
+        if (/^([^,]+),[^,]+,([^,]+),[^#]+#(.*)$/) {
+            my $projectname = $1;
+            my $grant = $2;
+            my $members = $3;
+            if ($members =~
+                /^$username$|^$username\s|\s$username\s|\s$username$/)
+            {
+                push @uppmax_projects, $projectname;
+            }
+        }
+        elsif (/^([^:]+):(\d+):.*:([^:]*)$/) {
+            my $projectname = $1;
+            my $grant = $2;
+            my $members = $3;
+            if ($members =~ /^$username$|^$username,|,$username,|,$username$/) {
+                push @uppmax_projects, $projectname;
+            }
+        }
+        else { # Error in file
+            die "Error: Bad line in file $grantfile:\n\t$line\n";
+        }
+    }
+    close GRANTFILE;
+
+    # choose project (account) to use with ricopili
+    print "Please choose the Uppmax project you want to use with ricopili:\n";
+    my $i = 1;
+    foreach (@uppmax_projects){
+        print "\t($i) $_\n";
+        $i += 1;
+    }
+    print "\n";
+    while (1) {
+        my $project = lc <>;
+        chomp $project;
+        if ( grep(/^$project$/, @uppmax_projects) ){ $uppmax_project = $project; last;}
+        else {
+            $project =~ s/(\)|\()//g;
+            if ($project >= 1 && $project <= $i){
+                $project -= 1;
+                $uppmax_project = $uppmax_projects[$project];
+                last;
+            }
+            else {
+                print "Did not recognize option. Please enter a project identifier from the options below:\n";
+                my $i = 1;
+                foreach (@uppmax_projects){
+                    print "\t($i) $_\n";
+                    $i += 1;
+                }
+                print "\n";
+            }
+        }
+    }
+    print "\nUsing the following Uppmax project: $uppmax_project\n\n";
+}
+
+    
+#############################
+# Determine the shell
+#############################
+my $shell = '';
+if (exists $ENV{SHELL}){$shell = basename($ENV{SHELL});}
+if ($shell eq "bash-login-check"){$shell = "bash";}
+if ($shell ne "bash" && $shell ne "tcsh") {
+    print "Warning! Shell not recognized: $shell\n";
+    print "Please send email to rp_dev\@broadinstitute.org\n";
+}
+print "Detected you are using the following shell: $shell\n\n";
+
+
+###################################################
+###  system call with test if successful
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+###################################################
+###  Check if rp_bin already installed
+###################################################
+system("bin_check"); # dummy script that doesn't do anything
+my $status_bin = ($? >> 8);
+system("bin_check_pdfjam"); # dummy script that doesn't do anything
+my $status_pdfjam = ($? >> 8);
+
+
+if ($clusters{lisa} == 1) {
+    unless (-e "$home/.bash_profile") {
+	die $! unless open FILE, "> $home/.bash_profile";
+	     print FILE 'if [ -f ~/.bashrc ]; then '."\n";
+	     print FILE '    . ~/.bashrc'."\n";
+	     print FILE 'fi'."\n";
+	close FILE;
+    }
+    unless (-e "$home/.bashrc") {
+	system "touch ~/.bashrc\n";
+    }
+}
+
+unless ($clusters{broad} == 1) {
+
+#    print "$cdir/pdfjam\n";
+    die $!."($cdir/pdfjam/pdfjam)" unless open FILE, "< $cdir/pdfjam/pdfjam";
+    die $!."($cdir/pdfjam/pdfjam.ow)" unless open OUT, "> $cdir/pdfjam/pdfjam.ow";
+    while (my $line = <FILE>){
+	$line =~ s!/psych/genetics_data/ricopili_tmp!/scratch!;
+	print OUT "$line";
+    }
+    close FILE;
+    close OUT;
+    system ("mv $cdir/pdfjam/pdfjam.ow $cdir/pdfjam/pdfjam");
+    print "rewrote $cdir/pdfjam.ow\n";
+    
+}
+
+
+
+    
+if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
+    print "\n----------------------------------------------------\n";                    
+    print "\n\nWarning: Ricopili is already installed.\n";
+    print "Do you wish to uninstall Ricopili first (recommended)? <y/n>\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {
+
+            print "\n\n";
+	    print "*********************************************************************\n";
+	    print "*****  please read and follow instructions below, *******************\n";
+	    print "*****              only then restart ./rp_config  *******************\n";
+	    print "**********************************************************************\n";
+	    print "\n\n";	    
+            print "\nThe following two commands will remove the following paths from your default search path:\n";
+            my @PATH = split(':',$ENV{PATH});
+            foreach (@PATH) {
+                if ($_ =~ "rp_bin" || $_ =~ "rp_perlpackages") {
+                    print "\t$_\n";}
+            }
+            print "\n *** If you do not want to continue uninstalling Ricopili, please cancel now (ctr-c) *** \n\n";
+            
+            my @PATH = split ":", $ENV{PATH};
+            my @NEW_PATH = ();
+            foreach (@PATH) {
+                unless ($_ =~ "rp_bin") {
+                    push @NEW_PATH, $_;
+                }                    
+            }
+            my $new_path = join ":", @NEW_PATH;
+
+            my $i = 1;
+	    print "1) Run this command to remove rp_bin from the search path in your current login session (";
+            # 1. Remove paths for this session
+            if ($shell eq "bash") {
+                print " - bash detected - )\n\n";
+                $i += 1;                
+                print "\texport PATH=$new_path\n\n";
+            }
+            elsif ($shell eq "tcsh") {
+		print " - tcsh detected - )\n\n";
+                $i += 1;                                
+                print "\tsetenv PATH $new_path\n\n";
+            }
+            else {
+                print "   ---- shell seems to be different to bash or tcsh                                -------------\n";
+		print "   ---- please figure out how to change the current search path to the following   -------------\n";
+                $i += 1;
+                print "\t$new_path\n";
+            }
+
+	    
+
+#	    print "--------------------------------------------------------------------------------------\n";
+	    print "2) Run this command to remove rp_bin permanantly from the search path (";
+            # 2. Remove the path permanently from the search path
+            if ($clusters{broad} == 1) {
+                if (-e "$home/.my.bashrc") {
+                    &mysystem("grep -v \"rp_bin\\|rp_perlpackages\" $home/.my.bashrc > my.bashrc_minus_rpbin.txt");
+                    &mysystem("cp $home/.my.bashrc my.bashrc.copy");
+		    print " - bash detected - )\n\n";
+                    $i += 1;
+                    print "\tmv my.bashrc_minus_rpbin.txt $home/.my.bashrc\n\n";
+                    print "\t\t## which will delete the following lines from your $home/.my.bashrc file:\n";
+		    
+		    my @tmp_lines = `grep rp_bin $home/.my.bashrc`;
+		    foreach (@tmp_lines) {
+			print "\t\t\t## $_";
+		    }
+		    @tmp_lines = `grep rp_perlpackages $home/.my.bashrc`;
+		    foreach (@tmp_lines) {
+			print "\t\t\t## $_";
+		    }		  		    
+
+                    print "\n\t\t## A copy of the old $home/.my.bashrc is available here: my.bashrc.copy\n";                    
+                }
+                if (-e "$home/.my.cshrc") {
+                    &mysystem("grep -v \"rp_bin\\|rp_perlpackages\" $home/.my.cshrc > my.cshrc_minus_rpbin.txt");
+                    &mysystem("cp $home/.my.cshrc my.cshrc.copy");
+		    print " - tcsh detected - )\n\n";
+                    $i += 1;
+                    print "\tmv my.cshrc_minus_rpbin.txt $home/.my.cshrc\n\n";
+                    print "\t\t## which will delete the following lines from your $home/.my.cshrc file:\n";
+
+		    my @tmp_lines = `grep rp_bin $home/.my.cshrc`;
+		    foreach (@tmp_lines) {
+			print "\t\t\t## $_";
+		    }
+		    @tmp_lines = `grep rp_perlpackages $home/.my.cshrc`;
+		    foreach (@tmp_lines) {
+			print "\t\t\t## $_";
+		    }	
+
+                    print "\n\t\t## A copy of the old $home/.my.cshrc is available here: my.cshrc.copy\n";
+                }
+		else {
+		    print "---- shell seems to be different to bash or tcsh                                -------------\n";
+		    print "---- please figure out how to change the pemanent search path to the following   -------------\n";
+		    print "## You will need to figure out how to remove the permanent search path for rp_bin and rp_perlpackages:\n\n";
+		    $i += 1;
+		}
+            }
+	    #            elsif ($clusters{genomedk} == 1 || $clusters{mssm} == 1 || $clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{co_ipsych} == 1 || $clusters{uppmax} == 1) {
+	    else {
+                if (-e "$home/.bashrc") {
+                    &mysystem("grep -v \"rp_bin\\|rp_perlpackages\" $home/.bashrc > my.bashrc_minus_rpbin.txt");
+                    &mysystem("cp $home/.bashrc my.bashrc.copy");
+		    print " - bash detected - )\n\n";
+                    $i += 1;
+                    print "\tmv my.bashrc_minus_rpbin.txt $home/.bashrc\n\n";
+                    print "\t\t## which will delete the following lines from your $home/.bashrc file:\n";
+		    
+
+
+		    my @tmp_lines = `grep rp_bin $home/.bashrc`;
+		    foreach (@tmp_lines) {
+			print "\t\t\t## $_";
+		    }
+		    @tmp_lines = `grep rp_perlpackages $home/.bashrc`;
+		    foreach (@tmp_lines) {
+			print "\t\t\t## $_";
+		    }		    
+##                    &mysystem("grep \"rp_bin\\|rp_perlpackages\" $home/.bashrc");
+
+
+                    print "\n\t\t## A copy of the old $home/.bashrc is available here: my.bashrc.copy\n";                    
+                }
+		else {
+		    print "Error: cannot find $home/.bashrc, other shells currently only supported on the broad cluster.\n";
+		    exit;
+		}
+	    }
+
+
+	    
+
+#            else {
+#                print "\n----------------------------------------------------\n";                                    
+#                print "\n## Remove the directories listed above from the same place where you permanently added the directories to the search path.\n";
+#                $i += 1;
+#            }
+	    
+            print "\n\n";
+	    print "*********************************************************************\n";
+	    print "*****  please read and follow instructions above, *******************\n";
+	    print "*****              only then restart ./rp_config  *******************\n";
+	    print "**********************************************************************\n";
+	    print "\n\n";
+            exit;
+        }
+        elsif ($answer eq "n") {&mysystem("touch install_true");last;}
+        else {print "Please answer with y or n.\n";}
+    }
+};
+
+###################################################
+###  Add rp_bin to default search path
+###################################################
+system("bin_check"); # dummy script that doesn't do anything
+my $status_bin = ($? >> 8);
+system("bin_check_pdfjam"); # dummy script that doesn't do anything
+my $status_pdfjam = ($? >> 8);
+
+
+
+
+# exit;
+
+
+unless ($status_bin == 0  && $status_pdfjam == 0) {    
+    my $bash = "$cdir/my.bashrc_rp_path";    
+    my $csh = "$cdir/my.cshrc_rp_path";    
+
+    die $! unless open FILE, "> $bash";
+    print FILE "\n\nPATH=$cdir:\$PATH\n";
+    print FILE "PATH=$cdir/pdfjam:\$PATH\n";
+    
+    if ($clusters{lisa}){
+        print FILE "export rp_perlpackages=/home/gwas/perl_modules\n";
+    }
+    if ($clusters{computerome}){
+        print FILE "export rp_perlpackages=/home/people/sripke/rp_external_bins/perl_packages\n";
+    }
+    if ($clusters{co_ipsych}){
+        print FILE "export rp_perlpackages=/data/user_tools/rp_external_bins/perl_packages\n";
+    }    
+    if ($clusters{broad}){
+        print FILE "export rp_perlpackages=/home/unix/sripke/perl_modules\n";
+    }
+    if ($clusters{uppmax}){
+        print FILE "export rp_perlpackages=/proj/$uppmax_project/ricopili/software/perl_modules\n";
+    }
+    close FILE;
+
+    die $! unless open FILE, "> $csh";
+    print FILE "\n\nset path=($cdir \$path)\n";
+    print FILE "set path=($cdir/pdfjam \$path)\n";
+    if ($clusters{broad}){
+        print FILE "setenv rp_perlpackages /home/unix/sripke/perl_modules\n";
+    }
+    close FILE;
+
+
+    print "\n\n";
+    print "*********************************************************************\n";
+    print "*****  please read and follow instructions below, *******************\n";
+    print "*****              only then restart ./rp_config  *******************\n";
+    print "**********************************************************************\n";
+    print "\n\n";
+
+    print "## Please run the following commands to permanently add rp_bin to the default search path: \n";
+    print "##     (the last three add the necessary paths also to your current session) \n\n";
+
+
+    if ($clusters{broad}){
+        my $i = 1;
+       
+        if (-e "$home/.my.bashrc") {
+            print "\tcat $bash >> ~/.my.bashrc\n";
+            $i += 1;
+        }
+        if (-e "$home/.my.cshrc") {
+            print "\tcat $csh >> ~/.my.cshrc\n";
+            $i += 1;
+        }
+
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;
+            print "\texport rp_perlpackages=/home/unix/sripke/perl_modules\n";
+            $i += 1;
+        }
+        elsif ($shell eq "tcsh") {
+            print "\tset path=($cdir \$path)\n";
+            $i += 1;
+            print "\tset path=($cdir/pdfjam \$path)\n";
+            $i += 1;
+            print "\tsetenv rp_perlpackages /home/unix/sripke/perl_modules\n";
+            $i += 1;
+        }
+
+    }
+    elsif ($clusters{genomedk}){
+	my $i = 1;
+	
+
+        if (-e "$home/.bashrc") {
+            print "\tcat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;        
+        }
+
+    }
+    elsif ($clusters{lisa}){
+	my $i = 1;    
+
+        if (-e "$home/.bashrc") {
+            print "\tcat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;        
+        }
+	print "\texport rp_perlpackages=/home/gwas/perl_modules\n";
+    }
+    elsif ($clusters{computerome}){
+	my $i = 1;    
+
+        if (-e "$home/.bashrc") {
+            print "\tcat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;        
+        }
+	print "\texport rp_perlpackages=/home/people/sripke/rp_external_bins/perl_packages\n";
+    }
+    
+    elsif ($clusters{co_ipsych}){
+	my $i = 1;    
+
+        if (-e "$home/.bashrc") {
+            print "\tcat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;        
+        }
+	print "\texport rp_perlpackages=/data/user_tools/rp_external_bins/perl_packages\n";
+    }
+
+    elsif ($clusters{mssm}){
+	my $i = 1;    
+
+        if (-e "$home/.bashrc") {
+            print "\tcat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;        
+        }
+    }
+
+    elsif ($clusters{uppmax}){
+	my $i = 1;
+
+        if (-e "$home/.bashrc") {
+            print "\tcat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;
+        }
+	print "\texport rp_perlpackages=/proj/$uppmax_project/ricopili/software/perl_modules\n";
+
+    }
+
+    else {
+        print "You'll need to add the following paths to your default search path:\n";
+        print "\t$cdir\n";
+        print "\t$cdir/pdfjam\n\n";
+        print "If you are using a bash shell, sample commands are located in this file: $bash\n";
+        print "If you are using a tcsh shell, sample commands are located in this file: $csh\n";
+        print "For example instructions, see http://www.cyberciti.biz/faq/unix-linux-adding-path/\n";
+        print "If possible, add these paths permanently. Otherwise, you will need to do this everytime you start a new session.\n";
+    }
+    
+    &mysystem("touch install_true");        
+    print "\n\n";
+    print "*********************************************************************\n";
+    print "*****  please read and follow instructions above, *******************\n";
+    print "*****              only then restart ./rp_config  *******************\n";
+    print "**********************************************************************\n";
+    print "\n\n";
+    exit;
+
+}
+
+print "Required directories found in search path:\n";
+print "\trp_bin/ -- success\n";
+print "\trp_bin/pdfjam/ -- success\n\n";
+
+system("latex small2e > /dev/null"); # dummy script that doesn't do anything
+my $status_latex = ($? >> 8);
+unless ($status_latex) {
+    print "Detected pdflatex is installed.\n\n";
+    &mysystem("rm small2e.*");
+}
+else {
+    print "---------------------------------------\n\n";
+    print "Error -- pdflatex is not installed!\n\n";
+
+    if ($clusters{genomedk} == 1){
+	print "Run the following commands to add pdflatex to the default search path:\n";
+	print "\techo \"source /com/extra/texlive/2014/load.sh\" >> ~/.bashrc\n";
+	print "\tsource /com/extra/texlive/2014/load.sh\n\n";
+}
+    else {
+	print "Please install pdflatex by downloading the texlive package and following the installation instructions (https://www.tug.org/texlive/)\n\n";
+    }
+    print "Rerun this script once pdflatex has been added to the default search path (./rp_config)\n\n";
+    print "---------------------------------------\n";
+    exit;
+}
+
+### Make sure all perl packages are installed
+### JG addition -- wrote this block before I saw you added something similar above
+#if ($clusters{broad} == 1){
+#    unless (exists $ENV{rp_perlpackages}) {
+#        print "Run the following commands to add rp_perlpackages as an environmental variable:\n";
+#        print "echo \"export rp_perlpackages=/home/unix/sripke/perl_modules/\" >> ~/.my.bashrc\n";
+#        print "echo \"setenv rp_perlpackages /home/unix/sripke/perl_modules/\" >> ~/.my.cshrc\n";
+#        if ($shell eq "bash") {
+#            print "export rp_perlpackages=/home/unix/sripke/perl_modules/\n";            
+#        }
+#        if ($shell eq "tcsh") {
+#            print "setenv rp_perlpackages /home/unix/sripke/perl_modules/\n";
+#        }
+
+#        print "./rp_config\n\n";
+#        exit;
+#    }
+#    else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
+#}
+if ($clusters{genomedk} == 1){
+    unless (exists $ENV{rp_perlpackages}) {
+        print "Run the following commands to add rp_perlpackages as an environmental variable:\n";
+        print "echo \"export rp_perlpackages=/project/ricopili/perl_packages/\" >> ~/.bashrc\n";
+        print "export rp_perlpackages=/project/ricopili/perl_packages/\n";
+        print "./rp_config\n\n";
+        exit;
+    }
+    else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
+}
+if ($clusters{mssm} == 1){
+    unless (exists $ENV{rp_perlpackages}) {
+        print "Run the following commands to add rp_perlpackages as an environmental variable:\n";
+        print "echo \"export rp_perlpackages=/hpc/users/xripkes01/perl_modules/\" >> ~/.bashrc\n";
+        print "export rp_perlpackages=/hpc/users/xripkes01/perl_modules/\n";
+        print "./rp_config\n\n";
+        exit;
+    }
+    else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
+}
+
+### Make sure lapack is installed
+if ($clusters{genomedk} == 1){
+    unless ($ENV{EXTRAS} =~ /lapack/) {
+        print "Run the following commands to add lapack to the default search path:\n";
+        print "echo \"source /com/extra/lapack/3.5.0/load.sh\" >> ~/.bashrc\n";
+        print "source /com/extra/lapack/3.5.0/load.sh\n";
+        print "./rp_config\n\n";
+        exit;
+    }
+    else { print "Detected lapack is installed.\n\n";}
+}
+
+
+
+my $ans_ow = "y";
+
+my $old_initials = "NA";
+my $old_email = "NA";
+
+if (-e $conf_file) {
+    print "*************************************************************\n";
+    print "Configuration file already exists at $conf_file\n";
+    print "Do you wish to build a new version of this file (with default values)? (y/n)\n";
+    print "        - while making a backup to $conf_file.copy - \n";
+    while (1) {
+        $ans_ow = lc <>;
+        chomp $ans_ow;
+        if ($ans_ow eq "y") {
+
+
+	    my @tmp_lines = `grep ^init $conf_file`;
+	    my @cells = split /\s+/, $tmp_lines[0];
+	    $old_initials = $cells[1];
+	    my @tmp_lines = `grep ^email $conf_file`;
+	    my @cells = split /\s+/, $tmp_lines[0];
+	    $old_email = $cells[1];	    
+
+
+			    
+            &mysystem("cp $conf_file $conf_file.copy");
+            last;
+        }
+        elsif ($ans_ow eq "n") {print "Not overwriting $conf_file.\n";last;}
+        else {print "Please answer with y or n.\n";}
+    }
+};
+
+my $cd = cwd();
+my $sloc = "";
+my $loloc = "";
+my $initials = "";
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my $hdir = $ENV{HOME};
+my $email = "";
+my @text = ();
+
+if ($ans_ow eq "y"){
+#############################
+# make scratch directory
+#############################
+if ($clusters{broad} == 1) {
+    my $user_name = basename($ENV{HOME});
+    $sloc = "/broad/hptmp/$user_name/";
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				$sloc =~ s/^~/$ENV{HOME}/g;
+				$sloc =~ s/^\./$cd/g;
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
+elsif ($clusters{lisa} == 1) {
+    $sloc = "/scratch/";
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				$sloc =~ s/^~/$ENV{HOME}/g;
+				$sloc =~ s/^\./$cd/g;        
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
+
+elsif ($clusters{computerome} == 1) {
+    $sloc = "/scratch/";
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				$sloc =~ s/^~/$ENV{HOME}/g;
+				$sloc =~ s/^\./$cd/g;        
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
+
+elsif ($clusters{co_ipsych} == 1) {
+    $sloc = "/data/scratch/";
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				$sloc =~ s/^~/$ENV{HOME}/g;
+				$sloc =~ s/^\./$cd/g;        
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
+
+elsif ($clusters{genomedk} == 1) {
+    $sloc = "/project/ricopili/scratch_dir/";
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				$sloc =~ s/^~/$ENV{HOME}/g;
+				$sloc =~ s/^\./$cd/g;        
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
+
+
+elsif ($clusters{mssm} == 1) {
+    my $user_name = $ENV{USER};
+    $sloc = "/sc/orga/scratch/$user_name/";
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				$sloc =~ s/^~/$ENV{HOME}/g;
+				$sloc =~ s/^\./$cd/g;        
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
+
+elsif ($clusters{uppmax} == 1) {
+    $sloc = "\$TMPDIR"; # $TMPDIR gets populated with /scratch/$SLURM_JOB_ID for
+                        # each job. Storing files directly in /scratch is not safe.
+                        # On login nodes $TMPDIR is just /scratch/.
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
+
+else {
+    print "Please enter a scratch directory to use:\n";
+    $sloc = "$cd/tmp/";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				$sloc =~ s/^~/$ENV{HOME}/g;
+				$sloc =~ s/^\./$cd/g;        
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+
+}
+
+unless (-d $sloc) {
+    print "Making scratch directory: $sloc\n\n";
+    &mysystem("mkdir -p $sloc");
+}
+else {
+    print "Scratch directory already exists at $sloc\n";
+}
+print "\n";
+
+#############################
+# write config file to home directory
+#############################
+if ($old_initials ne "NA") {
+    print " -> Do you want to use the entry found in the old $conf_file? ($old_initials) (y or n)\n";
+    while (1) {
+	my $answer = lc <>;
+	chomp $answer;
+	if ($answer eq "y") {$initials = $old_initials;last;}
+	elsif ($answer eq "n") {
+	    print "please give me new ones then: \n";
+
+	    while (1) {
+		$initials = lc <>;
+		chomp $initials;
+		if (length($initials) == 2) {last;}
+		else {print "Make sure initials are 2 letters!\n";}
+	    }
+	    
+	    
+	    last;
+	}
+	else {print "Please answer with y or n.\n";}
+    }
+}
+else {
+    print "Please enter your initials (2 letters):\n";
+    while (1) {
+	$initials = lc <>;
+	chomp $initials;
+	if (length($initials) == 2) {last;}
+	else {print "Make sure initials are 2 letters!\n";}
+    }
+}
+print "\n";
+
+
+
+print "Please enter your email address:\n";
+if ($old_email ne "NA") {
+    print " -> Do you want to use the entry found in the old $conf_file? ($old_email) (y or n)\n";
+    while (1) {
+	my $answer = lc <>;
+	chomp $answer;
+	if ($answer eq "y") {$email = $old_email;last;}
+	elsif ($answer eq "n") {
+	    print "please give me a new one then: \n";
+
+	    while (1) {
+		$email = lc <>;
+		chomp $email;
+		last;
+	    }
+	    
+	    last;
+	}
+	else {print "Please answer with y or n.\n";}
+    }
+}
+else {
+
+    $email = <>;
+    chomp $email;
+
+}
+print "\n";
+
+
+my $defall = 0;
+
+if ($clusters{lisa} == 1) {
+    print "Do you want to use default values for the rest of the installation process? (y or n)\n";
+    while (1) {
+	my $answer = lc <>;
+	chomp $answer;
+	if ($answer eq "y") {print "Using default values for the rest of the installation process\n\n"; $defall = 1;last;}
+	elsif ($answer eq "n") {print "Not using default values for the rest of the installation process\n\n"; $defall = 0;last;}
+	else {print "Please answer with y or n.\n";}
+    }
+}
+
+
+
+
+
+    
+
+my $home_dir = $ENV{HOME};
+$loloc = "$home_dir/";
+print "Do you want to use the following default directory to store your log files ($loloc)? (y or n)\n";
+print "\t$loloc\n";
+if ($defall == 0) {
+    while (1) {
+	my $answer = lc <>;
+	chomp $answer;
+	if ($answer eq "y") {print "Using $loloc as the log directory.\n\n";last;}
+	elsif ($answer eq "n") {print "Please enter a log directory to use:\n";
+				$loloc = <>;
+				chomp $loloc;
+				$loloc =~ s/^~/$ENV{HOME}/g;
+				$loloc =~ s/^\./$cd/g;        
+				last;}
+	else {print "Please answer with y or n.\n";}
+    }
+}
+
+
+print "\n";
+
+my %longvar = ("ploc","PLINK",
+	       "p2loc","PLINK2",
+	       "shloc","SHAPEIT",
+	       "sh3loc","SHAPEIT3",
+	       "ealoc","EAGLE",
+	       "bgziploc","BGZIP",
+	       "tabixloc","TABIX",
+	       "minimac3loc","Minimac3",
+	       
+	       "i2loc","IMPUTE2",
+	       "i4loc","IMPUTE4",
+	       "liloc","Liftover",
+	       "eloc","Eigenstrat",
+	       "rloc","R",
+	       "rpac","Rpackages",
+	       "hmloc","HapMap reference",
+	       "meloc","METAL",
+	       "ldloc","LDscore",
+	       "bcloc","BCFtools",
+	       "bcrloc","BCFtools_resources",
+#	       "hvloc","HaploView"
+    );
+	       
+
+my %variables = ("ploc", "",
+		 "p2loc","",
+		 "bgziploc","",
+		 "tabixloc","",
+		 "minimac3loc","",
+		 
+		 "shloc","",
+		 "sh3loc","",
+		 "ealoc","",
+		 "i2loc","",
+		 "i4loc","",
+		  "liloc","",
+		  "eloc","",
+		  "rloc","",
+		 "rpac","",
+		  "hmloc","",
+		 "meloc","",
+		 "bcloc","",
+		 "bcrloc","",
+#		  "hvloc","",
+    );
+
+
+
+
+    
+if ($clusters{broad}){
+    %variables = ("ploc", "/home/unix/sripke/plink_src/src/",
+		  "p2loc","/home/unix/sripke/plink_src/plink_1.9_newest/",
+		  "shloc","/home/unix/sripke/shapeit/",
+		  "sh3loc","/psych/genetics_data/ripke/rp_bins/shapeit3/",
+		  "bgziploc","/psych/genetics_data/ripke/rp_bins/tabix/tabix_rom/",
+		  "tabixloc","/psych/genetics_data/ripke/rp_bins/tabix/tabix_rom/",
+		  "minimac3loc","/psych/genetics_data/ripke/rp_bins/tabix/tabix_rom/",
+		  "ealoc","/psych/genetics_data/ripke/rp_bins/Eagle_v2.3.5/",
+		  "i2loc","/psych/genetics_data/ripke/references_from_debakkerscratch/impute_v2/impute_v2/impute_v2.3.2_x86_64_static/",
+		  "i4loc","/psych/genetics_data/ripke/rp_bins/impute_v4/",
+		  "liloc","/home/unix/sripke/liftover/",
+		  "eloc","/home/unix/sripke/EIG6.0beta/bin/",
+		  "ldloc","/psych/genetics_data/ripke/ldsc/",
+		  "rloc","broadinstitute",
+		  "rpac","NA",
+		  "hmloc","/psych/genetics_data/ripke/references_outdated/hapmap_ref/",
+		  "meloc","/psych/genetics_data/ripke/references_from_debakkerscratch/metal/2011_03/",
+		  "bcloc","/psych/genetics_data/ripke/rp_bins/bcftools/new_0816/bcftools-1.3.1_bin/bin/",
+		  "bcrloc","/psych/genetics_data/ripke/rp_bins/bcftools/bcftools-1.3.1/resources/",
+#		  "hvloc","/home/radon01/sripke/bakker_ripke/haploview/",
+	);
+}
+
+elsif ($clusters{lisa}){
+    %variables = ("ploc", "/home/gwas/plink/1.08/src",
+		  "p2loc","/home/gwas/plink2/plink_1.9_newest",
+		  "shloc","/home/gwas/shapeit",
+		  "sh3loc","/home/gwas/shapeit/shapeit3",
+		  "ealoc","/home/gwas/eagle/Eagle_v2.3.5/",
+		  "bgziploc","/home/gwas/rp_exec/bgzip/",
+		  "tabixloc","/home/gwas/rp_exec/tabix/",
+		  "minimac3loc","/home/gwas/rp_exec/minimac/",
+		  "i2loc","/home/gwas/bin_impute_v2/impute_v2.3.2_x86_64_static",
+		  "i4loc","/home/gwas/bin_impute_v4",
+		  "liloc","/home/gwas/liftover",
+		  "ldloc","/home/gwas/ldsc/",
+		  "eloc","/sara/sw/eigensoft-5.0.1/bin/",
+		  "rloc","/sara/sw/R-3.1.2/bin/",
+		  "rpac","/home/gwas/Rlibs",
+		  "hmloc","/home/gwas/pgc-samples/hapmap_ref/",
+		  "meloc","/home/gwas/metal",
+		  "bcloc","/home/gwas/bcftools/",
+		  "bcrloc","/home/gwas/bcftools/",
+#		  "hvloc","./",
+	);
+}
+
+
+
+elsif ($clusters{computerome}){
+    %variables = ("ploc", "/home/people/sripke/rp_external_bins/plink/",
+		  "p2loc","/home/people/sripke/rp_external_bins/plink_1.9_newest/",
+		  "shloc","/home/people/sripke/rp_external_bins/shapeit/",
+		  "sh3loc","NA",
+		  "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
+
+		  
+		  "i2loc","/home/people/sripke/rp_external_bins/impute2/",
+		  "i4loc","NA",
+		  "liloc","/home/people/sripke/rp_external_bins/liftover/",
+		  "ldloc","/home/people/sripke/rp_external_bins/ldsc/",
+		  "eloc","/home/people/sripke/rp_external_bins/EIG6.0beta/",
+		  "rloc","/services/tools/R-3.1.2/bin/",
+		  "rpac","/home/people/sripke/rp_external_bins/Rpackages/",
+		  "hmloc","/home/people/sripke/imputation_references/",
+		  "meloc","/home/people/sripke/rp_external_bins/metal/",
+		  "bcloc","NA",
+		  "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
+#		  "hvloc","./",
+	);
+}
+
+
+elsif ($clusters{co_ipsych}){
+    %variables = ("ploc", "/data/tools/plink-1.07/",
+		  "p2loc","/data/tools/plink2_sept2015/",
+		  "shloc","/data/tools/shapeit_sept_2015/",
+		  "sh3loc","NA",
+		  "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
+		  "i2loc","/data/tools/impute-2.3.2/",
+		  "i4loc","NA",
+		  "liloc","/data/user_tools/rp_external_bins/liftover/",
+		  "ldloc","/data/user_tools/rp_external_bins/ldsc/",
+		  "eloc","/data/tools/eigensoft-6.0.1/bin/",
+		  "rloc","/data/tools/R-3.2.1/bin/",
+		  "rpac","/data/user_tools/rp_external_bins/Rpackages/",
+		  "hmloc","/data/user_tools/imputation_references/",
+		  "meloc","/data/tools/metal-20110325/",
+		  "bcloc","NA",
+		  "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
+#		  "hvloc","./",
+	);
+}
+
+elsif ($clusters{genomedk}){
+    %variables = ("ploc", "/project/ricopili/plink_src/",
+		  "p2loc","/project/ricopili/plink_1.9_jul4/",
+		  "shloc","/project/ricopili/3rd_bins/shapeit/",
+		  "sh3loc","NA",
+		  "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
+		  "i2loc","/project/ricopili/3rd_bins/impute2/",
+		  "i4loc","NA",
+		  "liloc","/project/ricopili/3rd_bins/liftover/",
+		  "eloc","/project/ricopili/3rd_bins/eigenstrat/bin/",
+		  "rloc","/com/extra/R/3.1.0/bin",
+		  "rpac","NA",
+		  "hmloc","/project/ricopili/reference_dir/",
+		  "meloc","/project/ricopili/3rd_bins/metal/",
+		  "bcloc","NA",
+		  "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
+#		  "hvloc","./",
+	);
+}
+
+elsif ($clusters{mssm}){
+    %variables = ("ploc", "/hpc/users/xripkes01/ricopili/3rd_binaries/plink-1.07-src-sripke/",
+		  "p2loc","/hpc/users/xripkes01/ricopili/3rd_binaries/plink-1.09-src-aug4/",
+		  "shloc","/hpc/users/xripkes01/ricopili/3rd_binaries/shapeit/",
+		  "sh3loc","NA",
+		  "ealoc","pleasedownload_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
+		  "i2loc","/hpc/users/xripkes01/ricopili/3rd_binaries/impute2/",
+		  "i4loc","NA",
+		  "liloc","/hpc/users/xripkes01/ricopili/3rd_binaries/liftover/",
+		  "eloc","/hpc/packages/minerva-common/eigensoft/5.0.1/bin/",
+		  "rloc","/hpc/packages/minerva-common/R/2.15.3/lib64/R/bin/",
+		  "rpac","NA",
+		  "hmloc","/hpc/users/xripkes01/ricopili/reference_dir/",
+		  "meloc","/hpc/users/xripkes01/ricopili/3rd_binaries/metal/",
+		  "bcloc","NA",
+		  "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
+#		  "hvloc","./",
+	);
+}
+    elsif ($clusters{uppmax}){
+        %variables = ("ploc", "/sw/apps/bioinfo/plink/1.07/$uppmax_cluster/",
+		      "p2loc","/proj/$uppmax_project/ricopili/software/plink2/",
+		      "shloc","/proj/$uppmax_project/ricopili/software/shapeit/bin/",
+		      "sh3loc","NA",
+		      "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
+		      "i2loc","/proj/$uppmax_project/ricopili/software/impute2/impute_v2.3.2_x86_64_static/",
+		      "i4loc","NA",
+		      "liloc","/proj/$uppmax_project/ricopili/software/liftover/",
+		      "ldloc","/proj/$uppmax_project/ricopili/software/ldsc/",
+		      "eloc","/proj/$uppmax_project/ricopili/software/EIG6.0.1/bin/",
+		      "rloc","/usr/bin/",
+		      "rpac","/proj/$uppmax_project/ricopili/software/Rpackages",
+		      "hmloc","/proj/$uppmax_project/ricopili/hapmap_ref/",
+		      "meloc","/proj/$uppmax_project/ricopili/software/metal/generic-metal/",
+		      "bcloc","NA",
+		      "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
+    	);
+}
+
+
+
+foreach (keys %variables){
+
+    if ($variables{$_} eq "broadinstitute" && $longvar{$_} eq "R") {
+	print "You are running R on broad, took the default value\n\n";
+    }
+    elsif ($variables{$_} eq "NA" && $longvar{$_} eq "Rpackages") {
+	print "assuming library rmeta is installed on standard R\n\n";
+    }
+    else {
+	if ($variables{$_} ne '' && (-d $variables{$_})){
+	    print "For $_($longvar{$_}), do you want to use the default location ($variables{$_}) (y or n)?\n";
+	    if ($defall == 0) {
+		while (1) {
+		    my $answer = lc <>;
+		    chomp $answer;
+		    if ($answer eq "y") {
+			print "Using $variables{$_} for $longvar{$_}.\n\n";
+			last;
+		    }
+		    elsif ($answer eq "n") {print "Please enter a new location to use for $longvar{$_}:\n";
+					    my $input = <>;
+					    chomp $input;
+					    $input =~ s/^~/$ENV{HOME}/g;
+					    $input =~ s/^\./$cd/g;
+					    unless ( -d $input ){print "Not a valid directory. Please try again.\n";next;}
+					    print "\n";
+					    last;}
+		    else {print "Please answer with y or n.\n";}
+		}
+	    }
+	    else {
+		print " - took default value -\n";
+	    }
+	}
+	else {
+	    while (1){
+		print "For $_($longvar{$_}), no default value found, right now it is this here: <$variables{$_}> (y or n)?\n";
+		my $input = "";
+		$input = <>;
+		chomp $input;
+		$input =~ s/^~/$ENV{HOME}/g;
+		$input =~ s/^\./$cd/g;
+		unless ( -d $input ){print "Not a valid directory. Please try again.\n";next;}
+		$variables{$_} = $input;
+		print "\n";
+		last;
+	    }
+	}
+    }
+}
+
+foreach (keys %variables){
+    push (@text, "$_ $variables{$_}");
+}
+
+push (@text, "home $home");
+push (@text, "sloc $sloc");
+push (@text, "init $initials");
+push (@text, "email $email");
+push (@text, "loloc $loloc");
+
+### define queue depending on cluster
+#if ($clusters{broad}){push (@text, "queue bsub")}
+
+if ($clusters{broad}){push (@text, "queue qsub_b")}
+if ($clusters{lisa}){push (@text, "queue qsub")}
+if ($clusters{computerome} || $clusters{co_ipsych}){push (@text, "queue qsub_c")}
+if ($clusters{genomedk}){push (@text, "queue slurm")}
+if ($clusters{mssm}){push (@text, "queue msub")}
+if ($clusters{uppmax}){push (@text, "queue slurm_u")}
+if ($clusters{uppmax}){push (@text, "uppmax_project $uppmax_project")}
+}
+
+unless ( -e $conf_file && $ans_ow eq "n") {
+    die $! unless open FILE, "> $conf_file";
+    foreach (@text) {print FILE "$_\n"};
+    close FILE;
+}
+
+#############################
+# read ricopili.config file with default parameters
+#############################
+my %conf = (); ## hash with config parameters
+
+### Read config file
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+print "\n";
+
+#############################
+# write pipeline status file to home directory
+#############################
+
+my @log_file = ("$conf{loloc}/preimp_dir_info","$conf{loloc}/impute_dir_info","$conf{loloc}/pcaer_info","$conf{loloc}/idtager_info","$conf{loloc}/repqc2_info","$conf{loloc}/areator_info","$conf{loloc}/merge_caller_info","$conf{loloc}/postimp_navi_info","$conf{loloc}/reference_dir_info");
+
+foreach (@log_file) {
+    unless ( -e $_) {
+    print "Creating pipeline status file to $_\n";
+    &mysystem("touch $_");
+    }
+}
+
+############################
+# check whether all binary directories exist
+############################
+my @fail_path = ();
+my %locs = ("ploc","","p2loc","","shloc","","sh3loc","","ealoc","","i2loc","","i4loc","","liloc","","eloc","","rloc","","hmloc","","meloc","","ldloc","","rpac","bcloc", "bcrloc");
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    my $path = $cells[1];
+    my $variable = $cells[0];
+    unless (-d $path) {
+        if (exists $locs{$variable}) {push(@fail_path,$variable)};
+    }
+}
+close FILE;
+
+#############################
+# print finish statement
+#############################
+
+my $fail = 0;
+if ($#fail_path != -1) { 
+
+   
+#    foreach (@fail_path) {
+#        unless ($_ eq "rloc" && $clusters{broad} == 1) {
+
+    foreach my $confvar (@fail_path) {
+	if ($confvar eq "rloc" && $clusters{broad} == 1) {
+            next;
+	}
+	elsif ($confvar eq "rpac" && $clusters{lisa} != 1 && $clusters{other} != 1) {
+            next;
+	}
+	else{
+            $fail += 1;            
+        }
+    }
+    if ($fail != 0) {
+	print "Error: something went wrong\n";
+        print "You will need to install the binaries as described here (https://sites.google.com/a/broadinstitute.org/ricopili/resources) and use a text editor (emacs,vim,etc.) to edit the file paths listed in $hdir/ricopili.conf for the following variables:\n";
+        foreach (@fail_path) {
+            unless ($_ eq "rloc" && $clusters{broad} == 1) {
+                print "\t$_\n";            
+            }
+        }
+	exit;
+    }
+}
+
+
+&mysystem("rm install_true");    
+&mysystem("echo \"Configuration for RP was successful.\" | mail -s rp_config  $conf{'email'}");    
+
+
+
+my $hostname = $ENV{HOSTNAME}.'.'.$ENV{DOMAINNAME};
+if ($clusters{lisa} == 1) {
+    $hostname = "lisa.surfsara.nl";
+}
+if ($clusters{computerome} == 1) {
+    $hostname = "computerome.cbs.dtu.dk";
+}
+
+if ($clusters{co_ipsych} == 1) {
+    $hostname = "ipsych.computerome.cbs.dtu.dk";
+}
+
+
+print "-------------------------------------------------------------------\n";
+print "------------- here some tips        -------------------------------\n";
+print "-------------------------------------------------------------------\n\n";
+print "adding these commands to your ~/.bashrc can be very helpful(you have to logout and login again for these to be in effect)\n\n";
+print "## for colored output of ls:\n";
+print 'alias ls=\'ls --color=auto\''."\n\n";
+print "## for easy copy over to your local machine:\n";
+print 'alias c=\'sed "s#.*#scp '.$ENV{LOGNAME}.'@'.$hostname.':$(pwd)/& .#"\''."\n\n";
+
+
+print "## for list of currently running jobs:\n";
+if ($clusters{lisa} == 1 || $clusters{computerome} == 1 || $clusters{co_ipsych} == 1 || $clusters{broad} == 1) {
+    print 'alias q=\'qstat -u '.$ENV{LOGNAME}."\'\n\n";
+}
+elsif ($clusters{uppmax}) {
+    print 'alias q=\'squeue -u '.$username."\'\n\n";
+}
+else {
+    print "alias q=\'bjobs -w\'\n\n";
+
+}
+
+if ($clusters{computerome} == 1) {
+    print "## load queuing system by default:\n";
+    print "module load torque\n\n";
+    print "## different prompt:\n";
+    print 'PS1="$USER@computerome.cbs.dtu.dk:"\'\w\'" "'."\n\n";      
+}
+elsif ($clusters{co_ipsych} == 1) {
+    print "## different prompt:\n";
+    print 'PS1="$USER@ipsych.computerome.cbs.dtu.dk:"\'\w\'" "'."\n\n";  
+}
+else {
+    print "## different prompt:\n";
+    print 'PS1="'.$ENV{USER}.'@'.$hostname.':"\'\w\'" "'."\n\n";
+}
+
+
+
+print "\n\n";
+print "*********************************************************************\n";
+print "*****  Installation successful                    *******************\n";
+print "*********************************************************************\n";
+print "\n\n";
+print "If you do not receive a success email with the subject rp_config, please check your email address is entered correctly at $conf_file\n\n";
+
+
+exit;
+
+
+
+########## Done ##########
