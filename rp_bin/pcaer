@@ -693,6 +693,8 @@ version: $rp_version
         --serial          no sending jobs to queue all in one run
                                -> usually only used for testing 
         --longq          forces long queue for some jobs (bcomb)
+                                  bfile merges: me300, mepr
+                                  eigenstrat: epca
 
 
 
@@ -2134,6 +2136,9 @@ unless (-e "$bfile_menv.mds") {
 	    $sjadir = "$pcaer_dir/$subdir_mds";
 	    $sjaname = "epca";
 	    $sjatime = 2;
+	    if ($longq) {
+		$sjatime = 24;
+	    }
 	    $sjamem = 2000;
 	    @sjaarray = @job_arr;
 
