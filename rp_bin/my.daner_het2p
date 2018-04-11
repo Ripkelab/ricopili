@@ -11,6 +11,7 @@ my $progname = $0;
 
 my $colp = 10;
 my $colhp = -1;
+my $coldf = -1;
 #my $th = 3;
 
 
@@ -112,7 +113,9 @@ foreach my $cc (0..$#cells) {
     if ($cells[$cc] eq "HetPVa") {
 	$colhp = $cc;
     }
-
+    if ($cells[$cc] eq "HetDf") {
+	$coldf = $cc;
+    }
 #    print "cell: ".$cells[$cc]."\n";
 }
 
@@ -121,8 +124,14 @@ if ($colhp == -1) {
     exit;
 }
 
+if ($coldf == -1) {
+    print "Error: no HetDf found in header\n";
+    exit;
+}
+
 $cells[$colp] = "HetPVa";
 $cells[$colhp] = "P";
+
 
 
 $ouz->gzwrite("@cells\n") ;
@@ -140,6 +149,9 @@ while ($inz->gzreadline($line)){
 	next;
 
 #	exit;
+    }
+    if ($cells[$coldf] == 0) {
+	next;
     }
     my $tmp_p = $cells[$colp];
     $cells[$colp] = $cells[$colhp];
