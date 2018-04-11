@@ -315,7 +315,7 @@ if ($pcol==0){
 	print "$cc\t$cellx\n";
 	$cc++;
     }
-    die "please chose now\n";
+    die "please choose now\n";
 }
 
 if ($cacohead) {
@@ -324,6 +324,7 @@ if ($cacohead) {
 }
 
 
+my $nwarni=0;
 
 my $opfile = $pfile."o";
 die "$! ($opfile)" unless open OFILE, "> $opfile";
@@ -334,11 +335,16 @@ while (<FILE>){
 #    my @cells = &split_line($_);
 #    print "$cells[$pcol-1]\n";
     my $single_pval = $cells[$pcol-1];
+
+    if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0){
+	if ($nwarni < 5) {
+	    print "very strange: $cells[1] $cells[$pcol-1]\n";
+	    $nwarni++;
+	}
+	next;
+    }
+    
     $single_pval = $exp_ceiling if ($single_pval < $exp_ceiling);
-#    if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0){
-#	print "very strange: $cells[1] $cells[$pcol-1]\n";
-#	next;
-#    }
 
     if ($maf_th < 1.00) {
 	next if $cells[$frcol-1] <= $maf_th;
@@ -714,5 +720,7 @@ print "tar -cvzf $outname.tar.gz $pfile.qq.Rwork_tmp $pfile.forQQ_tmp\n";
 print "$outname\n";
 
 chdir ($rootdir);
-exit;
+
 &mysystem ("rm -rf  $workdir");
+
+exit;
