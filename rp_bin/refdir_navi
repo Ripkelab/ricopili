@@ -1270,7 +1270,13 @@ unless (-e $sample_fini) {
 	}
 	if (@chr22_samples < 1) {
 	    print "Error: no *chr22*samples files\n";
-	    exit;
+	    print "checkout chrX samples\n";
+	    @chr22_samples = `ls *chrX*samples`;
+	    if (@chr22_samples != 1) {
+		print "Error: no *chrX*samples files either\n";
+		exit;
+	    }
+
 	}
 	
 

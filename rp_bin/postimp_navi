@@ -207,6 +207,7 @@ version: $rp_version
  --idin STRING     ID inclusion list (before imputation, while ripping)
 
  --sep_pca         create and use a separate PCA for each cohort (will get better control over popstrat)
+ --sep_idin STRING use a different IDset than the separate 
 
  --mds STRING      mds-file (with studyindicator, (if necessary), 
                        NOMDS if no pcaer wished and analysis without covariates
@@ -347,6 +348,7 @@ GetOptions(
     "mach"=> \my $mach_sw,
     "mds=s"=> \my $mds_name,
     "sep_pca"=> \my $sep_pca,
+    "sep_idin=s"=> \my $sep_idin_str,
     "addcov=s"=> \my $addcov_name,
     "idex=s"=> \my $idex_name,
     "idin=s"=> \my $idin_name,
@@ -2140,10 +2142,18 @@ my %bg_in;
 
 my %sep_covfile;
 my %sep_covstr;
-my $sep_idin = "";
+my $sep_idin = "$outname.menv.mds_cov";
+if ($sep_idin_str) {
+    $sep_idin = $sep_idin_str;
+    unless (-e "$seppcadir/$sep_idin") {
+	&mysystem ("ln -s $rootdir/$sep_idin $seppcadir/$sep_idin");
+    }
+}
+
 
 if ($sep_pca) {
-    $sep_idin = "$outname.menv.mds_cov";
+
+    
     my $mdscov_file = "$outname.covfiles";
     unless (-e $mdscov_file) {
 	my $pcaer_count = 0;
@@ -2164,23 +2174,30 @@ if ($sep_pca) {
 		    my $bfile_bgs = "$bfile.bgs";
 		    my $bgs_bed_source = "$bgdir/$bfile_bgs";
 		    my $bgs_bed_target = "$seppcadir/$bfile_bgs";
-		    print "linking $bgs_bed_source.bed/bim/fam to $seppcadir\n";
+
 		    unless (-e "$bgs_bed_target.bed") {
+			print "linking $bgs_bed_source.bed to $seppcadir\n";
 			&mysystem ("ln -s $bgs_bed_source.bed $bgs_bed_target.bed");
 		    }
 		    unless (-e "$bgs_bed_target.bim") {
+			print "linking $bgs_bed_source.bim to $seppcadir\n";
 			&mysystem ("ln -s $bgs_bed_source.bim $bgs_bed_target.bim");
 		    }
 		    unless (-e "$bgs_bed_target.fam") {
+			print "linking $bgs_bed_source.fam to $seppcadir\n";
 			&mysystem ("ln -s $bgs_bed_source.fam $bgs_bed_target.fam");
 		    }
 
-		    unless (-e "$seppcadir/$bfile.bgs.menv.mds_cov") {
+		    unless (-e "$seppcadir/$bfile.bgs.menv.trans.mds") {
 			push @sep_pca_str_single, "pcaer --prefercase --out $bfile.bgs $bfile.bgs";
 			$pcaer_count++;
 		    }
 		    else {
 			unless (-e "$bfile.bgs.menv.trans.mds") {
+			    unless (-e "$seppcadir/$bfile.bgs.menv.mds.overworked.p_assoc.txt") {
+				print "Error: not existing: $seppcadir/$bfile.bgs.menv.mds.overworked.p_assoc.txt\n";
+				exit;
+			    }
 			    &mysystem ("ln -s $seppcadir/$bfile.bgs.menv.trans.mds .");
 			    &mysystem ("ln -s $seppcadir/$bfile.bgs.menv.mds.overworked.p_assoc.txt .");
 			}
@@ -2206,13 +2223,18 @@ if ($sep_pca) {
 		
 	    }
 
-	    unless (-e "$seppcadir/$outname.menv.mds_cov") {    
+	    unless (-e "$seppcadir/$sep_idin") {
+		print "###############################################################################################\n";
+		print "not existing, trying to create (if present please copy it there):\n$seppcadir/$sep_idin\n";
+		print "###############################################################################################\n";
 		push @sep_pca_str_single, "$sep_pca_str_comb";
 		$pcaer_count++;
 	    }
 	    else {
-		unless (-e "$outname.menv.mds_cov") {
-		    &mysystem ("ln -s $seppcadir/$outname.menv.mds_cov .");
+		unless (-e "$sep_idin") {
+		    print "debug1: $sep_idin\n";
+		    &mysystem ("ln -s $seppcadir/$sep_idin .");
+		    print "debug2\n";
 		}
 	    }
 	}		
@@ -2278,14 +2300,75 @@ if ($sep_pca) {
 	$sep_covstr{$cells[0]} = $cells[2];
     }
     close IN;
+
+
+
+    my @bimfli_files_tmp2;
+ #   print "nbfile: ".@bimfli_files."\n";
+
+
+    die $!." <$seppcadir/$sep_idin>" unless open MDSI, "< $seppcadir/$sep_idin";
+    while (my $line = <MDSI>){
+	my @cells = &split_line($line);
+	$mds_ids {"$cells[0]\t$cells[1]"} = 1;
+    }
+    close MDSI;
+
+
+    
+    
+    foreach my $bf (@bimfli_files) {
+	my $bfile = $bf;
+	$bfile =~ s/.bim$//;
+	my $famfile_loc = "$bfile.fam";
+	my $famloc = $famfile_loc;
+	$famloc =~ s/hg19.ch.fl.fam$/fam/;
+	$famloc =~ s/ch.fl.fam$/fam/;
+
+
+	my $found = 0;
+
+	
+	die $!." <$rootdir/$famloc>" unless open IN, "< $rootdir/$famloc";
+	while (my $line = <IN>){
+	    my @cells = &split_line($line);
+	    if (exists $mds_ids{"$cells[0]\t$cells[1]"}) {
+#		push @bimfli_files_tmp2, $bfile;
+		push @bimfli_files_tmp2, $bf;
+		$found = 1;
+		last;
+	    }
+	}
+	close IN;
+	if ($found == 0) {
+	    print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n";
+	    
+	}	
+	
+#	if (exists $sep_covfile{$bfile}){
+#
+#	    print "$bfile\n";	    
+#	}
+    }
+    @bimfli_files = @bimfli_files_tmp2;
+#    print "nbfile: ".@bimfli_files."\n";
+
+
+    
 }
 
 
 
+#foreach my $key (keys %sep_covfile) {
+
+#    print "key: $key\n";
+#    print "sep_covfile: $sep_covfile{$key}\n";
+#    print "sep_covstr: $sep_covstr{$key}\n";
+#}
 
 
-
-
+#print "debug\n";
+#exit;
 
 
 
@@ -2392,7 +2475,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 			    ###################################
 			    ### for sep_pca
 			    ####################################
-			    if ($sep_idin) {
+			    if ($sep_pca) {
 				$idin_str = "--idin $sep_idin";
 				my $sep_covfile_loc = $sep_covfile{$bfile};
 				my $sep_covstr_loc = $sep_covstr{$bfile};

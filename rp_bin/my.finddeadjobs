@@ -11,7 +11,9 @@ $progname =~ s!^.*/!!;
 use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
+    "Eqw"=> \my $eqw,
     "user=s"=> \my $username,
+
     );
 
 use File::Basename;
@@ -25,6 +27,7 @@ version: $version
 
         --user STRING   USERNAME if different to \$USER
         --help          print this message then quit
+        --Eqw           find jobs in Eqw state and kill them
 
 
  created by Stephan Ripke 2017 at MGH, Boston, MA
@@ -96,22 +99,71 @@ if ($username) {
 }
 
 my @qstat_out = `qstat -u $user`;
+#my @qstat_out = `cat tmp`;
+
+
+my @qdel_cmds;
+my @qdel_cmds_eqw;
+my @qdel_cmds_sub;
+
 my %running_jobs;
+
+my @qdel_cmds_inter;
+
+
+print "\n----------------------\n";
+
+
+
+print "entering Eqw mode....\n";
 
 foreach my $qstat_row (@qstat_out) {
     my @cells = @{&split_line_ref(\$qstat_row)};
     if (@cells > 4) {
+
 	if ($cells[4] eq "r"){
-#	    print "@cells\n";
-	    $running_jobs{$cells[0]} = 1;
+	    $running_jobs{$cells[0]} = 1;   # this is needed for the dead jobs
+	}
+
+	if ($cells[4] eq "Eqw"){
+
+	    my $jid = $cells[0];
+	    my $task_str = $cells[8];
+	    my @task_arr = split ',', $task_str;
+#	    print "----------------------\n";
+#	    print $task_str."\n";
+	    foreach my $tik (@task_arr) {
+#		print "--------\n";
+#		print $tik."\n";
+		my @tik_arr = split ':', $tik;
+#		print "$tik_arr[0]\n";
+		my @tik_range = split '-', $tik_arr[0];
+#		print "$tik_range[0]\n";
+		if (@tik_range == 1) {
+		    push @qdel_cmds_sub, "qdel $jid -t $tik_range[0]";
+		}
+		else {
+#		    print "$tik_range[1]\n";
+		    foreach my $tik_id ($tik_range[0] .. $tik_range[1]) {
+			push @qdel_cmds_sub, "qdel $jid -t $tik_id";
+		    }
+		}
+		
+	    }
+#	    exit;
+	    push @qdel_cmds_eqw, "qdel $jid";
 	}
     }
 }
 
 
-my @qdel_cmds;
-my @qdel_cmds_inter;
-print "\n----------------------\n";
+#print "Eqw done\n";
+#exit;
+
+
+
+
+
 
 foreach my $jid (keys %running_jobs) {
     print "looking for job $jid\n";
@@ -188,6 +240,32 @@ else {
     print "no suspicious interactive jobs detected\n";
 }
 print "---------------------------------\n";
+
+if (@qdel_cmds_eqw > 0) {
+    print @qdel_cmds_eqw." Eqw jobs detected, command to delete them (but I would recommend the one below):\n";
+    foreach my $qdel_cmd_eqw (@qdel_cmds_eqw) {
+	print "$qdel_cmd_eqw\n";
+    }
+    print "\n---------------------------------\n";
+
+    print @qdel_cmds_sub." subtasks in Eqw detected, commands to delete them:\n";
+    foreach my $qdel_cmd_sub (@qdel_cmds_sub) {
+	print "$qdel_cmd_sub\n";
+    }
+    print "\n---------------------------------\n";
+
+
+}
+else {
+    print "0 Eqw jobs detected\n";
+}
+
+print "\n---------------------------------";
+print "---------------------------------\n";
+
+
+
+
 exit;
 
 

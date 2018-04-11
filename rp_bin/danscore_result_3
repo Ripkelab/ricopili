@@ -331,8 +331,8 @@ foreach my $st (1..10) {
 	}
 	if (keys %prof_count_collect > 1) {
 	    print "Warning: different profile-counts for different individuals, please check if this happens only for distinct datasets\n";
-	    foreach my $_ (keys %prof_count_collect) {
-		print $_." ".$prof_count_collect{$_}."\n";
+	    foreach my $key (keys %prof_count_collect) {
+		print $key." ".$prof_count_collect{$key}."\n";
 	    }
 #	    exit;
 	}

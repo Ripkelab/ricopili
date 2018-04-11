@@ -3,6 +3,57 @@
 use strict;
 use warnings;
 
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+##### help message
+my $usage = "
+Usage : $progname [options]
+
+
+ --help            help
+ --subG            go into subdirs with gigabytes
+ --subT            go into subdirs with terabytes
+
+
+find big files:
+find . -size +5G > all_big
+
+
+";
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "subG"=> \my $subG,
+    "subT"=> \my $subT,
+
+    
+    );
+
+die $usage if $help;
+
+
+
+my $rootdir = "";
+use Cwd;
+use File::Path;
+$rootdir = &Cwd::cwd();
+    
 
 my $now = localtime time;
 
@@ -21,6 +72,52 @@ if ($sc == 0){
 
 
 system ('tail -10 '."du_out_$date");
+
+print "\n";
+print "-------------------------\n";
+
+die ":".$! unless open IFILE, "< du_out_$date";
+while (my $line = <IFILE>){
+    my @cells = @{&split_line_ref(\$line)};
+    my $size = $cells[0];
+    my $dir = $cells[1];
+
+
+    if ($subG) {
+	if (($size =~ m/T$/ || $size =~ m/G$/) && $dir ne "." && -d $dir) {
+
+	    print "following subdir with Gigabytes: ";
+	    
+	    print "$dir\n";
+	    chdir ($dir);
+	    
+#	    sleep (3);
+	    system ("my.du --subG");
+	    chdir ($rootdir);
+	    
+	}
+    }
+
+    if ($subT) {
+	if (($size =~ m/T$/ ) && $dir ne "." && -d $dir) {
+	    print "following subdir with Gigabytes: ";
+	    
+	    print "$dir\n";
+	    chdir ($dir);
+	    
+	    #	    sleep (3);
+	    system ("my.du --subT");
+	    chdir ($rootdir);
+	    
+	}
+    }
+
+
+    
+}
+close IFILE;
+
+
 
 
 
