@@ -1251,7 +1251,7 @@ elsif ($clusters{lisa}){
     %variables = ("ploc", "/home/gwas/plink/1.08/src",
 		  "p2loc","/home/gwas/plink2/plink_1.9_newest",
 		  "shloc","/home/gwas/shapeit",
-		  "sh3loc","NA",
+		  "sh3loc","/home/gwas/shapeit/shapeit3",
 		  "ealoc","/home/gwas/eagle/Eagle_v2.3.5/",
 		  "bgziploc","/home/gwas/rp_exec/bgzip/",
 		  "tabixloc","/home/gwas/rp_exec/tabix/",
