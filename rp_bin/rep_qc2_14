@@ -2760,7 +2760,7 @@ if ($gwa_plot) {
     $la_comb = $la_comb * 1;
     die if ($la_comb eq "");
     die if ($la_comb <= 0);
-    die if ($la_comb > 20);
+#    die if ($la_comb > 20);
 
     my $systemGWA="gwa_plot_3 $prekno_txt --gc $la_comb --cols 1,8,2,3 --title GWA-Plot_gc --sig-gwa combined_set_alt.txt";
     print "$systemGWA\n";
