@@ -347,11 +347,11 @@ while (<FILE>){
     $single_pval = $exp_ceiling if ($single_pval < $exp_ceiling);
 
     if ($maf_th < 1.00) {
-	next if $cells[$frcol-1] <= $maf_th;
-	next if $cells[$frcol-1] >= 1-$maf_th;
+	next if $cells[$frcol-1] < $maf_th;
+	next if $cells[$frcol-1] > 1-$maf_th;
     }
     if ($info_th < 3.00) {
-	next if $cells[$infocol-1] <= $info_th;
+	next if $cells[$infocol-1] < $info_th;
     }
     if ($af_th > 0) {
 	my $fa = $cells[$facol-1];
@@ -364,7 +364,7 @@ while (<FILE>){
 	$ac_loc += $fa *  $nca;
 	$ac_loc += $fu *  $nco;
 
-	if (2*$ac_loc <= $af_th) {
+	if (2*$ac_loc < $af_th) {
 #	    print "@cells\n";#
 #	    print "snp:".$cells[1]."\n";#
 #	    print "ca-f:".$cells[$facol-1]."\n";
