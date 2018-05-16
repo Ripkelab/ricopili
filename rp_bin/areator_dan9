@@ -567,6 +567,7 @@ while ($ns == 0) {
 	
     $bb_head .= " gwas_catalog_span.6";
     $bb_head .= " genes.6.50kb(dist2index)";
+    $bb_head .= " N.genes.6.50kb";
   
     
     my $ns_loc = 0;
@@ -1139,6 +1140,7 @@ if ($pliclu) {
 			my $right_m = $index_pos + $span_right_6*1000 ;
 			my %gene_hash= ();
 			my $gene_str = "";
+			my $Ngenes = 0;
 			foreach my $ac (0..$#name_arr_loc) {
 #			    print $name_arr_loc[$ac];
 #			    print " ".$star_arr_loc[$ac];
@@ -1166,6 +1168,7 @@ if ($pliclu) {
 					
 #				    print $name_loc."(".$dist.")"."\n";
 					$gene_str .= ",".$name_loc."(".$dist.")";
+					$Ngenes++;
 					$gene_hash{$name_loc} = 1;
 				    }
 				    
@@ -1179,6 +1182,7 @@ if ($pliclu) {
 
 			print LDA " ".$prekno_out_2;
 			print LDA " ".$gene_str;
+			printf LDA " %03d",$Ngenes;
 
 
 

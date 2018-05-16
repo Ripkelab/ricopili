@@ -329,6 +329,7 @@ my %area_rico_name;
 
 my %area_gwc;
 my %area_genes;
+my %area_ngenes;
 my $genes_header = "genes_within_0.1_cm";
 
 
@@ -336,6 +337,7 @@ if ($areator) {
     my $snp_col = 0;
     my $gene_col1 = 13;
     my $gene_col2 = 14;
+    my $ngenes = 22;
     my $left = 13;
     my $right = 14;
    my $left2 = 13;
@@ -364,15 +366,17 @@ if ($areator) {
 	$snp_col = 0;
 	$gene_col1 = 21;
 	$gene_col2 = 21;
+	$ngenes = 22;
 	$left = 13;
 	$right = 14;
 	$left2 = 17;
 	$right2 = 18;
 	$nhgri = 20;
 	$gwc = 21;
+
 	$ldf6 = 16;
 	$chrom = 1;
-	$genes_header = "genes.6.50kb(dist2index)";
+	$genes_header = "N:genes.6.50kb(dist2index)";
     }
     die $!."($areator)" unless open FILE, "< $areator";
     while (my $line = <FILE>){
@@ -383,6 +387,7 @@ if ($areator) {
 	$snp_loc =~ s/\*//g;
 	if ($cells[$gene_col1] ne "") {
 	    $area_genes{$snp_loc} = "$cells[$gene_col1]\t$cells[$gene_col2]";
+	    $area_ngenes{$snp_loc} = "$cells[$ngenes]";
 	    $area_left{$snp_loc} = "$cells[$left]";
 	    $area_right{$snp_loc} = "$cells[$right]";
 	    $area_left2{$snp_loc} = "$cells[$left2]";
@@ -390,6 +395,7 @@ if ($areator) {
 #	    $area_span{$snp_loc} = "$cells[$span]";
 	    $area_nhgri{$snp_loc} = "$cells[$nhgri]";
 	    $area_gwc{$snp_loc} = "$cells[$gwc]";
+
 	    $area_ldf6{$snp_loc} = "$cells[$ldf6]";
 	    $area_chr{$snp_loc} = "$cells[$chrom]";
 
@@ -679,7 +685,7 @@ else {
     die "$!" unless open GENE, "> $out_name.comb.meta.gene"; 
     my $head = <META>;
     chomp($head);
-    print GENE "$head\tGene\tGene_range(300Kb)\n";
+    print GENE "$head\tGene\tN:Gene_range(300Kb)\n";
     while (my $line = <META>){
 	chomp($line);
 	$line =~ s/^[\s]+//g;
@@ -687,7 +693,7 @@ else {
 	my $snp_loc = $cells[1];
 
 	if (exists $area_genes{$snp_loc}) {
-	    print GENE "$line\t$area_genes{$snp_loc}\n";
+	    print GENE "$line\t$area_ngenes{$snp_loc}:$area_genes{$snp_loc}\n";
 	}
 	else {
 	    print GENE "$line\tno_lookup\tno_lookup\n";

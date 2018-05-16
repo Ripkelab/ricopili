@@ -970,7 +970,7 @@ die "$out_name.meta: $!" unless open META, "< $out_name.meta1.tbl";
 die "$out_name.metadaner.tmp: $!" unless open DANER, "> $out_name.metadaner.tmp"; 
 my $header = <META>;
 #print DANER "CHR\tSNP\tBP\tA1\tA2\tFRQ_A_$nca\tFRQ_U_$nco\tINFO\tOR\tSE\tP\tngt\tDirection\tHetISqt\tHetChiSq\tHetDf\tHetPVa";
-print DANER "CHR\tSNP\tBP\tA1\tA2\tFRQ_A_$nca\tFRQ_U_$nco\tINFO\tOR\tSE\tP\tngt\tDirection\tHetISqt\tHetDf\tHetPVa\tNca\tNco\tNeff";
+print DANER "CHR\tSNP\tBP\tA1\tA2\tFRQ_A_$nca\tFRQ_U_$nco\tINFO\tOR\tSE\tP\tngt\tDirection\tHetISqt\tHetDf\tHetPVa\tNca\tNco\tNeff_half";
 
 if ($detout) {
     foreach my $dfile (@ARGV) {

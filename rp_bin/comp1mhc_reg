@@ -273,16 +273,20 @@ while (my $line = <IN>){
     $pv_loc *= 1;
 
 
-#    print "$pv_loc\n";
+    print "$pv_loc\n";
 #    next if ($cells[$pvcol] eq "NA");
 
 #    next if ($cells[$pvcol]*1 = 0);
 
+    
     next if ($pv_loc == 0);
 
 
 
-    next if ($pv_loc > $pth);
+    if ($pv_loc > $pth) {
+	print "no\n";
+	next;
+    }
 #    next if ($cells[$pvcol] > 1.0e-06);
 
 
