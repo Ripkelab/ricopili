@@ -97,6 +97,7 @@ my $sfile = $ARGV[1];
 
 my $outhaps = $outname.".haps";
 my $outsample = $outname.".sample";
+my $outsampleimp4 = $outname.".sample.i4";
 my $outfam = $outname.".fam";
 
 my @haps_arr;
@@ -118,6 +119,7 @@ my %id_content;
 
 print "$sfile\n";
 print "$outsample\n";
+print "$outsampleimp4\n";
 print "$outfam\n";
 
 die $!."($sfile)" unless open IFILE, "< $sfile";
@@ -151,10 +153,15 @@ close IFILE;
 my @out_arr = keys %case_loc;
 
 die $!."($outsample)" unless open OFILE, "> $outsample";
+die $!."($outsampleimp4)" unless open OFILE3, "> $outsampleimp4";
 die $!."($outfam)" unless open OFILE2, "> $outfam";
 
 print OFILE "ID_1 ID_2 missing father mother sex plink_pheno\n";
 print OFILE "0 0 0 D D D B\n";
+
+print OFILE3 "ID_1 ID_2 missing sex\n";
+print OFILE3 "0 0 0 D\n";
+
 foreach my $cl (@out_arr) {
     my $i_loc = $id_loc{$cl};
     my $p1_loc = $id_loc{$parent1_hash{$cl}};
@@ -175,6 +182,7 @@ foreach my $cl (@out_arr) {
 
 
     my $id = $cl."_pca";
+
     print OFILE $id;
     print OFILE " ".$id;
     print OFILE " 0";
@@ -182,8 +190,16 @@ foreach my $cl (@out_arr) {
     print OFILE " ".$parent2_hash{$cl};
     print OFILE " ".$sex_loc;
     print OFILE " 2\n";
+
+    print OFILE3 $id;
+    print OFILE3 " ".$id;
+    print OFILE3 " 0";
+    print OFILE3 " ".$sex_loc."\n";
+
+
 #    print OFILE " 0\n";
     my $id = $cl."_pco";
+
     print OFILE $id;
     print OFILE " ".$id;
     print OFILE " 0";
@@ -191,6 +207,12 @@ foreach my $cl (@out_arr) {
     print OFILE " ".$parent2_hash{$cl};
     print OFILE " ".$sex_loc;
     print OFILE " 1\n";
+
+    print OFILE3 $id;
+    print OFILE3 " ".$id;
+    print OFILE3 " 0";
+    print OFILE3 " ".$sex_loc."\n";
+
 #    print OFILE " 0\n";
 
 
@@ -217,6 +239,7 @@ foreach my $cl (@out_arr) {
 
 close OFILE;
 close OFILE2;
+close OFILE3;
 
 #exit;
 

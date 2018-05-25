@@ -108,6 +108,9 @@ if ($chr eq "X") {
 #    $xtxt = "-chrX -sample_known_haps_g $chrx";
     $xtxt = "-chrX -sample_known_haps_g";
 }
+if ($chrx) {
+    $xtxt = "-chrX -s $chrx";
+}
 
 my $imp2_bin = "impute2";
 my $imp4_bin = "impute4.r265.2";
@@ -185,7 +188,7 @@ else {
 
 }
 
-#print "$sys_loc\n";
+print "$sys_loc\n";
 #exit;
 
 

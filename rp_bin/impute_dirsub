@@ -307,6 +307,8 @@ version: $rp_version
 
  --chr23male       some special options for phasing and postimputation
 
+ --chr23trios      some special options for phasing trios on the X (in addition to --impute4 above)
+
 
 ##### alignment to reference:
 
@@ -535,6 +537,7 @@ GetOptions(
     "impwallinc=i"=> \$impwallinc,
     "phlong"=> \my $phaselong,
     "chr23male"=> \my $chr23male,
+    "chr23trios"=> \my $chr23trios,
 #    "chunk10"=> \my $chunk10,
 
     );
@@ -2653,6 +2656,11 @@ if ($prephase_done == 0) {
 	    if ($phas == 923 || $phas == 9123 || $phas == 91231) {
 		$xtxt = "--chrX";
 	    }
+	    
+	    if ($chr23trios) {
+		$xtxt = "--chrX";
+	    }
+	    
 
 	    if (exists $finifiles_hash{$haps_ch_out_mu0} ) {
 		$multi_txt = "--multi $multithread1";
@@ -3040,6 +3048,9 @@ if ($pseudo_done == 0) {
 		    if ($phas == 923 || $phas == 9123 || $phas == 91231) {
 			$chrX_txt  = "--chrX";
 		    }
+		    if ($chr23trios) {
+			$chrX_txt = "--chrX";
+		    }
 
 		    unless (exists $finifiles_hash{$pseudo_ch_out_fini} ) {
 			my $sys_loc = "$pseudo_script $chrX_txt --out $pseudo_ch_out $haps_file_loc $haps_file_loc_sample";
@@ -3207,7 +3218,7 @@ if ($imp_done == 0) {
 
 		    if ($trio_sw) {
 			$haps_file_loc = "$haps_ch_out.haps.spli1.trio.haps";
-			$haps_file_loc_sample = "$haps_ch_out.haps.spli1.trio.sample";
+			$haps_file_loc_sample = "$haps_ch_out.haps.spli1.trio.sample.i4";
 		    }
 
 		    my $pi_ch_out = "$subdir/plink.$bprefix.$refind.imp";
@@ -3221,7 +3232,9 @@ if ($imp_done == 0) {
 			$xtxt = "--chrX $haps_file_loc_sample";
 		    }
 
-
+		    if ($chr23trios) {
+			$xtxt = "--chrX $haps_file_loc_sample";
+		    }
 
 
 #		    print "not found (mm_out): $pi_ch_out_fini\n";
