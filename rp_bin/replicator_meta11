@@ -790,7 +790,7 @@ if (1) {
     $prcol = 10;
     $ocol = 8;
     $orcol = 8;
-    $qcol = 16;
+    $qcol = 15;
     $icol = 13;
     $secol = 9;
     $gcol = 19;
