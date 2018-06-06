@@ -344,7 +344,7 @@ version: $rp_version
 
 ### technical options
 
-  --refiex            file containing refinds to exclude
+  --refiex FILE       file containing refinds to exclude
 
   --sjamem_incr INT   increase all memore requests by INT Mb in steps of 1000 (1000 is 1Gb)
                            definitely necessary when not imputing with minimac3, since chunks are much bigger now
@@ -371,6 +371,9 @@ version: $rp_version
 
   --impwallinc INT    add INT hour to walltime of imputation jobs (also on top of minilong)
 
+  --reference_info    write out file refiex_templ to be used with --refiex
+                        cave: different for different values of --chunk
+                        if already present, remove file reference_info and restart
 
 ### remarks 
 
@@ -536,6 +539,7 @@ GetOptions(
     "minilong"=> \my $minilong,
     "impwallinc=i"=> \$impwallinc,
     "phlong"=> \my $phaselong,
+    "reference_info"=> \my $reference_info_file,
     "chr23male"=> \my $chr23male,
     "chr23trios"=> \my $chr23trios,
 #    "chunk10"=> \my $chunk10,
@@ -1659,6 +1663,144 @@ $info_txt = "command:\t\"$command_line\"\tdir:\t$rootdir";
 
 
 
+############################################################
+### refind array
+#############################################################
+
+my @refind_arr;
+my @refstart_arr;
+my @refend_arr;
+
+my @refchr_arr; ## safes the chromosomes in same order
+my @gema_arr; ## safes the gema_files in same order
+
+#my @bgz_arr; ## safes the bgz files in same order, needed for eagle / minimac
+
+
+my %gema_hash; ## contains the gema-files for each chromosome
+
+
+
+if ($suminfo_s_v2_sw == 0) {
+    foreach my $rf (@reffiles) {
+	
+	my $refind = $rf;
+	if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
+	    $refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
+	}
+	else {
+	    $refind =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
+	}
+
+	
+	
+	push @refind_arr, $refind;
+	print "refind: $refind\n";
+	
+	
+	#    my $chrind = $rf;
+	#    $chrind =~ s/.*(chr[0-9]*).*/\1/;
+	#    $chrind =~ s/chr//;
+	
+	my @tcells = split /_/, $refind;
+	my $mega_start = $tcells[1];
+	my $mega_end = $tcells[2];
+	
+	my $chrind = $tcells[0];
+	$chrind =~ s/chr//;
+	#    print "chrind: $chrind\n";
+	
+	push @refchr_arr, $chrind;
+	push @refstart_arr, $mega_start;
+	push @refend_arr, $mega_end;
+	
+	my $gema_file = "$refdir/genetic_map_chr$chrind"."_combined_b37.txt";
+	push @gema_arr, $gema_file;
+	
+	
+
+	
+	
+	
+	### test existence once per chromosome
+	unless (exists $gema_hash{$chrind}) {
+	    $gema_hash{$chrind} = 1;
+	    die "$gema_file not existent" unless (-e $gema_file);
+	}
+	
+    }
+}
+
+
+
+#############################################
+### write out files for postimp
+#############################################
+
+unless (-e "$rootdir/reference_info") {
+
+    print "write reference_info\n";
+    
+    die $! unless open REF, "> reference_info.tmp";
+    print REF "$refdir\n";
+
+
+    if ($suminfo_s_v2_sw ==1) {
+
+	die $!." <$refdir/$suminfo_c>" unless open IN, "< $refdir/$suminfo_c";
+	while (my $line = <IN>){
+	    my @cells = &split_line($line);
+	    print REF "chr$cells[0]"."_".$cells[1]."_".$cells[2]."\n";
+	}
+	close IN;
+
+
+    }
+    else {
+	foreach (@refind_arr) {
+	    print REF "$_\n";
+	}
+    }
+
+    
+    close REF;
+    &mysystem ("mv reference_info.tmp $rootdir/reference_info");
+    &mysystem ("cp $rootdir/reference_info $rootdir/refiex_templ");
+
+    if (1) {
+	foreach (@bimfli_files) {
+	    my $bprefix = $_;
+	    $bprefix =~ s/.bim$//;
+	    &mysystem ("cp $rootdir/reference_info $rootdir/$bprefix.ref");
+	    
+	}
+    }
+}
+
+
+
+
+#    unless (-e "$rootdir/datasets_info") {
+#	die $! unless open BF, "> datasets_info.tmp";
+#	foreach (@bimfli_files) {
+#	    print BF "$_\n";
+#	}
+#	close BF;
+#	&mysystem ("mv datasets_info.tmp $rootdir/datasets_info");
+ #   }
+
+#foreach my $ccc (0..$#refind_arr) {
+#    print "$ccc\n";
+#}
+#print "debug\n";
+#exit;
+
+
+if ($reference_info_file) {
+    print "exit after building refiex_templ\n";
+    exit;
+}
+
 #####################################################
 ## check readref
 ########################################################
@@ -2160,74 +2302,6 @@ unless (-e "$rootdir/puting_done") {
 #exit;
 
 
-############################################################
-### refind array
-#############################################################
-
-my @refind_arr;
-my @refstart_arr;
-my @refend_arr;
-
-my @refchr_arr; ## safes the chromosomes in same order
-my @gema_arr; ## safes the gema_files in same order
-
-#my @bgz_arr; ## safes the bgz files in same order, needed for eagle / minimac
-
-
-my %gema_hash; ## contains the gema-files for each chromosome
-
-
-
-if ($suminfo_s_v2_sw == 0) {
-    foreach my $rf (@reffiles) {
-	
-	my $refind = $rf;
-	if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
-	    $refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
-	}
-	else {
-	    $refind =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
-	}
-
-	
-	
-	push @refind_arr, $refind;
-	print "refind: $refind\n";
-	
-	
-	#    my $chrind = $rf;
-	#    $chrind =~ s/.*(chr[0-9]*).*/\1/;
-	#    $chrind =~ s/chr//;
-	
-	my @tcells = split /_/, $refind;
-	my $mega_start = $tcells[1];
-	my $mega_end = $tcells[2];
-	
-	my $chrind = $tcells[0];
-	$chrind =~ s/chr//;
-	#    print "chrind: $chrind\n";
-	
-	push @refchr_arr, $chrind;
-	push @refstart_arr, $mega_start;
-	push @refend_arr, $mega_end;
-	
-	my $gema_file = "$refdir/genetic_map_chr$chrind"."_combined_b37.txt";
-	push @gema_arr, $gema_file;
-	
-	
-
-	
-	
-	
-	### test existence once per chromosome
-	unless (exists $gema_hash{$chrind}) {
-	    $gema_hash{$chrind} = 1;
-	    die "$gema_file not existent" unless (-e $gema_file);
-	}
-	
-    }
-}
-
 
 #print "debug2\n";
 #exit;
@@ -2291,65 +2365,6 @@ if ($suminfo_s_v2_sw == 1) {
 
 
 #print "debug2\n";
-#exit;
-
-#############################################
-### write out files for postimp
-#############################################
-
-unless (-e "$rootdir/reference_info") {
-
-    print "write reference_info\n";
-    
-    die $! unless open REF, "> reference_info.tmp";
-    print REF "$refdir\n";
-
-
-    if ($suminfo_s_v2_sw ==1) {
-
-	die $!." <$refdir/$suminfo_c>" unless open IN, "< $refdir/$suminfo_c";
-	while (my $line = <IN>){
-	    my @cells = &split_line($line);
-	    print REF "chr$cells[0]"."_".$cells[1]."_".$cells[2]."\n";
-	}
-	close IN;
-
-
-    }
-    else {
-	foreach (@refind_arr) {
-	    print REF "$_\n";
-	}
-    }
-
-    
-    close REF;
-    &mysystem ("mv reference_info.tmp $rootdir/reference_info");
-
-    foreach (@bimfli_files) {
-	my $bprefix = $_;
-	$bprefix =~ s/.bim$//;
-	&mysystem ("cp $rootdir/reference_info $rootdir/$bprefix.ref");
-
-    }
-}
-
-
-
-
-#    unless (-e "$rootdir/datasets_info") {
-#	die $! unless open BF, "> datasets_info.tmp";
-#	foreach (@bimfli_files) {
-#	    print BF "$_\n";
-#	}
-#	close BF;
-#	&mysystem ("mv datasets_info.tmp $rootdir/datasets_info");
- #   }
-
-#foreach my $ccc (0..$#refind_arr) {
-#    print "$ccc\n";
-#}
-#print "debug\n";
 #exit;
 
 
