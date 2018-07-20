@@ -19,7 +19,7 @@ use Ricopili::Utils qw(trans);
 my $ploc = &trans("ploc");
 my $p2loc = &trans("p2loc");
 my $qloc = &trans("queue");
-my $hmloc = &trans("hmloc");
+#my $hmloc = &trans("hmloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
 

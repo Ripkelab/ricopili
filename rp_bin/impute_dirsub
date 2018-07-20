@@ -148,7 +148,7 @@ my $host = hostname;
 
 my $ploc = &trans("p2loc");
 my $shloc = &trans("shloc"); # shapeit
-my $hapmap_ref_root = &trans("hmloc");
+my $hmloc = &trans("hmloc");
 my $homedir = &trans("home");
 my $qloc = &trans("queue");
 my $i2loc = &trans("i2loc");
@@ -160,79 +160,79 @@ my $loloc = &trans("loloc");
 ###############################################
 
 #if ($broad) {
-#    $hapmap_ref_root = "/home/radon01/sripke/bakker_ripke/hapmap_ref/";
+#    $hmloc = "/home/radon01/sripke/bakker_ripke/hapmap_ref/";
 #    $homedir = "/home/radon01/sripke/";
 #}
 
 
-$ref_coll[5] = "$hapmap_ref_root"."1KG/phased/subchr" ;
-$ref_coll[6] = "$hapmap_ref_root"."1KG_june10/hapmap3_r2_plus_1000g_jun2010_b36_ceu/bgl/subchr_5" ;
-$ref_coll[7] = "$hapmap_ref_root"."1KG_aug10/subchr" ;
-$ref_coll[8] = "$hapmap_ref_root"."1KG_aug10_nodup/subchr" ;
-$ref_coll[8883] = "$hapmap_ref_root"."1KG_aug10_nodup/mhc_window" ;
-$ref_coll[8882] = "$hapmap_ref_root"."mars_window/1KG" ;
+$ref_coll[5] = "$hmloc"."1KG/phased/subchr" ;
+$ref_coll[6] = "$hmloc"."1KG_june10/hapmap3_r2_plus_1000g_jun2010_b36_ceu/bgl/subchr_5" ;
+$ref_coll[7] = "$hmloc"."1KG_aug10/subchr" ;
+$ref_coll[8] = "$hmloc"."1KG_aug10_nodup/subchr" ;
+$ref_coll[8883] = "$hmloc"."1KG_aug10_nodup/mhc_window" ;
+$ref_coll[8882] = "$hmloc"."mars_window/1KG" ;
 
-$ref_coll[88] = "$hapmap_ref_root"."1KG_phas1_umich/ref_0611/subchr" ;
-$ref_coll[881] = "$hapmap_ref_root"."1KG_phas1_umich/ref_0611_eur/subchr" ;
-$ref_coll[882] = "$hapmap_ref_root"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr" ;
-$ref_coll[8821] = "$hapmap_ref_root"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/test2" ;
-$ref_coll[8822] = "$hapmap_ref_root"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/NOD2" ;
-$ref_coll[88222] = "$hapmap_ref_root"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/best_basam" ;
-$ref_coll[882222] = "$hapmap_ref_root"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/chr3_itih" ;
-$ref_coll[882223] = "$hapmap_ref_root"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/chr19_ncan" ;
+$ref_coll[88] = "$hmloc"."1KG_phas1_umich/ref_0611/subchr" ;
+$ref_coll[881] = "$hmloc"."1KG_phas1_umich/ref_0611_eur/subchr" ;
+$ref_coll[882] = "$hmloc"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr" ;
+$ref_coll[8821] = "$hmloc"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/test2" ;
+$ref_coll[8822] = "$hmloc"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/NOD2" ;
+$ref_coll[88222] = "$hmloc"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/best_basam" ;
+$ref_coll[882222] = "$hmloc"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/chr3_itih" ;
+$ref_coll[882223] = "$hmloc"."1KG_phas1_umich/ref_0611_eur_3Mb/subchr/chr19_ncan" ;
 
-$ref_coll[9999] = "$hapmap_ref_root"."impute2_ref/1KG_Mar12/ALL_1000G_phase1integrated_feb2012_impute/test/subchr" ;
-$ref_coll[9] = "$hapmap_ref_root"."impute2_ref/1KG_Mar12/ALL_1000G_phase1integrated_feb2012_impute/subchr" ;
-$ref_coll[91] = "$hapmap_ref_root"."impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/subchr" ;
-$ref_coll[9111] = "$hapmap_ref_root"."impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/subchr/test" ;
-$ref_coll[9123] = "$hapmap_ref_root"."impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/chr23/subchr" ;
-$ref_coll[91231] = "$hapmap_ref_root"."impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/chr23/subchr/test" ;
-
-
-$ref_coll[923] = "$hapmap_ref_root"."impute2_ref/1KG_Mar12/ALL_1000G_phase1integrated_feb2012_impute/chr23/subchr" ;
-$ref_coll[9231] = "$hapmap_ref_root"."impute2_ref/1KG_Mar12/ALL_1000G_phase1integrated_feb2012_impute/chr23_pseudo/subchr" ;
+$ref_coll[9999] = "$hmloc"."impute2_ref/1KG_Mar12/ALL_1000G_phase1integrated_feb2012_impute/test/subchr" ;
+$ref_coll[9] = "$hmloc"."impute2_ref/1KG_Mar12/ALL_1000G_phase1integrated_feb2012_impute/subchr" ;
+$ref_coll[91] = "$hmloc"."impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/subchr" ;
+$ref_coll[9111] = "$hmloc"."impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/subchr/test" ;
+$ref_coll[9123] = "$hmloc"."impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/chr23/subchr" ;
+$ref_coll[91231] = "$hmloc"."impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/chr23/subchr/test" ;
 
 
-$ref_coll[555] = "$hapmap_ref_root"."1KG/phased/subchr/test";
-$ref_coll[3] = "$hapmap_ref_root"."subchr";
-$ref_coll[323] = "$hapmap_ref_root"."subchr/23";
-$ref_coll[333] = "$hapmap_ref_root"."subchr/test" ;
+$ref_coll[923] = "$hmloc"."impute2_ref/1KG_Mar12/ALL_1000G_phase1integrated_feb2012_impute/chr23/subchr" ;
+$ref_coll[9231] = "$hmloc"."impute2_ref/1KG_Mar12/ALL_1000G_phase1integrated_feb2012_impute/chr23_pseudo/subchr" ;
 
-$ref_coll[334] = "$hapmap_ref_root"."subchr/HLA" ;
-$ref_coll[335] = "$hapmap_ref_root"."subchr/chr2_test" ;
-$ref_coll[3333] = "$hapmap_ref_root"."subchr/test/local" ;
-$ref_coll[3331] = "$hapmap_ref_root"."subchr/SDCCA" ;
-$ref_coll[3332] = "$hapmap_ref_root"."mars_window" ;
-$ref_coll[39] = "$hapmap_ref_root"."impute2_ref/HM3/hapmap3_r2_b36/subchr" ;
-$ref_coll[399] = "$hapmap_ref_root"."impute2_ref/HM3/hapmap3_r2_b36/subchr.3mb" ;
 
-$ref_coll[15] ="$hapmap_ref_root"."hla_t1d/subchr";
-$ref_coll[152] ="$hapmap_ref_root"."impute2_ref/HLA_0813/orig/subchr";
-$ref_coll[1521] ="$hapmap_ref_root"."impute2_ref/HLA_0813/orig/hg19";
-$ref_coll[1522] ="$hapmap_ref_root"."mhc";
-$ref_coll[515] = "$hapmap_ref_root"."1KG/phased/subchr/hla" ;
-$ref_coll[511] = "$hapmap_ref_root"."1KG/phased/subchr/mir" ;
-$ref_coll[512] = "$hapmap_ref_root"."1KG/phased/subchr/mir708" ;
-$ref_coll[513] = "$hapmap_ref_root"."1KG/phased/subchr/HBII-108" ;
+$ref_coll[555] = "$hmloc"."1KG/phased/subchr/test";
+$ref_coll[3] = "$hmloc"."subchr";
+$ref_coll[323] = "$hmloc"."subchr/23";
+$ref_coll[333] = "$hmloc"."subchr/test" ;
 
-$ref_coll[514] = "$hapmap_ref_root"."1KG/phased/subchr/chr10_11" ;
-$ref_coll[515] = "$hapmap_ref_root"."1KG/phased/subchr/chr8_9" ;
-$ref_coll[516] = "$hapmap_ref_root"."1KG/phased/subchr/cacna1c" ;
-$ref_coll[517] = "$hapmap_ref_root"."1KG/phased/subchr/csmd1" ;
-$ref_coll[518] = "$hapmap_ref_root"."1KG/phased/subchr/tcf4" ;
-$ref_coll[519] = "$hapmap_ref_root"."1KG/phased/subchr/chr2_20" ;
-$ref_coll[520] = "$hapmap_ref_root"."1KG/phased/subchr/top_scz" ;
-$ref_coll[521] = "$hapmap_ref_root"."1KG/phased/subchr/chr11_13" ;
+$ref_coll[334] = "$hmloc"."subchr/HLA" ;
+$ref_coll[335] = "$hmloc"."subchr/chr2_test" ;
+$ref_coll[3333] = "$hmloc"."subchr/test/local" ;
+$ref_coll[3331] = "$hmloc"."subchr/SDCCA" ;
+$ref_coll[3332] = "$hmloc"."mars_window" ;
+$ref_coll[39] = "$hmloc"."impute2_ref/HM3/hapmap3_r2_b36/subchr" ;
+$ref_coll[399] = "$hmloc"."impute2_ref/HM3/hapmap3_r2_b36/subchr.3mb" ;
 
-$ref_coll[5555] ="$hapmap_ref_root"."impute2_ref/lboettger/chr16";
+$ref_coll[15] ="$hmloc"."hla_t1d/subchr";
+$ref_coll[152] ="$hmloc"."impute2_ref/HLA_0813/orig/subchr";
+$ref_coll[1521] ="$hmloc"."impute2_ref/HLA_0813/orig/hg19";
+$ref_coll[1522] ="$hmloc"."mhc";
+$ref_coll[515] = "$hmloc"."1KG/phased/subchr/hla" ;
+$ref_coll[511] = "$hmloc"."1KG/phased/subchr/mir" ;
+$ref_coll[512] = "$hmloc"."1KG/phased/subchr/mir708" ;
+$ref_coll[513] = "$hmloc"."1KG/phased/subchr/HBII-108" ;
 
-$ref_coll[4] = "$hapmap_ref_root"."CNV/subchr";
-$ref_coll[444] = "$hapmap_ref_root"."CNV/subchr_test";
+$ref_coll[514] = "$hmloc"."1KG/phased/subchr/chr10_11" ;
+$ref_coll[515] = "$hmloc"."1KG/phased/subchr/chr8_9" ;
+$ref_coll[516] = "$hmloc"."1KG/phased/subchr/cacna1c" ;
+$ref_coll[517] = "$hmloc"."1KG/phased/subchr/csmd1" ;
+$ref_coll[518] = "$hmloc"."1KG/phased/subchr/tcf4" ;
+$ref_coll[519] = "$hmloc"."1KG/phased/subchr/chr2_20" ;
+$ref_coll[520] = "$hmloc"."1KG/phased/subchr/top_scz" ;
+$ref_coll[521] = "$hmloc"."1KG/phased/subchr/chr11_13" ;
 
-$ref_coll[2] = "$hapmap_ref_root"."phas2/subchr/outdir";
-$ref_coll[222] = "$hapmap_ref_root"."phas2/subchr/outdir/chr12_1";
-$ref_coll[311] = "$hapmap_ref_root"."hm3_ww/subchr";
-$ref_coll[322] = "$hapmap_ref_root"."finref/fineur/refdan/subchr";
+$ref_coll[5555] ="$hmloc"."impute2_ref/lboettger/chr16";
+
+$ref_coll[4] = "$hmloc"."CNV/subchr";
+$ref_coll[444] = "$hmloc"."CNV/subchr_test";
+
+$ref_coll[2] = "$hmloc"."phas2/subchr/outdir";
+$ref_coll[222] = "$hmloc"."phas2/subchr/outdir/chr12_1";
+$ref_coll[311] = "$hmloc"."hm3_ww/subchr";
+$ref_coll[322] = "$hmloc"."finref/fineur/refdan/subchr";
 
 
 my $info_th = 0.1;

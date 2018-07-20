@@ -2896,6 +2896,7 @@ my $pseudo_txt = "";
 if ($trio) {
 $pseudo_txt = "--pseudo";
 }
+
  &mysystem ("$mds2cov_script $pseudo_txt $bfile_menv.mds");
 # &mysystem ("rm -fr $workdir");
 

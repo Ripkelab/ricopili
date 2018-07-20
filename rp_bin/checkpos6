@@ -38,7 +38,7 @@ use Ricopili::Utils qw(trans $conf_file);
 #############################
 
 my $sloc = &trans("sloc");
-my $hmloc = &trans("hmloc");
+#my $hmloc = &trans("hmloc");
 #my $ploc = &trans("ploc");
 my $p2loc = &trans("p2loc");
 

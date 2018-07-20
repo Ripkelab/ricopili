@@ -408,7 +408,7 @@ unless ($clusters{broad} == 1) {
     die $!."($cdir/pdfjam/pdfjam)" unless open FILE, "< $cdir/pdfjam/pdfjam";
     die $!."($cdir/pdfjam/pdfjam.ow)" unless open OUT, "> $cdir/pdfjam/pdfjam.ow";
     while (my $line = <FILE>){
-	$line =~ s!/psych/genetics_data/ricopili_tmp!/scratch!;
+	$line =~ s!/psych/genetics_data/ricopili_tmp!/scratch!;   ################## needs to be changed SRIPKE
 	print OUT "$line";
     }
     close FILE;
