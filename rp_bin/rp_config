@@ -402,21 +402,6 @@ if ($clusters{lisa} == 1) {
     }
 }
 
-unless ($clusters{broad} == 1) {
-
-#    print "$cdir/pdfjam\n";
-    die $!."($cdir/pdfjam/pdfjam)" unless open FILE, "< $cdir/pdfjam/pdfjam";
-    die $!."($cdir/pdfjam/pdfjam.ow)" unless open OUT, "> $cdir/pdfjam/pdfjam.ow";
-    while (my $line = <FILE>){
-	$line =~ s!/psych/genetics_data/ricopili_tmp!/scratch!;   ################## needs to be changed SRIPKE
-	print OUT "$line";
-    }
-    close FILE;
-    close OUT;
-    system ("mv $cdir/pdfjam/pdfjam.ow $cdir/pdfjam/pdfjam");
-    print "rewrote $cdir/pdfjam.ow\n";
-    
-}
 
 
 
@@ -1063,6 +1048,38 @@ else {
     print "Scratch directory already exists at $sloc\n";
 }
 print "\n";
+
+
+
+
+#############################
+# rewrite scratchdir for pfdjam
+#############################
+
+
+
+#    print "$cdir/pdfjam\n";
+    die $!."($cdir/pdfjam/pdfjam)" unless open FILE, "< $cdir/pdfjam/pdfjam";
+    die $!."($cdir/pdfjam/pdfjam.ow)" unless open OUT, "> $cdir/pdfjam/pdfjam.ow";
+    while (my $line = <FILE>){
+	$line =~ s!/psych/genetics_data/ricopili_tmp!$sloc!;   ################## needs to be changed SRIPKE
+	print OUT "$line";
+    }
+    close FILE;
+    close OUT;
+    system ("mv $cdir/pdfjam/pdfjam.ow $cdir/pdfjam/pdfjam");
+    print "rewrote $cdir/pdfjam.ow\n";
+    
+
+
+
+
+
+
+
+
+
+
 
 #############################
 # write config file to home directory
