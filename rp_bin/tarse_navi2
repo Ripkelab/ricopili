@@ -1,0 +1,831 @@
+#!/usr/bin/perl
+use strict;
+#use warnings;
+
+srand(0);
+
+
+#############################
+# 
+# transfers from broad to lisa and back
+# 
+# 
+#############################
+
+
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    next unless (@cells >= 2);
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $qloc = &trans("queue");
+my $hmloc = &trans("hmloc");
+my $loloc = &trans("loloc");
+my $email = &trans("email");
+
+
+
+
+#######################################
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+my $rootdir = "";
+#my $info_txt = "";
+my $homedir = $ENV{"HOME"};
+
+my $walltime = 4;
+
+#my $out = "tarse";
+my $target = 'gwas@lisa.sara.nl:~/pgc-samples/from_broad';
+my $password = 'NOPASS';
+
+my $sjamem_incr = 0;
+
+#exit;
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "ot"=> \my $ot,
+    "dataset"=> \my $dataset,
+#    "out=s"=> \$out,
+    "target=s"=> \$target,
+    "password=s"=> \$password,
+
+        "serial"=> \my $serial,
+    "force1"=> \my $force1,
+    "sjamem_incr=i"=> \$sjamem_incr,
+    "outname=s"=> \my $outname,
+
+
+    
+    );
+
+
+
+if ($help){
+    print "usage: $progname 
+
+version: $version
+
+      options:
+
+        --help          print this message then quit
+
+        --target STRING target to send to, default: $target
+        --password STRING password (not working right now)
+        --ot            only tar, then stop
+        --dataset       full datasets as targets, meaning with dosages, genotypes and intermediated files
+                                     can be bim-files (will be stripped automatically)
+
+  --serial            no sending jobs to queue all in one run
+                          -> usually only used for testing  
+
+  --sjamem_incr INT   increase all memore requests by INT Mb in steps of 1000 (1000 is 1Gb)
+
+  --force1            do not exit if same fail, but do this only once
+
+ --outname STRING  identifier for imputation run (mandatory)
+
+
+
+ README: $hmloc/readmes/README_0114 $hmloc/readmes/README_0114.gt
+
+
+ created by Stephan Ripke 2012 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+die $help unless $outname;
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+############################################################
+## testing email script
+##############################################################
+my $blue_script = "blueprint";         ### my.pipeline_tar
+
+my $mutt_script = "mutt";                  ### my.pipeline_tar
+
+my $job_bn_th = 1000;
+
+
+print ".......testing email program....\n";
+
+my $err_scr = 0;
+{
+    my $scr_path = '';
+    
+    for my $path ( split /:/, $ENV{PATH} ) {
+	if ( -f "$path/$mutt_script" && -x _ ) {
+	    print "$mutt_script\tfound in $path\n";
+	    $scr_path = "$path/$mutt_script";
+	    last;
+	}
+    }
+    unless ( $scr_path ) {
+
+	print "!!Warning!! : No $mutt_script command available, trying mail\n" ;
+
+	$mutt_script = "mail";
+	for my $path ( split /:/, $ENV{PATH} ) {
+	    if ( -f "$path/$mutt_script" && -x _ ) {
+		print "$mutt_script\tfound in $path\n";
+		$scr_path = "$path/$mutt_script";
+		last;
+	    }
+	}
+	unless ( $scr_path ) {
+	    $err_scr = 1;
+	    print "!!Error!! : No $mutt_script command available\n" ;
+	}
+    }
+ 
+}
+die if $err_scr == 1;
+
+
+
+
+
+
+
+#####################################
+# send jobs to cluster and also send navi again
+#####################################
+
+my $sjadir = "";
+my $sjaweek = 0;
+my $sjaname = "";
+my $sjarow = "";
+my @sjaarray;
+my $sjamem = 0;
+my $sjamaxpar = 0;
+
+my $sjatime = -1;
+my $sjamaxjobs = 30000;
+my $sjainfofile = "$loloc/tarse_info";
+unless (-e $sjainfofile) {
+    print "log-file ($sjainfofile) is not existing\n";
+    print "please check loloc in ~/ricopili.conf\n";
+    exit;
+}
+#my $sjainfofile = "$homedir/impute_dir_info_35_test";
+my $sjainfotxt = "";
+my $sjamulti = 0;
+
+
+sub send_jobarray {
+
+    die "send_jobarray with undefined variables, dir" if ($sjadir eq "");
+    die "send_jobarray with undefined variables, name" if ($sjaname eq "");
+    die "send_jobarray with undefined variables, array" if (@sjaarray == 0);
+    die "send_jobarray with undefined variables, mem" if ($sjamem == 0);
+    die "send_jobarray with undefined variables, time" if ($sjatime < 0);
+    die "send_jobarray with undefined variables, info" if ($sjainfotxt eq "");
+
+
+    my $now = localtime time;
+    $now =~ s/ /_/g;
+
+
+    if ($sjaname eq "finished") {
+
+	my $fini_message ;
+	$fini_message .= "\n\n##################################################################\n";
+	$fini_message .= "##### CONGRATULATIONS: \n";
+	$fini_message .= "##### tarse (mirror tarballs) finished successfully:\n";
+	$fini_message .= "##### $sjainfotxt\n";
+	$fini_message .= "##### have a look at the wiki page\n"; 
+	$fini_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
+	$fini_message .= "##################################################################\n";
+	print "$fini_message\n";
+
+	
+	die $! unless open SUC, "> success_file";
+	print SUC $fini_message."\n";
+	close SUC;
+
+	&mysystem ('cat success_file | '.$mutt_script.' -s RP_pipeline_finished '.$email) ;
+
+	my $sjarow      = $sjainfotxt."\t$sjaname\t$now";
+	&a2filenew_app("$sjainfofile",$sjarow);
+
+
+	exit;
+
+    }
+
+
+    chdir ($sjadir);
+    my $jobfile = "$sjaname.job_list";
+    while (-e $jobfile) {
+	$jobfile .= ".s";
+	$sjatime = 4;
+    }
+
+
+    
+    &a2filenew ($jobfile, @sjaarray);
+
+#    print "$jobfile\n";
+#    exit;
+
+    my $nsja = @sjaarray;
+
+    my $nsja_loc = $nsja;
+    if ($nsja_loc > 30000) {
+	$nsja_loc = 30000;
+    }
+
+    my $multi_txt = "";
+    if ($sjamulti > 0) {
+	$multi_txt = "--multi $nsja_loc,$sjamulti";
+    }
+
+    ### with array
+    $sjamem = $sjamem + $sjamem_incr;
+
+
+
+    my $sja_week_str = "";
+    if ($sjaweek > 0) {
+	$sja_week_str = "--week 1";
+    }
+
+
+
+    
+    if ($serial) {
+	print "starting step $sjaname with ".@sjaarray." jobs\n";
+	print "please be patient.\n";
+	my $jc = 1;
+	foreach (@sjaarray) {
+	    print "running job $jc...\n";
+	    &mysystem($_);
+	    $jc++;
+	    
+	}
+    }
+    else { 
+	my $sys_loc = "$blue_script $sja_week_str --maxpar $sjamaxpar --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $sjaname.$outname $multi_txt";
+#    print "$sys_loc\n";
+#    exit;
+
+	
+	&mysystem ($sys_loc);
+    }
+#    exit;
+
+
+    my $old_cmd = `tail -1 $sjainfofile | head -1`;
+
+    my $nsja_txt = sprintf "%06d",$nsja;
+
+    my $sjacontent = "$sjaname.".$nsja_txt;
+
+    my $sjarow_part = $sjainfotxt."\t$sjacontent";
+    my $sjarow      = $sjainfotxt."\t$sjacontent\t$now";
+#    $message = $info_txt."\t$message\t$now";
+
+    &a2filenew_app("$sjainfofile",$sjarow);
+
+    if ($old_cmd =~ /$sjarow_part/){
+	unless ($force1 ){
+	    my $err_message ;
+	    $err_message .= "##################################################################\n";
+	    $err_message .= "##### Error: \n";
+	    $err_message .= "##### step $sjaname has been done repeatedly without any progress\n";
+	    $err_message .= "##### tarse pipeline stopped: $command_line\n";
+	    $err_message .= "##### $sjainfotxt\n";
+	    $err_message .= "##### if reason does not appear obvious\n";
+	    $err_message .= "##### have a look at the wiki page\n"; 
+	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
+	    $err_message .= "##### or contact the developers\n";
+	    $err_message .= "##################################################################\n";
+	    print "$err_message\n";
+
+	    die $! unless open ERR, "> error_file";
+	    print ERR $err_message."\n";
+	    close ERR;
+
+
+	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_pipeline_error '.$email) ;
+
+	    unless ($serial) {
+		exit;
+	    }
+
+	}
+
+    }
+
+
+    $command_line =~ s/--force1//;
+
+
+    my $wt_file = "$sjadir/blueprint_joblist_file-$sjaname.$outname";
+    chdir "$rootdir" or die "something strange";
+    if ($qloc eq "bsub") {
+	$wt_file =~ s/.*blueprint_joblist_file-//;
+    }
+
+    if ($qloc eq "slurm") {
+	$wt_file = "$sjadir/$jobfile.script.id";
+    }
+
+    if ($qloc eq "qsub") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    if ($qloc eq "qsub_c") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    if ($qloc eq "qsub_b") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    
+
+
+    if ($serial) {
+	my $sys_re = "$command_line";
+	&mysystem ($sys_re);
+	exit;
+    }
+    else {
+	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na _ta_$outname";
+	&mysystem ($sys_re);
+    }
+
+
+
+    print "------------------------------------------------------------\n";
+    print "$nsja jobs successfully submitted\n";
+    print "please see tail of $sjainfofile for regular updates\n";
+    print "also check bjobs -w for running jobs\n";
+    print "possibly differnt command on different computer cluster: e.g. qstat -u USER\n";
+    print "you will be informed via email if errors or successes occur\n";
+    print "------------------------------------------------------------\n";
+
+    exit;
+
+
+}
+
+#####################################
+# print array to file
+####################################
+
+sub a2file_new {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_."\n";
+    }
+    close FILE;
+}
+
+
+#####################################
+# append array to file with newline
+####################################
+
+sub a2filenew_app {
+    my ($file, @lines)=@_;
+    die "$!: $file" unless open FILE, ">> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+
+#####################################
+# print array to file with newline
+####################################
+
+sub a2filenew {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+
+
+
+
+
+
+#####################################
+# BEGIN
+#####################################
+
+use File::Copy;
+use File::Path;
+use File::Basename;
+use Cwd;
+
+
+my $ref_readme = "$hmloc/";
+
+$rootdir = &Cwd::cwd();
+#$info_txt = "$command_line\t___________\t$rootdir";
+
+$sjainfotxt = "$rootdir\t$command_line";
+
+
+
+my @targets = @ARGV;
+my @targets_new;
+
+
+#print "info: $info_txt\n";
+print "targets: @targets\n";
+
+if ($dataset) {
+
+    foreach my $ta (@targets) {
+
+
+	$ta =~ s/.bim$//;
+	my $targ_dir = "tarse_$ta";
+
+	unless (-e "$targ_dir.fini") {
+	    print "create $targ_dir\n";
+
+	    unless (-e $targ_dir) {
+		&mysystem ("mkdir $targ_dir");
+	    }
+	    else {
+		print "Warning: $targ_dir is existing. can I remove (y/n)?\n";
+		my $answer = lc <STDIN>;
+		chomp $answer;
+		if ($answer eq "y") {
+		    &mysystem ("rm -r $targ_dir");
+		    &mysystem ("mkdir $targ_dir");
+		}
+		else {
+		    print "...................then solve this yourself............\n";
+		    exit;
+		}
+	    }
+
+	    
+	    
+	    chdir ($targ_dir);
+	    if (-d "$rootdir/dasuqc1_$ta.ch.fl") {
+		&mysystem ("my.linksub $rootdir/dasuqc1_$ta.ch.fl");
+	    }
+	    elsif (-d "$rootdir/dasuqc1_$ta.hg19.ch.fl"){
+		&mysystem ("my.linksub $rootdir/dasuqc1_$ta.hg19.ch.fl");
+	    }
+	    else {
+		print "Error1: no dosage-dir: $rootdir/dasuqc1_$ta.hg19.ch.fl or $rootdir/dasuqc1_$ta.ch.fl\n";
+		exit;
+	    }
+
+	    &mysystem ("my.linksub $rootdir/*mds_cov.sub");
+	    &mysystem ("my.linksub $hmloc/readmes/README_0114");
+	    &mysystem ("my.linksub $hmloc/readmes/README_0114.gt");
+	    
+	    
+	    &mysystem ("mkdir genotypes");
+	    chdir ("genotypes");
+	    
+	    
+	    &mysystem ("my.linksub $rootdir/$ta.bim");
+	    &mysystem ("my.linksub $rootdir/$ta.bed");
+	    &mysystem ("my.linksub $rootdir/$ta.fam");
+
+
+	    my $found = 0;
+	    my $source = "$rootdir";
+	    
+	    while ($found == 0) {
+		print "searching for alignment files of $ta in $source/pi_sub\n";
+		if (-e "$source/pi_sub/$ta.ch.bim") {
+		    $found = 1;
+		    &mysystem ("my.linksub $source/pi_sub/$ta.ch.bim");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.ch.report");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.ch.tar.gz");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.ch.fl.bim");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.ch.fl.report");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.ch.fl.tar.gz");
+		}
+		elsif (-e "$source/pi_sub/$ta.hg19.ch.bim") {
+
+		    $found = 1;
+		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.bim");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.ch.bim");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.ch.report");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.ch.tar.gz");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.ch.fl.bim");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.ch.fl.report");
+		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.ch.fl.tar.gz");
+		}
+		else {
+#		    print "not existing: $source/pi_sub/$ta.ch.bim od \n";
+		    
+		    my $source_new = readlink ("$source/$ta.bim");
+		    $source_new = dirname($source_new);
+
+		    if ($source_new eq $source) {
+			print "Error: $source is equal to $source_new\n";
+			exit;
+		    }
+		    $source = $source_new;
+
+#		    print "source: ".$source."\n";
+#		    print "target: $rootdir/$ta.bim\n";
+#		    exit;
+		}
+	    }
+
+	    print "-> found\n";
+
+	    
+#	    else {
+#		print "Error2: no alignment files exist: $rootdir/pi_sub/$ta.ch.bim or $rootdir/pi_sub/$ta.hg19.ch.bim\n";
+#		exit;
+#	    }
+
+	    chdir ($rootdir);
+	    &mysystem ("touch $targ_dir.fini");
+	    print "$targ_dir finished\n";
+#	    exit;
+	}
+
+	push @targets_new, $targ_dir;
+    }
+    @targets = @targets_new;
+
+}
+
+#exit;
+
+my @tar_arr;
+my @scp_arr;
+my @md5_arr;
+
+my @for_getit;
+push @for_getit, "";
+push @for_getit, "reading the get-wiki (https://it.broadinstitute.org/wiki/Get):";
+push @for_getit, "";
+push @for_getit, "please set up for this list: ";
+push @for_getit, "";
+
+my @manual_arr;
+
+my $mod_str = "----------------------------------\n";
+
+my $max_size = 0;
+foreach my $ta (@targets) {
+    unless (-e $ta) {
+	print "Error: $ta is not existing\n";
+	exit;
+    }
+    if ($ta =~ m/\//) {
+	print "only dirname, no slash\n";
+	exit;
+    }
+    my $target_tar = "$ta.tar.gz";
+    my $filesize = -s $target_tar;
+
+    if ($max_size < $filesize) {
+	$max_size = $filesize;
+    }
+    my $cmd_tar = "my.tar $target_tar $ta";
+    my $cmd_md5 = "md5sum $target_tar > $target_tar.md5";
+
+    push @for_getit, "$rootdir/$target_tar $target_tar";
+    push @for_getit, "$rootdir/$target_tar.md5 $target_tar.md5";
+
+    my $cmd_scp = "my.scp --target $target --password $password $target_tar $target_tar.md5";
+
+    push @manual_arr, "scp $target_tar $target";
+    push @manual_arr, "password: $password";
+    push @manual_arr, "ctr-z, bg";
+#    my $cmd_scp = "my.scp --target $target $target_tar $target_tar.md5";
+    unless (-e "$target_tar.tar.fini") {
+	push @tar_arr, $cmd_tar;
+    }
+    else {
+	unless (-e "$target_tar.md5") {
+	    push @md5_arr, $cmd_md5;
+	}
+	else {
+	    unless (-e "$target_tar.scp.fini") {
+		push @scp_arr, $cmd_scp;
+	    }
+	}
+    }
+    $mod_str .= "chmod 750 $target_tar $target_tar.md5\n";
+    $mod_str .= "chgrp sharecdg $target_tar $target_tar.md5\n";
+}
+
+$mod_str .= "\nchmod 750\n";
+$mod_str .= "chgrp sharecdg\n";
+$mod_str .= "\n--------------------------\n";
+$mod_str .= "\n".'ls *tar.gz | blueprint -b "tar -xf prefix; echo \$? > prefix.detar.fini" --wa 4 -j'."\n";
+$mod_str .= "\n--------------------------\n\n";
+$mod_str .= "chmod -R 750 tarse_*\n";
+$mod_str .= "chgrp -R sharecdg tarse_*\n";
+$mod_str .= "\n--------------------------\n";
+
+
+
+
+
+foreach my $line (@manual_arr) {
+    print "$line\n";
+}
+
+my $scp_queue = "week";
+if ($max_size < 3000000000) {
+    $scp_queue = "hour";
+}
+#print "max filesize\t".$max_size."\t$scp_queue\n"; 
+#exit;
+
+chdir ($rootdir);
+
+
+if (@tar_arr > 0 ) {
+
+
+    $sjadir = $rootdir;
+    $sjaname = "tar";
+    $sjatime = 2;
+    $sjamem = 2000;
+    $sjamaxpar = 100;
+    @sjaarray = @tar_arr;
+	    
+    &send_jobarray;
+
+
+}
+
+
+if (@md5_arr > 0 ) {
+
+
+
+    $sjadir = $rootdir;
+    $sjaname = "md5";
+    $sjatime = 2;
+    $sjamem = 2000;
+    $sjamaxpar = 100;
+    @sjaarray = @md5_arr;
+	    
+    &send_jobarray;
+
+	
+}
+
+
+
+
+if ($ot) {
+
+
+    my @share_arr;
+    unless (-e "$outname.share.fini") {
+
+	my $file_str = "";
+	foreach my $ta (@targets) {
+	    $file_str .= " $ta.tar.gz";
+	    $file_str .= " $ta.tar.gz.md5";
+	}
+	push @share_arr, "my.share --out $outname $file_str";
+    }
+
+
+    if (@share_arr > 0 ) {
+
+
+
+	$sjadir = $rootdir;
+	$sjaname = "share";
+	$sjatime = 2;
+	$sjamem = 2000;
+	$sjamaxpar = 100;
+	@sjaarray = @share_arr;
+	
+	&send_jobarray;
+
+    }
+
+
+
+    
+#    print "stop after tar, look for for_getit_$out.txt\n";
+    &a2file_new ("$outname.for_getit.txt",@for_getit);
+    
+    
+    #############################################################
+    ## SUCCESSSS
+    #############################################################
+    
+    $sjadir = $rootdir;
+    $sjaname = "finished";
+    push @sjaarray, "tmp";
+    $sjatime = 2;
+    $sjamem = 1000;
+    
+    
+    &send_jobarray;
+
+
+    exit;
+}
+
+
+
+if (@scp_arr > 0 ) {
+    print "starting my.scp\n";
+
+
+
+
+    $sjadir = $rootdir;
+    $sjaname = "scp";
+    $sjatime = 2;
+    $sjamem = 2000;
+    $sjamaxpar = 100;
+    @sjaarray = @scp_arr;
+    
+    &send_jobarray;
+
+    
+}
+
+
+
+
+&a2file_new ("README.$outname.change_permissions.txt",$mod_str);
+&mysystem ("my.scp --target $target --password $password README.$outname.change_permissions.txt");
+#print "---------------------------\n";
+#print "$mod_str\n";
+#exit;
+#exit;
+
+
+#############################################################
+## SUCCESSSS
+#############################################################
+
+$sjadir = $rootdir;
+$sjaname = "finished";
+push @sjaarray, "tmp";
+$sjatime = 2;
+$sjamem = 1000;
+
+    
+&send_jobarray;
+
+
+
+
+#&reinvo_b ("everything-is-fine","XXX");
+
