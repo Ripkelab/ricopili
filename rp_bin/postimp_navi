@@ -165,8 +165,7 @@ my $host = hostname;
 # read config file
 #############################
 
-my $ploc = &trans("ploc");
-my $shloc = &trans("shloc"); # shapeit
+
 my $hapmap_ref_root = &trans("hmloc");
 my $homedir = &trans("home");
 my $qloc = &trans("queue");
@@ -1040,26 +1039,9 @@ sub send_jobarray {
 
 
 
-
-    my $wt_file = "$sjadir/blueprint_joblist_file-$sjaname.$outname";
+    my $wt_file = "$sjadir/j.$jobfile.id";
     chdir "$rootdir" or die "something strange";
-    if ($qloc eq "bsub" ) {
-	$wt_file =~ s/.*blueprint_joblist_file-//;
-    }
-
-    if ($qloc eq "slurm" || $qloc eq "slurm_u") {
-	$wt_file = "$sjadir/$jobfile.script.id";
-    }
-
-    if ($qloc eq "qsub") {
-	$wt_file = "$sjadir/j.$jobfile.id";
-    }
-    if ($qloc eq "qsub_c") {
-	$wt_file = "$sjadir/j.$jobfile.id";
-    }
-    if ($qloc eq "qsub_b") {
-	$wt_file = "$sjadir/j.$jobfile.id";
-    }
+    
     
 
     if ($serial) {

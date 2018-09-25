@@ -16,7 +16,7 @@ use Ricopili::Utils qw(trans);
 # read config file
 #############################
 
-my $ploc = &trans("ploc");
+my $ploc = &trans("p2loc");
 my $qloc = &trans("queue");
 #my $hmloc = &trans("hmloc");
 

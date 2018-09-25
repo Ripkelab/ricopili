@@ -72,6 +72,7 @@ use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
     "ot"=> \my $ot,
+    "share"=> \my $share_sw,
     "dataset"=> \my $dataset,
 #    "out=s"=> \$out,
     "target=s"=> \$target,
@@ -100,6 +101,7 @@ version: $version
         --target STRING target to send to, default: $target
         --password STRING password (not working right now)
         --ot            only tar, then stop
+        --share         parallel sharing with my.share
         --dataset       full datasets as targets, meaning with dosages, genotypes and intermediated files
                                      can be bim-files (will be stripped automatically)
 
@@ -362,26 +364,9 @@ sub send_jobarray {
 
     $command_line =~ s/--force1//;
 
-
-    my $wt_file = "$sjadir/blueprint_joblist_file-$sjaname.$outname";
+    my $wt_file = "$sjadir/$jobfile.script.id";
     chdir "$rootdir" or die "something strange";
-    if ($qloc eq "bsub") {
-	$wt_file =~ s/.*blueprint_joblist_file-//;
-    }
 
-    if ($qloc eq "slurm") {
-	$wt_file = "$sjadir/$jobfile.script.id";
-    }
-
-    if ($qloc eq "qsub") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
-    }
-    if ($qloc eq "qsub_c") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
-    }
-    if ($qloc eq "qsub_b") {
-	$wt_file = "$sjadir/j.$sjaname.$outname.id";
-    }
     
 
 
@@ -518,16 +503,30 @@ if ($dataset) {
 		&mysystem ("my.linksub $rootdir/dasuqc1_$ta.ch.fl");
 	    }
 	    elsif (-d "$rootdir/dasuqc1_$ta.hg19.ch.fl"){
-		&mysystem ("my.linksub $rootdir/dasuqc1_$ta.hg19.ch.fl");
+		unless (-d "dasuqc1_$ta.hg19.ch.fl"){
+		    &mysystem ("mkdir dasuqc1_$ta.hg19.ch.fl");
+		    chdir ("dasuqc1_$ta.hg19.ch.fl");
+		    &mysystem ("my.linksub $rootdir/dasuqc1_$ta.hg19.ch.fl/qc1");
+		    &mysystem ("my.linksub $rootdir/dasuqc1_$ta.hg19.ch.fl/info");
+		    chdir ("../");
+		}
+#		&mysystem ("my.linksub $rootdir/dasuqc1_$ta.hg19.ch.fl");
 	    }
 	    else {
 		print "Error1: no dosage-dir: $rootdir/dasuqc1_$ta.hg19.ch.fl or $rootdir/dasuqc1_$ta.ch.fl\n";
 		exit;
 	    }
 
+
+	    if (-d "$rootdir/cobg_dir_genome_wide") {
+		&mysystem ("my.linksub $rootdir/cobg_dir_genome_wide");
+	    }
+
+	    
 	    &mysystem ("my.linksub $rootdir/*mds_cov.sub");
-	    &mysystem ("my.linksub $hmloc/readmes/README_0114");
-	    &mysystem ("my.linksub $hmloc/readmes/README_0114.gt");
+	    &mysystem ("my.linksub $rootdir/*mds_cov");
+#	    &mysystem ("my.linksub $hmloc/readmes/README_0114");
+#	    &mysystem ("my.linksub $hmloc/readmes/README_0114.gt");
 	    
 	    
 	    &mysystem ("mkdir genotypes");
@@ -556,7 +555,9 @@ if ($dataset) {
 		elsif (-e "$source/pi_sub/$ta.hg19.ch.bim") {
 
 		    $found = 1;
-		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.bim");
+		    unless (-l "$source/pi_sub/$ta.hg19.bim") {
+			&mysystem ("my.linksub $source/pi_sub/$ta.hg19.bim");
+		    }
 		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.ch.bim");
 		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.ch.report");
 		    &mysystem ("my.linksub $source/pi_sub/$ta.hg19.ch.tar.gz");
@@ -601,7 +602,7 @@ if ($dataset) {
     @targets = @targets_new;
 
 }
-
+#print "debug\n";
 #exit;
 
 my @tar_arr;
@@ -621,8 +622,8 @@ my $mod_str = "----------------------------------\n";
 
 my $max_size = 0;
 foreach my $ta (@targets) {
-    unless (-e $ta) {
-	print "Error: $ta is not existing\n";
+    unless (-e $ta) { 
+	print "Error: $ta is not existing, mabye remove fini file?\n";
 	exit;
     }
     if ($ta =~ m/\//) {
@@ -726,9 +727,7 @@ if (@md5_arr > 0 ) {
 
 
 
-if ($ot) {
-
-
+if ($share_sw) {
     my @share_arr;
     unless (-e "$outname.share.fini") {
 
@@ -756,6 +755,10 @@ if ($ot) {
 
     }
 
+}
+
+
+if ($ot) {
 
 
     

@@ -25,7 +25,7 @@ sub trans {
     $conf{$expr};
 }
 
-my $ploc = &trans("ploc");
+my $ploc = &trans("p2loc");
 
 ###############################################
 

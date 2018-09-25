@@ -29,7 +29,7 @@ my $nhead = 1;
 # read config file
 #############################
 
-my $ploc = &trans("ploc");
+
 my $rloc = &trans("rloc");
 my $sloc = &trans("sloc");
 my $rpac = &trans("rpac");
@@ -383,11 +383,6 @@ sub a2fileapp {
 #############################
 
 
-unless (-e "$ploc/plink" ){
-    print "\n***** Error: couldn't find the following:\n";
-    print "please check --ploc or $conf_file\n";
-    exit;
-}
 
 
 

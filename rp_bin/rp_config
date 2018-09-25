@@ -233,8 +233,9 @@ my $command_line = "$progname @ARGV";
 #############################
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"other",0);
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"other",0);
-my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"other",0);
-my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","uppmax","other");
+#my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"other",0);
+my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"unc_slurm",0,"bih_qsub",0,"other",0);
+my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","uppmax","unc_slurm","bih_qsub","other");
 print "Please enter your cluster name from the following options:\n";
 my $i = 1;
 foreach (@cluster_names){
@@ -728,6 +729,37 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
             $i += 1;        
         }
     }
+    
+    elsif ($clusters{bih_qsub}){
+	my $i = 1;    
+
+        if (-e "$home/.bashrc") {
+            print "\tcat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;        
+        }
+    }
+    
+    elsif ($clusters{unc_slurm}){
+	my $i = 1;    
+
+        if (-e "$home/.bashrc") {
+            print "\tcat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;        
+        }
+    }
+    
 
     elsif ($clusters{uppmax}){
 	my $i = 1;
@@ -774,22 +806,22 @@ print "\trp_bin/pdfjam/ -- success\n\n";
 system("latex small2e > /dev/null"); # dummy script that doesn't do anything
 my $status_latex = ($? >> 8);
 unless ($status_latex) {
-    print "Detected pdflatex is installed.\n\n";
+    print "Detected latex is installed.\n\n";
     &mysystem("rm small2e.*");
 }
 else {
     print "---------------------------------------\n\n";
-    print "Error -- pdflatex is not installed!\n\n";
+    print "Error -- latex is not installed!\n\n";
 
     if ($clusters{genomedk} == 1){
-	print "Run the following commands to add pdflatex to the default search path:\n";
+	print "Run the following commands to add latex to the default search path:\n";
 	print "\techo \"source /com/extra/texlive/2014/load.sh\" >> ~/.bashrc\n";
 	print "\tsource /com/extra/texlive/2014/load.sh\n\n";
-}
+    }
     else {
 	print "Please install pdflatex by downloading the texlive package and following the installation instructions (https://www.tug.org/texlive/)\n\n";
     }
-    print "Rerun this script once pdflatex has been added to the default search path (./rp_config)\n\n";
+    print "Rerun this script once latex has been added to the default search path (./rp_config)\n\n";
     print "---------------------------------------\n";
     exit;
 }
@@ -833,6 +865,30 @@ if ($clusters{mssm} == 1){
     }
     else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
 }
+if ($clusters{bih_qsub} == 1){
+    unless (exists $ENV{rp_perlpackages}) {
+        print "Run the following commands to add rp_perlpackages as an environmental variable:\n";
+        print "echo \"export rp_perlpackages=/fast/users/panagigm_c/rp_bin/Statistics/\" >> ~/.bashrc\n";
+        print "export rp_perlpackages=/fast/users/panagigm_c/rp_bin/Statistics/\n";
+        print "./rp_config\n\n";
+        exit;
+    }
+    else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
+}
+
+
+
+if ($clusters{unc_slurm} == 1){
+    unless (exists $ENV{rp_perlpackages}) {
+        print "Run the following commands to add rp_perlpackages as an environmental variable:\n";
+        print "echo \"export rp_perlpackages=/PATH_TO_PERLMODULES/\" >> ~/.bashrc\n";
+        print "export rp_perlpackages=/PATH_TO_PERLMUODULES/\n";
+        print "./rp_config\n\n";
+        exit;
+    }
+    else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
+}
+
 
 ### Make sure lapack is installed
 if ($clusters{genomedk} == 1){
@@ -987,7 +1043,7 @@ elsif ($clusters{genomedk} == 1) {
 
 elsif ($clusters{mssm} == 1) {
     my $user_name = $ENV{USER};
-    $sloc = "/sc/orga/scratch/$user_name/";
+    $sloc = "/scratch/$user_name/";
     print "Do you want to use the following default scratch directory? (y or n)\n";
     print "\t$sloc\n";
     while (1) {
@@ -1003,6 +1059,26 @@ elsif ($clusters{mssm} == 1) {
         else {print "Please answer with y or n.\n";}
     }
 }
+
+elsif ($clusters{bih_qsub} == 1) {
+    my $user_name = $ENV{USER};
+    $sloc = "$home/scratch/";
+    print "Do you want to use the following default scratch directory? (y or n)\n";
+    print "\t$sloc\n";
+    while (1) {
+        my $answer = lc <>;
+        chomp $answer;
+        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
+        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
+				$sloc = <>;
+				chomp $sloc;
+				$sloc =~ s/^~/$ENV{HOME}/g;
+				$sloc =~ s/^\./$cd/g;        
+				last;}
+        else {print "Please answer with y or n.\n";}
+    }
+}
+
 
 elsif ($clusters{uppmax} == 1) {
     $sloc = "\$TMPDIR"; # $TMPDIR gets populated with /scratch/$SLURM_JOB_ID for
@@ -1390,24 +1466,75 @@ elsif ($clusters{mssm}){
 #		  "hvloc","./",
 	);
 }
-    elsif ($clusters{uppmax}){
-        %variables = ("ploc", "/sw/apps/bioinfo/plink/1.07/$uppmax_cluster/",
-		      "p2loc","/proj/$uppmax_project/ricopili/software/plink2/",
-		      "shloc","/proj/$uppmax_project/ricopili/software/shapeit/bin/",
-		      "sh3loc","NA",
-		      "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
-		      "i2loc","/proj/$uppmax_project/ricopili/software/impute2/impute_v2.3.2_x86_64_static/",
-		      "i4loc","NA",
-		      "liloc","/proj/$uppmax_project/ricopili/software/liftover/",
-		      "ldloc","/proj/$uppmax_project/ricopili/software/ldsc/",
-		      "eloc","/proj/$uppmax_project/ricopili/software/EIG6.0.1/bin/",
-		      "rloc","/usr/bin/",
-		      "rpac","/proj/$uppmax_project/ricopili/software/Rpackages",
-		      "hmloc","/proj/$uppmax_project/ricopili/hapmap_ref/",
-		      "meloc","/proj/$uppmax_project/ricopili/software/metal/generic-metal/",
-		      "bcloc","NA",
-		      "bcrloc","NA",
 
+elsif ($clusters{bih_qsub}){
+    my $dependency_dir = "$home/Ricopili_Dependencies";
+    %variables = (
+		  "p2loc","$dependency_dir/plink",
+
+		  "sh3loc","$dependency_dir/shapeit3",
+		  "ealoc","$dependency_dir/eagle",
+		  "i2loc","$dependency_dir/impute_v2",
+		  "i4loc","$dependency_dir/impute_v4",
+		  "liloc","$dependency_dir/liftover/",
+		  "eloc","$dependency_dir/eigensoft/EIG-7.2.1/bin/",
+		  "rloc","$home/local/R/bin/",  ## separate dir
+		  "rpac","/fast/users/panagigm_c/local/R/lib/R/library/rmeta", ## separate dir
+		  "hmloc","$dependency_dir/hapmap_ref/",
+		  "meloc","$dependency_dir/metal/",
+		  "bcloc","$dependency_dir/bcftools/bcftools-1.3.1_bin/bin/",
+		  "bcrloc","$dependency_dir/bcftools/bcftools-1.3.1/resources/",
+
+		  "bgziploc","$dependency_dir/tabix",
+		  "tabixloc","$dependency_dir/tabix/",
+		  "minimac3loc","$dependency_dir/tabix/",
+#		  "hvloc","./",
+	);
+}
+
+elsif ($clusters{unc_slurm}){
+    %variables = ("ploc", "NA",
+		  "p2loc","NA",
+		  "shloc","NA",
+		  "sh3loc","NA",
+		  "ealoc","pleasedownload_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
+		  "i2loc","NA",
+		  "i4loc","NA",
+		  "liloc","NA",
+		  "eloc","NA",
+		  "rloc","NA",
+		  "rpac","NA",
+		  "hmloc","NA",
+		  "meloc","NA",
+		  "bcloc","NA",
+		  "bcrloc","NA",
+
+		  "bgziploc","NA",
+		  "tabixloc","NA",
+		  "minimac3loc","NA",
+#		  "hvloc","./",
+	);
+}
+
+
+elsif ($clusters{uppmax}){
+    %variables = ("ploc", "/sw/apps/bioinfo/plink/1.07/$uppmax_cluster/",
+		  "p2loc","/proj/$uppmax_project/ricopili/software/plink2/",
+		  "shloc","/proj/$uppmax_project/ricopili/software/shapeit/bin/",
+		  "sh3loc","NA",
+		  "ealoc","please_download_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
+		  "i2loc","/proj/$uppmax_project/ricopili/software/impute2/impute_v2.3.2_x86_64_static/",
+		  "i4loc","NA",
+		  "liloc","/proj/$uppmax_project/ricopili/software/liftover/",
+		  "ldloc","/proj/$uppmax_project/ricopili/software/ldsc/",
+		  "eloc","/proj/$uppmax_project/ricopili/software/EIG6.0.1/bin/",
+		  "rloc","/usr/bin/",
+		  "rpac","/proj/$uppmax_project/ricopili/software/Rpackages",
+		  "hmloc","/proj/$uppmax_project/ricopili/hapmap_ref/",
+		  "meloc","/proj/$uppmax_project/ricopili/software/metal/generic-metal/",
+		  "bcloc","NA",
+		  "bcrloc","NA",
+		  
 		  "bgziploc","NA",
 		  "tabixloc","NA",
 		  "minimac3loc","NA",
@@ -1485,6 +1612,8 @@ if ($clusters{lisa}){push (@text, "queue qsub")}
 if ($clusters{computerome} || $clusters{co_ipsych}){push (@text, "queue qsub_c")}
 if ($clusters{genomedk}){push (@text, "queue slurm")}
 if ($clusters{mssm}){push (@text, "queue msub")}
+if ($clusters{unc_slurm}){push (@text, "queue unc_slurm")}
+if ($clusters{bih_qsub}){push (@text, "queue bih_qsub")}
 if ($clusters{uppmax}){push (@text, "queue slurm_u")}
 if ($clusters{uppmax}){push (@text, "uppmax_project $uppmax_project")}
 }

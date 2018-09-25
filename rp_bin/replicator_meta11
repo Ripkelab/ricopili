@@ -43,7 +43,7 @@ close FILE;
 # read config file
 #############################
 
-my $ploc = &trans("ploc");
+my $ploc = &trans("p2loc");
 my $rloc = &trans("rloc");
 my $sloc = &trans("sloc");
 

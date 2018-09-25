@@ -38,10 +38,12 @@ if ($qloc eq "qsub_b"){
     $qsub_broad =1;
 }
 
-my $bsub =1 if ($qloc eq "bsub");
+my $bsub =1 if ($qloc eq "bsub"); ## not existing in rp_config
 my $msub =1 if ($qloc eq "msub");
 my $slurm =1 if ($qloc eq "slurm");
 my $slurm_u = 1 if ($qloc eq "slurm_u");
+my $unc_slurm = 1 if ($qloc eq "unc_slurm");
+my $bih_qsub = 1 if ($qloc eq "bih_qsub");
 
 
 ##########################################
@@ -51,7 +53,7 @@ my $sample="plink --bfile prefix --out QC2/prefix-qc2 --geno 0.1 --mind 0.1 --ma
 
 my $prefix="prefix";
 
-my $jl_file="blueprint_joblist_file";
+
 
 my $core=12;
 my $inst=11;
@@ -128,7 +130,7 @@ outdated {
 new: changes between 8 and 12 cores, instancies always one less
 
 
- writes output to a specific file $jl_file
+
 
  created by Stephan Ripke 2008 at MGH, Boston, MA
  
@@ -416,7 +418,7 @@ if ($job){
     } 
 
 ########################################
-### BROAD (bsub)
+### BROAD (bsub)  -> oudated
 ##########################################
 
 
@@ -652,7 +654,7 @@ if ($job){
 ##########################################
 
     if ($msub) {
-#	print "entering bsub\n";
+
 	($multi,$threads) = split ',', $multi_str if ($multi_str ne "");
 #	print "multi: $multi\n";
 #	print "threads: $threads\n";
@@ -1022,13 +1024,301 @@ if ($job){
 #	exit;	    
 
 
-#	&a2file ($jl_file."-".$NOJ, @blueprint_out);
-
 
 	exit;	
 
     }
 
+########################################
+### BIH
+##########################################
+
+    if ($bih_qsub) {
+
+
+	my $inst_n=0;
+	my $job_n=0;
+	my $sum=0;
+	($multi,$threads) = split ',', $multi_str if ($multi_str ne "");  #multi is outdated not used any more
+	my $jobname;
+
+	my $mem_str = ($jmem / 1000) * 1;
+	$mem_str = 1 if ($mem_str < 1);
+
+	
+	$jobname="j.$NOJ";
+
+
+	unless ($wait_fi_file){
+	    if ($jobarray eq "") {
+		
+		if (@job_arr > 0) {
+		    
+		    die "$! ($jobname.scripts)" unless open SCR, "> $jobname.scripts";
+		    foreach (@job_arr) {
+			
+			print SCR "$_\n";   
+			
+		    }
+		    close SCR;
+		    $jobarray = "$jobname.scripts";
+		}
+		else {
+		    print "Exit: no jobs to process\n";
+		    exit;
+		}
+		
+		print "wrote $jobname.scripts\n";
+		$job_bn_th = @job_arr;
+		#	    print "sleep\n";
+		#	    sleep (3);
+		
+	    }
+	}
+
+	
+	if ($jobarray ne "") {
+
+	    ### walltime format
+	    my $wallstr = "$walltime:00:00";
+	    if ($walltime ==0){
+		$wallstr = "0:10:00";
+	    }
+
+
+	    my $maxpar_txt = "";
+
+	    ### need to know the flag for that
+	    if ($maxpar > 0) {
+		$maxpar_txt = "-tc $maxpar";
+	    }
+	    
+	    print "starting job_array, $jobname\n";
+
+
+	    my $multi_txt = "";
+#	    my $threads_half = int ($threads / 2);
+
+
+	    ## I dont think this is used somewhere.
+#	    my $threads_half = $threads;  ## don't know why this was just half
+#	    if ($threads > 1) {
+#		$multi_txt = "-pe smp $threads_half -binding linear:$threads_half ";
+#	    }
+#	    if ($threads > 8) {
+#		$multi_txt .= "-R y ";
+#	    }
+	    
+
+	    
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+	    print JOB "cd $rootdir\n";
+	    ### #SGE_TASK_ID need to be specified from the user
+	    print JOB "my.start_job -n ".'$SGE_TASK_ID'." --jobfile $jobarray\n";
+	    close JOB;
+
+	    $name_of_job = "-N $NOJ";
+	    
+	    my $qsub_cmd = "qsub -v PATH  -l h_vmem=".$mem_str."g -l h_rt=$wallstr  -t 1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job  $jobname";
+
+	    my $qsub_txt = "$qsub_cmd > $jobname.id";
+	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
+	    
+	    &mysystem ($qsub_log);
+	    &mysystem ($qsub_txt);
+	    exit;
+	}
+	
+	
+
+
+	if ($wait_fi_file){
+	    die "$! <$wait_fi_file>" unless open WF, "< $wait_fi_file";
+	    my $id_str = <WF>;
+	    chomp($id_str);
+	    ### this output needs to be specified by the user
+	    $id_str =~ s/Your job-array //;
+	    $id_str =~ s/\..*//;
+
+
+
+	    close WF;
+
+	    my $wallstr = "$walltime:00:00";
+	    
+	    print "starting motherscript, depending on $id_str\n";
+	    
+	    $jobname="j.$NOJ";
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+#	    print JOB "#PBS -lnodes=1\n";
+#	    print JOB "#PBS -lwalltime=$wallstr\n";
+	    print JOB "cd $ENV{PWD}\n";
+	    print JOB "$bp\n";
+	    close JOB;
+
+	    my $wallstr_0917 = "-l h_rt=$wallstr";
+
+	    $name_of_job = "-N $NOJ";
+	    my $qsub_cmd = "qsub -v PATH -l h_vmem=".$mem_str."g $wallstr_0917  -hold_jid $id_str -e $ENV{PWD}/$errname/ -o $ENV{PWD}/$errname/ $name_of_job  $jobname";
+
+	    my $qsub_txt = "$qsub_cmd > $jobname.id";
+	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
+
+	    &mysystem ($qsub_log);
+	    &mysystem ($qsub_txt);
+	    exit;
+	}
+
+
+
+
+	
+    }
+
+########################################
+### UNCSLURM 
+##########################################
+
+    if ($unc_slurm) {
+
+
+	my $inst_n=0;
+	my $job_n=0;
+	my $sum=0;
+	($multi,$threads) = split ',', $multi_str if ($multi_str ne "");  #multi is outdated not used any more
+	my $jobname;
+
+	my $mem_str = ($jmem / 1000) * 1;
+	$mem_str = 1 if ($mem_str < 1);
+
+
+	$jobname="j.$NOJ";
+
+
+	unless ($wait_fi_file){
+	    if ($jobarray eq "") {
+		
+		if (@job_arr > 0) {
+		    
+		    die "$! ($jobname.scripts)" unless open SCR, "> $jobname.scripts";
+		    foreach (@job_arr) {
+			
+			print SCR "$_\n";   
+			
+		    }
+		    close SCR;
+		    $jobarray = "$jobname.scripts";
+		}
+		else {
+		    print "Exit: no jobs to process\n";
+		    exit;
+		}
+		
+		print "wrote $jobname.scripts\n";
+		$job_bn_th = @job_arr;
+		#	    print "sleep\n";
+		#	    sleep (3);
+		
+	    }
+	}
+
+	
+	if ($jobarray ne "") {
+
+
+	    my $wallstr = "$walltime:00:00";
+	    if ($walltime ==0){
+		$wallstr = "0:10:00";
+	    }
+
+
+	    my $maxpar_txt = "";
+
+	    ### need to know the flag for that
+#	    if ($maxpar > 0) {
+#		$maxpar_txt = "-tc $maxpar";
+#	    }
+	    
+	    print "starting job_array, $jobname\n";
+
+
+	    my $multi_txt = "";
+#	    my $threads_half = int ($threads / 2);
+
+
+	    ## I dont think this is used somewhere.
+#	    my $threads_half = $threads;  ## don't know why this was just half
+#	    if ($threads > 1) {
+#		$multi_txt = "-pe smp $threads_half -binding linear:$threads_half ";
+#	    }
+#	    if ($threads > 8) {
+#		$multi_txt .= "-R y ";
+#	    }
+	    
+
+	    
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+	    print JOB "cd $rootdir\n";
+	    ### #SGE_TASK_ID need to be specified from the user
+	    print JOB "my.start_job -n ".'$SLURM_ARRAY_TASK_ID'." --jobfile $jobarray\n";
+	    close JOB;
+
+	    $name_of_job = "--job_name $NOJ";
+	    
+	    my $qsub_cmd = "sbatch --mem-per-cpu=$mem_str"."G -t $wallstr --array=1-$job_bn_th -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job -N 1 $jobname";
+
+
+	    my $qsub_txt = "$qsub_cmd > $jobname.id";
+	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
+	    
+	    &mysystem ($qsub_log);
+	    &mysystem ($qsub_txt);
+	    exit;
+	}
+	
+	
+
+
+	if ($wait_fi_file){
+	    die "$! <$wait_fi_file>" unless open WF, "< $wait_fi_file";
+	    my $id_str = <WF>;
+	    chomp($id_str);
+	    ### this output needs to be specified by the user
+	    $id_str =~ s/Submitted batch job //;
+
+
+
+	    close WF;
+
+	    my $wallstr = "$walltime:00:00";
+	    
+	    print "starting motherscript, depending on $id_str\n";
+	    
+	    $jobname="j.$NOJ";
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+#	    print JOB "#PBS -lnodes=1\n";
+#	    print JOB "#PBS -lwalltime=$wallstr\n";
+	    print JOB "cd $ENV{PWD}\n";
+	    print JOB "$bp\n";
+	    close JOB;
+
+
+	    $name_of_job = "--job_name $NOJ";
+	    my $qsub_cmd = "sbatch --mem-per-cpu=$mem_str"."G -t $wallstr -e $rootdir/$errname/ -o $rootdir/$errname/ $name_of_job -N 1 --dependency=afterok:$id_str $jobname";
+
+	    my $qsub_txt = "$qsub_cmd > $jobname.id";
+	    my $qsub_log = "echo $qsub_cmd > $jobname.log";
+
+	    &mysystem ($qsub_log);
+	    &mysystem ($qsub_txt);
+	    exit;
+	}
+
+
+
+
+	
+    }
     
 ########################################
 ### BROAD UGER
@@ -1520,120 +1810,7 @@ if ($job){
     
     
 
-    
-    
-
-
-
-    
-    if (0) {
-	foreach my $cmd (@job_arr){
-
-	my $wallstr = "$walltime:00:00";
-
-	if ($walltime == 0) {
-	    $wallstr = "00:10:00";
-	}
-
-	if ($start) {
-	    &mysystem($cmd);
-	    next;
-	}
-
-
-	if ($week > 0){
-	    my $walltime_loc = $walltime * 6;
-	    $wallstr = "$walltime_loc:00:00";
-	    $week = $week - 1;
-	}
-
-
-
-	if ($inst_n == 0){
-
-	    my $rn = int(rand(2));
-#	    if ($rn == 0){
-
-#	    $core = 8;
-#	    $inst = 7 unless ($inst == 1);
-
-#	    }
-#	    else {
-#		$core = 12;
-#		$inst = 11;
-#	    }
-
-	    $jobname="j.$job_n.$NOJ";
-#	    print " $jobname\n";
-	    if ($qsub){
-		die "$! ($jobname)" unless open JOB, "> $jobname";
-#		print JOB "#PBS -lnodes=1:cores$core\n";
-		print JOB "#PBS -lnodes=1\n";
-
-		if (0) {
-		    print JOB "#PBS -lnodes=1:cores$core\n" if ($core == 2);
-		    print JOB "#PBS -lnodes=1:cores8\n" if ($core == 8);
-		    print JOB "#PBS -lnodes=1:cores8:mem8gb\n" if ($core == 12);
-		    print JOB "#PBS -lnodes=1:cores8:mem16gb\n" if ($core == 16);
-		    print JOB "#PBS -lnodes=1:cores8:mem24gb\n" if ($core == 24);
-		}
-
-		print JOB "#PBS -lwalltime=$wallstr\n";
-
-
-		##### as long as dependencies don't work
-		if (0) {
-		    print JOB "$wait_str\n";
-		}
-
-		print JOB "$module\n";
-		print JOB "cd $ENV{PWD}\n";
-	    }
-	}
-	if ($qsub){
-	    
-	    if ($wait_fi_file){
-		die $! unless open CMD, "> $NOJ.cmd";
-		print CMD "$bp\n";
-		close CMD;
-#		print "blueprint_addon --cmd $NOJ.cmd --fwt $wait_fi_file --out $NOJ\n";
-		print JOB "blueprint_addon --cmd $NOJ.cmd --fwt $wait_fi_file --out $NOJ\n";
-
-	    }
-	    else {
-		print JOB $cmd;
-#		print JOB " &" unless ($serial);
-		print JOB " &" ;
-#		print JOB " &" unless ($cmd =~ /;$/);
-		print JOB "\n";
-	    }
-
-
-
-
-	    $inst_n++;
-	    $sum++;
-	    if ($inst_n == $inst || $sum == @job_arr || $week > 0){
-		print JOB "wait\n";
-		close JOB;
-		$inst_n=0;
-		$job_n++;
-
-		my $qsub_txt = "qsub -e $errname/ -o $errname/ $name_of_job $hhmm $jobname";
-#		print "$qsub_txt\n";
-#		&mysystem ("qsub $wait_str -e $errname/ -o $errname/ $name_of_job $jobname") if $lisa;
-		&mysystem ($qsub_txt) if $qsub;
-		last if ($job_n > 200);
-
-	    }
-	}
-	else {
-	    &mysystem ($cmd);
-	}
-    }
-	
-	&a2file ($jl_file."-".$NOJ, @blueprint_out);
-    }
+   
 }
 
 else {

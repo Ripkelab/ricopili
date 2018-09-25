@@ -33,7 +33,6 @@ my $job_bn_th = 1000;
 # read config file
 #############################
 
-my $ploc = &trans("ploc");
 my $homedir = &trans("home");
 my $qloc = &trans("queue");
 my $init = &trans("init");
@@ -648,23 +647,27 @@ sub send_jobarray {
     $command_line =~ s/--force1//;
 
 
-    my $wt_file = "$sjadir/blueprint_joblist_file-$sjaname.$outname";
+    my $wt_file = "$sjadir/j.$jobfile.id";
     chdir "$rootdir" or die "something strange";
-    if ($qloc eq "bsub" || $qloc eq "msub") {
-	$wt_file =~ s/.*blueprint_joblist_file-//;
-    }
-    if ($qloc eq "slurm" || $qloc eq "slurm_u") {
-	$wt_file = "$sjadir/$jobfile.script.id";
-    }
-    if ($qloc eq "qsub") {
-	$wt_file = "$sjadir/j.$jobfile.id";
-    }
-    if ($qloc eq "qsub_c") {
-	$wt_file = "$sjadir/j.$jobfile.id";
-    }
-    if ($qloc eq "qsub_b") {
-	$wt_file = "$sjadir/j.$jobfile.id";
-    }
+
+    
+#	"$sjadir/blueprint_joblist_file-$sjaname.$outname";
+
+#    if ($qloc eq "bsub" || $qloc eq "msub") {
+#	$wt_file =~ s/.*blueprint_joblist_file-//;
+ #   }
+ #   if ($qloc eq "slurm" || $qloc eq "slurm_u") {#
+#	$wt_file = "$sjadir/$jobfile.script.id";
+#    }
+#    if ($qloc eq "qsub") {#
+#	$wt_file = "$sjadir/j.$jobfile.id";
+#    }
+#    if ($qloc eq "qsub_c") {
+#	$wt_file = "$sjadir/j.$jobfile.id";
+#    }
+#    if ($qloc eq "qsub_b") {
+#	$wt_file = "$sjadir/j.$jobfile.id";
+#    }
     
 
 

@@ -698,24 +698,9 @@ sub send_jobarray {
     $command_line =~ s/--force1//;
 
 
-    my $wt_file = "$sjadir/blueprint_joblist_file-$sjaname.$outname";
-    chdir "$rootdir" or die "something strange";
-    if ($qloc eq "bsub") {
-	$wt_file =~ s/.*blueprint_joblist_file-//;
-    }
-    if ($qloc eq "slurm" || $qloc eq "slurm_u") {
-	$wt_file = "$sjadir/$jobfile.script.id";
-    }
+    my $wt_file = "$sjadir/j.$jobfile.id";
+    chdir "$rootdir" or die "something strange";    
 
-    if ($qloc eq "qsub") {
-	$wt_file = "$sjadir/j.$jobfile.id";
-    }
-    if ($qloc eq "qsub_c") {
-	$wt_file = "$sjadir/j.$jobfile.id";
-    }
-    if ($qloc eq "qsub_b") {
-	$wt_file = "$sjadir/j.$jobfile.id";
-    }
 
 
 
@@ -1438,7 +1423,9 @@ foreach my $chrint ($chr_start..$chr_end){
 	    unless ($answer_rename eq "y" || $answer_rename eq "Y"){
 		print "********************************\n";
 		print "vcf-file ($vcf_name) not found, but I found another possibility ($vcf_found).\n";
-		print "do you want to rename into matching template $vcf_templ (old names are lost) for all chromosomes?\n";
+		print "do you want to rename all files with the matching template $vcf_templ (old names are lost) for all chromosomes? (y/n)\n";
+		print "comment: thats expected for HRC imputation reference, so please say y\n";
+		print "comment: also it's recommend to start with a copy (or a link of the files)\n";
 	    }
 	    
 	    if ($answer_rename eq "") {
