@@ -1543,12 +1543,16 @@ print "starting excel file\n";
 
 
 
-use lib '/home/gwas/bin/Spreadsheet-WriteExcel-2.25/blib/lib';
-use lib '/home/unix/sripke/perl_modules/Spreadsheet-WriteExcel-2.25/blib/lib';
+#use lib '/home/gwas/bin/Spreadsheet-WriteExcel-2.25/blib/lib';
+#use lib '/home/unix/sripke/perl_modules/Spreadsheet-WriteExcel-2.25/blib/lib';
 
 
-use lib '/home/gwas/bin/Parse-RecDescent-1.965001/lib/'; ## for formulas
-use lib '/home/unix/sripke/perl_modules/Parse-RecDescent-1.965001/lib'; ## for formulas
+#use lib '/home/gwas/bin/Parse-RecDescent-1.965001/lib/'; ## for formulas
+#use lib '/home/unix/sripke/perl_modules/Parse-RecDescent-1.965001/lib'; ## for formulas
+
+
+use lib $ENV{rp_perlpackages}.'/Spreadsheet-WriteExcel-2.40/lib';
+use lib $ENV{rp_perlpackages}.'/Parse-RecDescent-1.965001/lib';
 
 die $! unless open NOREP, "> $out_name.norep.txt";
 die $! unless open REP, "> $out_name.rep.txt";

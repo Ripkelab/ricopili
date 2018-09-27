@@ -127,9 +127,41 @@ else {
     print FILE "variable value remarks\n";
     print FILE "-----------------------------------------\n";
     print FILE "exbin_dir PLACEHOLDER ## directory in which all downloaded external binaries will be installed to\n";
+    print FILE '
+
+rp_dependencies_dir                              ### classic parameters: /home/unix/USERNAME/rp_dependencies
+R_packages_dir                                   ### classic parameters: /broad/software/free/Linux/redhat_6_x86_64/pkgs/r_2.14.0/lib64/R/library, /home/unix/USERNAME/R_packages
+path_to_R                                        ### classic parameters: /sara/sw/R-3.1.2/bin/R, source /broad/software/scripts/useuse; use R-2.14; R
+path_to_Perlmodules                              ### classic parameters: /home/unix/USERNAME/rp_dependencies ***
+path_to_scratchdir                               ### classic parameters: /psych/genetics_data/ripke/sloc/, /scratch
+ldsc_starting_procedure                          ### classic parameters: source /broad/software/scripts/useuse; use .anaconda-2.1.0-no-mkl; python /psych/genetics_data/ripke//ldsc/LDSCPY, module load ldsc; LDSCPY **
+----------------------------------------
+o    How to start jobarrays and job-dependencies: XXX stand for integer values.
+batch_jobcommand:                                 ### classic parameters: qsub, sbatch, bsub
+batch_memory-request(XXX_is_GB):                  ### classic parameters: -l h_vmem=XXXg, --mem-per-cpu=XXXG
+batch_walltime:                                   ### classic parameters: -l h_rt=HH:MM:SS, -t HH:MM:SS
+batch_array(XXX_is_number_of_arrays):             ### classic parameters: -t 1-XXX, --array=1-XXX, -J "jobname[1-XXX]"
+batch_output(stdout):                             ### classic parameters: -o XXX
+batch_output(stderr):                             ### classic parameters: -e XXX
+batch_job_dependency:                             ### classic parameters: -hold_jid XXX, --dependency=afterok:XXX
+batch_array_task_id:                              ### classic parameters: $SGE_TASK_ID, $SLURM_ARRAY_TASK_ID, %LSB_JOBINDEX
+batch_max_parallel_jobs_per_one_array:            ### classic parameters: -tc XXX, added_to_array *****
+batch_other_job_flags:                            ### classic parameters: -P urgent, -v PATH,rp_perlpackages, --jobfile
+batch_job_output_jid:                             ### classic parameters: Your job-array XXX.1-YYY:1 ("test-job_array") has been submitted, Submitted batch job XXX ****
+
+
+** LDSCPY will be internally replaced by ldsc.py or munge_sumstats.py
+*** needs to contain three perl-packages: (Statistics-Distributions-1.02 / Spreadsheet-WriteExcel-2.40 / Parse-RecDescent-1.965001), if Dependency download is used, then these are already included
+**** YYY stand for numbers that can be removed when trying to read out the job-ID XXX
+***** added_to_array means sbatch format --array=1-XXX%YYY (e.g. see this format:https://stackoverflow.com/questions/42812425/limit-the-number-of-running-jobs-in-slurm) or qsub format -J "jobname[1-XXX]%YYY"
+
+
+'
     close FILE;
     
 }
+
+    exit;
 
 print "------------------------------------------------------------------\n";
 print "------------------------------------------------------------------\n";

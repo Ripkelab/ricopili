@@ -112,7 +112,7 @@ sub split_line_ref {
 
 
 #use lib '/home/gwas/bin/Spreadsheet-WriteExcel-2.25/blib/lib';
-use lib $ENV{rp_perlpackages}.'/Spreadsheet-WriteExcel-2.40/blib/lib';
+use lib $ENV{rp_perlpackages}.'/Spreadsheet-WriteExcel-2.40/lib';
 #use lib '/home/unix/sripke/perl_modules/Spreadsheet-WriteExcel-2.37/blib/lib';
 
 #use lib '/home/sripke/ricopili/perl_packages/Spreadsheet-WriteExcel-2.37/blib/lib';
