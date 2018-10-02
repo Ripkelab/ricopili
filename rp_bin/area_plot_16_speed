@@ -78,8 +78,14 @@ my $email = &trans("email");
 
 ###############################################
 my $r_sys = "$rloc/R";
-if ($rloc eq "broadinstitute") {
-    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+if ($rloc =~ /_SPACE_/) {
+    $r_sys = $rloc;
+    $r_sys =~ s/_SPACE_/ /g;
+}
+else {
+    if ($rloc eq "broadinstitute") {
+	$r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+    }
 }
 
 #my $homedir = "/home/gwas";

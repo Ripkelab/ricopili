@@ -16,6 +16,7 @@ use Ricopili::Utils qw(trans);
 #############################
 
 my $ldsc = &trans("ldloc");
+my $ldsc_sys = &trans("starting_ldsc");
 
 my $pop_prev = 0.01;
 use Getopt::Long;

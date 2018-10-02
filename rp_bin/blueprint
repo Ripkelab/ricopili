@@ -24,6 +24,19 @@ my $command_line = "$progname @ARGV";
 #############################
 
 my $qloc = &trans("queue");
+my $batch_walltime = &trans("batch_walltime");
+my $batch_maxpar = &trans("batch_max_parallel_jobs_per_one_array");
+my $batch_taskid = &trans("batch_array_task_id");
+my $batch_name = &trans("batch_name");
+my $batch_bin = &trans("batch_jobcommand");
+my $batch_jobfile = &trans("batch_jobfile");
+my $batch_stdout = &trans("batch_stdout");
+my $batch_stderr = &trans("batch_stderr");
+my $batch_array = &trans("batch_array");
+my $batch_mem = &trans("batch_memory_request");
+my $batch_other = &trans("batch_other_job_flags");
+my $batch_depend = &trans("batch_job_dependency");
+my $batch_jid = &trans("batch_job_output_jid");
 
 my $qsub =0;
 my $qsub_computerome =0;
@@ -44,6 +57,7 @@ my $slurm =1 if ($qloc eq "slurm");
 my $slurm_u = 1 if ($qloc eq "slurm_u");
 my $unc_slurm = 1 if ($qloc eq "unc_slurm");
 my $bih_qsub = 1 if ($qloc eq "bih_qsub");
+my $custom = 1 if ($qloc eq "custom");
 
 
 ##########################################
@@ -1029,6 +1043,211 @@ if ($job){
 
     }
 
+
+########################################################
+### CUSTOM (DIDNT CHANGE ANYTHING YET OF OCT 6th)
+#########################################################
+
+    if ($custom) {
+
+
+	my $inst_n=0;
+	my $job_n=0;
+	my $sum=0;
+	my $jobname;
+
+	my $mem_str = ($jmem / 1000) * 1;
+	$mem_str = 1 if ($mem_str < 1);
+
+	
+	$jobname="j.$NOJ";
+
+
+	unless ($wait_fi_file){
+	    if ($jobarray eq "") {
+		
+		if (@job_arr > 0) {
+		    
+		    die "$! ($jobname.scripts)" unless open SCR, "> $jobname.scripts";
+		    foreach (@job_arr) {
+			
+			print SCR "$_\n";   
+			
+		    }
+		    close SCR;
+		    $jobarray = "$jobname.scripts";
+		}
+		else {
+		    print "Exit: no jobs to process\n";
+		    exit;
+		}
+		
+		print "wrote $jobname.scripts\n";
+		$job_bn_th = @job_arr;
+		#	    print "sleep\n";
+		#	    sleep (3);
+		
+	    }
+	}
+
+
+	### walltime
+	$batch_walltime =~ s/_SPACE_/ /g;
+	$batch_walltime =~ s/HH/$walltime/g;
+	$batch_walltime =~ s/:MM/:00/;
+	$batch_walltime =~ s/:SS/:00/;
+
+	### batch memory request
+	$batch_mem =~ s/_SPACE_/ /g;
+	$batch_mem =~ s/XXX/$mem_str/g;
+
+	### name of job
+	$batch_name =~ s/_SPACE_/ /g;
+	$batch_name =~ s/XXX/$NOJ/g;
+	
+	### jobfile
+	$batch_jobfile =~ s/_SPACE_/ /g;
+	$batch_jofile =~ s/XXX/$jobname/g;
+	
+	### job_outputs
+	$batch_stdout =~ s/_SPACE_/ /g;
+	$batch_stdout =~ s/XXX/$rootdir/$errname/g;
+	$batch_stderr =~ s/_SPACE_/ /g;
+	$batch_stderr =~ s/XXX/$rootdir/$errname/g;	    	
+	
+	if ($jobarray ne "") {
+
+	    print "starting job_array, $jobname\n";
+	    
+
+
+	    #################################################################
+	    ## multi is not implemented as of now, not necessary right now, it's more efficient to run parallel jobs
+	    ############################################################################
+	    
+#	    my $multi_txt = "";
+#	    my $threads_half = int ($threads / 2);
+#	    my $threads_half = $threads;  ## don't know why this was just half
+#	    if ($threads > 1) {
+#		$multi_txt = "-pe smp $threads_half -binding linear:$threads_half ";
+#	    }
+#	    if ($threads > 8) {
+#		$multi_txt .= "-R y ";
+#	    }
+	    
+
+	    ## this small script take job number X from the array collection file
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+	    print JOB "cd $rootdir\n";
+	    print JOB "my.start_job -n ".$batch_taskid." --jobfile $jobarray\n";
+	    close JOB;
+
+
+	    ### batch array
+	    $batch_array =~ s/_SPACE_/ /g;
+	    $batch_array =~ s/XXX/$job_bn_th/g;
+
+	    ## slurm format for max parallel jobs
+	    if ($batch_array =~ /YYY/) {
+		if ($maxpar > 0) {
+		    $batch_array =~ s/YYY/$maxpar/;
+		}
+		else {
+		    $batch_array =~ s/YYY/50000/;
+		}
+	    }
+
+	    ## jobname in the array spec
+	    if ($batch_array =~ /JOBNAME/) {
+		$batch_array =~ s/JOBNAME/$NOJ/;
+	    }	    
+
+	    ### max parallel jobs in array
+
+	    $batch_maxpar =~ s/_SPACE_/ /g;
+	    $batch_maxpar =~ s/XXX/$maxpar/g;
+
+	    unless ($batch_maxpar =~ "XXX") {
+		$batch_maxpar = "";
+	    }
+
+
+	    ### batch other
+	    $batch_other =~ s/_SPACE_/ /g;
+
+	    
+	    my $batch_cmd = "$batch_bin $batch_other $batch_walltime $batch_maxpar $job_array $batch_stdout $batch_stderr $batch_name $batch_jobfile";
+
+	    my $batch_sys = "$batch_cmd > $jobname.id";
+	    my $batch_log = "echo $batch_cmd > $jobname.log";
+	    
+	    &mysystem ($batch_log);
+	    &mysystem ($batch_sys);
+	    exit;
+	}
+	
+	
+
+
+	if ($wait_fi_file){
+	    die "$! <$wait_fi_file>" unless open WF, "< $wait_fi_file";
+	    my $id_str = <WF>;
+	    chomp($id_str);
+	    close WF;
+
+
+	    ## for debugging
+		#$batch_depend = "-hold_jid_SPACE_XXX";
+		#$batch_jid = "Submitted_SPACE_batch_SPACE_job_SPACE_XXX";
+		#$id_str = "Submitted batch job 5364";
+	    #
+	    # for slurm
+		#$batch_depend = "--dependency=afterok:XXX";
+		#$batch_jid = "Your_SPACE_job-array_SPACE_XXX.1-YYY:1_SPACE(\"ZZZ\")_SPACE_has_SPACE_been_SPACE_submitted";
+		#$id_str = "Your job-array 243654.1-200:1 (\"ANYNAME\") has been submitted";
+
+	    #print "---------------------- originals ------------------------\n";
+	    #print "depend: ".$batch_depend."\n";
+	    #print "jid:    ".$batch_jid."\n";
+	    #print "id:     ".$id_str."\n";
+	    
+	    
+	    $batch_depend =~ s/_SPACE_/ /g;
+	    $batch_jid =~ s/_SPACE_/ /g;
+	    my @batch_jid_array = split "XXX", $batch_jid;
+	    
+	    $id_str =~ s/$batch_jid_array[0]//; ### remove the stuff from before XXX
+	    $id_str =~ s/([0123456789]*).*/$1/; ### take the first numbered ID and remove everything else
+
+	    $batch_depend =~ s/XXX/$id_str/g; ### put ID into dependency string
+
+
+	    ### for debugging
+		#print "---------------------- result ------------------------\n";
+		#print "jid:    ".$batch_jid_array[0]."\n";
+		#print "id:     ".$id_str."\n";
+		#print "depend: ".$batch_depend."\n";
+
+	    print "starting motherscript, depending on $id_str\n";
+	    
+	    $jobname="j.$NOJ";
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+	    print JOB "cd $rootdir\n";
+	    print JOB "$bp\n";
+	    close JOB;
+
+
+	    my $batch_cmd = "$batch_bin $batch_other $batch_mem $batch_walltime $batch_depend $batch_stdout $batch_stderr $batch_name  $jobname";
+
+	    my $batch_sys = "$batch_cmd > $jobname.id";
+	    my $batch_log = "echo batch_cmd > $jobname.log";
+
+	    &mysystem ($batch_log);
+	    &mysystem ($batch_sys);
+	    exit;
+	}
+
+    }
 ########################################
 ### BIH
 ##########################################

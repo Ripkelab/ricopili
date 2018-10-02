@@ -19,18 +19,16 @@ my $sloc = &trans("sloc");
 ########################
 
 my $r_sys = "$rloc/R";
-if ($rloc eq "broadinstitute") {
-    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+if ($rloc =~ /_SPACE_/) {
+    $r_sys = $rloc;
+    $r_sys =~ s/_SPACE_/ /g;
 }
 else {
-    
-    unless (-e "$rloc/R" ){
-	print "\n***** Error: couldn't find the following:\n";
-	print "$rloc/R\n";
-	exit;
+    if ($rloc eq "broadinstitute") {
+	$r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
     }
-
 }
+
 
 
 

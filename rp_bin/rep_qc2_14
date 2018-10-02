@@ -72,11 +72,14 @@ my $qloc = &trans("queue");
 
 
 my $r_sys = "$rloc/R";
-if ($rloc eq "broadinstitute") {
-    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+if ($rloc =~ /_SPACE_/) {
+    $r_sys = $rloc;
+    $r_sys =~ s/_SPACE_/ /g;
 }
-if ($qloc eq "msub") {
-    $r_sys = "module load R; R";
+else {
+    if ($rloc eq "broadinstitute") {
+	$r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+    }
 }
 
 

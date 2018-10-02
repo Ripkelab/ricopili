@@ -80,17 +80,14 @@ die "$usage\n" if $out eq "outname";
 
 
 my $r_sys = "$rloc/R";
-if ($rloc eq "broadinstitute") {
-
-    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+if ($rloc =~ /_SPACE_/) {
+    $r_sys = $rloc;
+    $r_sys =~ s/_SPACE_/ /g;
 }
 else {
-    unless (-x "$rloc/R") {
-	print "Error: R binary not found in assigned plink directory(--rloc)\n";
-	exit;
-    }
-    else {
-	print "R binary found\n";
+    if ($rloc eq "broadinstitute") {
+	
+	$r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
     }
 }
 

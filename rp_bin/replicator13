@@ -47,7 +47,6 @@ close FILE;
 #############################
 
 my $ploc = &trans("p2loc");
-my $rloc = &trans("rloc");
 my $sloc = &trans("sloc");
 my $hmloc = &trans("hmloc");
 

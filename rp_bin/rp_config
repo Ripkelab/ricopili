@@ -13,6 +13,7 @@ my $progname = $0;
 
 $progname =~ s!^.*/!!;
 
+my $rp_custom_installation_file = "rp_config.custom";
 
 
 ##### help message
@@ -23,6 +24,7 @@ Usage : $progname [options] --help
 
 
  --help            print this text and exits
+ --custom          use custom parameters (no default parameters for cluster)
 
 
  this script is trying to make installation of ricopili pipeline more convenient.
@@ -31,7 +33,17 @@ Usage : $progname [options] --help
 
  
 
+_______________________________________________
+-----------------------------------------------
+here you will find most necessary binaries, pleasee download and follow instructions in README:
 
+https://personal.broadinstitute.org/sripke/share_links/doMoVLWDcLcasit7xlcmwtt7cxDMjq_Ricopili_Dependencies.0918
+
+
+then start rp_config either vanilla (with many computer cluter-defaults) or with flag --custom.
+
+the latter will take job-queing parameters and filepaths from file: $rp_custom_installation_file
+if this file is not present, then a template file will be written out, needs to be filled then.
 
 
 
@@ -55,29 +67,54 @@ found on broad here:
 
 ----------------------------------------------------------------------
 
-
-bcloc /home/gwas/bcftools/
-bcrloc /home/gwas/bcftools/
-bgziploc /home/gwas/rp_exec/bgzip/
-tabixloc /home/gwas/rp_exec/tabix/
-minimac3loc /home/gwas/rp_exec/minimac/
-ealoc /home/gwas/eagle/Eagle_v2.2.3.5
-
-
--------------------------------------------------------------
-
-
-
 ### Jackie Goldstein, Jan 2014 & stephan ripke 2016
 ########################################################
 
 ";
 
 
+my $custom_file_template = '
+rp_dependencies_dir                              ### example parameters: /home/unix/USERNAME/rp_dependencies
+R_packages_dir                                   ### example parameters: /broad/software/free/Linux/redhat_6_x86_64/pkgs/r_2.14.0/lib64/R/library   /home/unix/USERNAME/R_packages
+starting_R                                       ### example parameters: /sara/sw/R-3.1.2/bin/R                                                    source_SPACE_/broad/software/scripts/useuse;_SPACE_use R-2.14;_SPACER
+path_to_Perlmodules                              ### example parameters: /home/unix/USERNAME/rp_dependencies                                       ***
+path_to_scratchdir                               ### example parameters: /psych/genetics_data/ripke/sloc/                                          /scratch
+starting_ldsc                                    ### example parameters: module_SPACE_load_SPACEldsc;_SPACE_LDSCPY                                 source_SPACE/broad/software/scripts/useuse;_SPACE_use_SPACE_.anaconda-2.1.0-no-mkl;_SPACE_python_SPACE/psych/genetics_data/ripke//ldsc/LDSCPY, **
+----------------------------------------
+---- How to start jobarrays and job-dependencies: XXX will be replaced internally.
+batch_jobcommand                                 ### example parameters:                          qsub                                        sbatch                                   bsub
+batch_memory_request                             ### example parameters(XXX_is_GB):               -l_SPACE_h_vmem=XXXg                        --mem-per-cpu=XXXG
+batch_walltime                                   ### example parameters:                          -l_SPACE_h_rt=HH:MM:SS                      -t_SPACE_HH:MM:SS
+batch_array                                      ### example parameters(XXX_is_number_of_arrays): -t_SPACE_1-XXX                              --array=1-XXX%YYY                            -J_SPACE_"JOBNAME[1-XXX]%YYY"  *****
+batch_jobfile                                    ### example parameters(XXX_is_the_jobfile):      XXX                                         XXX                                   --jobfile XXX
+batch_name                                       ### example parameters(XXX_is_jobname):          -N_SPACE_XXX                                --job_name_SPACE_XXX                     -J_SPACE_XXX
+batch_stdout                                     ### example parameters:                          -o_SPACE_XXX
+batch_stderr                                     ### example parameters:                          -e_SPACE_XXX
+batch_job_dependency                             ### example parameters(XXX_is_job_ID):           -hold_jid_SPACE_XXX                         --dependency=afterok:XXX
+batch_array_task_id                              ### example parameters:                          $SGE_TASK_ID                                $SLURM_ARRAY_TASK_ID                     $LSB_JOBINDEX
+batch_max_parallel_jobs_per_one_array            ### example parameters:                          -tc_SPACE_XXX                               added_to_array *****
+batch_other_job_flags                            ### example parameters:                          -P_SPACE_urgent                             -v_SPACE_PATH,rp_perlpackages
+batch_job_output_jid                             ### example parameters(XXX_jobid):               Submitted_SPACE_batch_SPACE_job_SPACE_XXX   Your_SPACE_job-array_SPACE_XXX.1-YYY:1_SPACE("ZZZ")_SPACE_has_SPACE_been_SPACE_submitted,  ****
+
+
+** LDSCPY will be internally replaced by ldsc.py or munge_sumstats.py
+*** needs to contain three perl-packages: (Statistics-Distributions-1.02 / Spreadsheet-WriteExcel-2.40 / Parse-RecDescent-1.965001), if Dependency download is used, then these are already included
+**** job-ID XXX, anything after the first set of numbers will be removed
+***** added_to_array means sbatch format --array=1-XXX%YYY (e.g. see this format:https://stackoverflow.com/questions/42812425/limit-the-number-of-running-jobs-in-slurm) or qsub format -J "jobname[1-XXX]%YYY"
+
+    ';
+
+
+
+
+
+
+
 use Getopt::Long;
 GetOptions( 
 
     "help"=> \my $help,
+    "custom"=> \my $custom_sw,
 
         );
 
@@ -103,65 +140,44 @@ sub cont(){
 ########################################
 ## out for now
 ############################################
-if (0) {
+
 
 #my $external_bin_dir;
-    my $rp_installation_file = "rp_config.variables";
-    my %conf;
 
+my %conf;
 
-if (-e $rp_installation_file) {
-    die $!."($rp_installation_file)" unless open FILE, "< $rp_installation_file";
-    while (my $line = <FILE>){
-	my @cells = split /\s+/, $line;
-	$conf{$cells[0]} = $cells[1];
+if ($custom_sw) {
+    if (-e $rp_custom_installation_file) {
+	die $!."($rp_custom_installation_file)" unless open FILE, "< $rp_custom_installation_file";
+	while (my $line = <FILE>){
+	    unless ($line =~ /^\-\-\-/ || $line =~ /^\*\*/) {
+		$line =~ s/###.*//;
+		my @cells = split /\s+/, $line;
+		unless ($cells[0] eq "" || $cells[0] eq "variable") {
+		    $conf{$cells[0]} = $cells[1];
+		    #	    my $line =~ s/^$cells[0]//;
+		    print "<".$cells[0].">"." <".$cells[1].">\n";
+		}
+	    }
+	}
+	close FILE;
     }
-    close FILE;
-}
-else {
-    print "$rp_installation_file not found\n";
-    print "will create a template for you\n";
-    print "please replace PLACEHOLDER\n";
-
-    die $!."($rp_installation_file)" unless open FILE, "> $rp_installation_file";
-    print FILE "variable value remarks\n";
-    print FILE "-----------------------------------------\n";
-    print FILE "exbin_dir PLACEHOLDER ## directory in which all downloaded external binaries will be installed to\n";
-    print FILE '
-
-rp_dependencies_dir                              ### classic parameters: /home/unix/USERNAME/rp_dependencies
-R_packages_dir                                   ### classic parameters: /broad/software/free/Linux/redhat_6_x86_64/pkgs/r_2.14.0/lib64/R/library, /home/unix/USERNAME/R_packages
-path_to_R                                        ### classic parameters: /sara/sw/R-3.1.2/bin/R, source /broad/software/scripts/useuse; use R-2.14; R
-path_to_Perlmodules                              ### classic parameters: /home/unix/USERNAME/rp_dependencies ***
-path_to_scratchdir                               ### classic parameters: /psych/genetics_data/ripke/sloc/, /scratch
-ldsc_starting_procedure                          ### classic parameters: source /broad/software/scripts/useuse; use .anaconda-2.1.0-no-mkl; python /psych/genetics_data/ripke//ldsc/LDSCPY, module load ldsc; LDSCPY **
-----------------------------------------
-o    How to start jobarrays and job-dependencies: XXX stand for integer values.
-batch_jobcommand:                                 ### classic parameters: qsub, sbatch, bsub
-batch_memory-request(XXX_is_GB):                  ### classic parameters: -l h_vmem=XXXg, --mem-per-cpu=XXXG
-batch_walltime:                                   ### classic parameters: -l h_rt=HH:MM:SS, -t HH:MM:SS
-batch_array(XXX_is_number_of_arrays):             ### classic parameters: -t 1-XXX, --array=1-XXX, -J "jobname[1-XXX]"
-batch_output(stdout):                             ### classic parameters: -o XXX
-batch_output(stderr):                             ### classic parameters: -e XXX
-batch_job_dependency:                             ### classic parameters: -hold_jid XXX, --dependency=afterok:XXX
-batch_array_task_id:                              ### classic parameters: $SGE_TASK_ID, $SLURM_ARRAY_TASK_ID, %LSB_JOBINDEX
-batch_max_parallel_jobs_per_one_array:            ### classic parameters: -tc XXX, added_to_array *****
-batch_other_job_flags:                            ### classic parameters: -P urgent, -v PATH,rp_perlpackages, --jobfile
-batch_job_output_jid:                             ### classic parameters: Your job-array XXX.1-YYY:1 ("test-job_array") has been submitted, Submitted batch job XXX ****
-
-
-** LDSCPY will be internally replaced by ldsc.py or munge_sumstats.py
-*** needs to contain three perl-packages: (Statistics-Distributions-1.02 / Spreadsheet-WriteExcel-2.40 / Parse-RecDescent-1.965001), if Dependency download is used, then these are already included
-**** YYY stand for numbers that can be removed when trying to read out the job-ID XXX
-***** added_to_array means sbatch format --array=1-XXX%YYY (e.g. see this format:https://stackoverflow.com/questions/42812425/limit-the-number-of-running-jobs-in-slurm) or qsub format -J "jobname[1-XXX]%YYY"
-
-
-'
-    close FILE;
-    
+    else {
+	print "$rp_custom_installation_file not found\n";
+	print "will create a template for you\n";
+	print "please replace PLACEHOLDER\n";
+	
+	die $!."($rp_custom_installation_file)" unless open FILE, "> $rp_custom_installation_file";
+	print FILE "variable value comments\n";
+	print FILE "-----------------------------------------\n";
+	#    print FILE "exbin_dir PLACEHOLDER ## directory in which all downloaded external binaries will be installed to\n";
+	print FILE $custom_file_template;
+	close FILE;
+	
+    }
 }
 
-    exit;
+#exit;
 
 print "------------------------------------------------------------------\n";
 print "------------------------------------------------------------------\n";
@@ -177,9 +193,12 @@ print "and you can interrupt the process anytime with command-c\n";
 print "are you ready?\n";
 &cont();
 
-print "using this here as directory for external bins: ".$conf{"exbin_dir"}."\n";
-&cont();
-#exit;
+
+if (0) {
+    print "using this here as directory for external bins: ".$conf{"exbin_dir"}."\n";
+    &cont();
+}
+    #exit;
 
 
 my %bin_names;
@@ -252,7 +271,7 @@ $bin_locs{"liftover"} = "http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/l
 #print "## ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/human_g1k_v37.fasta.gz\n";
 #exit;
 
-}
+
 
 
 my $cdir = cwd();
@@ -266,8 +285,8 @@ my $command_line = "$progname @ARGV";
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"other",0);
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"other",0);
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"other",0);
-my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"unc_slurm",0,"bih_qsub",0,"other",0);
-my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","uppmax","unc_slurm","bih_qsub","other");
+my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"unc_slurm",0,"bih_qsub",0,"custom",0);
+my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","uppmax","unc_slurm","bih_qsub","custom");
 print "Please enter your cluster name from the following options:\n";
 my $i = 1;
 foreach (@cluster_names){
@@ -651,7 +670,7 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
     print "\n\n";
 
     print "## Please run the following commands to permanently add rp_bin to the default search path: \n";
-    print "##     (the last three add the necessary paths also to your current session) \n\n";
+    print "##     (the last two add the necessary paths also to your current session) \n\n";
 
 
     if ($clusters{broad}){
@@ -791,6 +810,22 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
             $i += 1;        
         }
     }
+
+    elsif ($clusters{custom}){
+	my $i = 1;    
+
+        if (-e "$home/.bashrc") {
+            print "\tcat $bash >> ~/.bashrc\n";
+            $i += 1;
+        }
+        if ($shell eq "bash") {
+            print "\tPATH=$cdir:\$PATH\n";
+            $i += 1;
+            print "\tPATH=$cdir/pdfjam:\$PATH\n";
+            $i += 1;        
+        }
+    }
+    
     
 
     elsif ($clusters{uppmax}){
@@ -920,6 +955,28 @@ if ($clusters{unc_slurm} == 1){
     }
     else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
 }
+
+
+
+
+if ($clusters{custom} == 1){
+    my $path_to_perlmodules = $conf{"path_to_Perlmodules"};
+    if ($path_to_perlmodules eq "") {
+	print "Error: <path_to_Perlmodule> is not set in $rp_custom_installation_file\n";
+	exit;
+    }
+#    print  "path2perl:".$path_to_perlmodules."\n";
+#    sleep(10);
+    unless (exists $ENV{rp_perlpackages}) {
+        print "Run the following commands to add rp_perlpackages as an environmental variable:\n";
+        print "echo \"export rp_perlpackages=$path_to_perlmodules\" >> ~/.bashrc\n";
+        print "export rp_perlpackages=$path_to_perlmodules\n";
+        print "./rp_config\n\n";
+        exit;
+    }
+    else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
+}
+
 
 
 ### Make sure lapack is installed
@@ -1525,29 +1582,77 @@ elsif ($clusters{bih_qsub}){
 }
 
 elsif ($clusters{unc_slurm}){
-    %variables = ("ploc", "NA",
-		  "p2loc","NA",
-		  "shloc","NA",
-		  "sh3loc","NA",
-		  "ealoc","pleasedownload_https://data.broadinstitute.org/alkesgroup/Eagle/downloads/",
-		  "i2loc","NA",
-		  "i4loc","NA",
-		  "liloc","NA",
-		  "eloc","NA",
-		  "rloc","NA",
-		  "rpac","NA",
-		  "hmloc","NA",
-		  "meloc","NA",
-		  "bcloc","NA",
-		  "bcrloc","NA",
+    my $rp_dependencies_dir = "/nas/depts/007/sullilab/projects/ppd_sig/Ricopili_Dependencies/";
+    %variables = (
 
-		  "bgziploc","NA",
-		  "tabixloc","NA",
-		  "minimac3loc","NA",
-#		  "hvloc","./",
+	"p2loc","$rp_dependencies_dir/plink",
+
+	"sh3loc","$rp_dependencies_dir/shapeit3",
+	"ealoc","$rp_dependencies_dir/eagle",
+	"i2loc","$rp_dependencies_dir/impute_v2",
+	"i4loc","$rp_dependencies_dir/impute_v4",
+	"liloc","$rp_dependencies_dir/liftover/",
+	"eloc","$rp_dependencies_dir/eigensoft/EIG-7.2.1/bin/",
+	"rloc","module_SPACE_load_SPACE_r_SPACE_;_SPACE_R",  ## separate dir
+	"rpac","/nas/depts/007/sullilab/projects/ppd_sig/Rpackages/3.3/", ## separate dir
+	"hmloc","$rp_dependencies_dir/hapmap_ref/",
+	"meloc","$rp_dependencies_dir/metal/",
+	"bcloc","$rp_dependencies_dir/bcftools/bcftools-1.3.1_bin/bin/",
+	"bcrloc","$rp_dependencies_dir/bcftools/bcftools-1.3.1/resources/",
+	"ldloc","$rp_dependencies_dir/ldsc/",
+	
+	"bgziploc","$rp_dependencies_dir/tabix",
+	"tabixloc","$rp_dependencies_dir/tabix/",
+	"minimac3loc","$rp_dependencies_dir/tabix/",
+
 	);
 }
 
+elsif ($clusters{custom}){
+    my $rp_dependencies_dir = $conf{"rp_dependencies_dir"};
+    if ($rp_dependencies_dir eq "") {
+	print "Error: <rp_dependencies_dir> is not set in $rp_custom_installation_file\n";
+	exit;
+    }
+    my $starting_R = $conf{"starting_R"};
+    if ($starting_R eq "") {
+	print "Error: <starting_R> is not set in $rp_custom_installation_file\n";
+	exit;
+    }
+    my $R_packages_dir = $conf{"R_packages_dir"};
+    if ($R_packages_dir eq "") {
+	print "Error: <R_packages_dir> is not set in $rp_custom_installation_file\n";
+	exit;
+    }
+    my $starting_ldsc = $conf{"starting_ldsc"};
+    if ($starting_ldsc eq "") {
+	print "Error: <starting_ldsc> is not set in $rp_custom_installation_file\n";
+	exit;
+    }    
+
+    
+    %variables = (
+
+	"p2loc","$rp_dependencies_dir/plink",
+	"sh3loc","$rp_dependencies_dir/shapeit3",
+	"ealoc","$rp_dependencies_dir/eagle",
+	"i2loc","$rp_dependencies_dir/impute_v2",
+	"i4loc","$rp_dependencies_dir/impute_v4",
+	"liloc","$rp_dependencies_dir/liftover/",
+	"eloc","$rp_dependencies_dir/eigensoft/EIG-7.2.1/bin/",
+	"hmloc","$rp_dependencies_dir/hapmap_ref/",
+	"meloc","$rp_dependencies_dir/metal/",
+	"bcloc","$rp_dependencies_dir/bcftools/bcftools-1.3.1_bin/bin/",
+	"bcrloc","$rp_dependencies_dir/bcftools/bcftools-1.3.1/resources/",
+	"bgziploc","$rp_dependencies_dir/tabix",
+	"tabixloc","$rp_dependencies_dir/tabix/",
+	"minimac3loc","$rp_dependencies_dir/tabix/",
+	"ldloc","$starting_ldsc",
+
+	"rloc","$starting_R",  ## separate dir
+	"rpac","$R_packages_dir", ## separate dir
+	);
+}
 
 elsif ($clusters{uppmax}){
     %variables = ("ploc", "/sw/apps/bioinfo/plink/1.07/$uppmax_cluster/",
@@ -1636,6 +1741,19 @@ push (@text, "init $initials");
 push (@text, "email $email");
 push (@text, "loloc $loloc");
 
+
+
+my @batch_variables= qw /batch_jobcommand batch_memory_request batch_walltime batch_array batch_stdout batch_stderr batch_job_dependency batch_array_task_id batch_max_parallel_jobs_per_one_array batch_other_job_flags batch_job_output_jid/;
+
+foreach my $bv (@batch_variables) {
+   if ($conf{$bv} eq "") {
+	print "Error: <$bv> is not set in $rp_custom_installation_file\n";
+	exit;
+   }
+   push (@text, "$bv $conf{$bv}");
+}
+
+
 ### define queue depending on cluster
 #if ($clusters{broad}){push (@text, "queue bsub")}
 
@@ -1645,6 +1763,7 @@ if ($clusters{computerome} || $clusters{co_ipsych}){push (@text, "queue qsub_c")
 if ($clusters{genomedk}){push (@text, "queue slurm")}
 if ($clusters{mssm}){push (@text, "queue msub")}
 if ($clusters{unc_slurm}){push (@text, "queue unc_slurm")}
+if ($clusters{custom}){push (@text, "queue custom")}
 if ($clusters{bih_qsub}){push (@text, "queue bih_qsub")}
 if ($clusters{uppmax}){push (@text, "queue slurm_u")}
 if ($clusters{uppmax}){push (@text, "uppmax_project $uppmax_project")}
@@ -1716,7 +1835,7 @@ if ($#fail_path != -1) {
 	if ($confvar eq "rloc" && $clusters{broad} == 1) {
             next;
 	}
-	elsif ($confvar eq "rpac" && $clusters{lisa} != 1 && $clusters{other} != 1) {
+	elsif ($confvar eq "rpac" && $clusters{lisa} != 1) {
             next;
 	}
 	else{

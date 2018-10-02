@@ -27,7 +27,10 @@ my $rloc = &trans("rloc");
 
 ###############################################
 my $r_sys = "$rloc/R";
-if ($rloc eq "broadinstitute") {
+if ($rloc =~ /_SPACE_/) {
+    $r_sys = $rloc;
+    $r_sys =~ s/_SPACE_/ /g;
+} elsif ($rloc eq "broadinstitute") {
     $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
 }
 
