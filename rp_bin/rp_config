@@ -13,8 +13,29 @@ my $progname = $0;
 
 $progname =~ s!^.*/!!;
 
-my $rp_custom_installation_file = "rp_config.custom";
+my $rp_custom_installation_file = "rp_config.custom.txt";
 
+
+my $custom_txt = "
+-----------------------------------------------
+------------ CUSTOM INSTALLATION --------------
+-----------------------------------------------
+
+- please download and extract the following tarball to a different, empty directory (please remember the full path of this directory since you will need it during this process), with this tarball you will get most necessary binaries and resource files
+- follow the instructions in its README (README.binaries).
+
+e.g.:
+
+mkdir rp_dependenscies
+cd rp_dependenscies
+wget https://personal.broadinstitute.org/sripke/share_links/doMoVLWDcLcasit7xlcmwtt7cxDMjq_Ricopili_Dependencies.0918/Ricopili_Dependencies.0918.tar.gz .
+
+
+
+after that start rp_config choosing cluster environment -custom- (choice 10).
+if customfile ($rp_custom_installation_file) is not present this rp_config will write out a template to be filled out by you
+
+";
 
 ##### help message
 my $usage = "
@@ -22,28 +43,29 @@ Usage : $progname [options] --help
 
 
 
-
- --help            print this text and exits
- --custom          use custom parameters (no default parameters for cluster)
-
-
- this script is trying to make installation of ricopili pipeline more convenient.
- you still neeed to install most binaries manually for now
+ --help                print this text and exits
+ --customfile STRING   different customfile than default $rp_custom_installation_file
 
 
+ this script is trying to make the configuration of the ricopili pipeline as convenient as possible.
+ you will be able to choose from a variety of preset computer clusters.
+
+ since october 2018 this configuration is customizable:
+    - this is the preferred method since it only needs the right configuration file and not any changes of the sourcecode
  
 
-_______________________________________________
------------------------------------------------
-here you will find most necessary binaries, pleasee download and follow instructions in README:
-
-https://personal.broadinstitute.org/sripke/share_links/doMoVLWDcLcasit7xlcmwtt7cxDMjq_Ricopili_Dependencies.0918
 
 
-then start rp_config either vanilla (with many computer cluter-defaults) or with flag --custom.
+$custom_txt
 
-the latter will take job-queing parameters and filepaths from file: $rp_custom_installation_file
-if this file is not present, then a template file will be written out, needs to be filled then.
+    ";
+
+
+my $old_txt = "
+
+###############################
+### I think this if found in the README anyway and can go from these instructions
+#######################################
 
 
 
@@ -70,37 +92,43 @@ found on broad here:
 ### Jackie Goldstein, Jan 2014 & stephan ripke 2016
 ########################################################
 
-";
+    ";
 
 
 my $custom_file_template = '
-rp_dependencies_dir                              ### example parameters: /home/unix/USERNAME/rp_dependencies
-R_packages_dir                                   ### example parameters: /broad/software/free/Linux/redhat_6_x86_64/pkgs/r_2.14.0/lib64/R/library   /home/unix/USERNAME/R_packages
-starting_R                                       ### example parameters: /sara/sw/R-3.1.2/bin/R                                                    source_SPACE_/broad/software/scripts/useuse;_SPACE_use R-2.14;_SPACER
-path_to_Perlmodules                              ### example parameters: /home/unix/USERNAME/rp_dependencies                                       ***
-path_to_scratchdir                               ### example parameters: /psych/genetics_data/ripke/sloc/                                          /scratch
-starting_ldsc                                    ### example parameters: module_SPACE_load_SPACEldsc;_SPACE_LDSCPY                                 source_SPACE/broad/software/scripts/useuse;_SPACE_use_SPACE_.anaconda-2.1.0-no-mkl;_SPACE_python_SPACE/psych/genetics_data/ripke//ldsc/LDSCPY, **
+### for details please refer to https://docs.google.com/document/d/14aa-oeT5hF541I8hHsDAL_42oyvlHRC5FWR7gir4xco/edit?usp=sharing
+###          and https://docs.google.com/spreadsheets/d/1LhNYIXhFi7yXBC17UkjI1KMzHhKYz0j2hwnJECBGZk4/edit?usp=sharing
+variable_name                  variable_value
+----------------------------------------------
+rp_dependencies_dir                              
+R_packages_dir                                   
+starting_R                                       
+path_to_Perlmodules                              
+path_to_scratchdir                               
+starting_ldsc                                    
+rp_user_initials                                 
+rp_user_email                                    
+rp_logfiles                                      
 ----------------------------------------
----- How to start jobarrays and job-dependencies: XXX will be replaced internally.
-batch_jobcommand                                 ### example parameters:                          qsub                                        sbatch                                   bsub
-batch_memory_request                             ### example parameters(XXX_is_GB):               -l_SPACE_h_vmem=XXXg                        --mem-per-cpu=XXXG
-batch_walltime                                   ### example parameters:                          -l_SPACE_h_rt=HH:MM:SS                      -t_SPACE_HH:MM:SS
-batch_array                                      ### example parameters(XXX_is_number_of_arrays): -t_SPACE_1-XXX                              --array=1-XXX%YYY                            -J_SPACE_"JOBNAME[1-XXX]%YYY"  *****
-batch_jobfile                                    ### example parameters(XXX_is_the_jobfile):      XXX                                         XXX                                   --jobfile XXX
-batch_name                                       ### example parameters(XXX_is_jobname):          -N_SPACE_XXX                                --job_name_SPACE_XXX                     -J_SPACE_XXX
-batch_stdout                                     ### example parameters:                          -o_SPACE_XXX
-batch_stderr                                     ### example parameters:                          -e_SPACE_XXX
-batch_job_dependency                             ### example parameters(XXX_is_job_ID):           -hold_jid_SPACE_XXX                         --dependency=afterok:XXX
-batch_array_task_id                              ### example parameters:                          $SGE_TASK_ID                                $SLURM_ARRAY_TASK_ID                     $LSB_JOBINDEX
-batch_max_parallel_jobs_per_one_array            ### example parameters:                          -tc_SPACE_XXX                               added_to_array *****
-batch_other_job_flags                            ### example parameters:                          -P_SPACE_urgent                             -v_SPACE_PATH,rp_perlpackages
-batch_job_output_jid                             ### example parameters(XXX_jobid):               Submitted_SPACE_batch_SPACE_job_SPACE_XXX   Your_SPACE_job-array_SPACE_XXX.1-YYY:1_SPACE("ZZZ")_SPACE_has_SPACE_been_SPACE_submitted,  ****
+----------------------------------------
+---- jobarray and queueing parameters: 
+----------------------------------------
+----------------------------------------
+batch_jobcommand                                 
+batch_memory_request                             
+batch_walltime                                   
+batch_array                                      
+batch_max_parallel_jobs_per_one_array            
+batch_jobfile                                    
+batch_name                                       
+batch_stdout                                     
+batch_stderr                                     
+batch_job_dependency                             
+batch_array_task_id                              
+batch_other_job_flags                            
+batch_job_output_jid                             
 
 
-** LDSCPY will be internally replaced by ldsc.py or munge_sumstats.py
-*** needs to contain three perl-packages: (Statistics-Distributions-1.02 / Spreadsheet-WriteExcel-2.40 / Parse-RecDescent-1.965001), if Dependency download is used, then these are already included
-**** job-ID XXX, anything after the first set of numbers will be removed
-***** added_to_array means sbatch format --array=1-XXX%YYY (e.g. see this format:https://stackoverflow.com/questions/42812425/limit-the-number-of-running-jobs-in-slurm) or qsub format -J "jobname[1-XXX]%YYY"
 
     ';
 
@@ -112,21 +140,25 @@ batch_job_output_jid                             ### example parameters(XXX_jobi
 
 use Getopt::Long;
 GetOptions( 
-
+    
     "help"=> \my $help,
-    "custom"=> \my $custom_sw,
+    "customfile=s"=> \$rp_custom_installation_file,
+    
+    );
 
-        );
+
+if ($help) {
+    print $usage ;
+    exit;
+}
 
 
-
-die $usage if $help;
 
 ###################################################
-###  waiting for y to continue
+###  waiting for user to continue
 ###################################################
 sub cont(){
-    print "continue?";
+    print "continue (y/n)?\n";
     my $answer = lc <>;
     chomp $answer;
     unless ($answer eq "y") {
@@ -137,68 +169,22 @@ sub cont(){
 
 
 
-########################################
-## out for now
-############################################
+my $welcome_message = '
+-----------------------------------------------------------------------------
+-----------------------------------------------------------------------------
+-------------------------   RP_CONFIG    ------------------------------------
+-----------------------------------------------------------------------------
+-----------------------------------------------------------------------------
+ Script to ease Downloading, Configuration, Installation of Ricopili
+-----------------------------------------------------------------------------
+        please use flag --help if you are not familiar with its usage
+-----------------------------------------------------------------------------
+-----------------------------------------------------------------------------
+';
 
+print "$welcome_message\n";
+#&cont();
 
-#my $external_bin_dir;
-
-my %conf;
-
-if ($custom_sw) {
-    if (-e $rp_custom_installation_file) {
-	die $!."($rp_custom_installation_file)" unless open FILE, "< $rp_custom_installation_file";
-	while (my $line = <FILE>){
-	    unless ($line =~ /^\-\-\-/ || $line =~ /^\*\*/) {
-		$line =~ s/###.*//;
-		my @cells = split /\s+/, $line;
-		unless ($cells[0] eq "" || $cells[0] eq "variable") {
-		    $conf{$cells[0]} = $cells[1];
-		    #	    my $line =~ s/^$cells[0]//;
-		    print "<".$cells[0].">"." <".$cells[1].">\n";
-		}
-	    }
-	}
-	close FILE;
-    }
-    else {
-	print "$rp_custom_installation_file not found\n";
-	print "will create a template for you\n";
-	print "please replace PLACEHOLDER\n";
-	
-	die $!."($rp_custom_installation_file)" unless open FILE, "> $rp_custom_installation_file";
-	print FILE "variable value comments\n";
-	print FILE "-----------------------------------------\n";
-	#    print FILE "exbin_dir PLACEHOLDER ## directory in which all downloaded external binaries will be installed to\n";
-	print FILE $custom_file_template;
-	close FILE;
-	
-    }
-}
-
-#exit;
-
-print "------------------------------------------------------------------\n";
-print "------------------------------------------------------------------\n";
-
-print "Process for Downloading, Configuration, Installation of Ricopili\n";
-print "------------------------------------------------------------------\n";
-print "------------------------------------------------------------------\n";
-print "starting to download install\n";
-print "------------------------------------------------------------------\n";
-
-print "you will be asked in each step for confirmation\n"; 
-print "and you can interrupt the process anytime with command-c\n";
-print "are you ready?\n";
-&cont();
-
-
-if (0) {
-    print "using this here as directory for external bins: ".$conf{"exbin_dir"}."\n";
-    &cont();
-}
-    #exit;
 
 
 my %bin_names;
@@ -287,7 +273,7 @@ my $command_line = "$progname @ARGV";
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"other",0);
 my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"unc_slurm",0,"bih_qsub",0,"custom",0);
 my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","uppmax","unc_slurm","bih_qsub","custom");
-print "Please enter your cluster name from the following options:\n";
+print "Please enter your cluster environment from the following options:\n";
 my $i = 1;
 foreach (@cluster_names){
     print "\t($i) $_\n";
@@ -314,7 +300,59 @@ while (1) {
 	}
     }
 }
+
+
 print "\nUsing the following cluster: $cluster\n\n";
+
+
+
+#################################################################################
+###### CUSTOM configuration file
+################################################################################
+
+
+my %conf;
+
+if ($clusters{custom}){
+    if (-e $rp_custom_installation_file) {
+	die $!."($rp_custom_installation_file)" unless open FILE, "< $rp_custom_installation_file";
+	while (my $line = <FILE>){
+	    unless ($line =~ /^\-\-\-/ || $line =~ /^\*\*/) {
+		$line =~ s/###.*//;
+		my @cells = split /\s+/, $line;
+		unless ($cells[0] eq "" || $cells[0] eq "variable") {
+		    $conf{$cells[0]} = $cells[1];
+		    #	    my $line =~ s/^$cells[0]//;
+		    print "<".$cells[0].">"." <".$cells[1].">\n";
+		}
+	    }
+	}
+	close FILE;
+    }
+    else {
+	print "-----------------------------------------------------------------\n";
+	print "-----------------------------------------------------------------\n";
+	print "Custom - File ($rp_custom_installation_file) not found\n";
+	
+	die $!."($rp_custom_installation_file)" unless open FILE, "> $rp_custom_installation_file";
+	#    print FILE "exbin_dir PLACEHOLDER ## directory in which all downloaded external binaries will be installed to\n";
+	print FILE $custom_file_template;
+	close FILE;
+
+	print "-> an empty one was now created, please fill and restart rp_config afterwards\n\nExit now\n\n";
+	exit;
+	
+    }
+
+
+    print "$custom_txt\n";
+
+    
+}
+
+
+
+
 
 # If on an Uppmax cluster, determine which one, and which account to use.
 # Uses code from the projinfo utility on Uppmax
@@ -890,7 +928,12 @@ else {
     }
     print "Rerun this script once latex has been added to the default search path (./rp_config)\n\n";
     print "---------------------------------------\n";
+    print "there are also detailed instructions in the README in the dependency directory\n";
     exit;
+#    print "sleeping now, should exit later\n";
+#    print "---------------------------------------\n";
+#    sleep (3);
+#    exit;
 }
 
 ### Make sure all perl packages are installed
@@ -1002,7 +1045,8 @@ if (-e $conf_file) {
     print "*************************************************************\n";
     print "Configuration file already exists at $conf_file\n";
     print "Do you wish to build a new version of this file (with default values)? (y/n)\n";
-    print "        - while making a backup to $conf_file.copy - \n";
+    print "        - if yes, a backup of the present file will be here: $conf_file.copy - \n";
+    print "        - if not, then present $conf_file will be fully reused (choose this for simple update installation in the same environment) - \n";
     while (1) {
         $ans_ow = lc <>;
         chomp $ans_ow;
@@ -1026,12 +1070,11 @@ if (-e $conf_file) {
     }
 };
 
-my $cd = cwd();
+
+
 my $sloc = "";
 my $loloc = "";
 my $initials = "";
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my $hdir = $ENV{HOME};
 my $email = "";
 my @text = ();
 
@@ -1052,7 +1095,7 @@ if ($clusters{broad} == 1) {
 				$sloc = <>;
 				chomp $sloc;
 				$sloc =~ s/^~/$ENV{HOME}/g;
-				$sloc =~ s/^\./$cd/g;
+				$sloc =~ s/^\./$cdir/g;
 				last;}
         else {print "Please answer with y or n.\n";}
     }
@@ -1069,7 +1112,7 @@ elsif ($clusters{lisa} == 1) {
 				$sloc = <>;
 				chomp $sloc;
 				$sloc =~ s/^~/$ENV{HOME}/g;
-				$sloc =~ s/^\./$cd/g;        
+				$sloc =~ s/^\./$cdir/g;        
 				last;}
         else {print "Please answer with y or n.\n";}
     }
@@ -1087,7 +1130,7 @@ elsif ($clusters{computerome} == 1) {
 				$sloc = <>;
 				chomp $sloc;
 				$sloc =~ s/^~/$ENV{HOME}/g;
-				$sloc =~ s/^\./$cd/g;        
+				$sloc =~ s/^\./$cdir/g;        
 				last;}
         else {print "Please answer with y or n.\n";}
     }
@@ -1105,7 +1148,7 @@ elsif ($clusters{co_ipsych} == 1) {
 				$sloc = <>;
 				chomp $sloc;
 				$sloc =~ s/^~/$ENV{HOME}/g;
-				$sloc =~ s/^\./$cd/g;        
+				$sloc =~ s/^\./$cdir/g;        
 				last;}
         else {print "Please answer with y or n.\n";}
     }
@@ -1123,7 +1166,7 @@ elsif ($clusters{genomedk} == 1) {
 				$sloc = <>;
 				chomp $sloc;
 				$sloc =~ s/^~/$ENV{HOME}/g;
-				$sloc =~ s/^\./$cd/g;        
+				$sloc =~ s/^\./$cdir/g;        
 				last;}
         else {print "Please answer with y or n.\n";}
     }
@@ -1143,7 +1186,7 @@ elsif ($clusters{mssm} == 1) {
 				$sloc = <>;
 				chomp $sloc;
 				$sloc =~ s/^~/$ENV{HOME}/g;
-				$sloc =~ s/^\./$cd/g;        
+				$sloc =~ s/^\./$cdir/g;        
 				last;}
         else {print "Please answer with y or n.\n";}
     }
@@ -1162,7 +1205,7 @@ elsif ($clusters{bih_qsub} == 1) {
 				$sloc = <>;
 				chomp $sloc;
 				$sloc =~ s/^~/$ENV{HOME}/g;
-				$sloc =~ s/^\./$cd/g;        
+				$sloc =~ s/^\./$cdir/g;        
 				last;}
         else {print "Please answer with y or n.\n";}
     }
@@ -1187,22 +1230,24 @@ elsif ($clusters{uppmax} == 1) {
     }
 }
 
+elsif ($clusters{custom} == 1) {
+    $sloc = $conf{"path_to_scratchdir"};
+    if ($sloc eq "") {
+	print "Error: <path_to_scratchdir> is not set in $rp_custom_installation_file\n";
+	exit;
+    }
+    print "Using the following default scratch directory:\n";
+    print "\t$sloc\n";
+}
+
+
 else {
     print "Please enter a scratch directory to use:\n";
-    $sloc = "$cd/tmp/";
+    $sloc = <>;
+    chomp $sloc;
     while (1) {
-        my $answer = lc <>;
-        chomp $answer;
-        if ($answer eq "y") {print "Using $sloc as the scratch directory.\n\n";last;}
-        elsif ($answer eq "n") {print "Please enter a scratch directory to use:\n";
-				$sloc = <>;
-				chomp $sloc;
-				$sloc =~ s/^~/$ENV{HOME}/g;
-				$sloc =~ s/^\./$cd/g;        
-				last;}
-        else {print "Please answer with y or n.\n";}
+	print "Using $sloc as the scratch directory.\n\n";
     }
-
 }
 
 unless (-d $sloc) {
@@ -1233,24 +1278,24 @@ print "\n";
     close FILE;
     close OUT;
     system ("mv $cdir/pdfjam/pdfjam.ow $cdir/pdfjam/pdfjam");
-    print "rewrote $cdir/pdfjam.ow\n";
+    print "rewrote $cdir/pdfjam/pdfjam with scratchdir\n";
     
 
 
 
-
-
-
-
-
-
-
-
 #############################
-# write config file to home directory
+# get initials from custom, old config file or user
 #############################
-if ($old_initials ne "NA") {
-    print " -> Do you want to use the entry found in the old $conf_file? ($old_initials) (y or n)\n";
+if ($clusters{custom}){
+    $initials = $conf{"rp_user_initials"};
+    if ($initials eq "") {
+	print "Error: <rp_user_initials> is not set in $rp_custom_installation_file\n";
+	exit;
+    } 
+
+}
+elsif ($old_initials ne "NA") {
+    print " -> Do you want to use the initials found in the old $conf_file? ($old_initials) (y or n)\n";
     while (1) {
 	my $answer = lc <>;
 	chomp $answer;
@@ -1284,9 +1329,20 @@ print "\n";
 
 
 
-print "Please enter your email address:\n";
-if ($old_email ne "NA") {
-    print " -> Do you want to use the entry found in the old $conf_file? ($old_email) (y or n)\n";
+#############################
+# get email from custom, old config file or user
+#############################
+if ($clusters{custom}){
+    $email = $conf{"rp_user_email"};
+    if ($email eq "") {
+	print "Error: <rp_user_email> is not set in $rp_custom_installation_file\n";
+	exit;
+    } 
+
+}
+
+elsif ($old_email ne "NA") {
+    print " -> Do you want to use the email found in the old $conf_file? ($old_email) (y or n)\n";
     while (1) {
 	my $answer = lc <>;
 	chomp $answer;
@@ -1332,25 +1388,38 @@ if ($clusters{lisa} == 1) {
 
 
     
+#############################
+# set location for logfiles
+#############################
 
-my $home_dir = $ENV{HOME};
-$loloc = "$home_dir/";
-print "Do you want to use the following default directory to store your log files ($loloc)? (y or n)\n";
-print "\t$loloc\n";
-if ($defall == 0) {
-    while (1) {
-	my $answer = lc <>;
-	chomp $answer;
-	if ($answer eq "y") {print "Using $loloc as the log directory.\n\n";last;}
-	elsif ($answer eq "n") {print "Please enter a log directory to use:\n";
-				$loloc = <>;
-				chomp $loloc;
-				$loloc =~ s/^~/$ENV{HOME}/g;
-				$loloc =~ s/^\./$cd/g;        
-				last;}
-	else {print "Please answer with y or n.\n";}
+if ($clusters{custom}){
+    $loloc = $conf{"rp_logfiles"};
+    if ($loloc eq "") {
+	print "Error: <rp_logfiles> is not set in $rp_custom_installation_file\n";
+	exit;
+    } 
+}
+else {
+    my $home_dir = $ENV{HOME};
+    $loloc = "$home_dir/";
+    print "Do you want to use the following default directory to store your log files ($loloc)? (y or n)\n";
+    print "\t$loloc\n";
+    if ($defall == 0) {
+	while (1) {
+	    my $answer = lc <>;
+	    chomp $answer;
+	    if ($answer eq "y") {print "Using $loloc as the log directory.\n\n";last;}
+	    elsif ($answer eq "n") {print "Please enter a log directory to use:\n";
+				    $loloc = <>;
+				    chomp $loloc;
+				    $loloc =~ s/^~/$ENV{HOME}/g;
+				    $loloc =~ s/^\./$cdir/g;        
+				    last;}
+	    else {print "Please answer with y or n.\n";}
+	}
     }
 }
+
 
 
 print "\n";
@@ -1561,12 +1630,13 @@ elsif ($clusters{bih_qsub}){
     %variables = (
 		  "p2loc","$dependency_dir/plink",
 
-		  "sh3loc","$dependency_dir/shapeit3",
+	"sh3loc","$dependency_dir/shapeit3",
+	"shloc","$dependency_dir/shapeit",
 		  "ealoc","$dependency_dir/eagle",
 		  "i2loc","$dependency_dir/impute_v2",
 		  "i4loc","$dependency_dir/impute_v4",
 		  "liloc","$dependency_dir/liftover/",
-		  "eloc","$dependency_dir/eigensoft/EIG-7.2.1/bin/",
+		  "eloc","$dependency_dir/eigensoft/EIG-6.1.4/bin/",
 		  "rloc","$home/local/R/bin/",  ## separate dir
 		  "rpac","/fast/users/panagigm_c/local/R/lib/R/library/rmeta", ## separate dir
 		  "hmloc","$dependency_dir/hapmap_ref/",
@@ -1588,11 +1658,12 @@ elsif ($clusters{unc_slurm}){
 	"p2loc","$rp_dependencies_dir/plink",
 
 	"sh3loc","$rp_dependencies_dir/shapeit3",
+	"shloc","$rp_dependencies_dir/shapeit",
 	"ealoc","$rp_dependencies_dir/eagle",
 	"i2loc","$rp_dependencies_dir/impute_v2",
 	"i4loc","$rp_dependencies_dir/impute_v4",
 	"liloc","$rp_dependencies_dir/liftover/",
-	"eloc","$rp_dependencies_dir/eigensoft/EIG-7.2.1/bin/",
+	"eloc","$rp_dependencies_dir/eigensoft/EIG-6.1.4/bin/",
 	"rloc","module_SPACE_load_SPACE_r_SPACE_;_SPACE_R",  ## separate dir
 	"rpac","/nas/depts/007/sullilab/projects/ppd_sig/Rpackages/3.3/", ## separate dir
 	"hmloc","$rp_dependencies_dir/hapmap_ref/",
@@ -1628,18 +1699,19 @@ elsif ($clusters{custom}){
     if ($starting_ldsc eq "") {
 	print "Error: <starting_ldsc> is not set in $rp_custom_installation_file\n";
 	exit;
-    }    
+    }
 
     
     %variables = (
 
 	"p2loc","$rp_dependencies_dir/plink",
 	"sh3loc","$rp_dependencies_dir/shapeit3",
+	"shloc","$rp_dependencies_dir/shapeit",
 	"ealoc","$rp_dependencies_dir/eagle",
 	"i2loc","$rp_dependencies_dir/impute_v2",
 	"i4loc","$rp_dependencies_dir/impute_v4",
 	"liloc","$rp_dependencies_dir/liftover/",
-	"eloc","$rp_dependencies_dir/eigensoft/EIG-7.2.1/bin/",
+	"eloc","$rp_dependencies_dir/eigensoft/EIG-6.1.4/bin/",
 	"hmloc","$rp_dependencies_dir/hapmap_ref/",
 	"meloc","$rp_dependencies_dir/metal/",
 	"bcloc","$rp_dependencies_dir/bcftools/bcftools-1.3.1_bin/bin/",
@@ -1679,57 +1751,59 @@ elsif ($clusters{uppmax}){
 }
 
 
+unless ($clusters{custom}){
+    foreach (keys %variables){
 
-foreach (keys %variables){
-
-    if ($variables{$_} eq "broadinstitute" && $longvar{$_} eq "R") {
-	print "You are running R on broad, took the default value\n\n";
-    }
-    elsif ($variables{$_} eq "NA" && $longvar{$_} eq "Rpackages") {
-	print "assuming library rmeta is installed on standard R\n\n";
-    }
-    else {
-	if ($variables{$_} ne '' && (-d $variables{$_})){
-	    print "For $_($longvar{$_}), do you want to use the default location ($variables{$_}) (y or n)?\n";
-	    if ($defall == 0) {
-		while (1) {
-		    my $answer = lc <>;
-		    chomp $answer;
-		    if ($answer eq "y") {
-			print "Using $variables{$_} for $longvar{$_}.\n\n";
-			last;
+	if ($variables{$_} eq "broadinstitute" && $longvar{$_} eq "R") {
+	    print "You are running R on broad, took the default value\n\n";
+	}
+	elsif ($variables{$_} eq "NA" && $longvar{$_} eq "Rpackages") {
+	    print "assuming library rmeta is installed on standard R\n\n";
+	}
+	else {
+	    if ($variables{$_} ne '' && (-d $variables{$_})){
+		print "For $_($longvar{$_}), do you want to use the default location ($variables{$_}) (y or n)?\n";
+		if ($defall == 0) {
+		    while (1) {
+			my $answer = lc <>;
+			chomp $answer;
+			if ($answer eq "y") {
+			    print "Using $variables{$_} for $longvar{$_}.\n\n";
+			    last;
+			}
+			elsif ($answer eq "n") {print "Please enter a new location to use for $longvar{$_}:\n";
+						my $input = <>;
+						chomp $input;
+						$input =~ s/^~/$ENV{HOME}/g;
+						$input =~ s/^\./$cdir/g;
+						unless ( -d $input ){print "Not a valid directory. Please try again.\n";next;}
+						print "\n";
+						last;}
+			else {print "Please answer with y or n.\n";}
 		    }
-		    elsif ($answer eq "n") {print "Please enter a new location to use for $longvar{$_}:\n";
-					    my $input = <>;
-					    chomp $input;
-					    $input =~ s/^~/$ENV{HOME}/g;
-					    $input =~ s/^\./$cd/g;
-					    unless ( -d $input ){print "Not a valid directory. Please try again.\n";next;}
-					    print "\n";
-					    last;}
-		    else {print "Please answer with y or n.\n";}
+		}
+		else {
+		    print " - took default value -\n";
 		}
 	    }
 	    else {
-		print " - took default value -\n";
-	    }
-	}
-	else {
-	    while (1){
-		print "For $_($longvar{$_}), no default value found, right now it is this here: <$variables{$_}> (y or n)?\n";
-		my $input = "";
-		$input = <>;
-		chomp $input;
-		$input =~ s/^~/$ENV{HOME}/g;
-		$input =~ s/^\./$cd/g;
-		unless ( -d $input ){print "Not a valid directory. Please try again.\n";next;}
-		$variables{$_} = $input;
-		print "\n";
-		last;
+		while (1){
+		    print "For $_($longvar{$_}), no default value found, right now it is this here: <$variables{$_}> (y or n)?\n";
+		    my $input = "";
+		    $input = <>;
+		    chomp $input;
+		    $input =~ s/^~/$ENV{HOME}/g;
+		    $input =~ s/^\./$cdir/g;
+		    unless ( -d $input ){print "Not a valid directory. Please try again.\n";next;}
+		    $variables{$_} = $input;
+		    print "\n";
+		    last;
+		}
 	    }
 	}
     }
 }
+
 
 foreach (keys %variables){
     push (@text, "$_ $variables{$_}");
@@ -1743,7 +1817,7 @@ push (@text, "loloc $loloc");
 
 
 
-my @batch_variables= qw /batch_jobcommand batch_memory_request batch_walltime batch_array batch_stdout batch_stderr batch_job_dependency batch_array_task_id batch_max_parallel_jobs_per_one_array batch_other_job_flags batch_job_output_jid/;
+my @batch_variables= qw /batch_jobcommand batch_name batch_jobfile batch_memory_request batch_walltime batch_array batch_stdout batch_stderr batch_job_dependency batch_array_task_id batch_max_parallel_jobs_per_one_array batch_other_job_flags batch_job_output_jid/;
 
 foreach my $bv (@batch_variables) {
    if ($conf{$bv} eq "") {
@@ -1794,7 +1868,7 @@ print "\n";
 # write pipeline status file to home directory
 #############################
 
-my @log_file = ("$conf{loloc}/preimp_dir_info","$conf{loloc}/impute_dir_info","$conf{loloc}/pcaer_info","$conf{loloc}/idtager_info","$conf{loloc}/repqc2_info","$conf{loloc}/areator_info","$conf{loloc}/merge_caller_info","$conf{loloc}/postimp_navi_info","$conf{loloc}/reference_dir_info");
+my @log_file = ("$conf{loloc}/preimp_dir_info","$conf{loloc}/impute_dir_info","$conf{loloc}/pcaer_info","$conf{loloc}/idtager_info","$conf{loloc}/repqc2_info","$conf{loloc}/areator_info","$conf{loloc}/merge_caller_info","$conf{loloc}/postimp_navi_info","$conf{loloc}/reference_dir_info","$conf{loloc}/test_info");
 
 foreach (@log_file) {
     unless ( -e $_) {
@@ -1807,7 +1881,7 @@ foreach (@log_file) {
 # check whether all binary directories exist
 ############################
 my @fail_path = ();
-my %locs = ("ploc","","p2loc","","shloc","","sh3loc","","ealoc","","i2loc","","i4loc","","liloc","","eloc","","rloc","","hmloc","","meloc","","ldloc","","rpac","bcloc", "bcrloc");
+my %locs = ("ploc","","p2loc","","shloc","","sh3loc","","ealoc","","i2loc","","i4loc","","liloc","","eloc","","hmloc","","meloc","","rpac","bcloc", "bcrloc");
 
 die $!."($conf_file)" unless open FILE, "< $conf_file";
 while (my $line = <FILE>){
@@ -1844,7 +1918,7 @@ if ($#fail_path != -1) {
     }
     if ($fail != 0) {
 	print "Error: something went wrong\n";
-        print "You will need to install the binaries as described here (https://sites.google.com/a/broadinstitute.org/ricopili/resources) and use a text editor (emacs,vim,etc.) to edit the file paths listed in $hdir/ricopili.conf for the following variables:\n";
+        print "You will need to install the binaries as described here (https://sites.google.com/a/broadinstitute.org/ricopili/resources) and use a text editor (emacs,vim,etc.) to edit the file paths listed in $home/ricopili.conf for the following variables:\n";
         foreach (@fail_path) {
             unless ($_ eq "rloc" && $clusters{broad} == 1) {
                 print "\t$_\n";            
@@ -1915,6 +1989,12 @@ else {
 print "\n\n";
 print "*********************************************************************\n";
 print "*****  Installation successful                    *******************\n";
+print "*********************************************************************\n";
+print "*********************************************************************\n";
+print "*********************************************************************\n";
+print "*****  you should be able to use the pipeline as described        ***\n";
+print "*****  if you want to use it from a different login:              ***\n";
+print "*****      logout and relogin so that PATH is set correctly       ***\n";
 print "*********************************************************************\n";
 print "\n\n";
 print "If you do not receive a success email with the subject rp_config, please check your email address is entered correctly at $conf_file\n\n";

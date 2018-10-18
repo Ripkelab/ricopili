@@ -51,6 +51,8 @@ version: $version
   ############ for standalone users #####################
    
   --rloc STRING    directory containing R binary (default: $rloc)
+                      use term _SPACE_ if you need them:
+                        module load R; R as module_SPACE_load_SPACE_R;_SPACE_R)
                       download here: http://cran.r-project.org/
 
 
@@ -79,16 +81,14 @@ die "$usage\n" if $out eq "outname";
 
 
 
-my $r_sys = "$rloc/R";
-if ($rloc =~ /_SPACE_/) {
-    $r_sys = $rloc;
-    $r_sys =~ s/_SPACE_/ /g;
-}
-else {
-    if ($rloc eq "broadinstitute") {
-	
-	$r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
-    }
+my $r_sys = "$rloc";
+$r_sys =~ s/_SPACE_/ /g;
+
+system("$r_sys RHOME");
+my $status = ($? >> 8);
+if ($status != 0) {
+    print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
+    exit;
 }
 
 

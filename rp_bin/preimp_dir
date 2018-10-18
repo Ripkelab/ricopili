@@ -54,6 +54,7 @@ my $sexcheck_min = 10;
 
 my $withpna=0;
 my $noassoc = 0;
+my $sepa = 1;
 
 ##### help message
 my $usage = "
@@ -78,6 +79,8 @@ version: $rp_version
 
   --serial          no sending jobs to queue all in one run
                            -> usually only used for testing 
+  --sepa INT        use INT number of parallel jobs during serial
+
 
   --sleep INT       sleep for INT seconds, try this if you think there is a race condition
                            (hints: stops a different steps, --serial works)
@@ -131,6 +134,8 @@ GetOptions(
 
     "trio"=> \my $trio,
     "serial"=> \my $serial,
+    "sepa=i"=> \$sepa,
+
     "sleep=i"=> \my $sleep_sw,
     "help"=> \my $help,
     "disease=s"=> \$disname,
@@ -579,15 +584,46 @@ sub send_jobarray {
 
 
     if ($serial) {
+
 	print "starting step $sjaname with ".@sjaarray." jobs\n";
-	print "please be patient.\n";
+	print "running up to $sepa parallel jobs.\n";
+
+
 	my $jc = 1;
+#	my $job_str = "";
+	my @job_sepa_arr;
+
 	foreach (@sjaarray) {
 	    print "running job $jc...\n";
-	    &mysystem($_);
+	    push @job_sepa_arr, "$_ &";
+#	    $job_str .= "$_ & \n";
+
+	    if ($jc % $sepa == 0) {
+		push @job_sepa_arr, "wait";
+		#		$job_str .= "wait\n";
+		my $sepa_file = "$sjaname.sepa.$jc";
+		&a2filenew ($sepa_file,@job_sepa_arr);
+		print "sepa_file: ".$sepa_file."\n";
+		&mysystem("chmod u+x $sepa_file");
+		&mysystem("./$sepa_file");
+		@job_sepa_arr = ();
+	    }
 	    $jc++;
 	    
 	}
+
+	if (@job_sepa_arr > 0) {
+	    $jc--;
+	    push @job_sepa_arr, "wait";
+	    
+	    my $sepa_file = "$sjaname.sepa.$jc";
+	    &a2filenew ($sepa_file,@job_sepa_arr);
+	    print "sepa_file: ".$sepa_file."\n";
+	    &mysystem("chmod u+x $sepa_file");
+	    &mysystem("./$sepa_file");
+	}
+
+	
     }
     else {    
 	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";

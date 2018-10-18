@@ -161,6 +161,8 @@ my $nref = 4000;  ## number IDs in reference PCA set (random subgroup)
 
 my $reffile = "NOFILE";
 
+my $sepa = 1;
+
 
 
 use Getopt::Long;
@@ -190,7 +192,9 @@ GetOptions( "out=s"=> \$outname,
 	    "ref=s"=> \$reffile,
 	    "projection"=> \my $projection,
     "dfile=s"=> \my $dfile,
-    "longq"=> \my $longq,
+	    "longq"=> \my $longq,
+	    "sepa=i"=> \$sepa,
+
 
 
     );
@@ -498,15 +502,46 @@ sub send_jobarray {
 
 
     if ($serial) {
+	
 	print "starting step $sjaname with ".@sjaarray." jobs\n";
-	print "please be patient.\n";
+	print "running up to $sepa parallel jobs.\n";
+
+
 	my $jc = 1;
+#	my $job_str = "";
+	my @job_sepa_arr;
+
 	foreach (@sjaarray) {
 	    print "running job $jc...\n";
-	    &mysystem($_);
+	    push @job_sepa_arr, "$_ &";
+#	    $job_str .= "$_ & \n";
+
+	    if ($jc % $sepa == 0) {
+		push @job_sepa_arr, "wait";
+		#		$job_str .= "wait\n";
+		my $sepa_file = "$sjaname.sepa.$jc";
+		&a2filenew ($sepa_file,@job_sepa_arr);
+		print "sepa_file: ".$sepa_file."\n";
+		&mysystem("chmod u+x $sepa_file");
+		&mysystem("./$sepa_file");
+		@job_sepa_arr = ();
+	    }
 	    $jc++;
 	    
 	}
+
+	if (@job_sepa_arr > 0) {
+	    $jc--;
+	    push @job_sepa_arr, "wait";
+	    
+	    my $sepa_file = "$sjaname.sepa.$jc";
+	    &a2filenew ($sepa_file,@job_sepa_arr);
+	    print "sepa_file: ".$sepa_file."\n";
+	    &mysystem("chmod u+x $sepa_file");
+	    &mysystem("./$sepa_file");
+	}
+
+
     }
     else { 
 	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";
@@ -555,9 +590,9 @@ sub send_jobarray {
 
 	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_pcaer_pipeline_error '.$email) ;
 
-	    unless ($serial) {
+#	    unless ($serial) {
 		exit;
-	    }
+#	    }
 
 	}
 
@@ -672,6 +707,8 @@ version: $rp_version
 
         --serial          no sending jobs to queue all in one run
                                -> usually only used for testing 
+        --sepa INT      use INT number of parallel jobs during serial
+
         --longq          forces long queue for some jobs (bcomb)
                                   bfile merges: me300, mepr
                                   eigenstrat: epca

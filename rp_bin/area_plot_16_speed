@@ -77,16 +77,39 @@ my $email = &trans("email");
 #my $bin = &trans("bin");
 
 ###############################################
-my $r_sys = "$rloc/R";
-if ($rloc =~ /_SPACE_/) {
-    $r_sys = $rloc;
-    $r_sys =~ s/_SPACE_/ /g;
+
+
+
+my $r_sys = "$rloc";
+$r_sys =~ s/_SPACE_/ /g;
+
+system("$r_sys RHOME");
+my $status = ($? >> 8);
+if ($status != 0) {
+    print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
+    exit;
 }
-else {
-    if ($rloc eq "broadinstitute") {
-	$r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
-    }
-}
+
+
+
+#my $r_sys = "$rloc/R";
+#if ($rloc =~ /_SPACE_/) {
+#    $r_sys = $rloc;
+#    $r_sys =~ s/_SPACE_/ /g;
+#}
+#else {
+#    if ($rloc eq "broadinstitute") {
+#	$r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+#    }
+#}
+
+
+
+
+
+
+
+
 
 #my $homedir = "/home/gwas";
 #$homedir = "/home/ripke" unless ($lisa);
@@ -308,7 +331,7 @@ $anonym=1 if $anonym_tmp;
 if ($dandir ne "NA") {
     my @dadi_f = `ls -f $dandir`;
     my $ndadi = @dadi_f;
-#    print "$ndadi\n";
+#    print "@dadi_f\n";
  #   print "sleep\n";
 
 
@@ -317,6 +340,8 @@ if ($dandir ne "NA") {
 #    }
 
 }
+#exit;
+
 
 unless ($dandir) {
     die "$usage\n" if @ARGV ne 1;

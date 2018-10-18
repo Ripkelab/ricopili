@@ -1,0 +1,63 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+
+#############################
+# load utility functions
+#############################
+
+#use FindBin;
+#use lib "$FindBin::Bin";
+#use Ricopili::Utils qw(trans);
+
+
+#############################
+# read config file
+#############################
+
+#my $loloc = &trans("loloc");
+
+
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+##### help message
+my $usage = "
+Usage : $progname [options] INT
+
+
+ --help            help
+
+
+just used for testing the cluster environment
+INT is an integer used for the output file
+
+
+";
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    
+    );
+
+die $usage if $help;
+
+
+my $int = $ARGV[0];
+
+print "do the calc\n";
+my $big_int = 1e8;
+foreach my $c (1..$big_int) {
+    my $csq = $c*$c;
+}
+
+#print "waiting for 10 seconds\n";
+#sleep (10);
+print "writing successfile touch.$int.finished\n";
+system("echo success > touch.$int.finished")
+

@@ -1107,13 +1107,18 @@ if ($job){
 	
 	### jobfile
 	$batch_jobfile =~ s/_SPACE_/ /g;
-	$batch_jofile =~ s/XXX/$jobname/g;
+	$batch_jobfile =~ s/XXX/$jobname/g;
 	
 	### job_outputs
 	$batch_stdout =~ s/_SPACE_/ /g;
-	$batch_stdout =~ s/XXX/$rootdir/$errname/g;
+	$batch_stdout =~ s/XXX/$rootdir\/$errname/g;
 	$batch_stderr =~ s/_SPACE_/ /g;
-	$batch_stderr =~ s/XXX/$rootdir/$errname/g;	    	
+	$batch_stderr =~ s/XXX/$rootdir\/$errname/g;	    	
+
+	### batch other
+	$batch_other =~ s/_SPACE_/ /g;
+	$batch_other =~ s/NONE/ /g;
+
 	
 	if ($jobarray ne "") {
 
@@ -1134,8 +1139,11 @@ if ($job){
 #	    if ($threads > 8) {
 #		$multi_txt .= "-R y ";
 #	    }
-	    
 
+	    $batch_taskid =~ s/_DOLLAR_/\$/;
+#	    print "bacth_taskid: $batch_taskid\n";
+	    
+#	    sleep (10);
 	    ## this small script take job number X from the array collection file
 	    die "$! ($jobname)" unless open JOB, "> $jobname";
 	    print JOB "cd $rootdir\n";
@@ -1165,21 +1173,24 @@ if ($job){
 	    ### max parallel jobs in array
 
 	    $batch_maxpar =~ s/_SPACE_/ /g;
-	    $batch_maxpar =~ s/XXX/$maxpar/g;
+	    $batch_maxpar =~ s/YYY/$maxpar/g;
 
-	    unless ($batch_maxpar =~ "XXX") {
+	    unless ($batch_maxpar =~ "YYY") {
 		$batch_maxpar = "";
 	    }
 
 
-	    ### batch other
-	    $batch_other =~ s/_SPACE_/ /g;
 
+#	    print "batch_other: $batch_other\n";
+#	    sleep (10);
 	    
-	    my $batch_cmd = "$batch_bin $batch_other $batch_walltime $batch_maxpar $job_array $batch_stdout $batch_stderr $batch_name $batch_jobfile";
+	    my $batch_cmd = "$batch_bin $batch_other $batch_walltime $batch_maxpar $batch_array $batch_stdout $batch_stderr $batch_name $batch_jobfile";
 
 	    my $batch_sys = "$batch_cmd > $jobname.id";
 	    my $batch_log = "echo $batch_cmd > $jobname.log";
+
+	    print "$batch_sys\n";
+#	    sleep(10);
 	    
 	    &mysystem ($batch_log);
 	    &mysystem ($batch_sys);
@@ -1195,6 +1206,7 @@ if ($job){
 	    chomp($id_str);
 	    close WF;
 
+	    print "stdout from array submission: $id_str\n";
 
 	    ## for debugging
 		#$batch_depend = "-hold_jid_SPACE_XXX";
@@ -1217,7 +1229,10 @@ if ($job){
 	    my @batch_jid_array = split "XXX", $batch_jid;
 	    
 	    $id_str =~ s/$batch_jid_array[0]//; ### remove the stuff from before XXX
+#	    print "id_str: $id_str, $batch_jid_array[0]\n";
 	    $id_str =~ s/([0123456789]*).*/$1/; ### take the first numbered ID and remove everything else
+	    print "dependent job ID:$id_str\n";
+#	    sleep (10);
 
 	    $batch_depend =~ s/XXX/$id_str/g; ### put ID into dependency string
 

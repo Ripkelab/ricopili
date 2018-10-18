@@ -19,17 +19,18 @@ my $sloc = &trans("sloc");
 ########################
 
 
-my $r_sys = "$rloc/R";
-if ($rloc =~ /_SPACE_/) {
-    $r_sys = $rloc;
-    $r_sys =~ s/_SPACE_/ /g;
-}
-else {
 
-    if ($rloc eq "broadinstitute") {
-	$r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
-    }
+my $r_sys = "$rloc";
+$r_sys =~ s/_SPACE_/ /g;
+
+system("$r_sys RHOME");
+my $status = ($? >> 8);
+if ($status != 0) {
+    print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
+    exit;
 }
+
+
 
 # manhattan_plot --cols 2,11,1,3 --sig-gwa --areat SCZ17f.p3.2.areator.txt --out test_disc --pth 0.05 --title "SCZ17 - ManhattanPlot" daner_SCZ17f.verysmall.gz
 # manhattan_plot --cols 2,11,1,3 --sig-gwa --areat remeta_scz_repl_0610t.remeta --title "SCZ17 - ReplicationPlot" --out test_o --pth 0.05 --remeta daner_SCZ17f.verysmall.gz

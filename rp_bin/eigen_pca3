@@ -444,9 +444,12 @@ $pop_list_txt
 &a2file("POPlist","REF");
 
 my $sys = "$eloc/smartpca -p $merge_name.par\n";
-if ($queue eq "slurm") {
-    $sys = "source /com/extra/lapack/3.5.0/load.sh; $eloc/smartpca -p $merge_name.par\n";
-}
+
+#if ($queue eq "slurm") {
+#    $sys = "source /com/extra/lapack/3.5.0/load.sh; $eloc/smartpca -p $merge_name.par\n";
+#}
+
+
 print "$sys\n";
 #exit;
 &mysystem ("$sys");

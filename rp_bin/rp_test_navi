@@ -1,0 +1,665 @@
+#!/usr/bin/perl
+use strict;
+#use warnings;
+
+srand(0);
+
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
+#############################
+# read config file
+#############################
+
+
+
+my $loloc = &trans("loloc");
+my $email = &trans("email");
+my $force1 = 0;
+my $serial = 0;
+my $outname = "test";
+my $job_bn_th = 1000;
+my $sepa = 1;
+
+
+#######################################
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+my $rootdir = "";
+my $info_txt = "";
+my $homedir = $ENV{"HOME"};
+
+
+my $walltime = 4;
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "serial"=> \my $serial,
+    "sepa=i"=> \$sepa,
+	    
+    );
+
+
+
+if ($help ){
+    print "usage: $progname 
+
+version: $version
+
+      options:
+
+        --help          print this message then quit
+        --serial        no sending jobs to queue all in one run
+                                -> usually only used for testing
+        --sepa INT      use INT number of parallel jobs during serial
+
+ created by Stephan Ripke 2018 at Charite, Berlin, Germany
+ in the frame of the PGC
+ sripke (at) broadinstitute.org
+\n";
+    exit 2;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+#####################################
+# print array to file with newline
+####################################
+
+sub a2filenew {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+
+
+#####################################
+# append array to file with newline
+####################################
+
+sub a2filenew_app {
+    my ($file, @lines)=@_;
+    die "$!: $file" unless open FILE, ">> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+
+############################################################
+## testing binaries
+##############################################################
+my @test_scripts;
+
+
+
+my $mutt_script = "mutt";
+my $blueprint_script = "blueprint";            ### my.pipeline_tar
+
+
+print ".......testing email program....\n";
+
+my $err_scr = 0;
+{
+    my $scr_path = '';
+    
+    for my $path ( split /:/, $ENV{PATH} ) {
+	if ( -f "$path/$mutt_script" && -x _ ) {
+	    print "$mutt_script\tfound in $path\n";
+	    $scr_path = "$path/$mutt_script";
+	    last;
+	}
+    }
+    unless ( $scr_path ) {
+
+	print "!!Warning!! : No $mutt_script command available, trying mail\n" ;
+
+	$mutt_script = "mail";
+	for my $path ( split /:/, $ENV{PATH} ) {
+	    if ( -f "$path/$mutt_script" && -x _ ) {
+		print "$mutt_script\tfound in $path\n";
+		$scr_path = "$path/$mutt_script";
+		last;
+	    }
+	}
+	unless ( $scr_path ) {
+	    $err_scr = 1;
+	    print "!!Error!! : No $mutt_script command available\n" ;
+	}
+    }
+ 
+}
+die if $err_scr == 1;
+
+
+
+
+
+
+
+
+#####################################
+# send jobs to cluster and also send navi again
+#####################################
+
+my $sjadir = "";
+my $sjaweek = 0;
+my $sjaname = "";
+my $sjarow = "";
+my @sjaarray;
+my $sjamem = 0;
+my $sjatime = -1;
+my $sjamaxjobs = 30000;
+#my $sjainfofile = "$homedir/impute_dir_info";
+my $sjainfofile = "$loloc/test_info";
+unless (-e $sjainfofile) {
+
+    print "log-file ($sjainfofile) is not existing\n";
+    print "please check loloc in ~/ricopili.conf\n";
+    print "or just touch (create) $sjainfofile, if this is your first invokation of this module\n";
+    print "after that, just restart\n";
+    exit;
+}
+my $sjainfotxt = "";
+my $sjamulti = 0;
+
+
+sub send_jobarray {
+
+    die "send_jobarray with undefined variables, dir" if ($sjadir eq "");
+    die "send_jobarray with undefined variables, name" if ($sjaname eq "");
+    die "send_jobarray with undefined variables, array" if (@sjaarray == 0);
+    die "send_jobarray with undefined variables, mem" if ($sjamem == 0);
+    die "send_jobarray with undefined variables, time" if ($sjatime < 0);
+    die "send_jobarray with undefined variables, info" if ($sjainfotxt eq "");
+
+
+
+    my $now = localtime time;
+    $now =~ s/ /_/g;
+
+
+    if ($sjaname eq "finished") {
+
+	my $fini_message ;
+	$fini_message .= "\n\n##################################################################\n";
+	$fini_message .= "##### CONGRATULATIONS: \n";
+	$fini_message .= "##### testing finished successfully:\n";
+	$fini_message .= "##### $sjainfotxt\n";
+	$fini_message .= "##### have a look at the distributions subdir for output files\n";
+	$fini_message .= "##### have a look at the wiki page for more details\n"; 
+	$fini_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
+	$fini_message .= "##################################################################\n";
+	print "$fini_message\n";
+
+	
+	die $! unless open SUC, "> success_file";
+	print SUC $fini_message."\n";
+	close SUC;
+
+	&mysystem ('cat success_file | '.$mutt_script.' -s RP_test_finished '.$email) ;
+
+	my $sjarow      = $sjainfotxt."\t$sjaname\t$now";
+	&a2filenew_app("$sjainfofile",$sjarow);
+
+
+	exit;
+
+    }
+
+
+
+    chdir ($sjadir);
+    my $jobfile = "$sjaname.job_list";
+    while (-e $jobfile) {
+	$jobfile .= ".s";
+    }
+    &a2filenew ($jobfile, @sjaarray);
+
+    $walltime = $sjatime;
+    my $nsja = @sjaarray;
+
+    my $nsja_loc = $nsja;
+    if ($nsja_loc > 30000) {
+	$nsja_loc = 30000;
+    }
+
+    my $multi_txt = "";
+    if ($sjamulti > 0) {
+	$multi_txt = "--multi $nsja_loc,$sjamulti";
+    }
+
+    ### with array
+    my $sja_week_str = "";
+    if ($sjaweek > 0) {
+	$sja_week_str = "--week 1";
+    }
+
+
+
+    my $old_cmd = `tail -1 $sjainfofile | head -1`;
+    my $nsja_txt = sprintf "%06d",$nsja;
+    my $sjacontent = "$sjaname.".$nsja_txt;
+    my $sjarow_part = $sjainfotxt."\t$sjacontent";
+    my $sjarow      = $sjainfotxt."\t$sjacontent\t$now";
+#    $message = $info_txt."\t$message\t$now";
+
+    &a2filenew_app("$sjainfofile",$sjarow);
+
+    if ($old_cmd =~ /$sjarow_part/) {
+
+
+	unless ($force1 ){
+	    my $err_message ;
+	    $err_message .= "##################################################################\n";
+	    $err_message .= "##### Error: \n";
+	    $err_message .= "##### step $sjaname has been done repeatedly without any progress\n";
+
+	    $err_message .= "##### testing pipeline stopped\n";
+	    $err_message .= "##### $sjainfotxt\n";
+	    $err_message .= "##### if reason does not appear obvious\n";
+	    $err_message .= "##### have a look at the wiki page\n"; 
+	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
+	    $err_message .= "##### or contact the developers\n";
+	    $err_message .= "##################################################################\n";
+	    print "$err_message\n";
+
+	    die $! unless open ERR, "> error_file";
+	    print ERR $err_message."\n";
+	    close ERR;
+
+
+	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_test_error '.$email) ;
+#	    unless ($serial) {
+		exit;
+#	    }
+	}
+
+
+
+    }
+
+
+    
+    #################################
+    ## starting the job array
+    ##################################
+    if ($serial) {
+	print "starting step $sjaname with ".@sjaarray." jobs\n";
+	print "running up to $sepa parallel jobs.\n";
+
+
+	my $jc = 1;
+#	my $job_str = "";
+	my @job_sepa_arr;
+
+	foreach (@sjaarray) {
+	    print "running job $jc...\n";
+	    push @job_sepa_arr, "$_ &";
+#	    $job_str .= "$_ & \n";
+
+	    if ($jc % $sepa == 0) {
+		push @job_sepa_arr, "wait";
+		#		$job_str .= "wait\n";
+		my $sepa_file = "$sjaname.sepa.$jc";
+		&a2filenew ($sepa_file,@job_sepa_arr);
+		print "sepa_file: ".$sepa_file."\n";
+		&mysystem("chmod u+x $sepa_file");
+		&mysystem("./$sepa_file");
+		@job_sepa_arr = ();
+	    }
+	    $jc++;
+	    
+	}
+
+	if (@job_sepa_arr > 0) {
+	    $jc--;
+	    push @job_sepa_arr, "wait";
+	    
+	    my $sepa_file = "$sjaname.sepa.$jc";
+	    &a2filenew ($sepa_file,@job_sepa_arr);
+	    print "sepa_file: ".$sepa_file."\n";
+	    &mysystem("chmod u+x $sepa_file");
+	    &mysystem("./$sepa_file");
+	}
+	
+#	exit;
+
+	
+    }
+    else { 
+	my $sys_loc = "$blueprint_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --name $sjaname.$outname $multi_txt";
+	&mysystem ($sys_loc);
+    }
+
+
+
+
+    
+    $command_line =~ s/--force1//;
+
+
+
+    my $wt_file = "$sjadir/j.$sjaname.$outname.id";
+    chdir "$rootdir" or die "something strange";
+    
+    if ($serial) {
+	my $sys_re = "$command_line";
+	&mysystem ($sys_re);
+	exit;
+    }
+    else {
+	my $sys_re = "$blueprint_script --njob $job_bn_th -b \"$command_line\" --wa 1 --di -j --fwt $wt_file --na _te_$outname";
+	&mysystem ($sys_re);
+    }
+
+
+    print "------------------------------------------------------------\n";
+    print "$nsja jobs successfully submitted\n";
+    print "please see tail of $sjainfofile for regular updates\n";
+    print "also check bjobs -w for running jobs\n";
+    print "possibly different command on different computer cluster: e.g. qstat -u USER\n";
+    print "you will be informed via email if errors or successes occur\n";
+    print "------------------------------------------------------------\n";
+
+
+    exit;
+
+
+}
+
+
+print "---------------------------------------------\n";
+print "also test scratchdir, ldscore, starting R\n";
+print "---------------------------------------------\n";
+print "---------------------------------------------\n";
+#sleep(3);
+
+
+
+
+
+
+#####################################
+# BEGIN
+#####################################
+
+
+use Cwd;
+use File::Path;
+$rootdir = &Cwd::cwd();
+$sjainfotxt = "$rootdir\t$command_line";
+
+
+$info_txt = "command:\t\"$command_line\"\tdir:\t$rootdir";
+
+
+###################################################
+### check if fake daner files are present
+########################################################
+
+foreach my $count (1..4) {
+    my $danerfile = "PGC_cohort$count.ch.fl.r4.gz";
+    unless (-e $danerfile) {
+	print "Error: testdaner $danerfile not found\n";
+	exit;
+    }
+}
+my $danerfile = "PGC_meta.r4.gz";
+unless (-e $danerfile) {
+    print "Error: testdaner $danerfile not found\n";
+    exit;
+}
+
+
+
+###################################################
+### checkout heavy computational burden on many parallel jobs
+########################################################
+
+my @job_arr;
+foreach my $count (1..10) {
+    my $success_file = "touch.$count.finished";
+
+    unless (-e $success_file) {
+	my $cmd = "my.rp_test $count";
+	push @job_arr, $cmd ;
+	print "$success_file not found, need to start job\n";
+    }
+    else {
+	print "succ: $success_file\n";
+    }
+
+}
+
+
+
+if (@job_arr > 0 ) {
+
+    
+    $sjadir = $rootdir;
+    $sjaname = "heavycomp";
+    $sjatime = 2;
+    $sjamem = 2000;
+    @sjaarray = @job_arr;
+    
+    &send_jobarray;
+    
+}
+
+
+
+###################################################
+### checkout qqplot on four testing cohorts
+########################################################
+
+
+@job_arr = ();
+foreach my $count (1..4) {
+
+    my $danerfile = "PGC_cohort$count.ch.fl.r4.gz";
+    my $success_file = "$danerfile.out-qq.pdf";
+    
+    unless (-e $success_file) {
+	my $cmd = "qqplot_5 --maf 0.01 --info 0.6 --title QQ-plot.maf01.info6 --cacohead -p 11 --out $danerfile.out --ceiling 12 $danerfile";
+	push @job_arr, $cmd ;
+	print "$success_file not found, need to start job\n";
+#	print "$cmd\n";
+    }
+    else {
+	print "succ: $success_file\n";
+    }
+
+}
+
+
+
+my $danerfile = "PGC_meta.r4.gz";
+my $success_file = "$danerfile.out-qq.pdf";
+
+#print "$success_file\n";
+#sleep(5);
+
+unless (-e $success_file) {
+    
+    my $cmd = "qqplot_5 --maf 0.01 --info 0.6 --title QQ-plot.maf01.info6 --cacohead -p 11 --out $danerfile.out --ceiling 12 $danerfile";
+    push @job_arr, $cmd ;
+
+}
+else {
+    print "succ: $success_file\n";
+}
+
+#exit;
+if (@job_arr > 0 ) {
+
+    
+    $sjadir = $rootdir;
+    $sjaname = "qqplot";
+    $sjatime = 2;
+    $sjamem = 2000;
+    @sjaarray = @job_arr;
+    
+    &send_jobarray;
+    
+}    
+
+
+###################################################
+### four forest plots
+########################################################
+
+    
+@job_arr = ();
+
+my $snp = "rs16875002";
+my $chr = "8";
+my $pos = "107680748";
+my $forest_cmd = "forest_plot8 --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
+my $success_file = "forest_PGC_forest.$snp.pdf";
+unless (-e $success_file) {
+    push @job_arr, $forest_cmd ;
+}
+else {
+    print "succ: $success_file\n";
+}
+
+
+$snp = "rs7652320";
+$chr = "3";
+$pos = "37723593";
+$forest_cmd = "forest_plot8 --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
+$success_file = "forest_PGC_forest.$snp.pdf";
+unless (-e $success_file) {
+    push @job_arr, $forest_cmd ;
+}
+else {
+    print "succ: $success_file\n";
+}
+
+$snp = "rs72771701";
+$chr = "5";
+$pos = "93915071";
+$forest_cmd = "forest_plot8 --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
+$success_file = "forest_PGC_forest.$snp.pdf";
+unless (-e $success_file) {
+    push @job_arr, $forest_cmd ;
+}
+else {
+    print "succ: $success_file\n";
+}
+
+$snp = "rs6125307";
+$chr = "20";
+$pos = "46983366";
+$forest_cmd = "forest_plot8 --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
+$success_file = "forest_PGC_forest.$snp.pdf";
+unless (-e $success_file) {
+    push @job_arr, $forest_cmd ;
+}
+else {
+    print "succ: $success_file\n";
+}
+
+
+
+
+if (@job_arr > 0 ) {
+
+    
+    $sjadir = $rootdir;
+    $sjaname = "forplot";
+    $sjatime = 2;
+    $sjamem = 2000;
+    @sjaarray = @job_arr;
+    
+    &send_jobarray;
+    
+}
+
+
+
+#########################################
+## combine PDFs
+##########################################
+
+print "test successful\n\n";
+
+my $pdfjoin_cmd = "pdfjoin --outfile rp_test_forest_join.pdf forest_PGC_forest.rs*pdf PGC*qq.pdf";
+unless (-e "rp_test_forest_join.pdf"){
+    &mysystem($pdfjoin_cmd);
+}
+
+my $pdfnup_cmd = "pdfnup --nup 2x2 rp_test_forest_join.pdf";
+unless (-e "rp_test_forest_join-nup.pdf"){
+    &mysystem($pdfnup_cmd);
+}
+
+
+##########################################
+# test perl package for excel files
+##########################################
+
+my $table_txt = "column1 column2 column3 column4 column5
+1 2 3 4 5
+10 20 30 40 50
+0.3 0.1 0.1 0.1 0.2
+    ";
+
+&a2filenew("rp_test.txt",$table_txt);
+my $txt2xls_cmd = "txt2xls --txt rp_test.txt --xls rp_text.xls";
+unless (-e "rp_text.xls"){
+    &mysystem($txt2xls_cmd);
+}
+
+
+
+#############################################################
+## SUCCESSSS
+#############################################################
+
+$sjadir = $rootdir;
+$sjaname = "finished";
+push @sjaarray, "tmp";
+$sjatime = 2;
+$sjamem = 1000;
+
+    
+&send_jobarray;
+
+
+
+
+
+
+

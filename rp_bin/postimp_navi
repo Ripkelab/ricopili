@@ -151,6 +151,8 @@ my $polyfrom_file = "";
 my $danscore_file = "";
 my $range_file = "";
 my $polyto_file = "";
+my $sepa = 1;
+
 
 my $fth_th = 0.15;
 
@@ -312,6 +314,7 @@ version: $rp_version
 
   --serial          no sending jobs to queue all in one run
                            -> usually only used for testing 
+  --sepa INT        use INT number of parallel jobs during serial
 
   --sleep INT         sleep for INT seconds, try this if you think there is a race condition
                        (hints: stops a different steps, --serial works)
@@ -357,6 +360,8 @@ GetOptions(
     "cox"=> \my $cox,
     "outname=s"=> \my $outname,
     "serial"=> \my $serial,
+    "sepa=i"=> \$sepa,
+
     "sleep=i"=> \my $sleep_sw,
 
     "walltime=i"=> \ $walltime,
@@ -448,7 +453,7 @@ my $qqplot_script = "qqplot_5";                ### my.pipeline_tar
 my $lahunt_script = "lahunt_9";                ### my.pipeline_tar
 my $ldsc_script = "my.ldsc2";                ### my.pipeline_tar
 my $blueprint_script = "blueprint";            ### my.pipeline_tar
-my $clumpnavi_script = "clump_navi";           ### my.pipeline_tar
+#my $clumpnavi_script = "clump_navi";           ### my.pipeline_tar
 my $clumpnavi2_script = "clump_nav3";          ### my.pipeline_tar
 my $shrinkpdf_script = "shrinkpdf";            ### my.pipeline_tar
 my $comp1mhc_script = "comp1mhc2";             ### my.pipeline_tar
@@ -485,7 +490,7 @@ push @test_scripts, $qqplot_script ;
 push @test_scripts, $lahunt_script ;
 push @test_scripts, $ldsc_script ;
 push @test_scripts, $blueprint_script ;
-push @test_scripts, $clumpnavi_script ;
+#push @test_scripts, $clumpnavi_script ;
 push @test_scripts, $clumpnavi2_script ;
 push @test_scripts, $shrinkpdf_script ;
 push @test_scripts, $comp1mhc_script ;
@@ -1016,15 +1021,46 @@ sub send_jobarray {
     ## starting the job array
     ##################################
     if ($serial) {
+
 	print "starting step $sjaname with ".@sjaarray." jobs\n";
-	print "please be patient.\n";
+	print "running up to $sepa parallel jobs.\n";
+
+
 	my $jc = 1;
+#	my $job_str = "";
+	my @job_sepa_arr;
+
 	foreach (@sjaarray) {
 	    print "running job $jc...\n";
-	    &mysystem($_);
+	    push @job_sepa_arr, "$_ &";
+#	    $job_str .= "$_ & \n";
+
+	    if ($jc % $sepa == 0) {
+		push @job_sepa_arr, "wait";
+		#		$job_str .= "wait\n";
+		my $sepa_file = "$sjaname.sepa.$jc";
+		&a2filenew ($sepa_file,@job_sepa_arr);
+		print "sepa_file: ".$sepa_file."\n";
+		&mysystem("chmod u+x $sepa_file");
+		&mysystem("./$sepa_file");
+		@job_sepa_arr = ();
+	    }
 	    $jc++;
 	    
 	}
+
+	if (@job_sepa_arr > 0) {
+	    $jc--;
+	    push @job_sepa_arr, "wait";
+	    
+	    my $sepa_file = "$sjaname.sepa.$jc";
+	    &a2filenew ($sepa_file,@job_sepa_arr);
+	    print "sepa_file: ".$sepa_file."\n";
+	    &mysystem("chmod u+x $sepa_file");
+	    &mysystem("./$sepa_file");
+	}
+
+		
     }
     else { 
 	my $sys_loc = "$blueprint_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";

@@ -35,19 +35,17 @@ my $sloc = &trans("sloc");
 my $rpac = &trans("rpac");
 
 ###############################################
-my $r_sys = "$rloc/R";
 
-if ($rloc =~ /_SPACE_/) {
-    $r_sys = $rloc;
-    $r_sys =~ s/_SPACE_/ /g;
-}
-else {
-    if ($rloc eq "broadinstitute") {
-	$r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
-    }
-    elsif ($rloc eq "/usr/bin/") {
-	$r_sys = "module load R/3.1.2; R";
-    }
+
+
+my $r_sys = "$rloc";
+$r_sys =~ s/_SPACE_/ /g;
+
+system("$r_sys RHOME");
+my $status = ($? >> 8);
+if ($status != 0) {
+    print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
+    exit;
 }
 
 
@@ -122,7 +120,7 @@ my @created = mkpath(   ## $created ?
 			{verbose => 0, mode => 0750},
     );
 
-print "$workdir\n";
+print "workdir: $workdir\n";
 
 
 ###################################################
@@ -559,11 +557,19 @@ foreach my $fl (@file_list) {
 }
 @file_list = @farr_tmp;
 
+
+#print "$metafile\n";
+unless($metafile =~ /^\//) {
+
+    $metafile = "$rootdir/$metafile";
+}
+#print "$metafile\n";
+
 #exit;
 
 my %head_files;
 #foreach (0..($nhead-1)){
-    $head_files{$danerstr[$_]} = 1;
+    $head_files{$file_list[$_]} = 1;
 #    $head_files{$file_list[$_]} = 1;
 #}
 my $tmp = keys %head_files;
@@ -580,31 +586,48 @@ foreach my $c (0..$#file_list) {
 #    print "mion: $file_list[$c]\n";
 #    $hh{$file_list[$c]} = `zcat $rootdir/$file_list[$c] | head -1`;
 #    $hh{$file_list[$c]} = `zcat $file_list[$c] | head -1`;
-    $hh{$danerstr[$c]} = `gunzip -c $file_list[$c] | head -1`;
-    chomp($hh{$danerstr[$c]});
+    $hh{$file_list[$c]} = `gunzip -c $file_list[$c] | head -1`;
+    chomp($hh{$file_list[$c]});
+#    print "file-header($file_list[$c])\n";
+#    print "-> $hh{$danerstr[$c]}\n";
+
+    
+#    system ("gunzip -c $file_list[$c] | head -1 > $file_list[$c].header");
+#    my @test_arr = `cat $file_list[$c].header`;
+#    print "test_arr: @test_arr\n";
+#    print "test_arr0: $test_arr[0]\n";
+#    $hh{$danerstr[$c]} = $test_arr[0];
+#    print "strange_hash: $hh{$danerstr[$c]}\n";
+    #$hh{$danerstr[$c]} = `cat $file_list[$c].header`;
+#    system("cat $file_list[$c].header");
+#    $hh{$danerstr[$c]} = `gunzip -c $file_list[$c] | head -1`;
+
+#    print "strange_hash_after: $hh{$danerstr[$c]}\n";
 #    chomp($hh{$file_list[$c]});
-#    print "file-header:\t$hh{$file_list[$c]}\n";
+#    print "strange_hash_after_after: $hh{$danerstr[$c]}\n";
 }
-#exit;
+
 
 
 ## extract info
 my %finfo;
 my $ws = '[[:space:]]';
 
-my $main = `zgrep -m 1 -w $gsnp $file_list[0]`;
+my $main = `gunzip -c $file_list[0] | grep -m 1 -w $gsnp`;
+print "$main\n";
+#my $main = `zgrep -m 1 -w $gsnp $file_list[0]`;
 #my $main = `zgrep -m 1 -w $gsnp $rootdir/$file_list[0]`;
 foreach (0..$#file_list) {
 #    print "grep in :\t$file_list[$_]\n";
 #    $finfo{$file_list[$_]} = `zgrep -m 1 -w $gsnp $file_list[$_]`;
-    my $str_tmp = `zgrep -m 1 -w $gsnp $file_list[$_]`;
-    $finfo{$danerstr[$_]} = $str_tmp;
+    my $str_tmp = `gunzip -c $file_list[$_] | grep -m 1 -w $gsnp`;
+    $finfo{$file_list[$_]} = $str_tmp;
 
-#    print "$str_tmp\n";
+    print "$file_list[$_]: $str_tmp\n";
 
 
 }
-
+#exit;
 #my ($nca,$nco) = &excaco($hh1);
 #print "$nca\t$nco\n";
 
@@ -630,18 +653,20 @@ my $meta_f;
 
 my $hetp_col = 16 ;
 
-my $meta_line = `zgrep -m 1 -w $gsnp $metafile`;
+my $meta_line = `gunzip -c $metafile | grep -m 1 -w $gsnp `;
+#my $meta_line = `zgrep -m 1 -w $gsnp $metafile`;
 my $meta_hline = `gunzip -c $metafile | head -1`;
 #my $meta_line = `zgrep -m 1 -w $gsnp $rootdir/$metafile`;
-#    print $meta_line."\n";
-#    exit;
+print $meta_hline."\n";
+print $meta_line."\n";
+#exit;
 
 my @cells_h = &split_line($meta_hline);
 my $cc = 0;
 foreach (@cells_h){
     if ($_ eq "HetPVa"){
 	$hetp_col = $cc;
-	print "found\n";
+	print "HetPVa found\n";
     }
     $cc++;
 }

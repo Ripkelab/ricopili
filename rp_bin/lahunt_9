@@ -26,13 +26,20 @@ my $rloc = &trans("rloc");
 
 
 ###############################################
-my $r_sys = "$rloc/R";
-if ($rloc =~ /_SPACE_/) {
-    $r_sys = $rloc;
-    $r_sys =~ s/_SPACE_/ /g;
-} elsif ($rloc eq "broadinstitute") {
-    $r_sys = "source /broad/software/scripts/useuse; use R-2.14; R";
+
+
+my $r_sys = "$rloc";
+$r_sys =~ s/_SPACE_/ /g;
+
+system("$r_sys RHOME");
+my $status = ($? >> 8);
+if ($status != 0) {
+    print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
+    exit;
 }
+
+
+
 
 
 use lib $ENV{rp_perlpackages};
@@ -209,12 +216,19 @@ sub calc_lambda {
 
 
 	my @outp ;
-	if ($rloc eq "broadinstitute") {
-	    @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \"  qchisq (1-$halfway,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
-	}
-	else {
-	    @outp = split "\n", `echo \"  qchisq (1-$halfway,1)/ qchisq (0.5,1) \" | $r_sys --vanilla -q`;
-	}
+
+	die $! unless open FILE, "> R_tmp_laca";
+	print FILE "qchisq (1-$halfway,1)/ qchisq (0.5,1)";
+	close FILE;
+
+	@outp = split "\n", `$r_sys --vanilla -q < R_tmp_laca`;
+
+#	if ($rloc eq "broadinstitute") {
+#	    @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \"  qchisq (1-$halfway,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
+#	}
+#	else {
+#	    @outp = split "\n", `echo \"  qchisq (1-$halfway,1)/ qchisq (0.5,1) \" | $r_sys --vanilla -q`;
+#	}
 
 
 	foreach (@outp) {
@@ -312,12 +326,19 @@ sub calc_lambda_qs {
 #	my @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \" qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
 
 	my @outp ;
-	if ($rloc eq "broadinstitute") {
-	    @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
-	}
-	else {
-	    @outp = split "\n", `echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | $r_sys --vanilla -q`;
-	}
+
+	die $! unless open FILE, "> R_tmp_laca";
+	print FILE "qchisq (1-$p_half,1)/ qchisq (0.5,1)";
+	close FILE;
+
+	@outp = split "\n", `$r_sys --vanilla -q < R_tmp_laca`;
+	
+#	if ($rloc eq "broadinstitute") {
+#	    @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
+#	}
+#	else {
+#	    @outp = split "\n", `echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | $r_sys --vanilla -q`;
+#	}
 
 
 #	my @outp = split "\n", `echo \"qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | $rloc/R --vanilla -q`;
@@ -387,12 +408,20 @@ sub calc_lambda_file {
 
 
 	my @outp ;
-	if ($rloc eq "broadinstitute") {
-	    @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
-	}
-	else {
-	    @outp = split "\n", `echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | $r_sys --vanilla -q`;
-	}
+
+	die $! unless open FILE, "> R_tmp_laca";
+	print FILE "qchisq (1-$p_half,1)/ qchisq (0.5,1)";
+	close FILE;
+
+	@outp = split "\n", `$r_sys --vanilla -q < R_tmp_laca`;
+
+	
+#	if ($rloc eq "broadinstitute") {
+#	    @outp = split "\n", `source /broad/software/scripts/useuse; use R-2.14; echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | R --vanilla -q`;
+#	}
+#	else {
+#	    @outp = split "\n", `echo \"  qchisq (1-$p_half,1)/ qchisq (0.5,1) \" | $r_sys --vanilla -q`;
+#	}
 
 
 
