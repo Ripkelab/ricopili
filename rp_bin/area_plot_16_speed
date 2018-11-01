@@ -70,7 +70,6 @@ my $areastr = "NOAREA";
 
 my $ploc = &trans("p2loc");
 my $hapmap_ref_root = &trans("hmloc");
-my $homedir = &trans("home");
 my $sloc = &trans("sloc");
 my $rloc = &trans("rloc");
 my $email = &trans("email");

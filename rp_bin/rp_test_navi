@@ -37,7 +37,6 @@ my $command_line = "$progname @ARGV";
 
 my $rootdir = "";
 my $info_txt = "";
-my $homedir = $ENV{"HOME"};
 
 
 my $walltime = 4;
@@ -47,7 +46,8 @@ GetOptions(
     "help"=> \my $help,
     "serial"=> \my $serial,
     "sepa=i"=> \$sepa,
-	    
+    "noldsc"=> \my $noldsc,
+    
     );
 
 
@@ -63,6 +63,8 @@ version: $version
         --serial        no sending jobs to queue all in one run
                                 -> usually only used for testing
         --sepa INT      use INT number of parallel jobs during serial
+
+        --noldsc          do not do ldscore (if problems there)
 
  created by Stephan Ripke 2018 at Charite, Berlin, Germany
  in the frame of the PGC
@@ -125,6 +127,11 @@ my @test_scripts;
 
 my $mutt_script = "mutt";
 my $blueprint_script = "blueprint";            ### my.pipeline_tar
+my $test_script = "my.rp_test";            ### my.pipeline_tar
+my $qqplot_script = "qqplot_5";            ### my.pipeline_tar
+my $forest_script = "forest_plot8";            ### my.pipeline_tar
+my $txt2xls_script = "txt2xls";            ### my.pipeline_tar
+my $ldsc_script = "my.ldsc2";            ### my.pipeline_tar
 
 
 print ".......testing email program....\n";
@@ -180,7 +187,6 @@ my @sjaarray;
 my $sjamem = 0;
 my $sjatime = -1;
 my $sjamaxjobs = 30000;
-#my $sjainfofile = "$homedir/impute_dir_info";
 my $sjainfofile = "$loloc/test_info";
 unless (-e $sjainfofile) {
 
@@ -448,11 +454,11 @@ unless (-e $danerfile) {
 ########################################################
 
 my @job_arr;
-foreach my $count (1..10) {
+foreach my $count (1..20) {
     my $success_file = "touch.$count.finished";
 
     unless (-e $success_file) {
-	my $cmd = "my.rp_test $count";
+	my $cmd = "$test_script $count";
 	push @job_arr, $cmd ;
 	print "$success_file not found, need to start job\n";
     }
@@ -491,7 +497,7 @@ foreach my $count (1..4) {
     my $success_file = "$danerfile.out-qq.pdf";
     
     unless (-e $success_file) {
-	my $cmd = "qqplot_5 --maf 0.01 --info 0.6 --title QQ-plot.maf01.info6 --cacohead -p 11 --out $danerfile.out --ceiling 12 $danerfile";
+	my $cmd = "$qqplot_script --maf 0.01 --info 0.6 --title QQ-plot.maf01.info6 --cacohead -p 11 --out $danerfile.out --ceiling 12 $danerfile";
 	push @job_arr, $cmd ;
 	print "$success_file not found, need to start job\n";
 #	print "$cmd\n";
@@ -512,7 +518,7 @@ my $success_file = "$danerfile.out-qq.pdf";
 
 unless (-e $success_file) {
     
-    my $cmd = "qqplot_5 --maf 0.01 --info 0.6 --title QQ-plot.maf01.info6 --cacohead -p 11 --out $danerfile.out --ceiling 12 $danerfile";
+    my $cmd = "$qqplot_script --maf 0.01 --info 0.6 --title QQ-plot.maf01.info6 --cacohead -p 11 --out $danerfile.out --ceiling 12 $danerfile";
     push @job_arr, $cmd ;
 
 }
@@ -545,7 +551,7 @@ if (@job_arr > 0 ) {
 my $snp = "rs16875002";
 my $chr = "8";
 my $pos = "107680748";
-my $forest_cmd = "forest_plot8 --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
+my $forest_cmd = "$forest_script  --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
 my $success_file = "forest_PGC_forest.$snp.pdf";
 unless (-e $success_file) {
     push @job_arr, $forest_cmd ;
@@ -558,7 +564,7 @@ else {
 $snp = "rs7652320";
 $chr = "3";
 $pos = "37723593";
-$forest_cmd = "forest_plot8 --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
+$forest_cmd = "$forest_script  --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
 $success_file = "forest_PGC_forest.$snp.pdf";
 unless (-e $success_file) {
     push @job_arr, $forest_cmd ;
@@ -570,7 +576,7 @@ else {
 $snp = "rs72771701";
 $chr = "5";
 $pos = "93915071";
-$forest_cmd = "forest_plot8 --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
+$forest_cmd = "$forest_script  --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
 $success_file = "forest_PGC_forest.$snp.pdf";
 unless (-e $success_file) {
     push @job_arr, $forest_cmd ;
@@ -582,7 +588,7 @@ else {
 $snp = "rs6125307";
 $chr = "20";
 $pos = "46983366";
-$forest_cmd = "forest_plot8 --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
+$forest_cmd = "$forest_script  --meta PGC_meta.r4.gz --chr $chr --pos $pos --snp $snp --out PGC_forest.$snp PGC_meta.r4.gz PGC_cohort*.ch.fl.r4.gz";
 $success_file = "forest_PGC_forest.$snp.pdf";
 unless (-e $success_file) {
     push @job_arr, $forest_cmd ;
@@ -613,16 +619,19 @@ if (@job_arr > 0 ) {
 ## combine PDFs
 ##########################################
 
-print "test successful\n\n";
+
 
 my $pdfjoin_cmd = "pdfjoin --outfile rp_test_forest_join.pdf forest_PGC_forest.rs*pdf PGC*qq.pdf";
 unless (-e "rp_test_forest_join.pdf"){
     &mysystem($pdfjoin_cmd);
+    &mysystem("echo $pdfjoin_cmd >> commands.txt");
 }
 
 my $pdfnup_cmd = "pdfnup --nup 2x2 rp_test_forest_join.pdf";
+
 unless (-e "rp_test_forest_join-nup.pdf"){
     &mysystem($pdfnup_cmd);
+    &mysystem("echo $pdfnup_cmd >> commands.txt");
 }
 
 
@@ -637,11 +646,41 @@ my $table_txt = "column1 column2 column3 column4 column5
     ";
 
 &a2filenew("rp_test.txt",$table_txt);
-my $txt2xls_cmd = "txt2xls --txt rp_test.txt --xls rp_text.xls";
+my $txt2xls_cmd = "$txt2xls_script --txt rp_test.txt --xls rp_text.xls";
 unless (-e "rp_text.xls"){
     &mysystem($txt2xls_cmd);
+    &mysystem("echo $txt2xls_cmd >> commands.txt");
 }
 
+
+##########################################
+# test LDSC
+##########################################
+
+
+@job_arr = ();
+
+unless ($noldsc) {
+    unless (-e "PGC_meta.r4.gz.ldsc.fini"){
+	my $ldsc_cmd = "$ldsc_script PGC_meta.r4.gz";
+	push @job_arr, $ldsc_cmd;
+    }
+}
+
+
+
+if (@job_arr > 0 ) {
+
+    
+    $sjadir = $rootdir;
+    $sjaname = "ldsc";
+    $sjatime = 2;
+    $sjamem = 2000;
+    @sjaarray = @job_arr;
+    
+    &send_jobarray;
+    
+}
 
 
 #############################################################

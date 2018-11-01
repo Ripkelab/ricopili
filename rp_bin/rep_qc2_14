@@ -52,12 +52,6 @@ my $progname = $0;
 $progname =~ s!^.*/!!;
 my $command_line = "$progname @ARGV";
 
-my $past_file = $ENV{HOME}."/repqc2_info";
-my $pwd_loc = $ENV{PWD};
-
-die $! unless open FILE, ">> $past_file";
-print FILE "$pwd_loc\t$command_line\n";
-close FILE;
 
 
 
@@ -69,7 +63,15 @@ close FILE;
 my $ploc = &trans("p2loc");
 my $rloc = &trans("rloc");
 my $qloc = &trans("queue");
+my $loloc = &trans("loloc");
 
+
+my $past_file = "$loloc/repqc2_info";
+my $pwd_loc = $ENV{PWD};
+
+die $! unless open FILE, ">> $past_file";
+print FILE "$pwd_loc\t$command_line\n";
+close FILE;
 
 
 

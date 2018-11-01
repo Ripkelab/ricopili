@@ -169,7 +169,7 @@ my $host = hostname;
 
 
 my $hapmap_ref_root = &trans("hmloc");
-my $homedir = &trans("home");
+#my $homedir = &trans("home");
 my $qloc = &trans("queue");
 my $i2loc = &trans("i2loc");
 my $email = &trans("email");
@@ -3916,11 +3916,23 @@ my $Xchr_txt = "";
 my $prekno_txt = "";
 
 unless (-e $prekno_file) {
-    $prekno_file = "$hapmap_ref_root/gwascatalog/1015b/gwascatalog.txt.ow.short.new.sorted";
+
+
+    my @gwascat_files = `ls -rt $refdir/gwascatalog.*.rp.txt`;
+    if (@gwascat_files > 0) {
+	print "using as gwas catalog file: ".$gwascat_files[$#gwascat_files]."\n";
+	$prekno_file = $gwascat_files[$#gwascat_files];
+	chomp($prekno_file)
+	    #	$prekno_txt = "--prekno $prekno_file";
+    }
+    else {
+	$prekno_file = "$hapmap_ref_root/gwascatalog/1015b/gwascatalog.txt.ow.short.new.sorted";
+    }
 
 }
 
 unless (-e $prekno_file) {
+    
     print "Error: cannot find gwas catalog file\n";
     exit;
 }

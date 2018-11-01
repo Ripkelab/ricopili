@@ -127,7 +127,7 @@ my $command_line = "$progname @ARGV";
 
 my $rootdir = "";
 my $info_txt = "";
-my $homedir = $ENV{"HOME"};
+
 
 my $job_bn_th = 1000;
 
@@ -274,7 +274,7 @@ foreach my $scr_name (@test_scripts) {
 	}
     }
     if ( $scr_path eq  '') {
-	push @miss_scripts, "cp /home/unix/sripke/bin/$scr_name ./\n";
+#	push @miss_scripts, "cp /home/unix/sripke/bin/$scr_name ./\n";
 	print "!!Error!! : No $scr_name command available\n" ;
     }
  
@@ -312,7 +312,7 @@ foreach my $scr_name (@test_scripts) {
     }
     unless ( $scr_path ) {
 	$err_scr = 1;
-	print FILE1 "cp /home/unix/sripke/bin/$scr_name ./\n";
+#	print FILE1 "cp /home/unix/sripke/bin/$scr_name ./\n";
 	print "!!Error!! : No $scr_name command available\n" ;
     }
  

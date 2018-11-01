@@ -19,24 +19,11 @@ srand(0);
 # read config file
 #############################
 
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
 
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    next unless (@cells >= 2);
-    $conf{$cells[0]} = $cells[1];
-}
-close FILE;
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
 
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 my $qloc = &trans("queue");
 my $hmloc = &trans("hmloc");
@@ -56,7 +43,7 @@ my $command_line = "$progname @ARGV";
 
 my $rootdir = "";
 #my $info_txt = "";
-my $homedir = $ENV{"HOME"};
+#my $homedir = $ENV{"HOME"};
 
 my $walltime = 4;
 

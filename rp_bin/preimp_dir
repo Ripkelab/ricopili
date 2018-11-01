@@ -33,7 +33,7 @@ my $job_bn_th = 1000;
 # read config file
 #############################
 
-my $homedir = &trans("home");
+#my $homedir = &trans("home");
 my $qloc = &trans("queue");
 my $init = &trans("init");
 my $email = &trans("email");

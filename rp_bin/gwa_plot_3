@@ -19,18 +19,18 @@ use Ricopili::Utils qw(trans);
 
 my $rloc = &trans("rloc");
 my $sloc = &trans("sloc");
-my $home = &trans("home");
+#my $home = &trans("home");
 
 ########################
 ## read study names
 
 my %stuna ;
-print "study.names not found in homedir\n" unless open FILE, "< $home/study.names";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $stuna{$cells[0]} = $cells[1];
-}
-close FILE;
+#print "study.names not found in homedir\n" unless open FILE, "< $home/study.names";
+#while (my $line = <FILE>){
+#    my @cells = split /\s+/, $line;
+#    $stuna{$cells[0]} = $cells[1];
+#}
+#close FILE;
 
 ########################
 

@@ -24,19 +24,45 @@ my $command_line = "$progname @ARGV";
 #############################
 
 my $qloc = &trans("queue");
-my $batch_walltime = &trans("batch_walltime");
-my $batch_maxpar = &trans("batch_max_parallel_jobs_per_one_array");
-my $batch_taskid = &trans("batch_array_task_id");
-my $batch_name = &trans("batch_name");
-my $batch_bin = &trans("batch_jobcommand");
-my $batch_jobfile = &trans("batch_jobfile");
-my $batch_stdout = &trans("batch_stdout");
-my $batch_stderr = &trans("batch_stderr");
-my $batch_array = &trans("batch_array");
-my $batch_mem = &trans("batch_memory_request");
-my $batch_other = &trans("batch_other_job_flags");
-my $batch_depend = &trans("batch_job_dependency");
-my $batch_jid = &trans("batch_job_output_jid");
+
+
+my $batch_walltime;
+my $batch_maxpar;
+my $batch_taskid;
+my $batch_name;
+my $batch_bin;
+my $batch_jobfile;
+my $batch_stdout;
+my $batch_stderr;
+my $batch_array;
+my $batch_mem;
+my $batch_other = "NONE";
+my $batch_depend;
+my $batch_jid;
+my $batch_ncores_per_node = "NA";
+my $batch_mem_per_node = "NA";
+
+if ($qloc eq "custom") {
+    $batch_walltime = &trans("batch_walltime");
+    $batch_maxpar = &trans("batch_max_parallel_jobs_per_one_array");
+    $batch_taskid = &trans("batch_array_task_id");
+    $batch_name = &trans("batch_name");
+    $batch_bin = &trans("batch_jobcommand");
+    $batch_jobfile = &trans("batch_jobfile");
+    $batch_stdout = &trans("batch_stdout");
+    $batch_stderr = &trans("batch_stderr");
+    $batch_array = &trans("batch_array");
+    $batch_mem = &trans("batch_memory_request");
+    $batch_other = &trans("batch_other_job_flags");
+    $batch_depend = &trans("batch_job_dependency");
+    $batch_jid = &trans("batch_job_output_jid");
+    $batch_ncores_per_node = &trans("batch_ncores_per_node");
+    $batch_mem_per_node = &trans("batch_mem_per_node");
+}
+
+
+
+
 
 my $qsub =0;
 my $qsub_computerome =0;
@@ -1045,7 +1071,7 @@ if ($job){
 
 
 ########################################################
-### CUSTOM (DIDNT CHANGE ANYTHING YET OF OCT 6th)
+### CUSTOM 
 #########################################################
 
     if ($custom) {
@@ -1098,9 +1124,14 @@ if ($job){
 	$batch_walltime =~ s/:SS/:00/;
 
 	### batch memory request
-	$batch_mem =~ s/_SPACE_/ /g;
-	$batch_mem =~ s/XXX/$mem_str/g;
-
+	if ($batch_mem eq "NONE") {
+	    $batch_mem = "";
+	}
+	else {
+	    $batch_mem =~ s/_SPACE_/ /g;
+	    $batch_mem =~ s/XXX/$mem_str/g;
+	}
+	
 	### name of job
 	$batch_name =~ s/_SPACE_/ /g;
 	$batch_name =~ s/XXX/$NOJ/g;
@@ -1119,7 +1150,7 @@ if ($job){
 	$batch_other =~ s/_SPACE_/ /g;
 	$batch_other =~ s/NONE/ /g;
 
-	
+
 	if ($jobarray ne "") {
 
 	    print "starting job_array, $jobname\n";
@@ -1144,17 +1175,66 @@ if ($job){
 #	    print "bacth_taskid: $batch_taskid\n";
 	    
 #	    sleep (10);
-	    ## this small script take job number X from the array collection file
-	    die "$! ($jobname)" unless open JOB, "> $jobname";
-	    print JOB "cd $rootdir\n";
-	    print JOB "my.start_job -n ".$batch_taskid." --jobfile $jobarray\n";
-	    close JOB;
 
 
-	    ### batch array
-	    $batch_array =~ s/_SPACE_/ /g;
-	    $batch_array =~ s/XXX/$job_bn_th/g;
 
+	    
+	    ####################################
+	    ### if full node access (like LISA)
+	    ####################################
+	    
+	    my $parn_txt = "";  ## stays empty if not full node access is switched
+
+	    if ($batch_ncores_per_node ne "NA") {
+		#### first test if settings make sense
+		unless ($batch_ncores_per_node * 1 == $batch_ncores_per_node) {
+		    print "Error: batch_ncores_per_node in ricopili.conf must be an integer\n";
+		    die;
+		}
+		unless ($batch_mem_per_node * 1 == $batch_mem_per_node) {
+		    print "Error: batch_mem_per_node in ricopili.conf must be an integer\n";
+		    die;
+		}
+
+		### set the number per node down if mem does not suffice
+		my $batch_ncores_per_node_max = sprintf "%d", $batch_mem_per_node / $mem_str;
+		if ($batch_ncores_per_node_max < $batch_ncores_per_node) {
+		    $batch_ncores_per_node = $batch_ncores_per_node_max;
+		}
+		
+		## very complicated to get the number of nodes to request (ceiling of the job-N)
+		my $numnode = ($job_bn_th-0.000001)/$cores;
+		$numnode=sprintf "%d",$numnode;
+		$numnode++;
+
+		## set as maximim of 1000 nodes
+		if ($numnode > 1000){
+		    $numnode = 1000;
+		}
+
+		## gets into the starting script
+		$parn_txt = "--parn $cores";
+
+		### batch array requesting number of nodes and not jobs
+		$batch_array =~ s/_SPACE_/ /g;
+		$batch_array =~ s/XXX/$numnode/g;  ## this is different than the others
+
+		## maxpar needs to be adjusted
+		$maxpar = sprintf "%d", $maxpar/$batch_ncores_per_node
+
+
+
+		
+	    }
+	    else {
+		### batch array
+		$batch_array =~ s/_SPACE_/ /g;
+		$batch_array =~ s/XXX/$job_bn_th/g;
+	    }
+
+
+	    
+	    
 	    ## slurm format for max parallel jobs
 	    if ($batch_array =~ /YYY/) {
 		if ($maxpar > 0) {
@@ -1164,33 +1244,51 @@ if ($job){
 		    $batch_array =~ s/YYY/50000/;
 		}
 	    }
-
+	    
 	    ## jobname in the array spec
 	    if ($batch_array =~ /JOBNAME/) {
 		$batch_array =~ s/JOBNAME/$NOJ/;
 	    }	    
-
+	    
 	    ### max parallel jobs in array
-
+	    
 	    $batch_maxpar =~ s/_SPACE_/ /g;
-	    $batch_maxpar =~ s/YYY/$maxpar/g;
-
 	    unless ($batch_maxpar =~ "YYY") {
 		$batch_maxpar = "";
+	    }
+	    else {
+		$batch_maxpar =~ s/YYY/$maxpar/g;
 	    }
 
 
 
+
+	    
+	    ## this small script take job number X from the array collection file
+	    ## $parn_txt is empty if not full node access is switched on
+
+	    die "$! ($jobname)" unless open JOB, "> $jobname";
+	    print JOB '#!/bin/sh'."\n";
+	    print JOB "cd $rootdir\n";
+	    print JOB "my.start_job $parn_txt -n ".$batch_taskid." --jobfile $jobarray\n";
+	    close JOB;
+
+
+	    
+
 #	    print "batch_other: $batch_other\n";
 #	    sleep (10);
 	    
-	    my $batch_cmd = "$batch_bin $batch_other $batch_walltime $batch_maxpar $batch_array $batch_stdout $batch_stderr $batch_name $batch_jobfile";
+	    my $batch_cmd = "$batch_bin $batch_other $batch_mem $batch_walltime $batch_maxpar $batch_array $batch_stdout $batch_stderr $batch_name $batch_jobfile";
 
+	    
 	    my $batch_sys = "$batch_cmd > $jobname.id";
 	    my $batch_log = "echo $batch_cmd > $jobname.log";
 
-	    print "$batch_sys\n";
+#	    print "$batch_sys\n";
 #	    sleep(10);
+
+
 	    
 	    &mysystem ($batch_log);
 	    &mysystem ($batch_sys);
@@ -1247,6 +1345,7 @@ if ($job){
 	    
 	    $jobname="j.$NOJ";
 	    die "$! ($jobname)" unless open JOB, "> $jobname";
+	    print JOB '#!/bin/sh'."\n";
 	    print JOB "cd $rootdir\n";
 	    print JOB "$bp\n";
 	    close JOB;
@@ -1255,7 +1354,7 @@ if ($job){
 	    my $batch_cmd = "$batch_bin $batch_other $batch_mem $batch_walltime $batch_depend $batch_stdout $batch_stderr $batch_name  $jobname";
 
 	    my $batch_sys = "$batch_cmd > $jobname.id";
-	    my $batch_log = "echo batch_cmd > $jobname.log";
+	    my $batch_log = "echo $batch_cmd > $jobname.log";
 
 	    &mysystem ($batch_log);
 	    &mysystem ($batch_sys);

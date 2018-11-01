@@ -371,12 +371,15 @@ my %col = ();
 
 
 
+my $neff_max = 0;
+
 foreach my $dfile (@ARGV) {
 
     my $df = gzopen("$dfile", "rb")  or die "Cannot open $dfile: $gzerrno\n" ;
     $df->gzreadline(my $line);
     my @cells = @{&split_line_ref(\$line)};
 
+    my $neff_max_per_cohort = 0;
 
 #    print "read $dfile\n";
 
@@ -711,7 +714,9 @@ foreach my $dfile (@ARGV) {
 
 
 
-	
+	if ($neff_loc > $neff_max_per_cohort) {
+	    $neff_max_per_cohort = $neff_loc;
+	}
 	
 	$nca{$cells[$col{"SNP"}]} += $nca_loc;
 	$nco{$cells[$col{"SNP"}]} += $nco_loc;
@@ -736,13 +741,15 @@ foreach my $dfile (@ARGV) {
 
     $df -> gzclose();
     $fcount++;
+    $neff_max += $neff_max_per_cohort;
 }
 
 print "$nca\n";
 print "$nco\n";
 print "$metal_script_name\n";
-#print "debug\n";
-#sleep(10);
+
+print "neff_max: $neff_max\n";
+#sleep(3);
 
 
 
@@ -991,10 +998,12 @@ print DANER "\n";
 
 
 
-my $neff_max_half = 0;
-if ($nca>0 || $nco > 0){
-    $neff_max_half = (4*$nca*$nco/($nca+$nco))/4;;
-}
+my $neff_max_half = $neff_max/2;
+#if ($nca>0 || $nco > 0){
+#    $neff_max_half = (4*$nca*$nco/($nca+$nco))/4;;
+#}
+print "neff_max_half: $neff_max_half\n";
+#sleep(3);
 
 
 my $neff_ex_n =0;
@@ -1109,7 +1118,9 @@ while (<META>){
     unless ($nofilter) {
 	if ($neff_str < $neff_max_half) {
 	    if ($neff_ex_n < 10){
-		print "Warning: exclude $snp_name because of low Neff\n";
+		print "Warning: exclude $snp_name because of low Neff";
+		print "\t$neff_str\n";
+#		sleep (3);
 	    }
 	    if ($neff_ex_n == 10){
 		print "more exclusions not printing\n";

@@ -6,10 +6,18 @@ my $progname = $0;
 $progname =~ s!^.*/!!;
 my $nn = "notag";
 
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
 
 my $command_line = "$progname @ARGV";
 
-my $past_file = $ENV{HOME}."/idtager_info";
+
+my $loloc = &trans("loloc");
+
+
+my $past_file = "$loloc/idtager_info";
 my $pwd_loc = $ENV{PWD};
 
 die $! unless open FILE, ">> $past_file";

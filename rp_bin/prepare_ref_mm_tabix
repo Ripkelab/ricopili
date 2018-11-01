@@ -43,26 +43,14 @@ EOF
 }
 
 # Reading the config file
+#############################
+# load utility functions
+#############################
 
-my $conf_file = $ENV{HOME}."/ricopili.conf";
-my %conf = ();
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
 
-die $!."($conf_file)" unless open FILE, "< $conf_file";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    if (@cells > 1) {
-        $conf{$cells[0]} = $cells[1];
-    }
-}
-close FILE;
-
-sub trans {
-    my ($expr)=@_;
-    unless (exists $conf{$expr}) {
-        die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
-}
 
 foreach (@ARGV) {
     /.gz$/ and -f or die "Argument $_ is not a .gz file; aborting";

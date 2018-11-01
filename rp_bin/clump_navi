@@ -47,7 +47,7 @@ my $command_line = "$progname @ARGV";
 
 my $rootdir = "";
 my $info_txt = "";
-my $homedir = $ENV{"HOME"};
+
 
 my $out ="";
 my $pfile ="";
@@ -205,29 +205,6 @@ sub a2filenew_app {
 }
 
 
-#####################################
-# subroutine to re-invoke this script
-#####################################
-
-sub reinvo_b {
-    my ($message, $wt_file)=@_;
-    my $now = localtime time;
-    my $old_cmd = `tail -2 $homedir/clumper_info | head -1`;
-
-    my $message_part = $info_txt."\t$message";
-    $message = $info_txt."\t$message\t$now";
-
-    &a2filenew_app("$homedir/clumper_info",$message);
-    die "2 times already" if ($old_cmd =~ /$message_part/);
-    die "done" if ($message eq "everything-is-fine");
-    chdir "$rootdir" or die "something strange";
-    if ($qloc eq "bsub") {
-	$wt_file =~ s/.*blueprint_joblist_file-//;;
-    }
-    &mysystem ("blueprint -b \"$command_line\" --wa 1 --di -j --fwt $wt_file --na _clumper_$out");
-    exit;
-
-}
 
 
 #####################################

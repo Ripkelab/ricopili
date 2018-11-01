@@ -60,7 +60,7 @@ my $command_line = "$progname @ARGV";
 
 my $rootdir = "";
 my $info_txt = "";
-my $homedir = $ENV{"HOME"};
+
 
 
 
@@ -341,36 +341,6 @@ die if $err_scr == 1;
 
 
 #####################################
-# subroutine to re-invoke this script
-#####################################
-
-#sub reinvo_b {
-#    my ($message, $wt_file)=@_;
-#    my $now = localtime time;
-#    my $old_cmd = `tail -2 $homedir/clumper_info | head -1`;
-
-#    my $message_part = $info_txt."\t$message";
-#    $message = $info_txt."\t$message\t$now";
-
-#    &a2filenew_app("$homedir/clumper_info",$message);
-#    die "2 times already" if ($old_cmd =~ /$message_part/);
-#    die "done" if ($message eq "everything-is-fine");
-#    chdir "$rootdir" or die "something strange";
-#    if ($qloc eq "bsub") {#
-#	$wt_file =~ s/.*blueprint_joblist_file-//;;
-#    }
-#    &mysystem ("blueprint -b \"$command_line\" --wa 1 --di -j --fwt $wt_file --na _clumper_$outname");
-#    exit;
-
-#}
-
-
-
-
-
-
-
-#####################################
 # send jobs to cluster and also send navi again
 #####################################
 
@@ -382,7 +352,7 @@ my @sjaarray;
 my $sjamem = 0;
 my $sjatime = -1;
 my $sjamaxjobs = 30000;
-#my $sjainfofile = "$homedir/impute_dir_info";
+
 my $sjainfofile = "$loloc/clumper_info";
 unless (-e $sjainfofile) {
     print "log-file ($sjainfofile) is not existing\n";

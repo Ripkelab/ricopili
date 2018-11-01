@@ -15,8 +15,15 @@ use Ricopili::Utils qw(trans);
 # read config file
 #############################
 
-my $ldsc = &trans("ldloc");
-my $ldsc_sys = &trans("starting_ldsc");
+my $ldsc_sys = &trans("ldsc_start");
+$ldsc_sys =~ s/_SPACE_/ /g;
+
+#print "$ldsc_sys\n";
+#sleep (5);
+
+my $ldsc_ref = &trans("ldsc_ref");
+#my $ldsc_sys = &trans("starting_ldsc");
+
 
 my $pop_prev = 0.01;
 use Getopt::Long;
@@ -47,7 +54,7 @@ my $danerfile = $ARGV[0];
 
 if ($danerfile eq ""){
     print "please give danerfile\n";
-    exit;
+    die;
 }
 
 
@@ -81,24 +88,20 @@ sub mysystem(){
 # BEGIN
 ##############################
 
-my $ldsc_sys = "source /broad/software/scripts/useuse; use .anaconda-2.1.0-no-mkl; python $ldsc/";
+#my $ldsc_sys = "source /broad/software/scripts/useuse; use .anaconda-2.1.0-no-mkl; python $ldsc/";
 
-if ($ldsc eq "/home/gwas/ldsc/") {
-    $ldsc_sys = "module load ldsc; ";
+my $munge_cmd = $ldsc_sys."/munge_sumstats.py";
+if ($ldsc_sys =~ / $/ || $ldsc_sys =~ /;$/) {
+    $munge_cmd = $ldsc_sys." munge_sumstats.py";
 }
 
-if ($ldsc eq "/home/people/sripke/rp_external_bins/ldsc/") {
-    $ldsc_sys = "module load tools; module load anaconda;  python $ldsc/";
-}
+#print "$munge_cmd\n";
 
-if ($ldsc eq "/data/user_tools/rp_external_bins/ldsc/") {
-    $ldsc_sys = "module load anaconda/2.2.0 ;  python $ldsc/";
-}
+#print "sdleep for 10\n";
+#sleep(10);
 
 
-
-
-my $sys = "$ldsc_sys"."munge_sumstats.py --sumstats $danerfile  --daner --out $danerfile.ldsc --merge-alleles $ldsc/w_hm3.snplist";
+my $sys = "$munge_cmd --sumstats $danerfile  --daner --out $danerfile.ldsc --merge-alleles $ldsc_ref/w_hm3.snplist";
 
 #exit;
 
@@ -118,8 +121,8 @@ if (1){
     $sc = system ($sys);
     
     if ($sc != 0) {
-	print "Error with munging\n";
-	exit;
+	print "Error with munging: $sys\n";
+	die;
     }
 }
 #exit;
@@ -155,11 +158,14 @@ print "ratio: $sample_prev\n";
 
 #exit;
 
-
+my $ldsc_cmd = $ldsc_sys."/ldsc.py";
+if ($ldsc_sys =~ / $/ || $ldsc_sys =~ /;$/) {
+    $ldsc_cmd = $ldsc_sys." ldsc.py";
+}
 
 ## this is just one, intercept
-$sys = "$ldsc_sys"."ldsc.py --h2 $danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out ldsc.h2.$danerfile.observed";
-#$sys = "$ldsc_sys"."ldsc.py --h2 $danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out h2.$danerfile.nointercept --samp-prev $sample_prev --pop-prev $pop_prev --no-intercept";
+$sys = "$ldsc_cmd --h2 $danerfile.ldsc.sumstats.gz --ref-ld-chr $ldsc_ref/ref/eur_w_ld_chr/ --w-ld-chr $ldsc_ref/ref/eur_w_ld_chr/ --out ldsc.h2.$danerfile.observed";
+
 
 die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
 print OUT "$sys\n";
@@ -169,11 +175,11 @@ $sc = system ($sys);
 
 if ($sc != 0) {
     print "Error with observed h2\n";
-    exit;
+    die;
 }
 
 ## this is just one, intercept
-  $sys = "$ldsc_sys"."ldsc.py --h2 $danerfile.ldsc.sumstats.gz --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out ldsc.h2.$danerfile.liability --samp-prev $sample_prev --pop-prev $pop_prev ";
+  $sys = "$ldsc_cmd --h2 $danerfile.ldsc.sumstats.gz --ref-ld-chr $ldsc_ref/ref/eur_w_ld_chr/ --w-ld-chr $ldsc_ref/ref/eur_w_ld_chr/ --out ldsc.h2.$danerfile.liability --samp-prev $sample_prev --pop-prev $pop_prev ";
 
 die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
 print OUT "$sys\n";
@@ -183,7 +189,7 @@ $sc = system ($sys);
 
 if ($sc != 0) {
     print "Error with liabilty h2\n";
-    exit;
+    die;
 }
 
 
@@ -195,11 +201,16 @@ if ($sc != 0) {
 
 
 
-my $scz_sumstats = "$ldsc/scz52/daner_PGC_SCZ49.sh2_mds10.gz.ldsc.sumstats.gz";
+my $scz_sumstats = "$ldsc_ref/scz52/daner_PGC_SCZ49.sh2_mds10.gz.ldsc.sumstats.gz";
 my $scz_sumstats_loc = "daner_PGC_SCZ49.sh2_mds10.gz.ldsc.sumstats.gz";
 
 unless (-e $scz_sumstats_loc) {
-    system ("ln -s $scz_sumstats .");
+    $sc = system ("ln -s $scz_sumstats .");
+    
+    if ($sc != 0) {
+	print "Error with liabilty h2\n";
+	die;
+    }
 }
 
 my $nca_scz = 33640;
@@ -208,19 +219,19 @@ my $nco_scz = 43456;
 
 
 
-my $bip_sumstats = "$ldsc/bip32/daner_PGC_BIP32b_mds7a.gz.ldsc.sumstats.gz";
-my $bip_sumstats_loc = "daner_PGC_BIP32b_mds7a.gz.ldsc.sumstats.gz";
+#my $bip_sumstats = "$ldsc_ref/bip32/daner_PGC_BIP32b_mds7a.gz.ldsc.sumstats.gz";
+#my $bip_sumstats_loc = "daner_PGC_BIP32b_mds7a.gz.ldsc.sumstats.gz";
 
-unless (-e $bip_sumstats_loc) {
-    system ("ln -s $bip_sumstats .");
-}
+#unless (-e $bip_sumstats_loc) {
+#    system ("ln -s $bip_sumstats .");
+#}
 
-my $nca_bip = 20352;
-my $nco_bip = 31358;
+#my $nca_bip = 20352;
+#my $nco_bip = 31358;
 
 
 
-my $mdd_sumstats = "$ldsc/mdd29/daner_MDD29.0515a_mds6.gz.ldsc.sumstats.gz";
+my $mdd_sumstats = "$ldsc_ref/mdd29/daner_MDD29.0515a_mds6.gz.ldsc.sumstats.gz";
 my $mdd_sumstats_loc = "daner_MDD29.0515a_mds6.gz.ldsc.sumstats.gz";
 
 unless (-e $mdd_sumstats_loc) {
@@ -231,7 +242,10 @@ my $nca_mdd = 16823;
 my $nco_mdd = 25632;
 
     
-$sys = "$ldsc_sys"."ldsc.py --rg $danerfile.ldsc.sumstats.gz,$scz_sumstats_loc,$bip_sumstats_loc,$mdd_sumstats_loc --ref-ld-ch $ldsc/ref/eur_w_ld_chr/ --w-ld-chr $ldsc/ref/eur_w_ld_chr/ --out ldsc.rg.$danerfile.scz52.bip32.mdd29";
+#$sys = "$ldsc_sys"."/ldsc.py --rg $danerfile.ldsc.sumstats.gz,$scz_sumstats_loc,$bip_sumstats_loc,$mdd_sumstats_loc --ref-ld-ch $ldsc_ref/ref/eur_w_ld_chr/ --w-ld-chr $ldsc_ref/ref/eur_w_ld_chr/ --out ldsc.rg.$danerfile.scz52.bip32.mdd29";
+#without bip32
+$sys = "$ldsc_cmd --rg $danerfile.ldsc.sumstats.gz,$scz_sumstats_loc,$mdd_sumstats_loc --ref-ld-chr $ldsc_ref/ref/eur_w_ld_chr/ --w-ld-chr $ldsc_ref/ref/eur_w_ld_chr/ --out ldsc.rg.$danerfile.scz52.mdd29";
+
 
 die $!."(cmd.ldsc.txt)" unless open OUT, ">> cmd.ldsc.txt";
 
@@ -239,9 +253,9 @@ print OUT "\n\n-----------------------\n";
 print OUT "SCZ file: $scz_sumstats\n";
 print OUT "N_cases:    $nca_scz\n";
 print OUT "N_controls: $nco_scz\n";
-print OUT "\nBIP file: $bip_sumstats\n";
-print OUT "N_cases:    $nca_bip\n";
-print OUT "N_controls: $nco_bip\n";
+#print OUT "\nBIP file: $bip_sumstats\n";
+#print OUT "N_cases:    $nca_bip\n";
+#print OUT "N_controls: $nco_bip\n";
 print OUT "\nMDD file: $mdd_sumstats\n";
 print OUT "N_cases:    $nca_mdd\n";
 print OUT "N_controls: $nco_mdd\n";
@@ -255,14 +269,14 @@ $sc = system ($sys);
 
 if ($sc != 0) {
     print "Error with observed rg\n";
-    exit;
+    die;
 }
 
 
-&mysystem ("tar -cvzf ldsc.$danerfile.tar.gz $danerfile.ldsc.log ldsc.h2.$danerfile.observed.log ldsc.h2.$danerfile.liability.log ldsc.rg.$danerfile.scz52.bip32.mdd29.log cmd.ldsc.txt");
+&mysystem ("tar -cvzf ldsc.$danerfile.tar.gz $danerfile.ldsc.log ldsc.h2.$danerfile.observed.log ldsc.h2.$danerfile.liability.log ldsc.rg.$danerfile.scz52.mdd29.log cmd.ldsc.txt");
 
 
-sleep 2;
+#sleep 2;
 if ($sc == 0) {
     &mysystem ("touch $danerfile.ldsc.fini");
 }

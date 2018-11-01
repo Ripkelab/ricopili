@@ -67,7 +67,7 @@ my $cmd_line = "$progname @new_arg";
 
 my $subdir = "dbsnp_subdir";
 
-my $home_dir = "$ENV{HOME}";
+
 my $dbsnp_file = "/psych/genetics_data/ripke/references_from_debakkerscratch/ref_db/sorted_dbsnp_positions_129_b36";## created from this one  /humgen/gsa-hpprojects/GATK/data/dbsnp_129_b36.rod 
 my $dbsnp_file_lisa = "/home/gwas/1KG_reference/sorted_dbsnp_positions_129_b36";           ## including sed 's/\tY\t/\t24\t/' sorted_dbsnp_positions_129_b36 | sed 's/\tX\t/\t23\t/' | sed 's/MT/26/'
 
