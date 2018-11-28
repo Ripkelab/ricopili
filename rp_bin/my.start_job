@@ -22,6 +22,13 @@ GetOptions(
 use File::Basename;
 
 
+if ($jobfile eq ""){
+    print "Error: no -jobfile\n";
+}
+
+if ($num eq ""){
+    print "Error: no -n\n";
+}
 
 if ($help || $num eq "" || $jobfile eq ""){
     print "usage: $progname FILES

@@ -1172,8 +1172,12 @@ if ($job){
 #	    }
 
 	    $batch_taskid =~ s/_DOLLAR_/\$/;
-#	    print "bacth_taskid: $batch_taskid\n";
-	    
+	    $batch_taskid =~ s/ //g;
+	    print "batch_taskid: $batch_taskid\n";
+	    if ($batch_taskid eq "") {
+		print "Error: batch_array_task_id not set, please contact the programmers\n";
+		exit;
+	    }
 #	    sleep (10);
 
 
@@ -1271,8 +1275,10 @@ if ($job){
 	    print JOB '#!/bin/sh'."\n";
 	    print JOB "cd $rootdir\n";
 	    print JOB "my.start_job $parn_txt -n ".$batch_taskid." --jobfile $jobarray\n";
+	    print "this is the job_array sent: my.start_job $parn_txt -n ".$batch_taskid." --jobfile $jobarray\n";
 	    close JOB;
 
+	    
 
 	    
 
@@ -1447,6 +1453,7 @@ if ($job){
 	    die "$! ($jobname)" unless open JOB, "> $jobname";
 	    print JOB "cd $rootdir\n";
 	    ### #SGE_TASK_ID need to be specified from the user
+	    
 	    print JOB "my.start_job -n ".'$SGE_TASK_ID'." --jobfile $jobarray\n";
 	    close JOB;
 

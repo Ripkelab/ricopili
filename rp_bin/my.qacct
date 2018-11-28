@@ -59,7 +59,7 @@ sub split_line_ref {
 sub date2sec {
    my ($date) = @_;
    my ($m,$d,$y,$H,$M,$S,$MS) = $date =~ m{^([0-9]{2})/([0-9]{2})/([0-9]{4})_([0-9]{2}):([0-9]{2}):([0-9]{2}).([0-9]{3})\z}
-   or die;
+   or print "Warning with $date\n";
    my $nday = $y*365+$m*12+$d;
    my $nhour = $nday*24 + $H;
    my $nmins = $nhour*60 + $M;

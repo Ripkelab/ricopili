@@ -11,6 +11,7 @@ srand(0);
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
+use Ricopili::Version;
 
 #############################
 # read config file
@@ -31,6 +32,10 @@ my $loloc = &trans("loloc");
 
 
 
+
+
+$rp_header =~ s/MODULE/clump_nav3   /;
+print "$rp_header\n";
 
 
 
@@ -71,6 +76,7 @@ my $walltime = 4;
 my $job_bn_th = 1000;
 my $popname = "CEU";
 my $sepa = 1;
+
 
 
 use Getopt::Long;
@@ -290,6 +296,11 @@ sub a2filenew {
 ############################################################
 ## testing binaries
 ##############################################################
+
+
+
+
+
 my @test_scripts;
 
 
@@ -540,7 +551,9 @@ sub send_jobarray {
 
 
 
-    my $wt_file = "$sjadir/j.$jobfile.id";
+    my $wt_file = "$sjadir/j.$sjaname.$outname.id";
+
+#    my $wt_file = "$sjadir/j.$jobfile.id";
     chdir "$rootdir" or die "something strange";
     
     if ($serial) {

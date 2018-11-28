@@ -11,6 +11,13 @@ srand(0);
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
+use Ricopili::Version;
+
+
+
+
+$rp_header =~ s/MODULE/rp_test_navi /;
+print "$rp_header\n";
 
 #############################
 # read config file
@@ -134,6 +141,9 @@ my $txt2xls_script = "txt2xls";            ### my.pipeline_tar
 my $ldsc_script = "my.ldsc2";            ### my.pipeline_tar
 
 
+
+
+
 print ".......testing email program....\n";
 
 my $err_scr = 0;
@@ -222,7 +232,7 @@ sub send_jobarray {
 	$fini_message .= "##### CONGRATULATIONS: \n";
 	$fini_message .= "##### testing finished successfully:\n";
 	$fini_message .= "##### $sjainfotxt\n";
-	$fini_message .= "##### have a look at the distributions subdir for output files\n";
+	$fini_message .= "##### have a look at the working directory for output files\n";
 	$fini_message .= "##### have a look at the wiki page for more details\n"; 
 	$fini_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	$fini_message .= "##################################################################\n";

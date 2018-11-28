@@ -170,7 +170,12 @@ pdfinfo='pdfinfo'
 ##  Next a permitted location for temporary files on your system:
 ##
 # tempfileDir='/var/tmp'   ##  /var/tmp is standard on most unix systems
-tempfileDir='/psych/genetics_data/ricopili_tmp'   ##  sripke
+# tempfileDir='/psych/genetics_data/ricopili_tmp'   ##  outdated from sripke
+
+# if TMPDIR is set, use it, else use what mktemp uses, suggestion from robert Karlsson
+tempfileDir="${TMPDIR:-$(dirname -- $(mktemp -u))}"
+
+
 ##
 ##
 ##  Default for the output file location:

@@ -1,0 +1,714 @@
+#!/usr/bin/perl
+use strict;
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $rloc = &trans("rloc");
+
+
+
+
+###########################################
+
+my $r_sys = "$rloc";
+$r_sys =~ s/_SPACE_/ /g;
+
+system("$r_sys RHOME");
+my $status = ($? >> 8);
+if ($status != 0) {
+    print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
+    exit;
+}
+
+
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+my $usage = "
+Usage : $progname [options] Rdata_file1 Rdata_file3 .....
+
+   --help            display this text and exit
+   --grid INT        plot on a grid INT*INT    #### not used right now!!!!!
+   --out STRING      outfile-prefix
+   --publ            fix for publication
+   --noxaxis         no lables on xaxis
+   --fixrange=FLOAT  fix ranges on y-axis
+
+   --minusone        columns minus one (if its not combined, but rather poly.out.txt)
+
+
+version: $version
+
+ plots multiple Rdata files coming danscore_plot coming from dascore_navi
+ created by Stephan Ripke 2010 at MGH, Boston, MA
+";
+
+
+
+#### evaluate options
+use Getopt::Long;
+GetOptions(     
+  "help" => \my $help,
+    "minusone" => \my $minusone,
+    "out=s" => \my $out,
+  "grid=i" => \my $grid,
+  "publ" => \my $publ,
+    "noxaxis" => \my $noxaxis,
+    "fixrange=f" => \my $fixrange,
+);
+
+
+die "$usage" if ($help);
+unless ($out) {
+    print "Error:please provide --out\n";
+    exit;
+}
+
+$out = "mPRS_$out";
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE "$_";
+    }
+    close FILE;
+}
+
+
+##########################################
+# split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+##############################################
+##############################################
+#############  BEGIN
+##############################################
+##############################################
+
+my @Rdata_files = @ARGV;
+
+
+### write first column
+#my @p_th = qw /0.0001 0.001 0.01 0.05 0.1 0.2 0.3 0.4 0.5 1.0/;
+#
+my @p_th = qw /0.00000005 0.000001 0.0001 0.001 0.01 0.05 0.1 0.2 0.5 1.0/;
+if ($publ) {
+
+#    @p_th = qw /0.00000005 0.000001 0.0001 0.05 0.2 0.5/;
+#    @p_th = qw /0.00000005 0.000001 0.0001 0.001 0.01 0.05 1.0/;
+#    @p_th = qw /0.00000005 0.0001 0.01 0.2 1.0/;
+#    @p_th = qw /0.00000005 0.0001 0.05 0.2 0.5/;
+
+
+
+#    @p_th = qw /0.00000005 0.0001 0.05/;
+    @p_th = qw /0.000001 0.0001 0.001 0.01 0.05 0.1 0.2 0.5 1.0/;
+    @p_th = qw /0.0001 0.01 0.05 0.1 0.2 0.5 1.0/;
+    @p_th = qw /0.0001 1.0/;
+
+#    @p_th = qw /0.0001 0.001 0.01 0.05 0.1 0.2 0.5 1.0/;
+#    @p_th = qw /0.001 0.05 0.3/;
+}
+
+# @p_th = qw /0.00000005 0.000001 0.0001 0.001 0.01 0.05 0.1 0.2 0.5 1.0/;
+
+#"h2l_r2n" "se_h2l_r2" "AUC" "OR10decile" "ORL95" "ORH95"
+
+my @r2_lines ;
+my @pv_lines ;
+my @ni_lines ;
+my @nca_lines ;
+my @h2l_lines ;
+my @h2l_lines1 ;
+my @h2l_lines2 ;
+my @AUC_lines ;
+my @or10_lines ;
+push @r2_lines, "head";
+push @pv_lines, "head";
+push @ni_lines, "head";
+push @nca_lines, "head";
+push @h2l_lines, "head";
+push @h2l_lines1, "head";
+push @h2l_lines2, "head";
+push @AUC_lines, "head";
+push @or10_lines, "head";
+
+
+foreach (@p_th) {
+    push @r2_lines, $_;
+    push @pv_lines, $_;
+    push @ni_lines, $_;
+    push @nca_lines, $_;
+    push @h2l_lines, $_;
+    push @h2l_lines1, $_;
+    push @h2l_lines2, $_;
+    push @AUC_lines, $_;
+    push @or10_lines, $_;
+}
+
+
+##### go through all files
+my $fico = 0; ## this is just a counter
+
+## here the columns 
+my $or_col = 11;
+my $coeff_col = 16;
+my $orl_col = 12;
+my $orh_col = 13;
+my $r2_col = 5;
+my $pv_col = 6;
+my $ni_col = 3;
+my $nca_col = 14;
+my $h2l1_col = 8;
+my $h2l2_col = 9;
+my $auc_col = 9;
+
+
+if ($minusone) {
+
+    $or_col--;
+    $coeff_col--;
+    $orl_col--;
+    $orh_col--;
+    $r2_col--;
+    $pv_col--;
+    $ni_col--;
+    $nca_col--;
+    $h2l1_col--;
+    $h2l2_col--;
+    $auc_col--;
+
+}
+
+
+
+foreach my $rf (@Rdata_files) {
+
+    $fico++;
+    my $cc=0;
+    my $rfout = $rf;
+    print "hier: $rfout\n";
+#    $rfout =~ s/.*/./;
+
+
+    $rfout =~ s!.*/!!;
+    $rfout =~ s/.sum_all.Rdata//;
+    $rfout =~ s/.sum_all.combined//;
+    $rfout =~ s/plot.SCZ17_poly_eni.//;
+    $rfout =~ s/score.//;
+    $rfout =~ s/_eur.*//;
+    $rfout =~ s/plot.PGC_MDD27.sh2_mds6_poly_//;
+    $rfout =~ s/plot.PGC_BIP16.sh2_mds10_poly_bip1m_//;
+
+    $rfout =~ s/ADAUMABISC45_0511_poly_scz_male_female.scz_//;
+
+    $rfout =~ s/AUT10_trio_1KG_PGC_AUT_EURO_ALL_1301.poly_//;
+
+
+
+    $rfout =~ s/ADAUMABISC45_0511_poly_scz_female_male.scz_//;
+#    $rfout =~ s/MDD29.0515a_mds6.loo.//;
+    $rfout =~ s/.*.loo.//;
+#    $rfout =~ s/PGC_BIP32b_mds7a.loo.//;
+    $rfout =~ s/plot.PGC_SCZ43_mds9_poly_//;
+    $rfout =~ s/plot.PGC_SCZ49.sh2_mds10_poly_//;
+    $rfout =~ s/plot.PGC_SCZ_ASIAN3.sh2_mds4_poly_/as./;
+    $rfout =~ s/nobutr_butr/trio.nobutr_butr/;
+    $rfout =~ s/nouktr_uktr/trio.nouktr_uktr/;
+    $rfout =~ s/nolemu_lemu/trio.nolemu_lemu/;
+
+    $rfout =~ s/.*_1012_1KG_CD7_poly_//;
+
+
+    $rfout =~ s/plot.IRWT1_1KG_poly_//;
+    $rfout =~ s/noov//;
+    $rfout =~ s/plot.IBD15_0711a_poly_//;
+    $rfout =~ s/.*MDD9_poly_//;
+
+    $rfout =~ s/plot.ADAUMABISC45_0511_poly_//;
+    $rfout =~ s/plot.ADAUMABISC45_0511_SCZ17_poly_//;
+    $rfout =~ s/plot.ADAUMABISC45_0511_BISC_poly_//;
+
+    $rfout =~ s/PGC_SCZ49.sh2_mds10_poly_//;
+    $rfout =~ s/PGC_SCZ_ASIAN3.sh2_mds4_poly_n//;
+    $rfout =~ s/PGC_MDD28_mds4_poly//;
+    $rfout =~ s/MDD29.0515a_mds6_poly_//;
+    $rfout =~ s/.poly.out.txt.combined//;
+    $rfout =~ s/.poly.out.txt//;
+
+
+
+
+    $rfout =~ s/plot.BISC32_poly_//;
+    $rfout =~ s/_0811a$//;
+    $rfout =~ s/hilo_.*$/hilo/;
+
+
+    $rfout =~ s/_hq_xmhc//;
+    $rfout =~ s/_hq//;
+    $rfout =~ s/add/adhd/;
+    $rfout =~ s/aut/asd/;
+#    $rfout =~ s/bip/bpd/;
+    $rfout =~ s/_0812.//;
+#    print "res: $rfout\n";
+#    sleep(4);
+
+
+    $r2_lines[$cc] .= "\t$rfout";
+    $pv_lines[$cc] .= "\t$rfout";
+    $ni_lines[$cc] .= "\t$rfout";
+    $nca_lines[$cc] .= "\t$rfout";
+    $h2l_lines[$cc] .= "\t$rfout";
+    $h2l_lines1[$cc] .= "\t$rfout";
+    $h2l_lines2[$cc] .= "\t$rfout";
+    $AUC_lines[$cc] .= "\t$rfout";
+    $or10_lines[$cc] .= "\t$rfout";
+
+    die $! unless open RD, "< $rf";
+    my $head = <RD>;
+    while (my $line =<RD>){
+
+
+	my @cells = &split_line($line);
+
+	if ($publ){
+	    my $next = 1;
+	    my $pth_loc = $cells[2];
+	    $pth_loc =~ s/\"//g;
+
+	    foreach my $pc (@p_th) {
+		$next = 0 if ($pth_loc == $pc);
+	    }
+	    next if ($next == 1);
+#	    next if ($cells[0] eq "0.0001");
+#	    next if ($cells[0] eq "1.0");
+#	    next if ($cells[0] eq "0.01");
+#	    next if ($cells[0] eq "0.1");
+#	    next if ($cells[0] eq "0.2");
+#	    next if ($cells[0] eq "0.4");
+#	    next if ($cells[0] eq "0.5");
+#	    next if ($cells[0] eq "1.0");
+	}
+	$cc++;
+
+	if ($cells[$coeff_col] < 0.0) {
+	    $r2_lines[$cc] .= sprintf "\t-%.4g",$cells[$r2_col];
+	}
+	else {
+	    $r2_lines[$cc] .= sprintf "\t%.4g",$cells[$r2_col];
+	}
+
+#	$r2_lines[$cc] .= sprintf "\t%.7f",$cells[5];
+	$pv_lines[$cc] .= "\t$cells[$pv_col]";
+	$ni_lines[$cc] .= "\t$cells[$ni_col]";
+
+	$nca_lines[$cc] .= "\t$cells[$nca_col]";
+
+	$h2l_lines[$cc] .= sprintf "\t%.4f(%.4f)",$cells[$h2l1_col],$cells[$h2l2_col];
+	$h2l_lines1[$cc] .= sprintf "\t%.4f",$cells[$h2l1_col];#
+	$h2l_lines2[$cc] .= sprintf "\t%.4f",$cells[$h2l2_col];
+	$AUC_lines[$cc] .= sprintf "\t%.4f",$cells[$auc_col];
+	$or10_lines[$cc] .= sprintf "\t%.4f(%.4f,%.4f)",$cells[$or_col],$cells[$orl_col],$cells[$orh_col];
+
+    }
+    close RD;
+    print "$rfout\n";
+}
+#exit;
+
+my $cc=0;
+$r2_lines[$cc] .= "\n";
+$pv_lines[$cc] .= "\n";
+$ni_lines[$cc] .= "\n";
+$nca_lines[$cc] .= "\n";
+$h2l_lines[$cc] .= "\n";
+$h2l_lines1[$cc] .= "\n";
+$h2l_lines2[$cc] .= "\n";
+$AUC_lines[$cc] .= "\n";
+$or10_lines[$cc] .= "\n";
+foreach (@p_th) {
+    $cc++;
+    $r2_lines[$cc] .= "\n";
+    $pv_lines[$cc] .= "\n";
+    $ni_lines[$cc] .= "\n";
+    $nca_lines[$cc] .= "\n";
+    $h2l_lines[$cc] .= "\n";
+    $h2l_lines1[$cc] .= "\n";
+    $h2l_lines2[$cc] .= "\n";
+    $AUC_lines[$cc] .= "\n";
+    $or10_lines[$cc] .= "\n";
+}
+
+
+&a2file("$out.r2",@r2_lines);
+&a2file("$out.pv",@pv_lines);
+&a2file("$out.ni",@ni_lines);
+&a2file("$out.nca",@nca_lines);
+&a2file("$out.h2l",@h2l_lines);
+&a2file("$out.h2l1",@h2l_lines1);
+&a2file("$out.h2l2",@h2l_lines2);
+&a2file("$out.AUC",@AUC_lines);
+&a2file("$out.or10",@or10_lines);
+
+#exit;
+
+
+my $R_templ='
+
+
+read.delim("R2NAME",header=T)->poly_r2
+read.delim("PVNAME",header=T)->poly_pv
+read.delim("NCANAME",header=T,row.names=1)->poly_nca
+read.delim("R2NAME",header=T,row.names=1)->poly_r2_b
+read.delim("H2LNAME1",header=T,row.names=1)->poly_h2l1
+read.delim("H2LNAME2",header=T,row.names=1)->poly_h2l2
+
+
+mycol = heat.colors(dim(poly_r2)[1]);
+
+
+#poly$logp <- signif(poly[,4],3)
+#poly$logp_nocov <- signif(poly[,5],3)
+
+npth = NPTH ## number of  p-thresholds
+
+
+
+##### the less detailed
+plotmatrix_r2 <- as.matrix(poly_r2[,c(2:FICO)])
+#plotmatrix_nca <- as.matrix(poly_nca[,c(2:FICO)])
+
+#print (plotmatrix_r2)
+#print (poly)
+maxp= max(plotmatrix_r2,na.rm=T)
+minp= min(plotmatrix_r2,na.rm=T)
+minp = min(0,minp)
+# rip <- barplot(plotmatrix_r2,beside=T,legend=F,col=mycol, main = "polygene R2 + P", ylim=c(minp,maxp*1.2),cex.names = .8, las = 1)
+# rip <- barplot(plotmatrix_r2,beside=T,legend=F,col=mycol, main = "polygene R2 + P", ylim=c(minp,maxp*1.2),cex.names = .5, las = 1)
+
+
+##############################
+### for all on one slide
+if (1) {
+
+ pdf ("OUTNAME",8.7,6)
+# rip <- barplot(plotmatrix_r2,beside=T,legend=F,col=mycol, main = "TITLE", ylim=c(minp,maxp*1.2),cex.names = .8, axisnames= F, ylab = "",las = 1)
+ rip <- barplot(plotmatrix_r2,beside=T,legend=F,col=mycol, main = "TITLE", ylim=c(YRANGE),cex.names = .8, axisnames= F, ylab = "",las = 1)
+
+#text(0,0,"R - squared", col="red")
+
+mtext("R - squared", side=2, line=-1, cex.lab=1,las=2, padj =-18)
+
+#mtext("R - squared", side=2, line=-1, cex.lab=1,las=2, padj =-15)
+#axis("R - squared", side=2, line=0, cex.lab=1,las=2, adj =1, col="blue")
+
+# mtext(side = 1, at = colMeans(rip), line = -2, text = row.names(plotmatrix_r2), col = "red")
+ coldiff = (colMeans(rip)[2] - colMeans(rip)[1])/2
+# print (colnames(plotmatrix_r2))
+
+
+  cex.loc = 0.9
+  if (FICO > 20) {
+   cex.loc = 0.5;
+   coldiff = coldiff * 1.5;
+  }
+
+#  if (XAXIS) { 
+#   text(x = colMeans(rip)-coldiff, y= 0.00, offset = 1.5, pos = 1, xpd =T , line = 1, labels = colnames(plotmatrix_r2), cex= cex.loc,srt=45) ### this here is new
+#  }
+
+
+
+
+
+### studynames in the plot or not (july 2018)
+# text(x = colMeans(rip), y= 0.00, offset = 1.5, pos = 1, xpd =T , line = 1, labels = colnames(plotmatrix_r2), cex= .9,srt=45)
+
+# ripx = rip [1:10]
+# ripx_nocov = rip [11:22]
+my.cex = .7
+if (FICO * NPTH > 100) {
+  my.cex =.3 
+}
+
+print (FICO)
+
+
+   for (cc in 2:FICO) {
+    sig = poly_pv[,cc];
+    sigo = poly_pv[,cc];
+#    if (PUBL) {
+#      sig [sigo >= .05] = "n.s."
+#    } else {
+      sig [sigo >= .05] = ""
+#    }
+    sig [sigo < .05] = "  1*"
+    sig [sigo < 0.01] = " 2*"
+    sig [sigo < 0.005] = " 3*"
+    sig [sigo < 0.001] = " 4*"
+    sig [sigo < 1.0e-04] = " 5*"
+    sig [sigo < 1.0e-08] = " 6*"
+    sig [sigo < 1.0e-12] = " 7*"
+    sig [sigo < 1.0e-50] = " 8*"
+    sig [sigo < 1.0e-100] = " 9*"
+
+
+    ccl = (cc - 2)*npth
+#  print (ccl)
+    ripx = rip [(ccl+1):(ccl+npth)]
+#  print (ripx)
+
+#if (PUBL) {
+    text(x=ripx,y=poly_r2[,cc],sig,srt=75,cex=my.cex,adj =c(-.2,0)) 
+#}
+
+
+
+   if (PUBL) {
+     if (XAXIS) {
+       mtext("1* < 0.05, 2* < 0.01, 3* < 0.005, 4* < 0.001, 5* < 1.0e-4, 6* < 1.0e-08,  7* < 1.0e-12, 8* < 1.0e-50, 9* < 1.0e-100",side=1,line =4,cex=.6)
+     } else {
+       mtext("1* < 0.05, 2* < 0.01, 3* < 0.005, 4* < 0.001, 5* < 1.0e-4",side=1,line =1,cex=0.8)
+       mtext("6* < 1.0e-08,  7* < 1.0e-12, 8* < 1.0e-50, 9* < 1.0e-100",side=1,line =2,cex=0.8)
+     }
+   }    else {
+#       mtext("1* < 0.05, 6* < 1.0e-08, 7* < 1.0e-12, 8* < 1.0e-50",side=1,line =4,cex=.6)
+
+
+
+#       mtext("1* < 0.05, 3* < 0.005, 5* < 1.0e-4, 6* < 1.0e-08,  7* < 1.0e-12",side=1,line =4,cex=.6)
+
+#       mtext("5* < 1.0e-04, 6* < 1.0e-08, 7* < 1.0e-12",side=1,line =4,cex=.6)
+#       mtext("1* < 0.05, 2* < 0.01, 3* < 0.005",side=1,line =4,cex=.6)
+   }
+#  text(x=ripx,y=poly_r2[,cc],paste ("p < ",poly_pv[,cc],sep=""),srt=75,cex=.3,adj =c(-.2,0))
+#  print (cc)
+
+   }
+
+if (PUBL) {
+  legend("top",legend=poly_r2[,1], fill = mycol,ncol=length(poly_r2[,1]),cex =.6)
+}
+
+
+
+#######################################################################
+## here the plot for one p-value threshold
+
+xl = as.numeric(poly_nca["PTHRESH",]); 
+yl = as.numeric(poly_r2_b["PTHRESH",]);
+ylh1 = as.numeric(poly_h2l1["PTHRESH",]);
+ylh2 = as.numeric(poly_h2l2["PTHRESH",]);
+print (xl);
+print (yl);
+print (poly_nca);
+print (poly_r2_b);
+### r2
+plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = PTHRESH"); 
+text(xl,yl,labels= colnames(poly_r2_b),cex=0.4,pos=3)
+
+
+### 2nd value
+xl = as.numeric(poly_nca["P2THRESH",]); 
+yl = as.numeric(poly_r2_b["P2THRESH",]);
+ylh1 = as.numeric(poly_h2l1["P2THRESH",]);
+ylh2 = as.numeric(poly_h2l2["P2THRESH",]);
+plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = P2THRESH"); 
+text(xl,yl,labels= colnames(poly_r2_b),cex=0.4,pos=3)
+
+### 3nd value
+xl = as.numeric(poly_nca["P3THRESH",]); 
+yl = as.numeric(poly_r2_b["P3THRESH",]);
+ylh1 = as.numeric(poly_h2l1["P3THRESH",]);
+ylh2 = as.numeric(poly_h2l2["P3THRESH",]);
+plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = P3THRESH"); 
+text(xl,yl,labels= colnames(poly_r2_b),cex=0.4,pos=3)
+
+
+### 4th value
+xl = as.numeric(poly_nca["P4THRESH",]); 
+yl = as.numeric(poly_r2_b["P4THRESH",]);
+ylh1 = as.numeric(poly_h2l1["P4THRESH",]);
+ylh2 = as.numeric(poly_h2l2["P4THRESH",]);
+plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = P4THRESH"); 
+text(xl,yl,labels= colnames(poly_r2_b),cex=0.4,pos=3)
+
+
+
+### h2l
+cih = ylh1 + 2* ylh2
+cil = ylh1 - 2* ylh2
+maxyl = max(cih)
+minyl = min(cil)
+#plot(xl,ylh1,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. H2L on p = PTHRESH"); 
+
+#text(xl,ylh1,labels= colnames(poly_r2_b),cex=0.4,pos=3)
+
+ll = length(ylh1)
+
+plot(1:ll,type = "b",ylh1,cex=.6,col="red",xlab="index",ylab="H2L", main = "H2L on p = PTHRESH",ylim =c(minyl,maxyl)); 
+points(1:ll,type = "b",cih,cex=.6,col="black"); 
+points(1:ll,type = "b",cil,cex=.6,col="black"); 
+
+
+
+
+  dev.off()
+
+} else {
+
+
+######################################################
+## here a grid
+#  par(mfrow=c(3,3))
+
+ for (ii in 2:FICO) {
+   outname = colnames(plotmatrix)[ii-1]
+   print (outname)
+   pdf (paste(outname,"_OUTNAME",sep=""),8.7,6)  
+   pm_loc = plotmatrix [,ii-1]
+   rip_loc <- barplot(pm_loc,beside=T,legend=F,col=mycol, main = "polygene R2 + P", ylim=c(minp,maxp*1.2),cex.names = .5, axisnames= F,las = 1)
+   dev.off();
+
+
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+';
+
+$fico++;
+unless ($fixrange) {
+    $R_templ =~ s/YRANGE/minp,maxp*1.2/g;
+}
+else {
+    $R_templ =~ s/YRANGE/-$fixrange,$fixrange/g;
+}
+$R_templ =~ s/PTHRESH/0.001/g;
+$R_templ =~ s/P2THRESH/0.05/g;
+$R_templ =~ s/P3THRESH/0.2/g;
+$R_templ =~ s/P4THRESH/0.5/g;
+$R_templ =~ s/R2NAME/$out.r2/g;
+$R_templ =~ s/H2LNAME1/$out.h2l1/g;
+$R_templ =~ s/H2LNAME2/$out.h2l2/g;
+$R_templ =~ s/NCANAME/$out.nca/;
+$R_templ =~ s/PVNAME/$out.pv/;
+$R_templ =~ s/FICO/$fico/g;
+my $npth = @p_th;
+$R_templ =~ s/NPTH/$npth/g;
+if ($noxaxis){
+    $R_templ =~ s/XAXIS/0/g;
+}
+else {
+    $R_templ =~ s/XAXIS/1/g;
+}
+
+if ($publ) {
+    $R_templ =~ s/TITLE//g;
+    $R_templ =~ s/PUBL/0/g;
+}
+else {
+    $R_templ =~ s/TITLE/polygene R2 + P/g;
+    $R_templ =~ s/PUBL/1/g;
+}
+$R_templ =~ s/OUTNAME/$out.pdf/g;
+#$R_templ =~ s/XLAB/$xlab[$ccol]/g;
+    
+    
+&a2file ("$out.R_poly.in", $R_templ);
+&mysystem("$r_sys < $out.R_poly.in --vanilla ");
+#&mysystem("source /broad/software/scripts/useuse; use R-2.14; R< R_poly.in --vanilla ");
+
+
+#&mysystem("table.sh $out.pv ");
+&mysystem("txt2xls --txt $out.pv --xls $out.pv.xls");
+#&mysystem("table.sh $out.r2 ");
+&mysystem("txt2xls --txt $out.r2 --xls $out.r2.xls");
+&mysystem("txt2xls --txt $out.ni --xls $out.ni.xls");
+&mysystem("txt2xls --txt $out.nca --xls $out.nca.xls");
+&mysystem("txt2xls --txt $out.h2l --xls $out.h2l.xls");
+&mysystem("txt2xls --txt $out.AUC --xls $out.AUC.xls");
+&mysystem("txt2xls --txt $out.or10 --xls $out.or10.xls");
+
+&mysystem("tar -cvzf $out.xls.tar.gz $out.pv.xls $out.r2.xls $out.ni.xls $out.nca.xls $out.h2l.xls $out.AUC.xls $out.or10.xls");
+&mysystem("rm $out.pv.xls $out.r2.xls $out.ni.xls $out.nca.xls $out.h2l.xls $out.AUC.xls $out.or10.xls");
+&mysystem("rm $out.pv $out.r2 $out.ni $out.nca $out.h2l $out.AUC $out.or10 $out.h2l1 $out.h2l2");
+
+
+
+#&mysystem ("pdfjoin --rotateoversize false --outfile comb.$out.pdf $out.pdf $out.pv.pdf $out.r2.pdf");
+#&mysystem ("cp $out.pdf");
+
+
+
+#my $scp = `ls $out.pdf | c`;
+print "pdf: $out.pdf\n";
+print "xls: $out.pv.xls\n";
+print "xls: $out.r2.xls\n";
+print "xls: $out.ni.xls\n";
+print "xls: $out.nca.xls\n";
+print "xls: $out.h2l.xls\n";
+print "xls: $out.AUC.xls\n";
+print "xls: $out.or10.xls\n";
+#print "$scp\n";
+
+exit;

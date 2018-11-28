@@ -46,6 +46,8 @@ Usage : $progname [options] --help
  --help                print this text and exits
  --customfile STRING   different customfile than default $rp_custom_installation_file
 
+ --rphome             different homedirectory for ricopili.conf (by default it is environement HOME)
+
 
  this script is trying to make the configuration of the ricopili pipeline as convenient as possible.
  you will be able to choose from a variety of preset computer clusters.
@@ -136,7 +138,7 @@ batch_mem_per_node           NA
 
 
 
-
+my $rphome = $ENV{HOME};
 
 
 use Getopt::Long;
@@ -144,6 +146,7 @@ GetOptions(
     
     "help"=> \my $help,
     "customfile=s"=> \$rp_custom_installation_file,
+    "rphome=s"=> \$rphome,
     
     );
 
@@ -263,7 +266,7 @@ $bin_locs{"liftover"} = "http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/l
 
 my $cdir = cwd();
 my $home = $ENV{HOME};
-my $conf_file = $ENV{HOME}."/ricopili.conf";
+my $conf_file = $rphome."/ricopili.conf";
 my $command_line = "$progname @ARGV";
 
 #############################
@@ -719,6 +722,7 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
     }
     if ($clusters{custom}){
         print FILE "\texport rp_perlpackages=$path_to_perlmodules\n";
+	print FILE "\texport RPHOME=$rphome\n";
     }
     close FILE;
 
@@ -728,6 +732,7 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
 	print FILE "set path=($cdir/pdfjam \$path)\n";
 	if ($clusters{broad}){
 	    print FILE "setenv rp_perlpackages $path_to_perlmodules\n";
+	    print FILE "setenv RPHOME $rphome\n";
 	}
 	close FILE;
     }
@@ -900,6 +905,7 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
 	    print "\tPATH=$cdir/pdfjam:\$PATH\n";
 	    $i += 1;
 	    print "\texport rp_perlpackages=$path_to_perlmodules\n";
+	    print "\texport RPHOME=$rphome\n";
 	    $i += 1;
 	}
 
@@ -910,7 +916,7 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
             $i += 1;
             print "\tset path=($cdir/pdfjam \$path)\n";
             $i += 1;
-            print "\tsetenv rp_perlpackages $path_to_perlmodules\n";
+            print "\tsetenv RPHOME $rphome\n";
             $i += 1;
 	}
 	
@@ -1066,6 +1072,16 @@ if ($clusters{custom} == 1){
         exit;
     }
     else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
+
+    unless (exists $ENV{RPHOME}) {
+        print "Run the following commands to add RPHOME as an environmental variable:\n";
+        print "echo \"export RPHOME=$rphome\" >> ~/.bashrc\n";
+        print "export RPHOME=$rphome\n";
+        print "./rp_config\n\n";
+        exit;
+    }
+    else { print "Detected RPHOME as an environmental variable.\n\n";}
+    
 }
 
 
@@ -1317,18 +1333,41 @@ print "\n";
 
 
 #    print "$cdir/pdfjam\n";
-    die $!."($cdir/pdfjam/pdfjam)" unless open FILE, "< $cdir/pdfjam/pdfjam";
-    die $!."($cdir/pdfjam/pdfjam.ow)" unless open OUT, "> $cdir/pdfjam/pdfjam.ow";
+
+#die $!."($cdir/pdfjam/pdfjam)" unless open FILE, "< $cdir/pdfjam/pdfjam";
+#die $!."($cdir/pdfjam/pdfjam.ow)" unless open OUT, "> $cdir/pdfjam/pdfjam.ow";
+#while (my $line = <FILE>){
+#    $line =~ s!/psych/genetics_data/ricopili_tmp!$sloc!;   ################## needs to be changed SRIPKE
+#    print OUT "$line";
+#}
+#close FILE;
+#close OUT;
+#system ("mv $cdir/pdfjam/pdfjam.ow $cdir/pdfjam/pdfjam");
+#system ("chmod a+x $cdir/pdfjam/pdfjam");
+#print "rewrote $cdir/pdfjam/pdfjam with scratchdir\n";
+    
+
+
+#############################
+# rewrite Utils.pm
+#############################
+
+
+#    print "$cdir/pdfjam\n";
+
+if (0) {
+    die $!."($cdir/Ricopili/Utils.pm)" unless open FILE, "< $cdir/Ricopili/Utils.pm";
+    die $!."($cdir/Ricopili/Utils.pm.ow)" unless open OUT, "> $cdir/Ricopili/Utils.pm.ow";
     while (my $line = <FILE>){
-	$line =~ s!/psych/genetics_data/ricopili_tmp!$sloc!;   ################## needs to be changed SRIPKE
+	$line =~ s!RPHOME!$rphome!;   ################## needs to be changed SRIPKE
 	print OUT "$line";
     }
     close FILE;
     close OUT;
-system ("mv $cdir/pdfjam/pdfjam.ow $cdir/pdfjam/pdfjam");
-system ("chmod a+x $cdir/pdfjam/pdfjam");
-    print "rewrote $cdir/pdfjam/pdfjam with scratchdir\n";
-    
+    system ("mv $cdir/Ricopili/Utils.pm.ow $cdir/Ricopili/Utils.pm");
+    system ("chmod a+x $cdir/Ricopili/Utils.pm");
+    print "rewrote RPHOME $cdir/Ricopili/Utils.pm with scratchdir\n";
+}
 
 
 
@@ -1766,17 +1805,64 @@ elsif ($clusters{custom}){
 	"eloc","$rp_dependencies_dir/eigensoft/EIG-6.1.4/bin/",
 	"hmloc","$rp_dependencies_dir/hapmap_ref/",
 	"meloc","$rp_dependencies_dir/metal/",
-	"bcloc","$rp_dependencies_dir/bcftools/bcftools-1.3.1_bin/bin/",
-	"bcrloc","$rp_dependencies_dir/bcftools/bcftools-1.3.1/resources/",
-	"bgziploc","$rp_dependencies_dir/tabix",
+	
+	"bcloc","$rp_dependencies_dir/bcftools/bcftools-1.9_bin/",
+	"bcrloc","$rp_dependencies_dir/bcftools/resources/",
+
+#	"bcloc","$rp_dependencies_dir/bcftools/bcftools-1.3.1_bin/bin/",
+#	"bcrloc","$rp_dependencies_dir/bcftools/bcftools-1.3.1/resources/",
+	
+	"bgziploc","$rp_dependencies_dir/bgzip/",
 	"tabixloc","$rp_dependencies_dir/tabix/",
-	"minimac3loc","$rp_dependencies_dir/tabix/",
+	"minimac3loc","$rp_dependencies_dir/Minimac3/",
 	"ldsc_start","$starting_ldsc",
 	"ldsc_ref","$ldsc_reference",
 
 	"rloc","$starting_R",  ## separate dir
 	"rpac","$R_packages_dir", ## separate dir
 	);
+
+    unless (-d "$rp_dependencies_dir/Minimac3/") {
+	$variables{"minimac3loc"} = "$rp_dependencies_dir/tabix";
+	print "*************************************************************************\n";
+	print "         ($rp_dependencies_dir/tabix)\n";
+	print "Warning, using old directory structure, please update Dependency Download\n";
+	print "                       or use an updated custom-file\n";
+	print "*************************************************************************\n";
+	sleep (3);
+    }
+    unless (-d "$rp_dependencies_dir/bgzip/") {
+	$variables{"bgziploc"} = "$rp_dependencies_dir/tabix";
+	print "*************************************************************************\n";
+	print "         ($rp_dependencies_dir/tabix)\n";
+	print "Warning, using old directory structure, please update Dependency Download\n";
+	print "                       or use an updated custom-file\n";
+	print "*************************************************************************\n";
+	sleep (3);
+    }
+    unless (-d "$rp_dependencies_dir/bcftools/bcftools-1.9_bin/") {
+	$variables{"bcloc"} = "$rp_dependencies_dir/bcftools/bcftools-1.3.1_bin/bin/";
+	print "*************************************************************************\n";
+	print "         ($rp_dependencies_dir/bcftools/bcftools-1.3.1_bin/bin/)\n";
+	print "Warning, using old directory structure, please update Dependency Download\n";
+	print "                       or use an updated custom-file\n";
+	print "*************************************************************************\n";
+	sleep (3);
+    }
+    unless (-d "$rp_dependencies_dir/bcftools/resources/") {
+	$variables{"bcrloc"} = "$rp_dependencies_dir/bcftools/bcftools-1.3.1/resources/";
+	print "*************************************************************************\n";
+	print "         ($rp_dependencies_dir/bcftools/bcftools-1.3.1/resources)\n";
+	print "Warning, using old directory structure, please update Dependency Download\n";
+	print "                       or use an updated custom-file\n";
+	print "*************************************************************************\n";
+	sleep (3);
+    }
+
+    
+    
+
+    
 }
 
 elsif ($clusters{uppmax}){
@@ -1987,7 +2073,7 @@ if ($#fail_path != -1) {
 
 
 &mysystem("rm install_true");    
-#&mysystem("echo \"Configuration for RP was successful.\" | mail -s rp_config  $conf{'email'}");    
+&mysystem("echo \"Configuration for RP was successful.\" | mail -s rp_config  $conf{'email'}");    
 
 
 

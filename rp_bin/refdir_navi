@@ -383,8 +383,9 @@ version: $rp_version
         --sepa INT        use INT number of parallel jobs during serial
 
 
-        --walltimeplus INT  increase walltime by INT hours (important for bigger reference files)
-                                 prep_mm gets five times this amount since minimac is now single threaded 
+        --walltimeplus INT  increase walltime by INT hours (important for bigger reference files), 
+                                 prep_minimac_m3vcf gets ten times this amount since minimac is now single threaded 
+
 
  --out_templ is mandatory
  --outname is mandatory
@@ -1121,7 +1122,7 @@ unless (-e "$sample_root") {
 
     my $answer = lc <>;
     chomp $answer;
-    if ($answer eq "y" || $answer eq "Y"){
+    if ($answer eq "y"){
 
 	print "trying this:\n$sys\n";
 	&mysystem ($sys);
@@ -1129,7 +1130,7 @@ unless (-e "$sample_root") {
 
     }
     else {
-	print "I would suggest this:\n";
+	print "Manually I would suggest this:\n";
 	print "$sys\n";
 	print "exit now\n";
 	exit;
@@ -1604,16 +1605,14 @@ foreach my $chrint ($chr_start..$chr_end){
 	    }
 
 
-	    if ($answer eq "y" || $answer eq "Y"){
-		
+	    if ($answer eq "y"){
 		print "will put this into parallel jobs:\t$sys\n";
 		push @job_vcf_dl, $sys;
-
-		
 	    }
 	    else {
 		$exit = 1;
-		print "I would suggest this:\n";
+		print "Answer: <$answer>\n";
+		print "Manually I would suggest this:\n";
 		print "$sys\n";
 		#			print "exit now\n";
 		#			exit;
@@ -1658,7 +1657,7 @@ foreach my $chrint ($chr_start..$chr_end){
 	    else {
 
 		print "---------------------------------\n";
-		print "$gm_name_loc not exsiting\n";
+		print "$gm_name_loc not existing\n";
 		#		    if (-e $vcf_name_loc) {
 
 		unless ($answer_gm eq "y" || $answer_gm eq "Y"){
@@ -1683,7 +1682,8 @@ foreach my $chrint ($chr_start..$chr_end){
 		}
 		else {
 		    $exit = 1;
-		    print "I would suggest this:\n";
+		    print "Answer: <$answer>\n";
+		    print "Manually I would suggest this:\n";
 		    print "$sys\n";
 		    #			print "exit now\n";
 		    #			exit;
@@ -1880,7 +1880,7 @@ foreach my $chrint ($chr_start..$chr_end){
 	else {
 	    unless (-e $phased_name_count) {
 		my $sys = "wc -l $phased_name.annot.markers $phased_name.mono $phased_name.multi > $bgl_name_count";
-		print "$sys\n";
+#		print "$sys\n";
 		&mysystem ($sys);
 	    }
 	}
@@ -1918,7 +1918,7 @@ foreach my $chrint ($chr_start..$chr_end){
 
 	my $sys = "$filtnorm_translate_script --filtnorm $vcf_name_loc_filtnorm_reform --changes $changes_file";
 	push @job_filtnormtra, $sys;
-	print "$sys\n";
+#	print "$sys\n";
     }
 
 
@@ -2774,7 +2774,7 @@ if ($q16) {
 
     my $q16_bim = "$q16_phased.bim";
     unless (-e $q16_bim) {
-	print "$beagle2plink_script needs famfile\n";
+	print "Error: $beagle2plink_script needs famfile\n";
 	exit;
 	&mysystem ("$beagle2plink_script $q16_phased");
     }
@@ -2866,7 +2866,7 @@ if ($mhc) {
 
     my $mhc_bim = "$mhc_phased.bim";
     unless (-e $mhc_bim) {
-	print "$beagle2plink_script needs famfile\n";
+	print "Error: $beagle2plink_script needs famfile\n";
 	exit;
 	&mysystem ("$beagle2plink_script $mhc_phased");
     }
@@ -2967,7 +2967,7 @@ foreach my $chr ($chr_start..$chr_end){
     unless (-e "$rootdir/$gema_file") {
 	$gema_file = "genetic_map_chr$chr"."_combined_b36.txt";
 	unless (-e "$rootdir/$gema_file") {
-	    print "$gema_file not existing\n";
+	    print "Error: $gema_file not existing\n";
 	    exit;
 	}
     }

@@ -535,6 +535,7 @@ foreach my $scr_name (@test_scripts) {
  
 }
 
+#exit;
 
 
 if (@miss_scripts > 0) {
@@ -1194,7 +1195,8 @@ my $refdir;
 
 
 unless (-e "reference_info") {
-    print "error: no reference_info, please rerun impute_navi\n";
+    print "Error: no reference_info, please rerun impute_navi or copy it over from the original imputation directory\n";
+    print "(the first row points to the reference directory the following rows define the genomic chunks)\n";
     exit;
 }
 else {
@@ -1220,6 +1222,10 @@ if ($refdir =~ /chr23/) {
 
 $refdir =~ s!/home/radon01/sripke/bakker_ripke/hapmap_ref!/psych/genetics_data/ripke/references_outdated/hapmap_ref!;
 
+unless (-d $refdir) {
+    print "Error: Reference Directory ($refdir) does not exist\n";
+    print "please check first row in file reference_info\n";
+}
 
 
 ##########################################
@@ -1242,7 +1248,7 @@ if (-e "$refdir/pop_$popname") {
 	chomp($prekno_file)
 #	$prekno_txt = "--prekno $prekno_file";
     }
-    sleep(3);
+#    sleep(3);
 
 }
 #sleep(10);

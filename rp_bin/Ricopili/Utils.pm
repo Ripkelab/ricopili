@@ -13,7 +13,26 @@ BEGIN {
 # read config file
 #############################
 
-our $conf_file = $ENV{HOME}."/ricopili.conf";
+
+our $conf_file;
+
+if (-e  $ENV{HOME}."/ricopili.conf") {
+    $conf_file = $ENV{HOME}."/ricopili.conf";
+}
+elsif (-e  $ENV{RPHOME}."/ricopili.conf") {
+    $conf_file = $ENV{RPHOME}."/ricopili.conf";
+}
+else {
+    print "Error: ricopili.conf file not found\n";
+    print "       neither in env HOME\n";
+    print "           nor in env RPHOME\n";
+    die;
+}
+
+print "Config_file: $conf_file\n";
+#print "sleep\n";
+#sleep(10);
+
 my %conf = ();
 
 die $!."($conf_file)" unless open FILE, "< $conf_file";
@@ -24,8 +43,13 @@ while (my $line = <FILE>){
 
     # expand '~' for home directory in conf entries
     $cells[1] =~ s/^~/$ENV{HOME}/;
-#    $cells[1] =~ s/\$\{(\w+)\}/$ENV{$1}/g;
-#    $cells[1] =~ s/\$(\w+)/$ENV{$1}/g;
+
+    # expand environment variables defined in the current environment, 
+    # leave currently undefined env vars as they were:
+    $cells[1] =~ s/\$\{(\w+)\}/defined $ENV{$1} ? "$ENV{$1}" : "\$\{$1\}"/eg;
+    $cells[1] =~ s/\$(\w+)/defined $ENV{$1} ? "$ENV{$1}" : "\$$1"/eg;
+
+    
 
     $conf{$cells[0]} = $cells[1];
 }
