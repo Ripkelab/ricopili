@@ -46,7 +46,8 @@ Usage : $progname [options] --help
  --help                print this text and exits
  --customfile STRING   different customfile than default $rp_custom_installation_file
 
- --rphome             different homedirectory for ricopili.conf (by default it is environement HOME)
+ --rphome STRING       different homedirectory for ricopili.conf (by default it is environement HOME)
+ --depdir STRING       replace expression DEPDIR with STRING in the customfile (e.g. dependency_directory tends to get used multiple times)
 
 
  this script is trying to make the configuration of the ricopili pipeline as convenient as possible.
@@ -147,6 +148,7 @@ GetOptions(
     "help"=> \my $help,
     "customfile=s"=> \$rp_custom_installation_file,
     "rphome=s"=> \$rphome,
+    "depdir=s"=> \my $depdir,
     
     );
 
@@ -328,6 +330,12 @@ if ($clusters{custom}){
 	    unless ($line =~ /^\-\-\-/ || $line =~ /^\*\*/) {
 		$line =~ s/###.*//;
 		my @cells = split /\s+/, $line;
+
+		if ($depdir) {
+		    $cells[1]=~ s/DEPDIR/$depdir/g;
+		}
+
+		
 		unless ($cells[0] eq "" || $cells[0] eq "variable") {
 		    $conf{$cells[0]} = $cells[1];
 		    #	    my $line =~ s/^$cells[0]//;

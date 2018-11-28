@@ -1207,7 +1207,7 @@ if ($job){
 		}
 		
 		## very complicated to get the number of nodes to request (ceiling of the job-N)
-		my $numnode = ($job_bn_th-0.000001)/$cores;
+		my $numnode = ($job_bn_th-0.000001)/$batch_ncores_per_node;
 		$numnode=sprintf "%d",$numnode;
 		$numnode++;
 
@@ -1217,7 +1217,7 @@ if ($job){
 		}
 
 		## gets into the starting script
-		$parn_txt = "--parn $cores";
+		$parn_txt = "--parn $batch_ncores_per_node";
 
 		### batch array requesting number of nodes and not jobs
 		$batch_array =~ s/_SPACE_/ /g;
