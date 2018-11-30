@@ -3320,11 +3320,16 @@ chdir ($reportdir);
 #####################################
 ## write orientation file for forest-ploter
 unless (-e "danerdirs") {
+    print "create file danerdirs\n";
     die $! unless open DD, "> danerdirs";
     foreach my $cd (@daner_chunkdirs) {
 	print DD "$cd\n";
+	print "putting $cd into file danerdirs\n";
     }
     close DD;
+}
+else {
+    print "file danerdirs already existing\n";
 }
 #exit;
 

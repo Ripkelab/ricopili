@@ -1143,9 +1143,11 @@ if ($job){
 	### job_outputs
 	$batch_stdout =~ s/_SPACE_/ /g;
 	$batch_stdout =~ s/XXX/$rootdir\/$errname/g;
+	$batch_stdout =~ s/YYY/$NOJ/g;
 	$batch_stderr =~ s/_SPACE_/ /g;
 	$batch_stderr =~ s/XXX/$rootdir\/$errname/g;	    	
-
+	$batch_stderr =~ s/YYY/$NOJ/g;
+	
 	### batch other
 	$batch_other =~ s/_SPACE_/ /g;
 	$batch_other =~ s/NONE/ /g;
@@ -1356,6 +1358,9 @@ if ($job){
 	    print JOB "$bp\n";
 	    close JOB;
 
+	    $batch_stdout =~ s/.%a$//g;
+	    $batch_stderr =~ s/.%a$//g;
+	    
 
 	    my $batch_cmd = "$batch_bin $batch_other $batch_mem $batch_walltime $batch_depend $batch_stdout $batch_stderr $batch_name  $jobname";
 
