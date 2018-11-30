@@ -59,6 +59,11 @@ if ($qloc eq "custom") {
     $batch_ncores_per_node = &trans("batch_ncores_per_node");
     $batch_mem_per_node = &trans("batch_mem_per_node");
 }
+else {
+    print "Error: pipeline only runs in custom mode meanwhile\n";
+    print "       please reinstall\n";
+    exit;
+}
 
 
 

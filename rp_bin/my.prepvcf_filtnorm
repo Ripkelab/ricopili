@@ -104,6 +104,11 @@ if ($chrX) {
 
 my $fasta_file = "$bcrloc/human_g1k_v37.fasta";
 
+unless (-e $fasta_file){
+    print "Error: $fasta_file not existing\n";
+    exit;
+}
+
 my $bcftools2 = $bcloc."bcftools";;
 if ($bcloc =~ / /) {
     $bcftools2 = "bcftools";

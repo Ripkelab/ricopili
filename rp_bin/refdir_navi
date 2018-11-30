@@ -98,6 +98,7 @@ my $hmloc = &trans("hmloc");
 
 my $email = &trans("email");
 my $loloc = &trans("loloc");
+my $bcrloc = &trans("bcrloc");
 
 #######################################
 
@@ -1522,6 +1523,13 @@ if (@backup_arr > 0) {
     exit;	
 }
 
+
+my $fasta_file = "$bcrloc/human_g1k_v37.fasta";
+
+unless (-e $fasta_file){
+    print "Error: $fasta_file not existing\n";
+    exit;
+}
 
 
 

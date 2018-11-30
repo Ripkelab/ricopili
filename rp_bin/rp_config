@@ -277,17 +277,24 @@ my $command_line = "$progname @ARGV";
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"other",0);
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"other",0);
 #my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"other",0);
-my %clusters = ("broad",0,"mssm",0,"genomedk",0,"lisa",0,"computerome",0,"co_ipsych",0,"uppmax",0,"unc_slurm",0,"bih_qsub",0,"custom",0);
-my @cluster_names = ("broad","mssm","genomedk","lisa","computerome","co_ipsych","uppmax","unc_slurm","bih_qsub","custom");
+my %clusters = ("broad_do_not_use",0,"mssm_do_not_use",0,"genomedk_do_not_use",0,"lisa_do_not_use",0,"computerome_do_not_use",0,"co_ipsych_do_not_use",0,"uppmax_do_not_use",0,"unc_slurm_do_not_use",0,"bih_qsub_do_not_use",0,"custom",0);
+my @cluster_names = ("broad_do_not_use","mssm_do_not_use","genomedk_do_not_use","lisa_do_not_use","computerome_do_not_use","co_ipsych_do_not_use","uppmax_do_not_use","unc_slurm_do_not_use","bih_qsub_do_not_use","custom");
+
+
+my $cluster = "custom";
+
+if (0) {
 print "Please enter your cluster environment from the following options:\n";
 print "!!!! since the 1018 versions only custom (10) !!!!!\n";
 my $i = 1;
 foreach (@cluster_names){
-    print "\t($i) $_\n";
+    unless ($_ =~ /do_not_use/) {
+	print "\t($i) $_\n";
+    }
     $i += 1;
 }
 print "\n";
-my $cluster = "other";
+
 while (1) {    
     $cluster = lc <>;
     chomp $cluster;
@@ -307,11 +314,11 @@ while (1) {
 	}
     }
 }
+}
 
-
-print "\nUsing the following cluster: $cluster\n\n";
-
-
+print "\nUsing the following cluster: $cluster\nin combination with $rp_custom_installation_file\n\n";
+sleep (2);
+#exit;
 
 #################################################################################
 ###### CUSTOM configuration file
@@ -649,7 +656,7 @@ if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
                     &mysystem("cp $bashrc $bashrc.copy");
 
 
-                    $i += 1;
+#                    $i += 1;
 
 		    print "\n2) Run this command to remove rp_bin permanantly from the search path.\n";
                     print "\n\tmv $bashrc.minus_rpbin.txt $bashrc\n\n";

@@ -38,7 +38,7 @@ version: $version
       options:
 
         --help           print this message then quit
-        --n INT          line to take as command (like this n100)
+        --n INT          line to take as command (like this 100)
         --jobfile STRING jobfile from which to read command
         --parn INT       number of parallel jobs (then multiplicated with n)
 
