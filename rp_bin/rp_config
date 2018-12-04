@@ -2025,7 +2025,7 @@ print "\n";
 # write pipeline status file to home directory
 #############################
 
-my @log_file = ("$conf{loloc}/preimp_dir_info","$conf{loloc}/impute_dir_info","$conf{loloc}/pcaer_info","$conf{loloc}/idtager_info","$conf{loloc}/repqc2_info","$conf{loloc}/areator_info","$conf{loloc}/merge_caller_info","$conf{loloc}/postimp_navi_info","$conf{loloc}/reference_dir_info","$conf{loloc}/test_info");
+my @log_file = ("$conf{loloc}/preimp_dir_info","$conf{loloc}/impute_dir_info","$conf{loloc}/pcaer_info","$conf{loloc}/idtager_info","$conf{loloc}/repqc2_info","$conf{loloc}/areator_info","$conf{loloc}/merge_caller_info","$conf{loloc}/postimp_navi_info","$conf{loloc}/reference_dir_info","$conf{loloc}/test_info","$conf{loloc}/clumper_info");
 
 foreach (@log_file) {
     unless ( -e $_) {
