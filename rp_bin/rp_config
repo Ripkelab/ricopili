@@ -282,6 +282,7 @@ my @cluster_names = ("broad_do_not_use","mssm_do_not_use","genomedk_do_not_use",
 
 
 my $cluster = "custom";
+$clusters{custom} = 1;
 
 if (0) {
 print "Please enter your cluster environment from the following options:\n";
