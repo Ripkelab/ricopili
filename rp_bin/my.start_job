@@ -23,14 +23,26 @@ use File::Basename;
 
 
 if ($jobfile eq ""){
-    print "Error: no -jobfile\n";
+    print "Error: no entry for flag -jobfile in script $progname\n";
+    exit;
 }
 
 if ($num eq ""){
-    print "Error: no -n\n";
+    print "Error: no entry for flag -n in script $progname\n";
+    exit;
 }
 
-if ($help || $num eq "" || $jobfile eq ""){
+
+$num =~ s/n//;
+$num = $num * 1;
+if ($num == 0) {
+    print "flag --n in script $progname does not make sense\n";
+    print "most likely something is wrong with batch_array_task_id entry in your custom file during installation\n";
+    exit;
+}
+
+
+if ($help){
     print "usage: $progname FILES
 
 version: $version
@@ -52,18 +64,13 @@ version: $version
     exit 2;
 }
 
-$num =~ s/n//;
-$num = $num * 1;
-if ($num == 0) {
-    print "--n doesn't make sense: $num after transformation\n";
-}
-
 
 if ($parn ne "") {
 
     $parn = $parn * 1;
     if ($parn == 0) {
-	print "--parn doesn't make sense: $num after transformation\n";
+	print "flag --parn in script $progname does not make sense\n";
+	exit;
     }
 
     my $first_n = ($num-1) * $parn;
