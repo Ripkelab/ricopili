@@ -512,7 +512,7 @@ while ($igz->gzreadline(my $line)){
 	    $cells[$snp_col] .= "m";
 	}
 	else {
-	    print "Error: multi occurrence of $cells[$snp_col], $snppos_array[$cc], $cc, should not happen for autosomes\n";
+	    print "Error: multi occurrence of $cells[$snp_col], $snppos_array[$cc], row $cc, should not happen for autosomes\n";
 	    exit;
 	}
 #	exit;

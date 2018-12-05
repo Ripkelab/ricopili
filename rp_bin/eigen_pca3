@@ -384,7 +384,7 @@ while (<INFAM>) {
     my @cells2 = &split_line($_);
     my $id_name = $cells2[0];
 
-    print OUT "$cells2[0]\t";
+    print OUT "$id_name\t";
     print OUT "$cells2[1]\t";
     print OUT "$cells2[2]\t";
     print OUT "$cells2[3]\t";
@@ -404,6 +404,12 @@ open OUTBIM, "> $merge_name.ow.bim" or die $!;
 while (<INBIM>) {
     my @cells2 = &split_line($_);
     $cells2[2] = 0;
+
+#    if (length ($cells2[1]) > 15) {
+#	print "$cells2[1]\n";
+#    }
+    $cells2[1]  = substr $cells2[1], 0, 19;
+    
     print OUTBIM "$cells2[0]\t";
     print OUTBIM "$cells2[1]\t";
     print OUTBIM "$cells2[2]\t";
@@ -416,6 +422,8 @@ close OUTBIM;
 
 print "rewrite bim ($merge_name.ow.bim) done\n";
 #exit;
+#sleep(3);
+
 ########################################
 ###   start eigensoft
 #####################################
