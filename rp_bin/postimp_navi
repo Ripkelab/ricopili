@@ -4567,8 +4567,13 @@ if ($gwclump) {
     unless (-e "$daner_all.clumped.xmhc.gz") {
 	
 	unless ($noclumper) {
-	    if (1) {	
-		&mysystem ($bsys);
+	    if (1) {
+
+		
+		my $sys_re = "$blueprint_script -b \"$bsys\" --wa 2 --di -j  --na _cl_$daner_all";
+		&mysystem ($sys_re);
+		
+#		&mysystem ($bsys);
 	    }
 	    else {
 		die $!."(README.clump)" unless open CLU, ">> README.clump";
