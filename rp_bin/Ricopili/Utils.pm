@@ -16,11 +16,11 @@ BEGIN {
 
 our $conf_file;
 
-if (-e  $ENV{HOME}."/ricopili.conf") {
-    $conf_file = $ENV{HOME}."/ricopili.conf";
-}
-elsif (-e  $ENV{RPHOME}."/ricopili.conf") {
+if (-e  $ENV{RPHOME}."/ricopili.conf") {
     $conf_file = $ENV{RPHOME}."/ricopili.conf";
+}
+elsif (-e  $ENV{HOME}."/ricopili.conf") {
+    $conf_file = $ENV{HOME}."/ricopili.conf";
 }
 else {
     print "Error: ricopili.conf file not found\n";
