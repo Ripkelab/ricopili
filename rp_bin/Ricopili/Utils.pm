@@ -46,8 +46,27 @@ while (my $line = <FILE>){
 
     # expand environment variables defined in the current environment, 
     # leave currently undefined env vars as they were:
-    $cells[1] =~ s/\$\{(\w+)\}/defined $ENV{$1} ? "$ENV{$1}" : "\$\{$1\}"/eg;
-    $cells[1] =~ s/\$(\w+)/defined $ENV{$1} ? "$ENV{$1}" : "\$$1"/eg;
+
+
+    my $tmp_env = $cells[1];
+    if ($tmp_env =~ /^ENV{/){
+	$tmp_env =~ s/^ENV{//;
+	$tmp_env =~ s/}$//;
+	if (defined $ENV{$tmp_env}) {
+	    $cells[1]=$ENV{$tmp_env};
+	    print "replacing $tmp_env with $cells[1] in $conf_file\n";
+	}
+	else {
+	    print "environment variable $tmp_env in $conf_file is not defined\n";
+	}
+    }
+    
+#    print "using $cells[1] from $conf_file\n";
+
+
+    # the following got into problems with some cluster environments
+#    $cells[1] =~ s/\$\{(\w+)\}/defined $ENV{$1} ? "$ENV{$1}" : "\$\{$1\}"/eg;
+#    $cells[1] =~ s/\$(\w+)/defined $ENV{$1} ? "$ENV{$1}" : "\$$1"/eg;
 
     
 
