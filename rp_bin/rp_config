@@ -1330,13 +1330,13 @@ else {
     }
 }
 
-unless (-d $sloc) {
-    print "Making scratch directory: $sloc\n\n";
-    &mysystem("mkdir -p $sloc");
-}
-else {
-    print "Scratch directory already exists at $sloc\n";
-}
+#unless (-d $sloc) {
+#    print "Making scratch directory: $sloc\n\n";
+#    &mysystem("mkdir -p $sloc");
+#}
+#else {
+#    print "Scratch directory already exists at $sloc\n";
+#}
 print "\n";
 
 

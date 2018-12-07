@@ -49,9 +49,9 @@ while (my $line = <FILE>){
 
 
     my $tmp_env = $cells[1];
-    if ($tmp_env =~ /^ENV{/){
-	$tmp_env =~ s/^ENV{//;
-	$tmp_env =~ s/}$//;
+    if ($tmp_env =~ /^ENV\{/){
+	$tmp_env =~ s/^ENV\{//;
+	$tmp_env =~ s/\}$//;
 	if (defined $ENV{$tmp_env}) {
 	    $cells[1]=$ENV{$tmp_env};
 	    print "replacing $tmp_env with $cells[1] in $conf_file\n";
