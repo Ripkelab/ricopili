@@ -174,6 +174,7 @@ GetOptions(
     "scsize=i"=> \$scsize,
     "imputepostfix=s"=> \$imp_phased_postfix,
     "help"=> \my $help,
+    "debug"=> \my $debug,
     "noprio"=> \my $noprio,
     "chr=i"=> \my $sichr,
     "begchr=i"=> \my $begchr,
@@ -337,6 +338,7 @@ version: $rp_version
       options:
 
         --help               this help-text
+        --debug              some more detailed output
         --outname STRING     just as identifier
         --sample_root STRING file with identifiers and sex and ancestry, e.g. integrated_call_samples_v3.20130502.ALL.panel
         --out_templ STRING   outname as temlate, e.g. ALL.august.chrXXX.recal.vrcut.EUR.beagle.vcf.imp
@@ -386,6 +388,7 @@ version: $rp_version
 
         --walltimeplus INT  increase walltime by INT hours (important for bigger reference files), 
                                  prep_minimac_m3vcf gets ten times this amount since minimac is now single threaded 
+
 
 
  --out_templ is mandatory
@@ -863,7 +866,7 @@ if (@refgene_files == 0) {
     print "********************************\n";
 #    print "cd $subchr_dir\n";
 
-    print "wget http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz\n";
+    print "wget -nv http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz\n";
     print "zcat refGene.txt.gz > refGene.txt\n";
     print "$preprefgene_script refGene.txt\n";
     print "mv refGene.txt.gz sich.refGene.txt.gz\n";
@@ -886,7 +889,7 @@ if (@refgene_files == 0) {
 
 	print "downloading most recent file...\n";
 #	chdir $subchr_dir;
-	my $sys = "wget http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz > /dev/null";
+	my $sys = "wget -nv http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz ";
 	&mysystem ($sys);
 	
 	print "unzip...\n";
@@ -966,7 +969,7 @@ if (@cat_files == 0) {
     print "********************************\n";
 #    print "cd $subchr_dir\n";
 
-    print "wget http://www.ebi.ac.uk/gwas/api/search/downloads/full\n";
+    print "wget -nv http://www.ebi.ac.uk/gwas/api/search/downloads/full\n";
     print 'tr " " "_" < full > gwascatalog.txt.ow'."\n";
     print 'cat gwascatalog.txt.ow | cut -f2,8,12,13,21,22,28 > gwascatalog.txt.ow.short'."\n";
     print 'awk \'$7<5.0e-08{if (length($2)> 25 ) {$2 = substr($2,1,15)"..."}; print $6,$3,$4,$4,$7,$2"("$1")"}\' gwascatalog.txt.ow.short | awk \'NF > 5\' > gwascatalog.txt.ow.short.ow'."\n";
@@ -999,7 +1002,7 @@ if (@cat_files == 0) {
 
 	print "downloading most recent file...\n";
 #	chdir $subchr_dir;
-	my $sys = "wget http://www.ebi.ac.uk/gwas/api/search/downloads/full > /dev/null";
+	my $sys = "wget -nv http://www.ebi.ac.uk/gwas/api/search/downloads/full ";
 	&mysystem ($sys);
 	
 #	print "replace space...\n";
@@ -1119,7 +1122,7 @@ unless (-e "$sample_root") {
     print "********************************\n";
     print "--sample_root ($sample_root) not found, should I try to download at $vcf_site (y/n)?\n";
 
-    my $sys = "wget $vcf_site/$sample_root 2> /dev/null";
+    my $sys = "wget -nv $vcf_site/$sample_root ";
 
     my $answer = lc <>;
     chomp $answer;
@@ -1603,7 +1606,7 @@ foreach my $chrint ($chr_start..$chr_end){
 		print "vcf-file ($vcf_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
 	    }
 	    
-	    my $sys = "my.wget $vcf_site $vcf_name ";
+	    my $sys = "my.wget -nv $vcf_site $vcf_name ";
 	    #		print "$sys\n";
 
 
@@ -1672,9 +1675,14 @@ foreach my $chrint ($chr_start..$chr_end){
 
 		    print "gm-file ($gm_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
 		}
-		my $sys = "$wget_script $gm_site $gm_name ";
-		#		    print "$sys\n";
+		my $sys = "$wget_script -nv $gm_site $gm_name ";
+		if ($debug){
+		    print "debug: $sys\n";
+		    sleep(1);
+		}
+		
 		#		exit;	
+
 		if ($answer_gm eq "") {
 		    $answer_gm = lc <>;
 		    chomp $answer_gm;

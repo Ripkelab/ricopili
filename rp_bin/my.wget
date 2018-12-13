@@ -15,7 +15,7 @@ if (@ARGV != 2) {
 
 
 # only header from first file (and check success)
-my $sc =system ("wget $ftp_name/$vcf_name");
+my $sc =system ("wget -nv $ftp_name/$vcf_name");
 if ($sc != 0){
     print "systemcode: $sc\n";
     exit;
