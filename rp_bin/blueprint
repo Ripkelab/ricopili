@@ -1334,16 +1334,29 @@ if ($job){
 	    #print "jid:    ".$batch_jid."\n";
 	    #print "id:     ".$id_str."\n";
 	    
-	    
+	    my $id_str_orig = $id_str;
 	    $batch_depend =~ s/_SPACE_/ /g;
 	    $batch_jid =~ s/_SPACE_/ /g;
 	    my @batch_jid_array = split "XXX", $batch_jid;
 	    
 	    $id_str =~ s/$batch_jid_array[0]//; ### remove the stuff from before XXX
 #	    print "id_str: $id_str, $batch_jid_array[0]\n";
-	    $id_str =~ s/([0123456789]*).*/$1/; ### take the first numbered ID and remove everything else
+
+	    #	    $id_str =~ s/([0123456789]*).*/$1/; ### take the first numbered ID and remove everything else
+	    $id_str =~ s/[^0-9]*([0-9]*).*/$1/; ### small change in order to safe some wrongly typed batch_job_output_jid
 	    print "dependent job ID:$id_str\n";
-#	    sleep (10);
+
+	    if ($id_str eq ''){
+		print "********************************************************************************\n";
+		print "Error: something seems wrong with entry batch_job_output_jid in your custom file\n";
+		print "please revisit installation process\n";
+		if ($id_str_orig eq '') {
+		    print "Something is very strange since the array submission output is empty as well\n";
+		}
+		exit;
+	    }
+
+	    #	    sleep (10);
 
 	    $batch_depend =~ s/XXX/$id_str/g; ### put ID into dependency string
 
