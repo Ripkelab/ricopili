@@ -155,7 +155,7 @@ my $i2loc = &trans("i2loc");
 my $liloc = &trans("liloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
-my $serial = &trans("serial");
+my $serial = &trans("serial", 0);
 
 
 ###############################################

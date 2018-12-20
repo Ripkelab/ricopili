@@ -29,7 +29,7 @@ my $qloc = &trans("queue");
 my $hmloc = &trans("hmloc");
 my $loloc = &trans("loloc");
 my $email = &trans("email");
-my $serial = &trans("serial");
+my $serial = &trans("serial", 0);
 
 
 
