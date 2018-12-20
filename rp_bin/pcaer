@@ -23,7 +23,7 @@ my $qloc = &trans("queue");
 my $hmloc = &trans("hmloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
-my $serial = &trans("serial") || 0;
+my $serial = &trans("serial");
 
 #######################################
 ## v12: with pops as reference

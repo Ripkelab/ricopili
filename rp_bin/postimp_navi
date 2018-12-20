@@ -174,7 +174,7 @@ my $qloc = &trans("queue");
 my $i2loc = &trans("i2loc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
-my $serial = &trans("serial") || 0;
+my $serial = &trans("serial");
 
 
 #exit;

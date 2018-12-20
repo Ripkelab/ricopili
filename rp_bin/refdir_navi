@@ -99,7 +99,7 @@ my $hmloc = &trans("hmloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
 my $bcrloc = &trans("bcrloc");
-my $serial = &trans("serial") || 0;
+my $serial = &trans("serial");
 
 #######################################
 

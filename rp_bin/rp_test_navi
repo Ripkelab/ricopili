@@ -31,7 +31,7 @@ my $force1 = 0;
 my $outname = "test";
 my $job_bn_th = 1000;
 my $sepa = 1;
-my $serial = &trans("serial") || 0;
+my $serial = &trans("serial");
 
 
 #######################################

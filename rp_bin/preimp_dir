@@ -38,7 +38,7 @@ my $qloc = &trans("queue");
 my $init = &trans("init");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
-my $serial = &trans("serial") || 0;
+my $serial = &trans("serial");
 
 
 my $mind=0.02; # per ID	
