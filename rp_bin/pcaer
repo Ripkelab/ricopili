@@ -23,6 +23,7 @@ my $qloc = &trans("queue");
 my $hmloc = &trans("hmloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
+my $serial = &trans("serial") || 0;
 
 #######################################
 ## v12: with pops as reference
@@ -168,7 +169,7 @@ my $sepa = 1;
 use Getopt::Long;
 GetOptions( "out=s"=> \$outname,
 	    "help"=> \my $help,
-            "serial"=> \my $serial,
+            "serial"=>  $serial,
             "sleep=i"=> \my $sleep_sw,
 
 	    "trio"=> \my $trio,

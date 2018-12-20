@@ -99,6 +99,7 @@ my $hmloc = &trans("hmloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
 my $bcrloc = &trans("bcrloc");
+my $serial = &trans("serial") || 0;
 
 #######################################
 
@@ -186,7 +187,7 @@ GetOptions(
     "qheadd=i"=> \$q16_head,
     "mac_th=i"=> \$mac_th,
     "walltimeplus=i"=> \$walltimeplus,
-    "serial"=> \my $serial,
+    "serial"=>  $serial,
     "sepa=i"=> \$sepa,
     
     );

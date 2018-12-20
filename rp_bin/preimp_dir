@@ -38,6 +38,7 @@ my $qloc = &trans("queue");
 my $init = &trans("init");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
+my $serial = &trans("serial") || 0;
 
 
 my $mind=0.02; # per ID	
@@ -133,7 +134,7 @@ use Getopt::Long;
 GetOptions( 
 
     "trio"=> \my $trio,
-    "serial"=> \my $serial,
+    "serial"=> $serial,
     "sepa=i"=> \$sepa,
 
     "sleep=i"=> \my $sleep_sw,

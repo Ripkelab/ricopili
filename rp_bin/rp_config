@@ -119,6 +119,7 @@ rp_logfiles
 ---- jobarray and queueing parameters: 
 ----------------------------------------
 ----------------------------------------
+serial 0
 batch_jobcommand                                 
 batch_memory_request                             
 batch_walltime                                   

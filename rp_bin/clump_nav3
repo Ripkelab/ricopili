@@ -23,6 +23,7 @@ my $qloc = &trans("queue");
 #my $hmloc = &trans("hmloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
+my $serial = &trans("serial") || 0;
 
 
 #######################################
@@ -102,7 +103,7 @@ GetOptions( "outname=s"=> \$outname,
 	    "det=i"=> \$detformat,
 
 	    "force1"=> \my $force1,
-	    "serial"=> \my $serial,
+	    "serial"=>  $serial,
 	    "sepa=i"=> \$sepa,
 
 	    "noclean"=> \my $noclean,

@@ -155,6 +155,7 @@ my $i2loc = &trans("i2loc");
 my $liloc = &trans("liloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
+my $serial = &trans("serial") || 0;
 
 
 ###############################################
@@ -511,7 +512,7 @@ GetOptions(
     "triset=s"=> \my $trioset_file,
 
     "help"=> \my $help,
-    "serial"=> \my $serial,
+    "serial"=>  $serial,
     "sepa=i"=> \$sepa,
 
     "sleep=i"=> \my $sleep_sw,

@@ -28,10 +28,10 @@ print "$rp_header\n";
 my $loloc = &trans("loloc");
 my $email = &trans("email");
 my $force1 = 0;
-my $serial = 0;
 my $outname = "test";
 my $job_bn_th = 1000;
 my $sepa = 1;
+my $serial = &trans("serial") || 0;
 
 
 #######################################
@@ -51,7 +51,7 @@ my $walltime = 4;
 use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
-    "serial"=> \my $serial,
+    "serial"=>  $serial,
     "sepa=i"=> \$sepa,
     "noldsc"=> \my $noldsc,
     
