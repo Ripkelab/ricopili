@@ -378,6 +378,9 @@ version: $rp_version
                         cave: different for different values of --chunk
                         if already present, remove file reference_info and restart
 
+  --onlyalign         stop after alignment (no prephasing or imputation), to be used for imputation servers
+
+
 ### remarks 
 
   --phase is not mandatory any more, refdir is fine as well
@@ -547,6 +550,7 @@ GetOptions(
     "reference_info"=> \my $reference_info_file,
     "chr23male"=> \my $chr23male,
     "chr23trios"=> \my $chr23trios,
+    "onlyalign"=> \my $onlyalign,
 #    "chunk10"=> \my $chunk10,
 
     );
@@ -2384,6 +2388,10 @@ if ($suminfo_s_v2_sw == 1) {
 }
 
 
+if ($onlyalign) {
+    print "stopping after alignment\n";
+    exit;
+}
 
 #print "debug2\n";
 #exit;
