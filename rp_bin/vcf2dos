@@ -24,6 +24,9 @@ use Compress::Zlib ;
 
 my $t0 = time;
 
+my $legend_sw = 0;
+my $legend_file = "";
+
 ###############################################
 
 
@@ -36,16 +39,23 @@ Usage : $progname --vcf FILE --legend FILE
 version: $version
 
   --vcf STRING     coming out of minimac3
-  --legend STRING  legend file for SNP names
+  --legend STRING  legend file for SNP names, if not present, then VCF content is used
 
   --chr INT           chromosome
   --help              print this message and exit
 
   --refstart INT       Mb of start
   --refend INT         Mb of end
+
+  --gp4                genotype probability in forth place (instead of 3rd), HRC format
+                         also changes the behavior about filerenaminng 
+                          (doesnot need dose.vcf.gz and introduces .out.)
+
 #  --buff INT           buffer, default  ## minimac takes the buffer out anyway
 
   --keepvcf            keep the vcf version of minimac output
+
+  --outname            use different outname (especially for deployed imputations
 
  created by Stephan Ripke 2017 at MGH, Boston, MA
  in the frame of the PGC
@@ -59,21 +69,30 @@ GetOptions(
     "help"=> \my $help,
     "keepvcf"=> \my $keepvcf,
     "vcf=s"=> \my $vcf_file,
-    "legend=s"=> \my $legend_file,
+    "legend=s"=> \$legend_file,
     "refstart=s"=> \my $refstart,
     "refend=s"=> \my $refend,
     "chr=s"=> \my $chr,
+    "gp4"=> \my $gp4,
+    "outname=s"=> \my $outname,
     #    "buff=i"=> \ $buff,
     
     );
 
 die ($usage) if $help;
-die ($usage) unless $vcf_file;
-die ($usage) unless $legend_file;
-die ($usage) unless $refstart;
-die ($usage) unless $refend;
-die ($usage) unless $chr;
+die ("no_vcf, please consult --help\n") unless $vcf_file;
+die ("no_refstat, please consult --help\n") unless $refstart;
+die ("no_refend, please consult --help\n") unless $refend;
+die ("no_chr, please consult --help\n") unless $chr;
+#die ($usage) unless $legend_file;
+#die ($usage) unless $refstart;
+#die ($usage) unless $refend;
+#die ($usage) unless $chr;
 
+
+if ($legend_file ne "") {
+    $legend_sw = 1;
+}
 
 
 ##########################################
@@ -148,16 +167,30 @@ my $end_loc =  $refend * 1.0e06 ; #+ $buff * 1.0e-03;
 
 
 my $outvcf = $vcf_file;
-$outvcf =~ s/.dose.vcf.gz$/.vcf.gz/;
-
 my $outdos = $vcf_file;
+
+$outvcf =~ s/.dose.vcf.gz$/.vcf.gz/;
 $outdos =~ s/.dose.vcf.gz$/.GP.gz/;
+
+if ($gp4) {
+    $outvcf =~ s/.vcf.gz$/.out.vcf.gz/;
+    $outdos =~ s/.vcf.gz$/.out.GP.gz/;
+}
+
+if ($outname) {
+    $outvcf = "$outname.imp.vcf.gz"; ## only used if keepvcf is on 
+    $outdos = "$outname.imp.GP.gz"; 
+}
 
 my $outmap = $outdos.".map";
 my $outfam = $outdos.".fam";
 
 if ($vcf_file eq $outdos || $vcf_file eq $outvcf ) {
     print "Error: inputfile equals outputfile\n";
+    print "vcf_file: $vcf_file\n";
+    print "outdos: $outdos\n";
+    print "outvcf: $outvcf\n";
+    
     exit;
 }
 
@@ -169,30 +202,31 @@ if ($vcf_file eq $outdos || $vcf_file eq $outvcf ) {
 ##############################################
 
 
-print "reading into hash file: $legend_file\n";
-
-
 
 my %snp;
-my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $gzerrno\n" ;
 
-while ($igz->gzreadline(my $line)){
-    chomp($line);
-    my @cells = @{&split_line_ref(\$line)};
-    if ($cells[1] >= $start_loc && $cells[1] <= $end_loc){
+if ($legend_sw == 1) {
+    print "reading into hash file: $legend_file\n";
 
-	my $key = $cells[1];
-	$key .= " ".$cells[2];
-	$key .= " ".$cells[3];
-	
-	$snp{$key} = $cells[0];
+    my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $gzerrno\n" ;
+
+    while ($igz->gzreadline(my $line)){
+	chomp($line);
+	my @cells = @{&split_line_ref(\$line)};
+	if ($cells[1] >= $start_loc && $cells[1] < $end_loc){
+
+	    my $key = $cells[1];
+	    $key .= " ".$cells[2];
+	    $key .= " ".$cells[3];
+	    
+	    $snp{$key} = $cells[0];
+
+	}
 
     }
 
+    $igz->gzclose();
 }
-
-$igz->gzclose();
-
 
 &mytime();
 
@@ -213,27 +247,13 @@ die $!."$outmap" unless open MAP, "> $outmap";
 
 print "translating $vcf_file into $outvcf and $outdos\n";
 
-
+my $nwarnings=0;
 while ($igz->gzreadline(my $line)){
     chomp($line);
     my @cells = @{&split_line_ref_tab(\$line)};
     
     
 
-    unless ($cells[0] =~ /^#/) {
-	my $key = $cells[1];
-	$key .= " ".$cells[3];
-	$key .= " ".$cells[4];
-	
-	if (exists $snp{$key}) {
-	    $cells[2]= $snp{$key};
-	    #		delete $snp{$key};
-	}
-	else {
-	    print "Error: <$key> not found in $legend_file\n";
-	    exit;
-	}
-    }
 	
     if ($keepvcf) {	
 	my $outv_str = $cells[0];
@@ -244,17 +264,83 @@ while ($igz->gzreadline(my $line)){
     }
 
 
-
-    
     unless ($cells[0] =~ /^#/) {
+
+	my $skip = 0;
+	if (0){
+	    ### apply INFO 0.1 and AC==0 filter
+
+	    if ($gp4) {
+		my $info_cell = $cells[7];
+		my @icells = split ";",$info_cell;
+		#	    print "meta:$info_cell\n";#
+		#	    sleep(3);
+		foreach my $icell (@icells) {
+		    my @icells_eq = split "=",$icell;
+		    if ($icells_eq[0] eq "INFO"){
+			#		    print "INFO of $cells[2] is $icells_eq[1]\n";
+			#		    sleep(3);
+			if ($icells_eq[1]<0.1){
+			    $skip = 1;
+			}
+		    }
+		    if ($icells_eq[0] eq "AC"){
+			if ($icells_eq[1] == 0){
+			    $skip = 1;
+			}
+		    }		
+		}
+	    }
+	}
+	
+	## position is important when translating back from outsourced VCFs
+	if ($cells[1] < $start_loc || $cells[1] >= $end_loc){
+	    $skip = 1;
+	}
+
+	if ($skip == 1){
+	    next;
+	}
+	
+	### test legend file and translate by key
+	if ($legend_sw == 1) {
+
+	    my $key = $cells[1];
+	    $key .= " ".$cells[3];
+	    $key .= " ".$cells[4];
+	    
+	    if (exists $snp{$key}) {
+		$cells[2]= $snp{$key};
+		#		delete $snp{$key};
+	    }
+	    else {
+		if ($nwarnings<10) {
+		    print "Warning: <$key> not found in $legend_file\n";
+		    $nwarnings++;
+		}
+		$cells[2] = "$chr:$cells[1]"."_$cells[3]"."_$cells[4]"."_noref";
+#		exit; 17:781_A_T
+	    }
+	}
+	
+	
 	my $outd_str = "---";
 	$outd_str .= " ".$cells[2];
 	$outd_str .= " ".$cells[1];
 	$outd_str .= " ".$cells[3];
 	$outd_str .= " ".$cells[4];
+
 	
 	foreach my $cc (9..$#cells) {
-	    my ($gt,$ds,$gp) = split ":",$cells[$cc];
+	    my @gcells = split ":",$cells[$cc];
+	    my $gp;
+	    if ($gp4) {
+		$gp = $gcells[3];
+	    }
+	    else {
+		$gp = $gcells[2];
+	    }
+#	    my ($gt,$ds,$gp) = split ":",$cells[$cc];
 	    my ($gp1,$gp2,$gp3) = split ",",$gp;
 
 	    if ($gp3 eq "") {

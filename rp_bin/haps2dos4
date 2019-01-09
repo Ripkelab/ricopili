@@ -40,6 +40,8 @@ version: $version
   --chr INT           chromosome
   --help              print this message and exit
 
+#  --deployfam         dosages come from deployed job with IDs=FID_IID
+
   --nodosfam          if there is not a separata dosagefamfile
 #  --transfam STRING   contains the key to translate the vcf IDs
 
@@ -58,6 +60,7 @@ GetOptions(
 
     "help"=> \my $help,
     "outname=s"=> \my $outname,
+#    "deployfam"=> \my $deployfam,
     "prefix=s"=> \my $prefix,
     "outdir=s"=> \my $outdir,
     "fam=s"=> \my $famname,
@@ -147,7 +150,14 @@ my $haps_fam = "$haps_file1.fam";
 my $haps_file_gz = "$haps_file1.combined.gz";
 my $haps_file_gz_map = "$haps_file1.combined.gz.map";
 
-
+unless (-e $haps_fam) {
+    print "Warning: $haps_fam not existing\n";
+#    $haps_fam =~ s/.imp.gz.fam/.imp.GP.gz.fam/;
+#    unless (-e $haps_fam) {
+#	print "Error: $haps_fam not existing\n";
+#	exit;
+#    }
+}
 
 my $info_file = $haps_file1;
 $info_file =~ s/.gz$//;
@@ -287,30 +297,81 @@ push @famarray, "header";
 
 
 unless ($nodosfam) {
-    die $!."($famname_in)" unless open IF, "< $famname_in";
-    
-    while (my $line = <IF>){
-	my @cells = @{&split_line_ref(\$line)};
-	push @famarray,"@cells";
+
+
+
+    if (0){
+	## this for deployed jobs where ID=FID_IID, it's not needed any more since prepdep uses idnum now
+
+	my %famhash;
+	die $!."($famname_in)" unless open IF, "< $famname_in";
+	while (my $line = <IF>){
+	    my @cells = @{&split_line_ref(\$line)};
+	    my $lid = $cells[0]."_".$cells[1];
+
+	    if (exists $famhash {$lid}){
+		print "Error: $lid not unique (multiple underscores?)\n";
+		print "please contact ricopili developers\n";
+		exit;
+	    }
+	    $famhash {$lid} = "@cells";
+
+	    
+	}
+	close IF;
 	
+	die $!."($haps_fam)" unless open IF, "< $haps_fam";
+	die $!."($famout.ow)" unless open OF, "> $famout";
+	
+	while (my $line = <IF>){
+	    my @cells = @{&split_line_ref(\$line)};
+	    
+	    #    if ($cells[5] != 2 && $cells[5] != 1) {#
+	    #	$cells[5] = 1;
+	    #    }
+	    
+	    unless (exists $famhash{$cells[0]}) {
+		print "Error: $cells[0] from deployed vcf is not found in $famname_in\n";
+		exit;
+	    }
+	    print OF $famhash {$cells[0]}."\n";
+	}
+	close IF;
+	close OF;
+
+#	print "$famout\n";#
+#	print "debug\n";
+#	exit;
+
+
     }
-    close IF;
-    
-    die $!."($haps_fam)" unless open IF, "< $haps_fam";
-    die $!."($famout.ow)" unless open OF, "> $famout";
-    
-    while (my $line = <IF>){
-	my @cells = @{&split_line_ref(\$line)};
+    else {
+	### this here is done is standard ricopili
+	die $!."($famname_in)" unless open IF, "< $famname_in";
 	
-	#    if ($cells[5] != 2 && $cells[5] != 1) {#
-	#	$cells[5] = 1;
-	#    }
+	while (my $line = <IF>){
+	    my @cells = @{&split_line_ref(\$line)};
+	    push @famarray,"@cells";
+	    
+	}
+	close IF;
 	
+	die $!."($haps_fam)" unless open IF, "< $haps_fam";
+	die $!."($famout.ow)" unless open OF, "> $famout";
 	
-	print OF $famarray [$cells[0]]."\n";
+	while (my $line = <IF>){
+	    my @cells = @{&split_line_ref(\$line)};
+	    
+	    #    if ($cells[5] != 2 && $cells[5] != 1) {#
+	    #	$cells[5] = 1;
+	    #    }
+	    
+	    
+	    print OF $famarray [$cells[0]]."\n";
+	}
+	close IF;
+	close OF;
     }
-    close IF;
-    close OF;
 }
 else {
     die $!."($famout.ow)" unless open OF, "> $famout";

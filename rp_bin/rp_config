@@ -653,7 +653,7 @@ if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
 
 
 		    
-                    &mysystem("grep -v rp_bin $bashrc | grep -v rp_perlpackages > $bashrc.minus_rpbin.txt");
+                    &mysystem("grep -v rp_bin $bashrc | grep -v rp_perlpackages | grep -v RPHOME > $bashrc.minus_rpbin.txt");
                     &mysystem("cp $bashrc $bashrc.copy");
 
 
@@ -737,8 +737,8 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
         print FILE "\texport rp_perlpackages=/proj/$uppmax_project/ricopili/software/perl_modules\n";
     }
     if ($clusters{custom}){
-        print FILE "\texport rp_perlpackages=$path_to_perlmodules\n";
-	print FILE "\texport RPHOME=$rphome\n";
+        print FILE "export rp_perlpackages=$path_to_perlmodules\n";
+	print FILE "export RPHOME=$rphome\n";
     }
     close FILE;
 
