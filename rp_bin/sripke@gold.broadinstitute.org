@@ -592,7 +592,6 @@ my $chuck_script = "my.chuck2";            ### my.pipeline_tar
 my $preph_script = "my.preph3";             ### my.pipeline_tar
 my $imp_script = "my.imp.3";             ### my.pipeline_tar
 my $dos_script = "haps2dos4";              ### my.pipeline_tar
-my $prepdep_script = "my.prepdep";              ### my.pipeline_tar
 my $vcf2dos_script = "vcf2dos";            ### my.pipeline_tar
 my $impprob_script = "impprob_to_2dos";    ### my.pipeline_tar
 my $dabg_script = "daner_bg3";             ### my.pipeline_tar
@@ -1571,7 +1570,6 @@ foreach (@bim_files) {
 #sleep(10);
 
 my @bimfli_files = grep {/.ch.fl.bim$/} @pi_files;
-my @bimdep_files = grep {/dep.fini$/} @pi_files;
 my @bimpos_files = grep {/.ch.bim$/} @pi_files;
 my @bimref_files = grep {/.bim.ref/} @pi_files;
 my @bimhg19_files = grep {/.hg19.bim$/} @pi_files;
@@ -1597,13 +1595,6 @@ print "@bimhg19_files\n";
 my %bimfli_array = ();
 foreach (@bimfli_files) {
     $bimfli_array{$_} = 1;
-}
-
-
-### read deployed bim-files
-my %bimdep_array = ();
-foreach (@bimdep_files) {
-    $bimdep_array{$_} = 1;
 }
 
 ### read flipped bim-files
@@ -1903,20 +1894,6 @@ if ($suminfo_s_v2_sw) {
 #print "exit;\n";
 #exit;
 
-###################################
-### test for legend file for DEPLOY
-###################################
-
-
-if ($deploy) {
-    my $gw_legend_file = "$refdir/$suminfo_s_v2.impute.legend";
-    unless (-e $gw_legend_file) {
-	print "Error: this file is missing and necessary for deploying: $gw_legend_file\n";
-	print "please rerun refdir_navi with on the reference you are using with a newer ricopili version\n";
-	exit;
-    }
-}
-
 
 
 ###################################
@@ -2049,8 +2026,6 @@ if ($suminfo_s_v2_sw == 1) {
 	my $readrefsum_fini = 0;
 	
 	foreach (@bim_files) {
-
-	    
 	    my $bimfile = $_;
 	    my $bfile = $bimfile;
 	    $bfile =~ s/.bim$//;
@@ -2144,7 +2119,7 @@ unless (-e "$rootdir/posing_done") {
 	$sjaname = "chepos";
 	$sjatime = 2;
 #	$sjatime = 4 if ($chepos_fini > 0);
-	$sjamem = 8000;
+	$sjamem = 2000;
 	@sjaarray = @chepos_arr;
 	
 	&send_jobarray;
@@ -2168,64 +2143,64 @@ unless (-e "$rootdir/posing_done") {
 my @chefli_arr = ();
 my $chefli_fini = 0;
 
-unless (-e "$rootdir/flipping_done") {
-    foreach (@bim_files) {
-	my $bfile = $_;
-	$bfile =~ s/.bim$//;
-	my $accfli ="$bfile".".hg19.ch.fl.bim";
-	my $locref = $bfile.".hg19.bim.ref.sum";
+    unless (-e "$rootdir/flipping_done") {
+	foreach (@bim_files) {
+	    my $bfile = $_;
+	    $bfile =~ s/.bim$//;
+	    my $accfli ="$bfile".".hg19.ch.fl.bim";
+	    my $locref = $bfile.".hg19.bim.ref.sum";
 
-	if (-e $locref) {
-	    #		print "locref $locref is existing! safes some time\n";
-	    unless (exists $bimfli_array{$accfli}) {
-		my $systmp = "$checkflip_script --dbcol 0,3,4,5 --fth $fth_th --sfh $sec_freq --info $rootdir/$impute_dir/$locref $bfile.hg19.ch.bim" ;
-		push @chefli_arr, $systmp ;
-		#		    print "$systmp\n";
-		#		    exit;
-		#		    push @chepos_arr, "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim" ;#
-		
+	    if (-e $locref) {
+#		print "locref $locref is existing! safes some time\n";
+		unless (exists $bimfli_array{$accfli}) {
+		    my $systmp = "$checkflip_script --dbcol 0,3,4,5 --fth $fth_th --sfh $sec_freq --info $rootdir/$impute_dir/$locref $bfile.hg19.ch.bim" ;
+		    push @chefli_arr, $systmp ;
+#		    print "$systmp\n";
+#		    exit;
+#		    push @chepos_arr, "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim" ;#
+		    
+		}
+		else {
+		    $chefli_fini++;
+		}
 	    }
 	    else {
-		$chefli_fini++;
+	        print "locref $locref is not existing! would be better if it did\n";
+		unless (exists $bimfli_array{$accfli}) {
+		    print "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim\n" ;
+		    push @chefli_arr, "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim" ;
+		}
+		else {
+		    $chefli_fini++;
+		}
 	    }
+
+
+	}
+
+#	exit;
+
+#	print "debug\n";
+#	sleep (10);
+
+	
+	if (@chefli_arr > 0) {
+	    
+	    $sjadir = $impute_dir;
+	    $sjaname = "chefli";
+	    $sjatime = 2;
+#	    $sjatime = 4 if ($chefli_fini > 0);
+	    $sjamem = 2000;
+	    @sjaarray = @chefli_arr;
+	    
+	    &send_jobarray;
+	    
 	}
 	else {
-	    print "locref $locref is not existing! would be better if it did\n";
-	    unless (exists $bimfli_array{$accfli}) {
-		print "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim\n" ;
-		push @chefli_arr, "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim" ;
-	    }
-	    else {
-		$chefli_fini++;
-	    }
+	    &mysystem ("touch $rootdir/flipping_done");
+	    print "checkflip done\n";
 	}
-
-
     }
-
-    #	exit;
-
-    #	print "debug\n";
-    #	sleep (10);
-
-    
-    if (@chefli_arr > 0) {
-	
-	$sjadir = $impute_dir;
-	$sjaname = "chefli";
-	$sjatime = 2;
-	#	    $sjatime = 4 if ($chefli_fini > 0);
-	$sjamem = 8000;
-	@sjaarray = @chefli_arr;
-	
-	&send_jobarray;
-	
-    }
-    else {
-	&mysystem ("touch $rootdir/flipping_done");
-	print "checkflip done\n";
-    }
-}
 
 
 
@@ -2337,74 +2312,6 @@ unless (-e "$rootdir/puting_done") {
     }
 }
 
-
-
-
-
-
-###################################
-### PREPDEPLOY
-###################################
-
-
-if ($deploy) {
-    my @prepdep_arr = ();
-    my $prepdep_fini = 0;
-
-    unless (-e "$rootdir/prepdep_done") {
-	foreach (@bimfli_files) {
-	    my $bprefix = $_;
-	    $bprefix =~ s/.bim$//;
-#	foreach (@bim_files) {
-#	    my $bfile = $_;
-#	    $bfile =~ s/.bim$//;
-
-	    my $subdir_deploy = "deploy_$bprefix";
-	    unless (-e $subdir_deploy) {
-		&mysystem ("mkdir $subdir_deploy");
-	    }
-	    
-	    my $accfli =$bprefix.".dep.fini";
-	    my $bfile_aligned =$bprefix;
-	    my $gw_legend_file = "$refdir/$suminfo_s_v2.impute.legend";
-	    ;
-
-	    unless (exists $bimdep_array{$accfli}) {
-		my $systmp = "$prepdep_script --famfile $bprefix.fam.idnum --legend $gw_legend_file --bfile $bfile_aligned" ;
-		push @prepdep_arr, $systmp ;
-		
-	    }
-	    else {
-		$prepdep_fini++;
-	    }
-
-	}
-
-	#	exit;
-
-	#	print "debug\n";
-	#	sleep (10);
-
-	
-	if (@prepdep_arr > 0) {
-	    
-	    $sjadir = $impute_dir;
-	    $sjaname = "prepdep";
-	    $sjatime = 2;
-	    #	    $sjatime = 4 if ($chefli_fini > 0);
-	    $sjamem = 2000;
-	    @sjaarray = @prepdep_arr;
-	    
-	    &send_jobarray;
-	    
-	}
-	else {
-	    &mysystem ("touch $rootdir/prepdep_done");
-	    print "prepare deploy done\n";
-	}
-    }
-}
-
 #exit;
 
 
@@ -2463,11 +2370,9 @@ if ($suminfo_s_v2_sw == 1) {
 	push @gema_arr_v2, $gema_file;
 	
 	### test existence once per chromosome
-	unless ($deploy) {
-	    unless (exists $gema_hash{$cells[0]}) {
-		$gema_hash{$cells[0]} = 1;
-		die "$gema_file not existent" unless (-e $gema_file);
-	    }
+	unless (exists $gema_hash{$cells[0]}) {
+	    $gema_hash{$cells[0]} = 1;
+	    die "$gema_file not existent" unless (-e $gema_file);
 	}
     }
     close IN;
@@ -3619,11 +3524,11 @@ if ($impdeploy_done == 0) {
 
 	
 	## not sure this is needed
-#	print "read emptydir....\n";
-#	opendir(IND, $subdir_empty) || die "can't opendir .: $!";
-#	my @indirempty = grep {/\.empty$/} readdir(IND);
-#	closedir IND;
-#	my %indirempty_hash = map { $_ => 1 } @indirempty;
+	print "read emptydir....\n";
+	opendir(IND, $subdir_empty) || die "can't opendir .: $!";
+	my @indirempty = grep {/\.empty$/} readdir(IND);
+	closedir IND;
+	my %indirempty_hash = map { $_ => 1 } @indirempty;
 
 
 	my @dirfiles = ();
@@ -3634,9 +3539,6 @@ if ($impdeploy_done == 0) {
 	opendir(DIR, $subdir) || die "can't opendir .: $!";
 	@dirfiles = readdir(DIR);
 	@finifiles = grep {/\.fini$/} @dirfiles;
-#	print "finifiles: @finifiles\n";
-#	sleep (3);
-#	exit;
 #	@sumfiles = grep {/\_summary$/} @dirfiles;
 	closedir DIR;
 
@@ -3646,14 +3548,6 @@ if ($impdeploy_done == 0) {
 	print "start vcf2dos_deploy refdirloop....\n";
 	#### loop for reference chunks
 
-	## not needed here, but maybe later, usually done in prephasing step
-	my $subdir_empty = "empty_$bprefix";
-#	print "$subdir_empty\n";
-	unless (-e $subdir_empty) {
-	    &mysystem ("mkdir $subdir_empty");
-	}
-#	sleep(3);
-	
 	foreach my $ccc (0..$#refind_arr) {
 
 
@@ -3676,54 +3570,41 @@ if ($impdeploy_done == 0) {
 	    my $legend_file = $refchunk;
 	    $legend_file .= ".legend.gz";
 
-	    #####################
-	    ######## here work
-	    #################
-	    my $outname = "$subdir/plink.$bprefix.$refind";
+	    
 
 	    my $empty_ch_out = "$bprefix.$refind.empty";
 
 
 
-#	    if (exists $indirempty_hash{$empty_ch_out} ) {
-#		print "$bprefix.$refind.empty\n";
-#	    }
-#	    else {
+	    if (exists $indirempty_hash{$empty_ch_out} ) {
+		print "$bprefix.$refind.empty\n";
+	    }
+	    else {
 
-	    my $vcf2dos_deploy_fini = "plink.$bprefix.$refind.imp.GP.gz.fini";
+		my $vcf2dos_deploy_fini = "plink.$bprefix.$refind.imp.GP.gz.fini";
 
 
-
-		## not sure about empty for deployed jobs
-#		unless (exists $finifiles_hash{$pi_ch_out_fini} ) {
-#		    if ($empty) {
-#			&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
-#		    }
-#		}
-
-	    ####################################################
-	    #### vcf2dos for deployed imputation
-	    ###################################################
-		
-	    unless (exists $finifiles_hash{$vcf2dos_deploy_fini} ) {
-		    
-#		print "$vcf2dos_deploy_fini does not exist\n";
-#		sleep(1);
-#		    my $vcf_file = $pi_ch_out.".dose.vcf.gz";
-		my $vcf_file = "$subdir_in/$refchr.vcf.gz";
-		unless (-e $vcf_file) {
-		    print "--------------------------------------------------------------\n";
-		    print "Error: $vcf_file not found\n";
-		    print "has this dataset been already imputed and received back?\n";
-		    print "--------------------------------------------------------------\n";
-		    exit;
+		unless (exists $finifiles_hash{$pi_ch_out_fini} ) {
+		    if ($empty) {
+			&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
+		    }
 		}
+
+		####################################################
+		#### vcf2dos for deployed imputation
+		###################################################
+		
+		unless (exists $finifiles_hash{$vcf2dos_deploy_fini} ) {
+		    
+		    
+#		    my $vcf_file = $pi_ch_out.".dose.vcf.gz";
+		    my $vcf_file = "$subdir_in/$refchr.vcf.gz";
 		    my $keep_txt = "";
 		    $keep_txt = "--keepvcf" if ($noclean);
 
-		    my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend --chr $refchr --gp4 --outname $outname";
-#		    print "$sys_loc\n";
-#		    exit;
+		    my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend --chr $refchr --gp4";
+		    print "$sys_loc\n";
+		    exit;
 		    
 		    push @vcf2dos_deploy_arr, $sys_loc;
 		    
@@ -3732,12 +3613,12 @@ if ($impdeploy_done == 0) {
 		    $vcf2dos_deploy_fini++;
 		    $n_vcf2dos_deploy_done++;
 		}
-#	    }
+	    }
 	}
     }
 
-#    print "debug2\n";
-#    exit;
+    print "debug2\n";
+    exit;
 ###################################
 ### send vcf2dos deploy jobs 
 ###################################
@@ -3768,10 +3649,10 @@ if ($impdeploy_done == 0) {
 
     
 
-#if ($deploy) {
-#    print "debug3\n";
-#    exit;
-#}
+if ($deploy) {
+    print "debug3\n";
+    exit;
+}
 
 ############################################################
 ### dosing
@@ -3904,7 +3785,7 @@ if ($dos_done == 0) {
 			
 		    $puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp.gz";
 
-		    if ($mm3_sw || $deploy) {
+		    if ($mm3_sw) {
 			$puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp.GP.gz";
 		    }
 		    
@@ -3917,12 +3798,8 @@ if ($dos_done == 0) {
 #		    print "really not existing: $dos_ch_out_fini\n ";
 #		    exit;
 		    ################################## work on this here!!!!!
-		    my $deploy_txt = "";
-#		    if ($deploy) {
-#			$deploy_txt = "--deployfam";
-#		    }
 		    my $sys_loc = "";
-		    $sys_loc = "$dos_script $deploy_txt $prefix_loc --outname $dos_ch_out --outdir $dasudir_loc  --chr $refchr --fam $famname_loc --bim $plink_ch_out.bim $puter_out_arr";
+		    $sys_loc = "$dos_script $prefix_loc --outname $dos_ch_out --outdir $dasudir_loc  --chr $refchr --fam $famname_loc --bim $plink_ch_out.bim $puter_out_arr";
 
 
 #		    print "$sys_loc\n";

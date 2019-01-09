@@ -1,0 +1,155 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+
+my $version = "1.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+
+
+
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
+
+
+
+my $bcloc = &trans("bcloc");
+my $bcrloc = &trans("bcrloc");
+my $p2loc = &trans("p2loc");
+
+
+
+
+
+
+
+
+my $legendfile = "";
+my $famfile = "";
+my $bfile = "";
+
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+
+    "bfile=s"=> \$bfile,
+    "legend=s"=> \$legendfile,
+    "famfile=s"=> \$famfile,
+
+    );
+
+
+if ($help){
+    print "usage: $progname
+
+version: $version
+
+      options:
+
+        --help              this help-text
+        --legend STRING     whole genome legend file (unzipped)
+        --famfile STRING    different famfile
+        --bfile STRING      plink binary
+
+
+
+
+ converts aligned plink binary into vcf with right reference alleles (to be deployed to imputation server)
+
+ created by Stephan Ripke 2019 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+
+
+#/psych/ripke/share/gio/Ricopili_Dependencies_sr_1118b/plink/plink --vcf pop_euro_eur_SEQ.det.vcf --a2-allele pop_euro_eur_SEQ.det.bim.exc.det 2 1  --recode vcf --real-ref-alleles --out pop_euro_eur_SEQ.det.vcf.refalleles --double-id
+my $sys = "$p2loc"."/plink --bed $bfile.bed --bim $bfile.bim --fam $famfile  --a2-allele $legendfile 3 1 --recode vcf --real-ref-alleles --out $bfile.dep.tmp";
+print "$sys\n";
+system ("echo $sys > $bfile.dep.log");
+#exit;
+
+my $sc = 0;
+$sc =system ($sys);
+
+if ($sc != 0){
+    print "Error systemcode: $sc\n";
+    exit;
+}
+
+
+
+$sc =system ("gzip $bfile.dep.tmp.vcf");
+
+if ($sc != 0){
+    print "Error systemcode: $sc\n";
+    exit;
+}
+
+$sc =system ("mv $bfile.dep.tmp.vcf.gz $bfile.dep.vcf.gz");
+
+if ($sc != 0){
+    print "Error systemcode: $sc\n";
+    exit;
+}
+
+
+
+
+### check if all is well aligned
+#####################################
+$sys = "$bcloc"."/bcftools norm -f $bcrloc/human_g1k_v37.fasta -c w $bfile.dep.vcf.gz > /dev/null 2> bcftools.$bfile.err";
+
+system ("echo \'$sys\' >> $bfile.dep.log");
+print "$sys\n";
+
+$sc =system ($sys);
+
+if ($sc != 0){
+    print "Error systemcode: $sc\n";
+    exit;
+}
+
+
+
+$sys = "wc -l bcftools.$bfile.err > bcftools.$bfile.err.wc";
+print "$sys\n";
+
+$sc =system ($sys);
+
+
+die $!." <bcftools.$bfile.err.wc>" unless open IN, "< bcftools.$bfile.err.wc";
+my $line = <IN>;
+chomp($line);
+my @cells = split / /, $line;
+if ($cells[0] != 1) {
+    print "Error: bcftools.$bfile.err has $cells[0] rows, but it should have exactly one.\n";
+    exit;
+}
+close IN;
+
+
+
+
+
+
+if ($sc != 0){
+    print "Error systemcode: $sc\n";
+    exit;
+}
+
+$sc =system ("touch $bfile.dep.fini");
+
+
+
