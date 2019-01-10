@@ -26,6 +26,7 @@ COMAND DIR1 DIR2 DIR3 .....
   --help              print help massage and exits
 #  --clean             clean directory
   --dirfile STRING       file containing merge directories
+  --force              do not exit if references do not match
 #  --out               name of imputation run
  
 
@@ -99,6 +100,7 @@ GetOptions(
     "dirfile=s"=> \my $dirfile,
 #    "out=s"=> \$outname,
     "clean"=> \my $cleandir,
+    "force"=> \my $force,
     "help"=> \my $help );
 
 
@@ -243,7 +245,14 @@ foreach my $sd (@sourcedirs) {
 		print "Warning: directories seem to be from different reference sets....?\n";
 		print "compare ./reference_info with $sd/reference_info\n";
 		print "----------------------------------------------\n";
-		sleep (3);
+		if ($force) {
+		    print "since --force is on, I wont exit, but you probably run into problems soon\n";
+		    print "----------------------------------------------\n";
+		    sleep (3);
+		}
+		else {
+		    exit;
+		}
 	    }
 	}
 	

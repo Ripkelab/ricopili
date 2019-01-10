@@ -66,6 +66,12 @@ else {
 }
 
 
+if (uc($batch_bin) eq "SERIAL") {
+    print "Error, it seems that you used SERIAL in your configuration file\n";
+    print "then you need to start the modules with flag --serial as well\n";
+}
+
+
 
 
 

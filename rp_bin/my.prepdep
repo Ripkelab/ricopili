@@ -8,7 +8,7 @@ my $version = "1.0.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 
-
+use Compress::Zlib ;
 
 
 #############################
@@ -24,18 +24,33 @@ use Ricopili::Utils qw(trans);
 
 my $bcloc = &trans("bcloc");
 my $bcrloc = &trans("bcrloc");
+my $bgziploc = &trans("bgziploc");
 my $p2loc = &trans("p2loc");
 
 
 
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
 
 
+
+my $debug = 0;
 
 
 
 my $legendfile = "";
 my $famfile = "";
 my $bfile = "";
+my $outdir = "";
 
 
 use Getopt::Long;
@@ -45,6 +60,7 @@ GetOptions(
     "bfile=s"=> \$bfile,
     "legend=s"=> \$legendfile,
     "famfile=s"=> \$famfile,
+    "outdir=s"=> \$outdir,
 
     );
 
@@ -74,30 +90,55 @@ version: $version
 
 
 
+my $sc = 0;
+
+
 #/psych/ripke/share/gio/Ricopili_Dependencies_sr_1118b/plink/plink --vcf pop_euro_eur_SEQ.det.vcf --a2-allele pop_euro_eur_SEQ.det.bim.exc.det 2 1  --recode vcf --real-ref-alleles --out pop_euro_eur_SEQ.det.vcf.refalleles --double-id
-my $sys = "$p2loc"."/plink --bed $bfile.bed --bim $bfile.bim --fam $famfile  --a2-allele $legendfile 3 1 --recode vcf --real-ref-alleles --out $bfile.dep.tmp";
+my $sys = "$p2loc"."/plink --bed $bfile.bed --bim $bfile.bim --fam $famfile  --a2-allele $legendfile 3 1 --recode vcf --real-ref-alleles --out $outdir/$bfile.dep.tmp";
 print "$sys\n";
-system ("echo $sys > $bfile.dep.log");
+unless ($debug) {
+    system ("echo $sys > $bfile.dep.log");
+}
+unless ($debug) {
+    $sc =system ($sys);
+}
+if ($sc != 0){
+    print "Error systemcode: $sc\n";
+    exit;
+}
+
+
+## for michigan server
+foreach my $chr (1..22) {
+    my $sys = "$p2loc"."/plink --chr $chr --bed $bfile.bed --bim $bfile.bim --fam $famfile  --a2-allele $legendfile 3 1 --recode vcf --real-ref-alleles --out $outdir/$bfile.chr$chr";
+    print "$sys\n";
+#    unless ($debug) {
+	$sc =system ($sys);
+#    }
+    if ($sc != 0){
+	print "Error systemcode: $sc\n";
+	exit;
+    }
+}
+
 #exit;
 
-my $sc = 0;
-$sc =system ($sys);
+
+
+chdir ($outdir);
+
+unless ($debug) {
+    $sc =system ("gzip $bfile.dep.tmp.vcf");
+}
 
 if ($sc != 0){
     print "Error systemcode: $sc\n";
     exit;
 }
 
-
-
-$sc =system ("gzip $bfile.dep.tmp.vcf");
-
-if ($sc != 0){
-    print "Error systemcode: $sc\n";
-    exit;
+unless ($debug) {
+    $sc =system ("mv $bfile.dep.tmp.vcf.gz $bfile.dep.vcf.gz");
 }
-
-$sc =system ("mv $bfile.dep.tmp.vcf.gz $bfile.dep.vcf.gz");
 
 if ($sc != 0){
     print "Error systemcode: $sc\n";
@@ -114,7 +155,9 @@ $sys = "$bcloc"."/bcftools norm -f $bcrloc/human_g1k_v37.fasta -c w $bfile.dep.v
 system ("echo \'$sys\' >> $bfile.dep.log");
 print "$sys\n";
 
-$sc =system ($sys);
+unless ($debug) {
+    $sc =system ($sys);
+}
 
 if ($sc != 0){
     print "Error systemcode: $sc\n";
@@ -126,8 +169,14 @@ if ($sc != 0){
 $sys = "wc -l bcftools.$bfile.err > bcftools.$bfile.err.wc";
 print "$sys\n";
 
-$sc =system ($sys);
+unless ($debug) {
+    $sc =system ($sys);
+}
 
+if ($sc != 0){
+    print "Error systemcode: $sc\n";
+    exit;
+}
 
 die $!." <bcftools.$bfile.err.wc>" unless open IN, "< bcftools.$bfile.err.wc";
 my $line = <IN>;
@@ -142,12 +191,50 @@ close IN;
 
 
 
+#######################################
+### split vcf into 22 chromosomes
+#######################################
 
 
-if ($sc != 0){
-    print "Error systemcode: $sc\n";
-    exit;
+print "sort  22 VCFs for Michigan Imputation Server\n";
+
+foreach my $chr (1..22) {
+    $sys = "vcf-sort $bfile.chr$chr.vcf | $bgziploc/bgzip -c > $bfile.chr$chr.vcf.gz";
+    print "$sys\n";
+#    unless ($debug) {
+	system ("echo '$sys' >> $bfile.vcfsort.log");
+#    }
+#    unless ($debug) {
+	$sc =system ($sys);
+#    }
+    if ($sc != 0){
+	print "Error systemcode: $sc\n";
+	exit;
+    }
+    
 }
+
+## clean up
+foreach my $chr (1..22) {
+    $sys = "rm $bfile.chr$chr.vcf";
+    print "$sys\n";
+    $sc =system ($sys);
+}
+
+
+
+
+
+
+
+if ($debug) {
+    print "ran in debug mode\n";
+    sleep(10);
+}
+
+
+
+
 
 $sc =system ("touch $bfile.dep.fini");
 

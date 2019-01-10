@@ -613,7 +613,8 @@ my $du_script = "my.du";                   ### my.pipeline_tar
 my $blue_script = "blueprint";             ### my.pipeline_tar
 my $preploo_script = "my.preploo2";        ### my.pipeline_tar
 my $qacct_script = "my.qacct";             ### my.pipeline_tar
-my $performance_script = "jobperformance";  ### my.pipeline_tar
+my $performance_script = "jobperformance"; ### my.pipeline_tar
+my $vcfsort_script = "vcf-sort";           ### my.pipeline_tar
 
 
 
@@ -646,6 +647,10 @@ push @test_scripts,  $blue_script;
 push @test_scripts,  $preploo_script;
 push @test_scripts,  $qacct_script;
 push @test_scripts,  $performance_script;
+
+if ($deploy) {
+    push @test_scripts,  $vcfsort_script;
+}
 
 #push @test_scripts, $mutt_script ;
 
@@ -2359,18 +2364,24 @@ if ($deploy) {
 #	    my $bfile = $_;
 #	    $bfile =~ s/.bim$//;
 
-	    my $subdir_deploy = "deploy_$bprefix";
-	    unless (-e $subdir_deploy) {
-		&mysystem ("mkdir $subdir_deploy");
+
+	    my $subdir_preimp_deploy = "deploy_preimp_$bprefix";
+	    unless (-e $subdir_preimp_deploy) {
+		&mysystem ("mkdir $subdir_preimp_deploy");
 	    }
 	    
-	    my $accfli =$bprefix.".dep.fini";
+	    my $subdir_postimp_deploy = "deploy_postimp_$bprefix";
+	    unless (-e $subdir_postimp_deploy) {
+		&mysystem ("mkdir $subdir_postimp_deploy");
+	    }
+	    
+	    my $prepdep_fini = $subdir_preimp_deploy."/".$bprefix.".dep.fini";
 	    my $bfile_aligned =$bprefix;
 	    my $gw_legend_file = "$refdir/$suminfo_s_v2.impute.legend";
 	    ;
 
-	    unless (exists $bimdep_array{$accfli}) {
-		my $systmp = "$prepdep_script --famfile $bprefix.fam.idnum --legend $gw_legend_file --bfile $bfile_aligned" ;
+	    unless (-e $prepdep_fini) {
+		my $systmp = "$prepdep_script --outdir $subdir_preimp_deploy --famfile $bprefix.fam.idnum --legend $gw_legend_file --bfile $bfile_aligned" ;
 		push @prepdep_arr, $systmp ;
 		
 	    }
@@ -3610,7 +3621,7 @@ if ($impdeploy_done == 0) {
 	$bprefix =~ s/.bim$//;
 
 	my $subdir = "pi_$bprefix";
-	my $subdir_in = "deploy_$bprefix";
+	my $subdir_in = "deploy_postimp_$bprefix";
 	my $subdir_empty = "empty_$bprefix";
 
 	unless (-e $subdir) {
@@ -3619,40 +3630,40 @@ if ($impdeploy_done == 0) {
 
 	
 	## not sure this is needed
-#	print "read emptydir....\n";
-#	opendir(IND, $subdir_empty) || die "can't opendir .: $!";
-#	my @indirempty = grep {/\.empty$/} readdir(IND);
-#	closedir IND;
-#	my %indirempty_hash = map { $_ => 1 } @indirempty;
+	#	print "read emptydir....\n";
+	#	opendir(IND, $subdir_empty) || die "can't opendir .: $!";
+	#	my @indirempty = grep {/\.empty$/} readdir(IND);
+	#	closedir IND;
+	#	my %indirempty_hash = map { $_ => 1 } @indirempty;
 
 
 	my @dirfiles = ();
 	my @finifiles = ();
-#	my @sumfiles = ();
+	#	my @sumfiles = ();
 
 	print "read outdir....\n";
 	opendir(DIR, $subdir) || die "can't opendir .: $!";
 	@dirfiles = readdir(DIR);
 	@finifiles = grep {/\.fini$/} @dirfiles;
-#	print "finifiles: @finifiles\n";
-#	sleep (3);
-#	exit;
-#	@sumfiles = grep {/\_summary$/} @dirfiles;
+	#	print "finifiles: @finifiles\n";
+	#	sleep (3);
+	#	exit;
+	#	@sumfiles = grep {/\_summary$/} @dirfiles;
 	closedir DIR;
 
 	my %finifiles_hash = map { $_ => 1 } @finifiles;
-#	my %sumfiles_hash = map { $_ => 1 } @sumfiles;
+	#	my %sumfiles_hash = map { $_ => 1 } @sumfiles;
 
 	print "start vcf2dos_deploy refdirloop....\n";
 	#### loop for reference chunks
 
 	## not needed here, but maybe later, usually done in prephasing step
 	my $subdir_empty = "empty_$bprefix";
-#	print "$subdir_empty\n";
+	#	print "$subdir_empty\n";
 	unless (-e $subdir_empty) {
 	    &mysystem ("mkdir $subdir_empty");
 	}
-#	sleep(3);
+	#	sleep(3);
 	
 	foreach my $ccc (0..$#refind_arr) {
 
@@ -3665,11 +3676,11 @@ if ($impdeploy_done == 0) {
 
 	    my $rf = $reffiles[$ccc];
 
-#	    my $buffer = 1000;
+	    #	    my $buffer = 1000;
 
 	    
 	    
-#	    my $deploy_out = "$subdir_in/$refchr.vcf.gz";
+	    #	    my $deploy_out = "$subdir_in/$refchr.vcf.gz";
 
 	    my $refchunk = "$refdir/$suminfo_s_v2.impute";
 	    $refchunk =~ s/XXX/$refchr/;
@@ -3685,62 +3696,66 @@ if ($impdeploy_done == 0) {
 
 
 
-#	    if (exists $indirempty_hash{$empty_ch_out} ) {
-#		print "$bprefix.$refind.empty\n";
-#	    }
-#	    else {
+	    #	    if (exists $indirempty_hash{$empty_ch_out} ) {
+	    #		print "$bprefix.$refind.empty\n";
+	    #	    }
+	    #	    else {
 
 	    my $vcf2dos_deploy_fini = "plink.$bprefix.$refind.imp.GP.gz.fini";
 
 
 
-		## not sure about empty for deployed jobs
-#		unless (exists $finifiles_hash{$pi_ch_out_fini} ) {
-#		    if ($empty) {
-#			&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
-#		    }
-#		}
+	    ## not sure about empty for deployed jobs
+	    #		unless (exists $finifiles_hash{$pi_ch_out_fini} ) {
+	    #		    if ($empty) {
+	    #			&mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
+	    #		    }
+	    #		}
 
 	    ####################################################
 	    #### vcf2dos for deployed imputation
 	    ###################################################
-		
+	    
 	    unless (exists $finifiles_hash{$vcf2dos_deploy_fini} ) {
-		    
-#		print "$vcf2dos_deploy_fini does not exist\n";
-#		sleep(1);
-#		    my $vcf_file = $pi_ch_out.".dose.vcf.gz";
-		my $vcf_file = "$subdir_in/$refchr.vcf.gz";
+		
+		#		print "$vcf2dos_deploy_fini does not exist\n";
+		#		sleep(1);
+		#		    my $vcf_file = $pi_ch_out.".dose.vcf.gz";
+		my $vcf_file = "$subdir_in/$refchr.vcf.gz"; ## sanger format
+		
 		unless (-e $vcf_file) {
-		    print "--------------------------------------------------------------\n";
-		    print "Error: $vcf_file not found\n";
-		    print "has this dataset been already imputed and received back?\n";
-		    print "--------------------------------------------------------------\n";
-		    exit;
+		    $vcf_file = "$subdir_in/chr$refchr.dose.vcf.gz"; ## michigan format    
+		    unless (-e $vcf_file) {
+			print "------------------------------------------------------------------------------------------------------------\n";
+			print "Error: $vcf_file not found\n";
+			print "has this dataset been already imputed on the imputation server, received back and copied to the right place?\n";
+			print "------------------------------------------------------------------------------------------------------------\n";
+			exit;
+		    }
 		}
-		    my $keep_txt = "";
-		    $keep_txt = "--keepvcf" if ($noclean);
-
-		    my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend --chr $refchr --gp4 --outname $outname";
-#		    print "$sys_loc\n";
-#		    exit;
-		    
-		    push @vcf2dos_deploy_arr, $sys_loc;
-		    
-		}
-		else {
-		    $vcf2dos_deploy_fini++;
-		    $n_vcf2dos_deploy_done++;
-		}
-#	    }
+		my $keep_txt = "";
+		$keep_txt = "--keepvcf" if ($noclean);
+		
+		my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend --chr $refchr --gp4 --outname $outname";
+		#		    print "$sys_loc\n";
+		#		    exit;
+		
+		push @vcf2dos_deploy_arr, $sys_loc;
+		
+	    }
+	    else {
+		$vcf2dos_deploy_fini++;
+		$n_vcf2dos_deploy_done++;
+	    }
+	    #	    }
 	}
     }
-
-#    print "debug2\n";
-#    exit;
-###################################
-### send vcf2dos deploy jobs 
-###################################
+    
+    #    print "debug2\n";
+    #    exit;
+    ###################################
+    ### send vcf2dos deploy jobs 
+    ###################################
     
     if (@vcf2dos_deploy_arr > 0) {
 	
