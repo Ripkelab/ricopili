@@ -502,7 +502,7 @@ h2l_CS <-  function(k,cs,p) {
 #main program
 library(rms)
 library(pROC)
-library(MBESS)
+#library(MBESS) ## only neede in some testing environment.
 library(MASS)
 
 ### light edits of s.ripke

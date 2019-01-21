@@ -1362,7 +1362,21 @@ unless (-e $sample_fini) {
     
     while (my $line = <IN>){
 	my @cells = @{&split_line_ref(\$line)};
-	my $fid = $cells[$super_pop_col]."_".$cells[$pop_col];
+	my $spop_cell = $cells[$super_pop_col];
+	my $pop_cell = $cells[$pop_col];
+	if ($spop_cell =~ /_/) {
+	    print "----------------------------------------------------------------\n";
+	    print "Error: no underscores are allowed for super population column\n";
+	    print "when using a new file, please also deleted this file: $sample_ca\n";
+	    exit;
+	}
+	if ($pop_cell =~ /_/) {
+	    print "----------------------------------------------------------------\n";
+	    print "Error: no underscores are allowed for population column\n";
+	    print "when using a new file, please also deleted this file: $sample_ca\n";
+	    exit;
+	}	
+	my $fid = $spop_cell."_".$pop_cell;
 	my $iid = $cells[$iid_col];
 	my $sex;
 	if (exists $sex_hash{$iid}) {

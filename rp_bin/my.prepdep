@@ -96,10 +96,10 @@ my $sc = 0;
 #/psych/ripke/share/gio/Ricopili_Dependencies_sr_1118b/plink/plink --vcf pop_euro_eur_SEQ.det.vcf --a2-allele pop_euro_eur_SEQ.det.bim.exc.det 2 1  --recode vcf --real-ref-alleles --out pop_euro_eur_SEQ.det.vcf.refalleles --double-id
 my $sys = "$p2loc"."/plink --bed $bfile.bed --bim $bfile.bim --fam $famfile  --a2-allele $legendfile 3 1 --recode vcf --real-ref-alleles --out $outdir/$bfile.dep.tmp";
 print "$sys\n";
-unless ($debug) {
+unless ($debug == 1) {
     system ("echo $sys > $bfile.dep.log");
 }
-unless ($debug) {
+unless ($debug == 1) {
     $sc =system ($sys);
 }
 if ($sc != 0){
@@ -127,7 +127,7 @@ foreach my $chr (1..22) {
 
 chdir ($outdir);
 
-unless ($debug) {
+unless ($debug == 1) {
     $sc =system ("gzip $bfile.dep.tmp.vcf");
 }
 
@@ -136,7 +136,7 @@ if ($sc != 0){
     exit;
 }
 
-unless ($debug) {
+unless ($debug == 1) {
     $sc =system ("mv $bfile.dep.tmp.vcf.gz $bfile.dep.vcf.gz");
 }
 
@@ -155,7 +155,7 @@ $sys = "$bcloc"."/bcftools norm -f $bcrloc/human_g1k_v37.fasta -c w $bfile.dep.v
 system ("echo \'$sys\' >> $bfile.dep.log");
 print "$sys\n";
 
-unless ($debug) {
+unless ($debug == 1) {
     $sc =system ($sys);
 }
 
@@ -169,7 +169,7 @@ if ($sc != 0){
 $sys = "wc -l bcftools.$bfile.err > bcftools.$bfile.err.wc";
 print "$sys\n";
 
-unless ($debug) {
+unless ($debug == 1) {
     $sc =system ($sys);
 }
 
@@ -227,7 +227,7 @@ foreach my $chr (1..22) {
 
 
 
-if ($debug) {
+if ($debug == 1) {
     print "ran in debug mode\n";
     sleep(10);
 }
