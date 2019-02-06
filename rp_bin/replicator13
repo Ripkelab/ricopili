@@ -44,7 +44,7 @@ my $command_line = "$progname @ARGV";
 my $ploc = &trans("p2loc");
 my $sloc = &trans("sloc");
 my $hmloc = &trans("hmloc");
-my $hmloc = &trans("loloc");
+my $loloc = &trans("loloc");
 
 
 

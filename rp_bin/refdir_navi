@@ -2735,7 +2735,7 @@ foreach my $pf_loc (@pop_fams) {
 
 	
 	unless (-e "pop_$pf_loc/$gm_name") {
-	    system ("ln -s $rootdir/$gm_name pop_$pf_loc/$gm_name");
+	    system ("cp $rootdir/$gm_name pop_$pf_loc/$gm_name");
 	}
 #	print "$rootdir/$gm_name\n";
 	

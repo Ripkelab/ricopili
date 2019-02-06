@@ -471,6 +471,7 @@ my $mystart_script = "my.start_job";           ### my.pipeline_tar
 my $replicator_script = "replicator13";        ### my.pipeline_tar
 my $replicmeta_script = "replicator_meta11";   ### my.pipeline_tar
 my $damecat_script = "my.dameta_cat";          ### my.pipeline_tar
+my $plot_or_reg_script = "plot_or_regressions"; ### my.pipeline_tar
 
 my $mutt_script = "mail";
 

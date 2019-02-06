@@ -1610,9 +1610,15 @@ if (1){
 	    $recomb_list = "$refdir/genetic_map_GRCh37_chr$chr.ow.txt";
 	    print "using hg19 recombinations\n";
 	}
+	else {
+	    print "not existing: $refdir/genetic_map_GRCh37_chr$chr.ow.txt\n";
+	}
 	if (-e "$refdir/genetic_map_chr$chr"."_combined_b37.txt") {
 	    $recomb_list = "$refdir/genetic_map_chr$chr"."_combined_b37.txt";
 	    print "using hg19 recombinations\n";
+	}
+	else {
+	    print "not existing: $refdir/genetic_map_chr$chr"."_combined_b37.txt\n";
 	}
 	print "$recomb_list\n";
 	&error ("missing: $recomb_list") unless open GI, "< $recomb_list";

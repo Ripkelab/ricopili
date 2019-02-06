@@ -40,7 +40,7 @@ my $command_line = "$progname @ARGV";
 my $ploc = &trans("p2loc");
 my $rloc = &trans("rloc");
 my $sloc = &trans("sloc");
-my $sloc = &trans("loloc");
+my $loloc = &trans("loloc");
 
 my $past_file = "$loloc/replicator_info";
 my $pwd_loc = $ENV{PWD};
