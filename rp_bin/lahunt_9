@@ -76,6 +76,8 @@ version: $version
   --prepro STRING preknown SNPs, preprocessed from gwa-file.
   --top INT     only the top INT single values, default - $top_int;
 
+  --debug       no new directory, no big sorting and extracting
+
 
 
  created by Stephan Ripke 2008 at MGH, Boston, MA
@@ -94,6 +96,7 @@ GetOptions(
     "c1=s"=> \my $c1s,
     "out=s"=> \$outname,
     "help"=> \my $help,
+    "debug"=> \my $debug,
     "prepro=s"=> \my $prepro_file,
     "check"=> \my $check,
     "nohead"=> \my $nohead,
@@ -466,9 +469,10 @@ my $rootdir = &Cwd::cwd();
 
 my $workdir="$sloc/lahunt_$outname";
 
-
-while (-e $workdir) {
-    $workdir .= ".l";
+unless ($debug) {
+    while (-e $workdir) {
+	$workdir .= ".l";
+    }
 }
 
 print "workdir: $workdir\n";
@@ -486,7 +490,10 @@ chdir ($workdir);
 #print "@ARGV\n";
 #exit;
 
-&mysystem ("cp $rootdir/$pfile .");
+unless ($debug) {
+    &mysystem ("cp $rootdir/$pfile .");
+}
+
 
 my %prepro_hash;
 if ($prepro_file) {
@@ -499,8 +506,13 @@ if ($prepro_file) {
     close PF;
 }
 
-unless ($pfile =~ /.gz$/){
-    &mysystem ("gzip -f $pfile");
+unless ($debug) {
+    unless ($pfile =~ /.gz$/){
+	&mysystem ("gzip -f $pfile");
+	$pfile .= ".gz";
+    }
+}
+else {
     $pfile .= ".gz";
 }
 
@@ -696,8 +708,10 @@ sub lamco3_alt (){
 
 
     $top_int++;
-    &mysystem("sort -k1,1g $matrixfile.tmp | head -n $top_int > $matrixfile");
-    
+
+#    unless ($debug) {
+	&mysystem("sort -k1,1g $matrixfile.tmp | head -n $top_int > $matrixfile");
+#    }
 
     print  "finished....., $lc lines\n";
     
@@ -741,107 +755,158 @@ sub lamco3_alt (){
 #    exit;
 
 #    print "$step1\t$cc1_min\n";
-#    exit;
+	#    exit;
 
-    print  "sort file 1....\n";
-    &mysystem ("sort -k1,1g $file1 > $file1.sorted") unless (-e "$file1.sorted");
-    print  "... finished\n";
-#    print  "sort file 2\n";
-#    &mysystem ("sort -k1,1g $file2 > $file2.sorted");
+	print  "sort file 1....\n";
 
 
-    my $file_loc = "$file1.sorted";
-    my $file_bin = "$file1.sorted.bin";
-    my $cc_loc_min = $cc1_min;
-
-    my @p_bowl_loc = ();
-    my $pcount = 0;
-    my $cc_loc_next = $cc_loc_min + $step1;
-
-    print  "go through sorted file....$file_loc\n";
-    $lasi_str_c1= "$cc1head\tlambda\tsize\n";
-    die $!."($file_loc)" unless open FILE, "< $file_loc";
-    die $!."($file_bin)" unless open PLOC, "> $file_bin";
-    while (my $line = <FILE>){
-	my @cells = split /\s+/, $line;
-	my $cc_loc = $cells[0];
-	my $p_loc = $cells[1];
-	$pcount++;
-#	print "@p_bowl_loc\n";
-	if ($tfile) {
-	    print PLOC "$p_loc\n";
-	}
-	else {
-	    push @p_bowl_loc, $p_loc;
+	unless ($debug) {
+	    &mysystem ("sort -k1,1g $file1 > $file1.sorted") unless (-e "$file1.sorted");
 	}
 
+	print  "... finished\n";
+	#    print  "sort file 2\n";
+	#    &mysystem ("sort -k1,1g $file2 > $file2.sorted");
 
-	if ($cc_loc >= $cc_loc_next) {
-#	    print "found!!!!!\n";
-	    close PLOC;
+
+	my $file_loc = "$file1.sorted"; ## this file contains CC and P sorted by CC 
+	my $file_bin = "$file1.sorted.bin"; ## this file contains the pvalues for one bin
+	my $cc_loc_min = $cc1_min;
+
+	my @p_bowl_loc = ();
+	my $pcount = 0;
+	my $cc_loc_next = $cc_loc_min + $step1;
+
+#	if ($debug) {
+#	    $cc_loc_next = $cc_loc_min + $step1 + $step1;
+#	}
+	
+	print  "go through sorted file....$file_loc\n";
+	$lasi_str_c1= "$cc1head\tlambda\tsize\n";
+
+	
+	die $!."($file_loc)" unless open FILEIN, "< $file_loc";
+	die $!."($file_bin)" unless open PLOC, "> $file_bin";
+	my $afterfirst = 0;
+
+	my $line_file;
+	while ($line_file = <FILEIN>){
+	    my @cells = split /\s+/, $line_file;
+	    my $cc_loc = $cells[0];
+	    my $p_loc = $cells[1];
 	    
+	    if ($debug) {
+		if ($cc_loc > 0) {
+		    print "CC:$cc_loc\t$p_loc\n";
+		}
+	    }
+
+
+	    $pcount++;
+	    #	print "@p_bowl_loc\n";
+	    if ($tfile) {
+		print PLOC "$p_loc\n";
+	    }
+	    else {
+		push @p_bowl_loc, $p_loc;
+	    }
+
+
+	    if ($cc_loc >= $cc_loc_next) {
+
+		$afterfirst++;
+		if ($debug) {
+		    print "found!!!!!\n";
+		    sleep(1);
+		}
+		    
+		close PLOC;
+
+
+		    #	    if ($debug) {
+		    #		print "$file_bin\n";
+		    #		exit;
+		    #	    }
+		    
+		    my $lambda_loc ;
+		    my $p_n_loc;
+
+
+
+		if ($tfile) {
+		    if (1) {
+			$lambda_loc =  &calc_lambda_file ($file_bin,$pcount);
+		    }
+		    $p_n_loc = $pcount;
+		    print "tfile on with $p_n_loc values\n";
+		}
+		else {
+		    $lambda_loc =  &calc_lambda_qs (\@p_bowl_loc);
+		    $p_n_loc = @p_bowl_loc;
+		    print "tfile off\n";
+		}
+		#	    my $lambda_loc =  &calc_lambda (\@p_bowl_loc);
+
+
+
+
+		    my $cc_val_loc = ($cc_loc_min + $cc_loc_next) / 2 ;
+		    if ($categ1 == 1){
+			$cc_val_loc = $cc_loc_min ;
+		    }
+
+		    print "one_bin\nmiddle_point:$cc_val_loc\tlambda:$lambda_loc\tN:$p_n_loc\n";
+		    #	    exit;
+		    #if ()
+		    $lasi_str_c1 .= "$cc_val_loc\t$lambda_loc\t$p_n_loc\n";
+		    @p_bowl_loc = ();
+
+
+		    die $!."($file_bin)" unless open PLOC, "> $file_bin";
+		    $pcount = 0;
+
+		    $cc_loc_min = $cc_loc_next;
+		    $cc_loc_next = $cc_loc_min + $step1;
+		    print "cc_loc_min: $cc_loc_min\n";
+		    print "cc_loc_next: $cc_loc_next\n";
+
+
+	    }
+	}
+	#    my $lambda_loc =  &calc_lambda (\@p_bowl_loc);
+	#    print "@p_bowl_loc\n";
+	my $p_n_loc = @p_bowl_loc;
+	if ($tfile) {
+	    $p_n_loc = $pcount;
+	}
+	close PLOC;
+
+	if ($p_n_loc > 0) {
+	    my $cc_val_loc = ($cc_loc_min + $cc_loc_next) / 2 ;
+
+	    print "$cc_val_loc\t$p_n_loc\n";
 	    my $lambda_loc ;
-	    my $p_n_loc;
+	    
 	    if ($tfile) {
 		$lambda_loc =  &calc_lambda_file ($file_bin,$pcount);
-		$p_n_loc = $pcount;
 	    }
 	    else {
 		$lambda_loc =  &calc_lambda_qs (\@p_bowl_loc);
-		$p_n_loc = @p_bowl_loc;
-	    }
-#	    my $lambda_loc =  &calc_lambda (\@p_bowl_loc);
-	    my $cc_val_loc = ($cc_loc_min + $cc_loc_next) / 2 ;
+	    }	    
 	    if ($categ1 == 1){
 		$cc_val_loc = $cc_loc_min ;
 	    }
-
-	    print "$cc_val_loc\t$lambda_loc\t$p_n_loc\n";
-#	    exit;
-#if ()
 	    $lasi_str_c1 .= "$cc_val_loc\t$lambda_loc\t$p_n_loc\n";
-	    @p_bowl_loc = ();
-
-	    die $!."($file_bin)" unless open PLOC, "> $file_bin";
-	    $pcount = 0;
-
-	    $cc_loc_min = $cc_loc_next;
-	    $cc_loc_next = $cc_loc_min + $step1;
 	}
-    }
-#    my $lambda_loc =  &calc_lambda (\@p_bowl_loc);
-#    print "@p_bowl_loc\n";
-    my $p_n_loc = @p_bowl_loc;
-    if ($tfile) {
-	$p_n_loc = $pcount;
-    }
-    close PLOC;
 
-    if ($p_n_loc > 0) {
-	my $cc_val_loc = ($cc_loc_min + $cc_loc_next) / 2 ;
-
-	print "$cc_val_loc\t$p_n_loc\n";
-	my $lambda_loc ;
-	
-	if ($tfile) {
-	    $lambda_loc =  &calc_lambda_file ($file_bin,$pcount);
-	}
-	else {
-	    $lambda_loc =  &calc_lambda_qs (\@p_bowl_loc);
-	}	    
-	if ($categ1 == 1){
-	    $cc_val_loc = $cc_loc_min ;
-	}
-	$lasi_str_c1 .= "$cc_val_loc\t$lambda_loc\t$p_n_loc\n";
-    }
-
-    close FILE;
+	close FILEIN;
 
     }
 
 
     &a2file($lasifile_c1,$lasi_str_c1);
 
+#    print  "$lasifile_c1\n";
 #    exit;
 
     print  "use R to plot\n";
@@ -1079,8 +1144,9 @@ use File::Copy;
 copy ($pdfname1,"$rootdir");
 #copy ($pdfname2,"$rootdir");
 
-&mysystem("rm -rf $workdir");
-
+unless ($debug) {
+    &mysystem("rm -rf $workdir");
+}
 
 exit 0;
 
