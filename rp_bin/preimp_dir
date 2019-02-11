@@ -782,7 +782,7 @@ my $namefile = "$disname.names";
 
 ### read bim-files
 my @bim_files = grep {/bim$/} @files;
-my @bim_files = grep {!/-qc.bim$/} @bim_files;
+#my @bim_files = grep {!/-qc.bim$/} @bim_files;
 
 
 #print "bim: @files\n";
@@ -792,6 +792,7 @@ my @bim_files = grep {!/-qc.bim$/} @bim_files;
 
 
 my %name_hash;
+my %qcc_hash; ### QC cycle
 my @name_arr;
 #my @bim_tmp;
 
@@ -800,12 +801,19 @@ my @name_arr;
 ##############################
 unless (-e $namefile) {
     die $! unless open FILE, "> $namefile";
+    print FILE "###STUDYNAME: 5 alphanumeric characters, recommeded city or study abbreviation and wave, e.g. lond1, cloz2\n";
+    print FILE "###              please negotiate with PIs about this name\n";
+    print FILE "###BFILE:     bed-filename root, e.g. if you dataset is called YOURDATA.bed, then please use YOURDATA in this column\n";
+    print FILE "###QCCYCLE:   numeric indicating the rounds of quality controls you have already performed\n";
+    print FILE "###              this will be appended to the resulting files with -qc1 or -qc2\n";
+    print FILE "###EXCLUDE:   set 0 if you want this dataset being included in the preimp process\n";
+    print FILE "STUDYNAME\tBFILE\tQCCYCLE\tEXCLUDE\n";
     my @qc_arr;
     my $cc = 1;
     foreach (@bim_files) {
 	my $bprefix = $_;
 	$bprefix =~ s/.bim$//;
-	print FILE "$disname$cc $bprefix\n";
+	print FILE "$disname$cc\t$bprefix\t1\t0\n";
 	$cc++;
     }
     close FILE;
@@ -815,12 +823,27 @@ unless (-e $namefile) {
 else {
     die "$!:$namefile" unless open NF, "< $namefile";   
     while (<NF>) {
+	next if ($_ =~ /^###/);
+	next if ($_ =~ /^STUDYNAME/);
 	my @cells = &split_line($_);
-	$name_hash{$cells[1]} = $cells[0];
-	push @name_arr, $cells[0];
+	my $qccycle = 1;
+	my $exclude = 0;
+	if (@cells>3) {
+	    $qccycle = $cells[2];
+	    $exclude = $cells[3];
+	}
+	if ($exclude == 0) {
+	    $name_hash{$cells[1]} = $cells[0];
+	    $qcc_hash{$cells[0]} = $qccycle;
+	    push @name_arr, $cells[0];
+	    print "included: $cells[1]\t$qccycle\n";
+	}
     }
     close NF;
 }
+
+
+
 #exit;
 #print "bim: @bim_files\n";
 #exit;
@@ -836,7 +859,7 @@ foreach my $bf (@bim_files) {
     my $bprefix = $bf;
     $bprefix =~ s/.bim$//;
     unless (exists $name_hash{$bprefix}){
-	print "$bprefix does not have a name and will not go on further\n"; 
+	print "$bprefix is not or as excluded defined in $namefile and will not go into pipeline\n"; 
     }
     else {
 	push @bim_files_clean, $bimprefix ;
@@ -1053,6 +1076,7 @@ chdir ($qc_dir);
 
 
 my @bfiles_pi = ();
+my %bfiles_qcc_hash; # qccylcle
 foreach my $name (@name_arr) {
 
     my $nn = "$disname";
@@ -1063,6 +1087,11 @@ foreach my $name (@name_arr) {
 #    print $cname."\n";
     die "$cname.bim is not existing, maybe remove $disname.tag.done" unless (-e $cname.".bim");
     push @bfiles_pi, $cname;
+    $bfiles_qcc_hash {$cname} = $qcc_hash{$name};
+#    print "name: $name\n";
+#    print "QCC: $qcc_hash{$name}\n";
+
+#    exit;
 #    $nn .= "_".$platform_hash{$bprefix};
 #    push @it_arr, "id_tager --create --nn $nn --cn $cname $bprefix.fam" unless (-e "$cname.bim");
 }
@@ -1111,12 +1140,23 @@ foreach my $bprefix (@bfiles_pi) {
     $option_txt .= " --withpna $withpna";
     $option_txt .= " --sexmin $sexcheck_min";
 
+    my $qcc_loc = $bfiles_qcc_hash{$bprefix};
+    $option_txt .= " --qcc ".$qcc_loc;
+    unless (exists $bfiles_qcc_hash{$bprefix}) {
+	print "Error: QC cycle for $bprefix not set, please look at $namefile\n";
+	exit;
+    }
 
-    unless (-e "$bprefix-qc.fini") {
+#    print "$bprefix\n";
+#    print "$option_txt\n";
+    
+#    exit;
+
+    unless (-e "$bprefix-qc".$qcc_loc.".fini") {
 	push @qc_arr, "$qc_script $option_txt $tdt_txt $prekno_txt $bprefix" ;
     }
     else {
-	push @meta_files, "$bprefix-qc.meta" ;
+	push @meta_files, "$bprefix-qc".$qcc_loc.".meta" ;
 	$qc_fini++;
     }
    # }
@@ -1165,9 +1205,11 @@ chdir ($imp_dir);
 
 
 foreach my $bprefix (@bfiles_pi) {
-    &mysystem ("$link_script ../$bprefix-qc.bed") unless (-e "$bprefix-qc.bed");
-    &mysystem ("$link_script ../$bprefix-qc.bim") unless (-e "$bprefix-qc.bim");
-    &mysystem ("$link_script ../$bprefix-qc.fam") unless (-e "$bprefix-qc.fam");
+    my $qcc_loc = $bfiles_qcc_hash{$bprefix};
+    my $bfile_loc_qc = "$bprefix-qc".$qcc_loc;
+    &mysystem ("$link_script ../$bfile_loc_qc.bed") unless (-e "$bfile_loc_qc.bed");
+    &mysystem ("$link_script ../$bfile_loc_qc.bim") unless (-e "$bfile_loc_qc.bim");
+    &mysystem ("$link_script ../$bfile_loc_qc.fam") unless (-e "$bfile_loc_qc.fam");
 }
 
 unless (-e "README") {

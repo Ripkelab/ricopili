@@ -98,6 +98,8 @@ my $midi_th=0.02; # per SNP
 
 my $pre_geno=0.05; # per SNP
 
+
+
 my $mend_th=4; # per SNP
 my $imend_th=10000; # per ID
 my $Fhet_th=.2; # per ID
@@ -110,6 +112,7 @@ my $me_th2=0.1;
 my $withpna=0;
 my $sexcheck_min = 10;
 
+my $qcc=1; # QC cycle
 
 #############################################################################
 
@@ -175,7 +178,7 @@ options:
 
 
 
- reports on the QC2 - Step for GWAS - Data, while using plink, R, latex
+ reports on the QC - Step for GWAS - Data, while using plink, R, latex
  created by Stephan Ripke 2008 at MGH, Boston, MA
  in the frame of the PGC
  since vs. 3.0.0 it is a perl-script
@@ -258,8 +261,10 @@ GetOptions(
     "lmend=i"=> \$mend_th,  # mendel per SNP threshhold
     "Fhet_th=f"=> \$Fhet_th,  # Fhet threshold
     "pre_geno=f"=> \$pre_geno,  # pre_geno threshold
+
     "withpna=i"=> \$withpna, # mono threshold
 
+    "qcc=i"=> \$qcc,  # qc-cycle
 
     "minsize=i"=> \$minsize,  # minsize for lambda in lahunt
     "faf=f"=> \$faf_th,  # FAF per SNP threshhold
@@ -423,9 +428,9 @@ my $progress_log="log-file.txt";
 
 
 my $outprefix="$prefix";
-$outprefix="$outprefix"."-qc";
+$outprefix="$outprefix"."-qc".$qcc;
 
-my $reportprefix="$prefix.qc";
+my $reportprefix="$prefix.qc".$qcc;
 #my $reportprefix="report_qc2_$prefix";
 my $proprefix="prop_$prefix";
 my $mendiprefix="mendi_$prefix";  # mendi-error-check
@@ -829,7 +834,7 @@ sub a2file {
     close FILE;
 }
 
-print  "Progress of the QC2-Report of $prefix\n";
+print  "Progress of the QC-Report of $prefix\n";
 
 
 ##############################################
@@ -2331,7 +2336,7 @@ my %aff_off;
 
 
 
-## crete QC2 set
+## crete QC set
 if ($calc) {
     unless (-e "$pofiprefix.fam") {
 
@@ -3881,7 +3886,7 @@ if ($tex_sum){
 %\usepackage{ngerman}
 \date{\today}
 \author{Psychiatric GWAS Consortium}
-\title{QC2-Report of PREFIXFORTEX}
+\title{QC-Report of PREFIXFORTEX}
 \begin{document}
 \maketitle
 \begin{abstract}
