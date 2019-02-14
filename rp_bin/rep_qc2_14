@@ -3756,6 +3756,19 @@ mtext(paste("p_ (Kol-Smi) to TOP1000 = ", ptou ," and to TOP100 = ", phu, sep=""
     my $system = "grep -v NA combined_set_alt.txt | sort -k8,8g  >  $outprefix.sorted_combined.txt";
     &mysystem($system);
 
+    my $valid_snps_notna;
+    unless (-e "$outprefix.sorted_combined.txt.n") {
+	$valid_snps_notna = &count_lines("$outprefix.sorted_combined.txt") - 1;
+	die $!."($outprefix.sorted_combined.txt.n)" unless open DXN, "> $outprefix.sorted_combined.txt.n";
+	print DXN "$valid_snps_notna\n";
+	close DXN;
+    }
+    die $!."($outprefix.sorted_combined.txt.n)" unless open DXN, "< $outprefix.sorted_combined.txt.n";
+    $valid_snps_notna = <DXN>;
+    chomp($valid_snps_notna);
+    close DXN;
+
+
     my $R_in='read.table("INNAME", header=T)-> all'."\n";
     $R_in =~ s/INNAME/$outprefix.sorted_combined.txt/g;
 
@@ -3766,7 +3779,7 @@ mtext(paste("p_ (Kol-Smi) to TOP1000 = ", ptou ," and to TOP100 = ", phu, sep=""
 
     foreach my $t (0,1){
 	my $real = $hundr[$t];
-	$real = $valid_snps if ($hundr[$t] > $valid_snps);
+	$real = $valid_snps_notna if ($hundr[$t] > $valid_snps_notna);
 	$R_in.= "top$hundr[$t] <- all[1:$real,]\n";
 
 

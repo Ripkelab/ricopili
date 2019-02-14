@@ -2237,6 +2237,13 @@ unless (-e "$rootdir/flipping_done") {
 #print "debug\n" ;  
 #exit;
 
+print "N_bimfli: ".@bimfli_files."\n";
+print "N_bim: ".@bim_files."\n";
+
+#print "debug\n";
+#exit;
+    
+
 
 
 ###############################################################################
@@ -3614,6 +3621,7 @@ my $vcf2dos_deploy_fini = 0;
 if ($impdeploy_done == 0) {
 
 
+#    print "bimfli_N: ".@bimfli_files."\n";
     ### loop for datasets
     foreach (@bimfli_files) {
 
@@ -3664,9 +3672,11 @@ if ($impdeploy_done == 0) {
 	    &mysystem ("mkdir $subdir_empty");
 	}
 	#	sleep(3);
-	
+
+#	print "refind_N: ".@refind_arr."\n";
 	foreach my $ccc (0..$#refind_arr) {
 
+	    
 
 	    my $refind = $refind_arr[$ccc];
 	    my $refchr = $refchr_arr[$ccc];
@@ -3678,7 +3688,7 @@ if ($impdeploy_done == 0) {
 
 	    #	    my $buffer = 1000;
 
-	    
+#	    print "refind: $refind\n";
 	    
 	    #	    my $deploy_out = "$subdir_in/$refchr.vcf.gz";
 
@@ -3744,6 +3754,7 @@ if ($impdeploy_done == 0) {
 		
 	    }
 	    else {
+		print "this is existing: ".$finifiles_hash{$vcf2dos_deploy_fini}."\n";
 		$vcf2dos_deploy_fini++;
 		$n_vcf2dos_deploy_done++;
 	    }
