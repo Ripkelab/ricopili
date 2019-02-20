@@ -74,12 +74,17 @@ while (my $line = <FILE>){
 }
 close FILE;
 
+# return config value, if a default is provided that is returned in case
+# the value is not set in the config file
+# Otherwise the call resuts in a die call
 sub trans {
-    my ($expr) = @_;
-    unless (exists $conf{$expr}) {
-	die "config file without entry: $expr\n";
-    }
-    $conf{$expr};
+    my ($expr, $default) = @_;
+
+    return $conf{ $expr} if (exists $conf{$expr});
+
+    return $default if ( defined $default );
+
+    die "config file without entry: $expr\n";
 }
 
 

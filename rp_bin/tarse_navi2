@@ -29,7 +29,7 @@ my $qloc = &trans("queue");
 my $hmloc = &trans("hmloc");
 my $loloc = &trans("loloc");
 my $email = &trans("email");
-
+my $serial = &trans("serial", 0);
 
 
 
@@ -65,7 +65,7 @@ GetOptions(
     "target=s"=> \$target,
     "password=s"=> \$password,
 
-        "serial"=> \my $serial,
+        "serial"=>  $serial,
     "force1"=> \my $force1,
     "sjamem_incr=i"=> \$sjamem_incr,
     "outname=s"=> \my $outname,
