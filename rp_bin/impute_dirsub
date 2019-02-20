@@ -3743,6 +3743,16 @@ if ($impdeploy_done == 0) {
 			exit;
 		    }
 		}
+
+		# check for vcf index files (csi or tbi)
+		unless (-e "$vcf_file.csi" || -e "$vcf_file.tbi") {
+			print "------------------------------------------------------------------------------------------------------------\n";
+			print "Error: $vcf_file index (csi or tbi) not found\n";
+			print "Please copy from imputation server output or generate in $subdir_in with \"tabix -p vcf\"\n";
+			print "------------------------------------------------------------------------------------------------------------\n";
+			exit;
+		}
+
 		my $keep_txt = "";
 		$keep_txt = "--keepvcf" if ($noclean);
 		

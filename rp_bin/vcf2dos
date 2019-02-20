@@ -15,6 +15,7 @@ use Ricopili::Utils qw(trans);
 
 use lib $ENV{rp_perlpackages};
 use Compress::Zlib ;
+use IO::Zlib;
 #use Time;
 
 
@@ -235,7 +236,18 @@ if ($legend_sw == 1) {
 ## translate vcf file
 ##############################################
 
-my $igz = gzopen("$vcf_file", "rb")  or die "Cannot open file $vcf_file: $gzerrno\n" ;
+# check for vcf index file and use with tabix if present
+# if not, read entire file as before
+my $vcf_has_index = -e "$vcf_file.csi" || -e "$vcf_file.tbi";
+
+if ($vcf_has_index) {
+  my $tabix = trans("tabixloc") . "/tabix";
+  my $tabix_cmd = "$tabix -h $vcf_file $chr:$start_loc-$end_loc";
+  die $!."$tabix_cmd" unless open VCF, "-|", "$tabix_cmd";
+} else {
+  die $!."$vcf_file" unless tie *VCF, "IO::Zlib", "$vcf_file", "rb";
+}
+
 my $ovgz = gzopen("$outvcf", "wb")  or die "Cannot open file $outvcf: $gzerrno\n" ;
 my $odgz = gzopen("$outdos", "wb")  or die "Cannot open file $outdos: $gzerrno\n" ;
 
@@ -248,7 +260,8 @@ die $!."$outmap" unless open MAP, "> $outmap";
 print "translating $vcf_file into $outvcf and $outdos\n";
 
 my $nwarnings=0;
-while ($igz->gzreadline(my $line)){
+
+while (my $line = <VCF>){
     chomp($line);
     my @cells = @{&split_line_ref_tab(\$line)};
     
@@ -383,7 +396,7 @@ while ($igz->gzreadline(my $line)){
     
 }
 
-$igz->gzclose();
+close VCF;
 $ovgz->gzclose();
 $odgz->gzclose();
 close MAP;
