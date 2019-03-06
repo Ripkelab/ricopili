@@ -2029,8 +2029,13 @@ if (1){
     }
     else {
 	my $hm3_refdir = "$hapmap_ref_root/subchr";
-	my @hm3_coll = `cat $hm3_refdir/*chr$chr.*bim`;
-	my @hm3_files = `ls $hm3_refdir/*chr$chr.*bim`;
+#	my @hm3_coll = `cat $hm3_refdir/*chr$chr.*bim`;
+#	my @hm3_files = `ls $hm3_refdir/*chr$chr.*bim`;
+
+	my @hm3_coll ;
+	my @hm3_files ;
+
+	
 	#	print "hmind files: @hm3_files\n";
 	foreach my $line (@hm3_coll) {
 	    my @cells = @{&split_line_ref(\$line)};

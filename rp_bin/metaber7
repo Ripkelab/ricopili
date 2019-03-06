@@ -48,7 +48,8 @@ GetOptions(
 #   "beta"=> \my $beta,
 
    "help"=> \my $help,
-   "nofilter"=> \my $nofilter,
+    "nofilter"=> \my $nofilter,
+    "no_neff_filter"=> \my $no_neff_filter,
     "detout"=> \my $detout,
 
    "xdf"=> \my $xdf,
@@ -65,6 +66,7 @@ if ($help || $out_name eq "metaber"){
                              defaut $info_th
                              !!! use zero before period  !!!
         --nofilter         no filter at all
+        --no_neff_filter   no neff filter 
 
 #        --beta             if there is BETA instead of OR present
 
@@ -1116,17 +1118,19 @@ while (<META>){
 
     my $neff_ex = 0;
     unless ($nofilter) {
-	if ($neff_str < $neff_max_half) {
-	    if ($neff_ex_n < 10){
-		print "Warning: exclude $snp_name because of low Neff";
-		print "\t$neff_str\n";
-#		sleep (3);
+	unless ($no_neff_filter) {
+	    if ($neff_str < $neff_max_half) {
+		if ($neff_ex_n < 10){
+		    print "Warning: exclude $snp_name because of low Neff";
+		    print "\t$neff_str\n";
+		    #		sleep (3);
+		}
+		if ($neff_ex_n == 10){
+		    print "more exclusions not printing\n";
+		}	
+		$neff_ex = 1;
+		$neff_ex_n++;
 	    }
-	    if ($neff_ex_n == 10){
-		print "more exclusions not printing\n";
-	    }	
-	    $neff_ex = 1;
-	    $neff_ex_n++;
 	}
     }
 #    for my $i (6..10) {

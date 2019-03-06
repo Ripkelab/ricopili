@@ -325,6 +325,8 @@ version: $rp_version
   --nolahunt        do not do lahunt (speeds up the pipeline)
   --gwclump         do genome wide clumping in the end (for scoring)
 
+  --no_neff_filter  do not do Neff filter
+
   ********
   uses puter and subchromosomes in reference
   ************
@@ -405,7 +407,8 @@ GetOptions(
     "nohet"=> \my $nohet,
    "force1"=> \my $force1,
    "noldsc"=> \my $noldsc,
-   "nolahunt"=> \my $nolahunt,
+    "nolahunt"=> \my $nolahunt,
+    "no_neff_filter"=> \my $no_neff_filter,
    "gwclump"=> \my $gwclump,
 #    "cond"=> \my $cond,
 
@@ -426,7 +429,10 @@ if ($sleep_sw) {
   sleep ($sleep_sw);
 }
 
-
+my $no_neff_filter_txt = "";
+if ($no_neff_filter) {
+    $no_neff_filter_txt = "--no_neff_filter";
+}
 
 
 
@@ -2653,7 +2659,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 			my $dadimetadir = $dametadir."_$cx";
 			my $dameta_out = "$dadimetadir/dan_$refind.assoc.dosage.meta.ngt";
 			unless (-e "$dameta_out.metadaner.gz") {
-			    my $sys = "$metaber_script $xdf_txt --out $dameta_out @dasidifiles";
+			    my $sys = "$metaber_script $no_neff_filter_txt $xdf_txt --out $dameta_out @dasidifiles";
 			    push @daner_dimeta_arr, $sys; 
 			}
 			push @ {$dadimeta_files {$cx}}, "$dameta_out.metadaner.gz";
@@ -2671,7 +2677,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 		    @dasifiles_loc = @dadimeta_arr if ($n_cdg > 1);
 		    
 		    
-		    push @daner_meta_arr, "$metaber_script $xdf_txt --out $dameta_out @dasifiles_loc";
+		    push @daner_meta_arr, "$metaber_script $no_neff_filter_txt $xdf_txt --out $dameta_out @dasifiles_loc";
 		    #	    print "metaber5 $xdf_txt --out $dameta_out @dasifiles_loc\n";
 		    #	    exit;
 		}
@@ -3215,7 +3221,7 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 	foreach my $rc (keys %refc){
 	    my $dameta_out = "$dametadir/dan_$rc.assoc.dosage.meta.ngt";
 	    unless (-e "$dameta_out.metadaner.gz") {
-		my $sys = "$metaber_script $xdf_txt --out $dameta_out $refc{$rc}";
+		my $sys = "$metaber_script $no_neff_filter_txt $xdf_txt --out $dameta_out $refc{$rc}";
 #		print "$sys\n";
 #		print "debug\n";
 #		exit;
