@@ -139,6 +139,8 @@ my $job_bn_th = 1000;
 
 my @ref_coll = ();
 
+my $info_th = "0.1";
+
 #print "hmm\n";
 #exit; 
 
@@ -326,6 +328,9 @@ version: $rp_version
   --gwclump         do genome wide clumping in the end (for scoring)
 
   --no_neff_filter  do not do Neff filter
+  --info_th FLOAT   filter for info prior to meta-analysis, will not work on single cohort analysis
+                        defaut $info_th
+                        !!! use zero before period  !!!
 
   ********
   uses puter and subchromosomes in reference
@@ -409,7 +414,8 @@ GetOptions(
    "noldsc"=> \my $noldsc,
     "nolahunt"=> \my $nolahunt,
     "no_neff_filter"=> \my $no_neff_filter,
-   "gwclump"=> \my $gwclump,
+    "gwclump"=> \my $gwclump,
+    "info_th=s"=> \$info_th,
 #    "cond"=> \my $cond,
 
 #    "chrX"=> \my $chrX,
@@ -2659,7 +2665,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 			my $dadimetadir = $dametadir."_$cx";
 			my $dameta_out = "$dadimetadir/dan_$refind.assoc.dosage.meta.ngt";
 			unless (-e "$dameta_out.metadaner.gz") {
-			    my $sys = "$metaber_script $no_neff_filter_txt $xdf_txt --out $dameta_out @dasidifiles";
+			    my $sys = "$metaber_script --info_th $info_th $no_neff_filter_txt $xdf_txt --out $dameta_out @dasidifiles";
 			    push @daner_dimeta_arr, $sys; 
 			}
 			push @ {$dadimeta_files {$cx}}, "$dameta_out.metadaner.gz";
@@ -2677,7 +2683,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 		    @dasifiles_loc = @dadimeta_arr if ($n_cdg > 1);
 		    
 		    
-		    push @daner_meta_arr, "$metaber_script $no_neff_filter_txt $xdf_txt --out $dameta_out @dasifiles_loc";
+		    push @daner_meta_arr, "$metaber_script --info_th $info_th $no_neff_filter_txt $xdf_txt --out $dameta_out @dasifiles_loc";
 		    #	    print "metaber5 $xdf_txt --out $dameta_out @dasifiles_loc\n";
 		    #	    exit;
 		}
@@ -3221,7 +3227,7 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 	foreach my $rc (keys %refc){
 	    my $dameta_out = "$dametadir/dan_$rc.assoc.dosage.meta.ngt";
 	    unless (-e "$dameta_out.metadaner.gz") {
-		my $sys = "$metaber_script $no_neff_filter_txt $xdf_txt --out $dameta_out $refc{$rc}";
+		my $sys = "$metaber_script --info_th $info_th $no_neff_filter_txt $xdf_txt --out $dameta_out $refc{$rc}";
 #		print "$sys\n";
 #		print "debug\n";
 #		exit;
@@ -3239,22 +3245,6 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 
 
 
-	if (0) {
-	    unless (-e $daner_meta) {
-		print "$daner_meta not existing\n";
-		#	exit;
-		if (-e "$daner_meta_nogz.metadaner.gz"){
-		    &mysystem ("mv $daner_meta_nogz.metadaner.gz $daner_meta");
-		}
-		else {
-		    $walltime = 4 if (@result_files > 6);
-		    &mysystem ("$blueprint_script --njob $job_bn_th -b \"$metaber_script --detout $xdf_txt --out $daner_meta_nogz @result_files\" --mem 5000 --di --wa $walltime -j --na metaber_$outname");
-		    &reinvo_b ("metaber","$reportdir/blueprint_joblist_file-metaber_$outname");
-		}
-	    }
-	    
-	    &mysystem ("ln -sf $daner_meta $daner_all");
-	}
     }
 }
 else {
