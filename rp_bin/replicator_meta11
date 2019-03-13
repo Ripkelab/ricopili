@@ -1856,7 +1856,7 @@ $tmp_str .= "\tP-rep-st";
 $tmp_str .= "\t95CI_low-rep";
 $tmp_str .= "\t95CI_high-rep";
 $tmp_str .= "\t95CI_low-comb";
-$tmp_str .= "\t95CI_low-comb";
+$tmp_str .= "\t95CI_high-comb";
 
 @cells = @{&split_line_ref(\$tmp_str)};
 foreach (@cells) {
