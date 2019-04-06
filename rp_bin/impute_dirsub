@@ -3746,7 +3746,7 @@ if ($impdeploy_done == 0) {
 		my $keep_txt = "";
 		$keep_txt = "--keepvcf" if ($noclean);
 		
-		my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend --chr $refchr --gp4 --outname $outname";
+		my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend --chr $refchr --outname $outname";
 		#		    print "$sys_loc\n";
 		#		    exit;
 		
