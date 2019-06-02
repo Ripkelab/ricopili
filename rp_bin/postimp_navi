@@ -97,6 +97,8 @@ use Ricopili::Utils qw(trans);
 use Ricopili::Version;
 
 
+
+
 #my $version = "1.0.30";
 my $progname = $0;
 $progname =~ s!^.*/!!;
@@ -141,6 +143,7 @@ my @ref_coll = ();
 
 my $info_th = "0.1";
 
+
 #print "hmm\n";
 #exit; 
 
@@ -162,6 +165,8 @@ my $fth_th = 0.15;
 use Sys::Hostname;
 my $host = hostname;
 
+my $serial = 0;
+
 #my $broad = 1 if ($ENV{"DOMAINNAME"} =~ /broadinstitute/);
 
 
@@ -176,6 +181,17 @@ my $qloc = &trans("queue");
 my $i2loc = &trans("i2loc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
+my $bcmd = &trans("batch_jobcommand");
+
+
+###############################################
+
+if ($bcmd eq "SERIAL") {
+    $serial = 1;
+    print "-----------------------------------------------------\n";
+    print "switched on SERIAL mode because of configuration file\n";
+}
+
 
 
 #exit;
@@ -332,6 +348,8 @@ version: $rp_version
                         defaut $info_th
                         !!! use zero before period  !!!
 
+  --debug             extended output
+
   ********
   uses puter and subchromosomes in reference
   ************
@@ -366,7 +384,7 @@ GetOptions(
     "allsw"=> \my $allsw,
     "cox"=> \my $cox,
     "outname=s"=> \my $outname,
-    "serial"=> \my $serial,
+    "serial"=> \my $serial_sw,
     "sepa=i"=> \$sepa,
 
     "sleep=i"=> \my $sleep_sw,
@@ -416,10 +434,16 @@ GetOptions(
     "no_neff_filter"=> \my $no_neff_filter,
     "gwclump"=> \my $gwclump,
     "info_th=s"=> \$info_th,
+    "debug"=> \my $debug,
 #    "cond"=> \my $cond,
 
 #    "chrX"=> \my $chrX,
     );
+
+
+if ($serial_sw) {
+    $serial = 1;
+}
 
 
 
@@ -452,7 +476,7 @@ my @test_scripts;
 
 my $metaber_script = "metaber7";               ### my.pipeline_tar
 my $daner_script = "danerdir_6";               ### my.pipeline_tar
-my $dsc_script = "danscore_result_3";          ### my.pipeline_tar
+my $danscore_result_script = "danscore_result_3";          ### my.pipeline_tar
 my $chunker_script = "chunker2";                ### my.pipeline_tar
 my $danerhet2p_script = "my.daner_het2p";      ### my.pipeline_tar
 my $topfilter_script = "topfilter";            ### my.pipeline_tar
@@ -490,7 +514,7 @@ my $mutt_script = "mail";
 push @test_scripts, $pdflatex_script ;
 push @test_scripts, $metaber_script ;
 push @test_scripts, $daner_script ;
-push @test_scripts, $dsc_script ;
+push @test_scripts, $danscore_result_script ;
 push @test_scripts, $chunker_script ;
 push @test_scripts, $danerhet2p_script ;
 push @test_scripts, $topfilter_script ;
@@ -526,7 +550,7 @@ $rp_header =~ s/MODULE/postimp_navi /;
 print "$rp_header\n";
 
 
-print ".......testing necessary binaries....\n";
+print ".......testing necessary binaries....\n" if ($debug);
 my @miss_scripts;
 
 
@@ -536,7 +560,7 @@ foreach my $scr_name (@test_scripts) {
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$scr_name" && -x _ ) {
-	    print "$scr_name\tfound in $path\n";
+	    print "$scr_name\tfound in $path\n" if ($debug);
 	    $scr_path = "$path/$scr_name";
 	    last;
 	}
@@ -573,7 +597,7 @@ if (@miss_scripts > 0) {
 
 
 
-print ".......testing email program....\n";
+print ".......testing email program....\n" if ($debug);
 my $noti = 1;
 my $err_scr = 0;
 {
@@ -581,26 +605,26 @@ my $err_scr = 0;
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$mutt_script" && -x _ ) {
-	    print "$mutt_script\tfound in $path\n";
+	    print "$mutt_script\tfound in $path\n" if ($debug);
 	    $scr_path = "$path/$mutt_script";
 	    last;
 	}
     }
     unless ( $scr_path ) {
 
-	print "!!Warning!! : No $mutt_script command available, trying mutt\n" ;
+	print "!!Warning!! : No $mutt_script command available, trying mutt\n"  if ($debug);
 
 	$mutt_script = "mutt";
 	for my $path ( split /:/, $ENV{PATH} ) {
 	    if ( -f "$path/$mutt_script" && -x _ ) {
-		print "$mutt_script\tfound in $path\n";
+		print "$mutt_script\tfound in $path\n" if ($debug);
 		$scr_path = "$path/$mutt_script";
 		last;
 	    }
 	}
 	unless ( $scr_path ) {
 	    #	    $err_scr = 1;
-	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" ;
+	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" if ($debug);
 	    $noti = 0;
 	    sleep (3);
 	    
@@ -611,8 +635,8 @@ my $err_scr = 0;
 die if $err_scr == 1;
 
 
-print "....all necessary binaries found....\n";
-print "------------------------------------\n";
+print "....all necessary binaries found....\n" if ($debug);
+print "------------------------------------\n" if ($debug);
 #push @scripts,"id_tager_3";
 
 
@@ -621,14 +645,14 @@ print "------------------------------------\n";
 # "testing environment variable rp_perlpackages
 ####################################
 
-print "testing environment variable rp_perlpackages....\n";
+print "testing environment variable rp_perlpackages....\n" if ($debug);
 unless (exists $ENV{rp_perlpackages}) {
     print "Error: no environment variable for perl-packages, please re-install ricopili and make sure to follow all instructions\n";
     print "------------------------------------\n";
     exit;
 }
-print "....all set....\n";
-print "------------------------------------\n";
+print "....all set....\n" if ($debug);
+print "------------------------------------\n" if ($debug);
 
 
 
@@ -668,7 +692,7 @@ $xdf_txt = "--xdf" if ($xdf);
 
 my %refiex;
 if ($refiex_file) {
-    print "read $refiex_file...\n";
+    print "read $refiex_file...\n" if ($debug);
     die $!." <$refiex_file>" unless open IN, "< $refiex_file";
     while (my $line = <IN>){
 	chomp($line);
@@ -676,7 +700,7 @@ if ($refiex_file) {
 #	print "$line\n";
     }
     close IN;
-    print "...finished\n";
+    print "...finished\n" if ($debug);
 
 }
 
@@ -876,6 +900,8 @@ sub send_jobarray {
     die "send_jobarray with undefined variables, info" if ($sjainfotxt eq "");
 
 
+    print "Running job: $sjaname\n";
+
 
     my $now = localtime time;
     $now =~ s/ /_/g;
@@ -1021,7 +1047,7 @@ sub send_jobarray {
 
 	    }
 #	    unless ($serial) {
-	    exit;
+		exit;
 #	    }
 	}
 
@@ -1036,8 +1062,8 @@ sub send_jobarray {
     ##################################
     if ($serial) {
 
-	print "starting step $sjaname with ".@sjaarray." jobs\n";
-	print "running up to $sepa parallel jobs.\n";
+	print "starting step $sjaname with ".@sjaarray." jobs\n" if ($debug);
+	print "running up to $sepa parallel jobs.\n" if ($debug);
 
 
 	my $jc = 1;
@@ -1045,7 +1071,7 @@ sub send_jobarray {
 	my @job_sepa_arr;
 
 	foreach (@sjaarray) {
-	    print "running job $jc...\n";
+	    print "running job $jc...\n" if ($debug);
 	    push @job_sepa_arr, "$_ &";
 #	    $job_str .= "$_ & \n";
 
@@ -1054,7 +1080,7 @@ sub send_jobarray {
 		#		$job_str .= "wait\n";
 		my $sepa_file = "$sjaname.sepa.$jc";
 		&a2filenew ($sepa_file,@job_sepa_arr);
-		print "sepa_file: ".$sepa_file."\n";
+		print "sepa_file: ".$sepa_file."\n" if ($debug);
 		&mysystem("chmod u+x $sepa_file");
 		&mysystem("./$sepa_file");
 		@job_sepa_arr = ();
@@ -1069,7 +1095,7 @@ sub send_jobarray {
 	    
 	    my $sepa_file = "$sjaname.sepa.$jc";
 	    &a2filenew ($sepa_file,@job_sepa_arr);
-	    print "sepa_file: ".$sepa_file."\n";
+	    print "sepa_file: ".$sepa_file."\n" if ($debug);
 	    &mysystem("chmod u+x $sepa_file");
 	    &mysystem("./$sepa_file");
 	}
@@ -1229,15 +1255,16 @@ else {
 
 my $Xchr = 0;
 if ($refdir =~ /chr23/) {
-    print "chr23 found\n";
+    print "chr23 found\n" if ($debug);
     $Xchr = 1;
 }
 
 $refdir =~ s!/home/radon01/sripke/bakker_ripke/hapmap_ref!/psych/genetics_data/ripke/references_outdated/hapmap_ref!;
 
 unless (-d $refdir) {
-    print "Error: Reference Directory ($refdir) does not exist\n";
-    print "please check first row in file reference_info\n";
+    print "Error: Reference Directory ($refdir) does not exist\n" if ($debug);
+    print "please check first row in file reference_info\n" if ($debug);
+    exit;
 }
 
 
@@ -1250,13 +1277,13 @@ unless (-d $refdir) {
 if (-e "$refdir/pop_$popname") {
 
     $refdir = "$refdir/pop_$popname";
-    print "found ancestry specific reference data for clumping and such: $refdir\n";
+    print "found ancestry specific reference data for clumping and such: $refdir\n" if ($debug);
 
 
 
     my @gwascat_files = `ls $refdir/gwascatalog.*.rp.txt`;
     if (@gwascat_files == 1) {
-	print "using as gwas catalog file: ".$gwascat_files[0]."\n";
+	print "using as gwas catalog file: ".$gwascat_files[0]."\n" if ($debug);
 	$prekno_file = $gwascat_files[0];
 	chomp($prekno_file)
 #	$prekno_txt = "--prekno $prekno_file";
@@ -1287,7 +1314,7 @@ if ($areat_diffdir =~ /subchr&/ || $areat_diffdir =~ /subchr\/&/) {
 
     if (-e $areat_diffdir) {
 	$areat_refdir = $areat_diffdir;
-	print "using different subset for clumping: $areat_refdir\n";
+	print "using different subset for clumping: $areat_refdir\n" if ($debug);
 	sleep (2);
 	#    $refdir = $areat_eurdir;
     }
@@ -1323,7 +1350,7 @@ unless (-e $seppcadir) {
 
 
 unless (-e "datasets_info") {
-    print "warning: no datasets_info, create one with all datasets\n";
+    print "warning: no datasets_info, create one with all datasets\n" if ($debug);
     my @files = ();
     opendir(DIR, ".") || die "can't opendir .: $!";
     @files = readdir(DIR);
@@ -1334,7 +1361,7 @@ unless (-e "datasets_info") {
 	my $bitemp = $_;
 	$bitemp =~ s/.bim$//;
 
-	print "bitemp: $bitemp\n";
+	print "bitemp: $bitemp\n" if ($debug);
 	my $dasudir_loc_qc1 = "$dasudir"."qc1_$bitemp";
 	$dasudir_loc_qc1 .= ".hg19.ch.fl";
 #	print "start: $dasudir_loc_qc1  \n";
@@ -1344,11 +1371,11 @@ unless (-e "datasets_info") {
 
 	    $tmpdir =~ s/.hg19.ch.fl/.ch.fl/;
 	    if (-e $tmpdir) {
-		print "found old format: $tmpdir\n";
+		print "found old format: $tmpdir\n" if ($debug);
 		$bitemp .= ".ch.fl";
 	    }
 	    else {
-		print "not old and not new format: $tmpdir\n";
+		print "not old and not new format: $tmpdir\n" if ($debug);
 	    }
 	}
 	else {
@@ -1373,7 +1400,7 @@ while (my $line = <BF>){
     push @bimfli_files, $line;
     unless ($line =~ /.hg19.ch.fl$/) {
 	if ($line =~ /.ch.fl$/) {
-	    print "Warning: old datasets_info: $line\n";
+	    print "Warning: old datasets_info: $line\n" if ($debug);
 #	    exit;
 	}
 	else {
@@ -1386,7 +1413,7 @@ while (my $line = <BF>){
 close BF;
 
 if (@bimfli_files == 1) {
-    print "only one dataset to analyze, removing heterogeneity test\n";
+    print "only one dataset to analyze, removing heterogeneity test\n" if ($debug);
     $nohet_sw = 1;
 }
 #}
@@ -1399,7 +1426,7 @@ if (@bimfli_files == 1) {
 my %empty_files;
 unless (-e "empty_info") {
     &mysystem ("touch empty_info");
-    print "warning: no empty_info, created an empty one\n";
+    print "warning: no empty_info, created an empty one\n" if ($debug);
 #    exit;
 }
 else {
@@ -1613,7 +1640,7 @@ $outname = $outname."_perm".$siperm if ($siperm);
 my $danerjobdir = "$rootdir/danerjobdir_$outname";
 
 unless (-e $danerjobdir){
-    print "danerjobdir is not existing, create one for you\n";
+    print "danerjobdir is not existing, create one for you\n" if ($debug);
     my @created = mkpath(   ## $created ?
 			    $danerjobdir,
 			    {verbose => 0, mode => 0750},
@@ -1771,7 +1798,7 @@ unless ($result_name){
 
 	    if (exists $trioset_bimfli{$bf}){
 		push @bimfli_files_tmp, $bf;
-		print "$bf as trio, so not checked for IDs\n";
+		print "$bf as trio, so not checked for IDs\n" if ($debug);
 		next;
 	    }
 
@@ -1794,7 +1821,7 @@ unless ($result_name){
 	    }
 	    close IN;
 	    if ($found == 0) {
-		print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n";
+		print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n" ;
 	    }
 	}
 	
@@ -1978,7 +2005,7 @@ my $n_cdg = keys %cdg_dis;
 #my @daner_dicoll;
 if ($n_cdg > 1) {
     foreach my $cx (keys %cdg_dis) {
-	print "dis: $cx\n"; 
+	print "dis: $cx\n" if ($debug); 
 	my $dadimetadir = $dametadir."_$cx";
 	
 	my @created = mkpath(   ## $created ?
@@ -1998,16 +2025,6 @@ if ($n_cdg > 1) {
 ###################################
 ### dan-ANALYSIS
 ###################################
-
-if (0) {
-    unless (-e $danerdir){
-	print "danerdir is not existing, create one for you\n";
-	my @created = mkpath(   ## $created ?
-				$danerdir,
-				{verbose => 0, mode => 0750},
-	    );
-    }
-}
 
 
 
@@ -2068,7 +2085,7 @@ unless ($sep_pca) {
 
 	    unless (-e $pheno_file){
 
-		print "create a permuted phenotype file\n";
+		print "create a permuted phenotype file\n" if ($debug);
 		unless (-e $mds_name) {
 		    print "permutation needs a covariate file now\n";
 		    exit;
@@ -2213,15 +2230,15 @@ if ($sep_pca) {
 		    my $bgs_bed_target = "$seppcadir/$bfile_bgs";
 
 		    unless (-e "$bgs_bed_target.bed") {
-			print "linking $bgs_bed_source.bed to $seppcadir\n";
+			print "linking $bgs_bed_source.bed to $seppcadir\n" if ($debug);
 			&mysystem ("ln -s $bgs_bed_source.bed $bgs_bed_target.bed");
 		    }
 		    unless (-e "$bgs_bed_target.bim") {
-			print "linking $bgs_bed_source.bim to $seppcadir\n";
+			print "linking $bgs_bed_source.bim to $seppcadir\n" if ($debug);
 			&mysystem ("ln -s $bgs_bed_source.bim $bgs_bed_target.bim");
 		    }
 		    unless (-e "$bgs_bed_target.fam") {
-			print "linking $bgs_bed_source.fam to $seppcadir\n";
+			print "linking $bgs_bed_source.fam to $seppcadir\n" if ($debug);
 			&mysystem ("ln -s $bgs_bed_source.fam $bgs_bed_target.fam");
 		    }
 
@@ -2261,17 +2278,17 @@ if ($sep_pca) {
 	    }
 
 	    unless (-e "$seppcadir/$sep_idin") {
-		print "###############################################################################################\n";
-		print "not existing, trying to create (if present please copy it there):\n$seppcadir/$sep_idin\n";
-		print "###############################################################################################\n";
+		print "###############################################################################################\n" if ($debug);
+		print "not existing, trying to create (if present please copy it there):\n$seppcadir/$sep_idin\n" if ($debug);
+		print "###############################################################################################\n" if ($debug);
 		push @sep_pca_str_single, "$sep_pca_str_comb";
 		$pcaer_count++;
 	    }
 	    else {
 		unless (-e "$sep_idin") {
-		    print "debug1: $sep_idin\n";
+		    print "debug1: $sep_idin\n" if ($debug);
 		    &mysystem ("ln -s $seppcadir/$sep_idin .");
-		    print "debug2\n";
+		    print "debug2\n" if ($debug);
 		}
 	    }
 	}		
@@ -2290,12 +2307,12 @@ if ($sep_pca) {
 	    &mysystem ("chmod u+x $seppcadir/$start_file");
 	    
 	    
-	    print "\n###########################################################################\n";
-	    print "separate PCAs requested, please start these commands from the command line:\n\n";
+	    print "\n###########################################################################\n" if ($debug);
+	    print "separate PCAs requested, please start these commands from the command line:\n\n" if ($debug);
 	    
-	    print "\tcd $seppcadir\n";
-	    print "\t./$start_file\n\n";
-	    print "wait till all pcaer-jobs (_pc_*) ran through and restart postimp-pipeline\n";
+	    print "\tcd $seppcadir\n" if ($debug);
+	    print "\t./$start_file\n\n" if ($debug);
+	    print "wait till all pcaer-jobs (_pc_*) ran through and restart postimp-pipeline\n" if ($debug);
 
 
 	    #############################################################
@@ -2314,10 +2331,10 @@ if ($sep_pca) {
 	}
 
 	if (@mdsfile_txt == @bimfli_files) {
-	    print "---------------------------------------------------------------\n";
-	    print "Success: There are as many covariate files as there are cohorts\n";
-	    print "---------------------------------------------------------------\n";
-	    print "writing out mdscovfile: $mdscov_file\n";
+	    print "---------------------------------------------------------------\n" if ($debug);
+	    print "Success: There are as many covariate files as there are cohorts\n" if ($debug);
+	    print "---------------------------------------------------------------\n" if ($debug);
+	    print "writing out mdscovfile: $mdscov_file\n" if ($debug);
 	    die $! unless open FILE1, "> $mdscov_file";
 	    foreach (@mdsfile_txt) {
 		print FILE1 "$_\n";
@@ -2327,7 +2344,7 @@ if ($sep_pca) {
 	}
     }
     else {
-	print "$mdscov_file exists, now going to next step\n";
+	print "$mdscov_file exists, now going to next step\n" if ($debug);
     }
     
     die $!." <$mdscov_file>" unless open IN, "< $mdscov_file";
@@ -2378,7 +2395,7 @@ if ($sep_pca) {
 	}
 	close IN;
 	if ($found == 0) {
-	    print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n";
+	    print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n" if ($debug);
 	    
 	}	
 	
@@ -2451,7 +2468,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 		    $tmpdir =~ s/.hg19.ch.fl/.ch.fl/;
 		    if (-e $tmpdir) {
 			if ($n_old_format < 100) {
-			    print "found old format: $tmpdir\n";
+			    print "found old format: $tmpdir\n" if ($debug);
 			}
 			$n_old_format++;
 			$dasudir_loc_qc1 = $tmpdir;
@@ -2485,13 +2502,13 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 		    my $empty_file = "$bfile.$refind.empty";
 		    if (exists $empty_files{$empty_file}) {
-			print "empty: $empty_file\n";
+			print "empty: $empty_file\n" if ($debug);
 		    }
 		    else {
 
 			my $empty_file = "$dasudir_loc/dos_$bfile.$refind.out.dosage.gz.empty";
 			if (-e $empty_file) {
-			    print "empty after dabg: $bfile.$refind\n";
+			    print "empty after dabg: $bfile.$refind\n" if ($debug);
 			}
 			else {
 
@@ -2530,8 +2547,8 @@ unless (-e "$rootdir/daner_$outname.done") {
 			    if (-e $mapfile) {
 #			    print "map$mapfile\n";
 				if (-e "$danerdir_loc/dan_$bfile.$refind.assoc.dosage.plink_started"){
-				    print "danerdir_long:";
-				    print "\t$danerdir_loc/dan_$bfile.$refind.assoc.dosage.plink_started\n";
+				    print "danerdir_long:" if ($debug);
+				    print "\t$danerdir_loc/dan_$bfile.$refind.assoc.dosage.plink_started\n" if ($debug);
 
 				    push @danerdir_arr_long, $sys_loc ;
 				}
@@ -2549,7 +2566,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 			    else {
 				if ($n_nomap < 100) {
 				    unless ($bgscore) {
-					print "Warning: no map file ($mapfile)\n";
+					print "Warning: no map file ($mapfile)\n" if ($debug);
 				    }
 				}
 				$n_nomap++;
@@ -2577,7 +2594,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 			    ## for backward compatibility
 			    unless (-e $bg_bed) {
-				print "Warning: best_guess dataset not existing: $bg_bed\n";
+				print "Warning: best_guess dataset not existing: $bg_bed\n" if ($debug);
 				$bfile_bg =~ s/.ch.fl.bgn$/.bgn/;
 				
 				$bg_bed = "$bgdir/$bfile_bg.bed";
@@ -2596,8 +2613,8 @@ unless (-e "$rootdir/daner_$outname.done") {
 				    my $sys_loc = "$daner_script --score $danscore_file --range $range_file --nosi --indir $bgdir $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danscoredir_loc --bfile $bfile_bg nouse";
 				    
 				    push @danscore_arr, $sys_loc;
-				    print "$sys_loc\n";
-				    print "$danscoredir_loc/R.$workname.hl_nw.Rin\n";
+				    print "$sys_loc\n" if ($debug);
+				    print "$danscoredir_loc/R.$workname.hl_nw.Rin\n" if ($debug);
 				    
 				    $bg_in{$bfile_bg} = 1;
 				}
@@ -2749,7 +2766,7 @@ if  ($bgscore) {
 	## test for backwards compatibility
 	my $pdf_tmp = "$danscoredir_loc/$bfile_long.pdf";
 	unless (-e $pdf_tmp) {
-	    print "Warning: pdf not existing: $pdf_tmp\n";
+	    print "Warning: pdf not existing: $pdf_tmp\n" if ($debug);
 	    $bfile_long =~ s/.ch.fl.bgn$/.bgn/;
 	    $bfile_short =~ s/.ch.fl.bgn$/.bgn/;
 
@@ -2817,9 +2834,11 @@ if ($danscore_file ne "") {
     my $nreffiles = @refind_arr; 
     my $trio_sw = "";
     $trio_sw = "--trio" if ($trioset_file);
-    my $sys = "$dsc_script --nref $nreffiles --out $outname --mds $mds_name_sub_mds $trio_sw";
+    my $sys = "$danscore_result_script --nref $nreffiles --out $outname --mds $mds_name_sub_mds $trio_sw";
 
     &mysystem ("echo $sys >> startit_job.sh") ;
+#    print ("danscore_result_cmd: $sys\n") if ($debug);
+#    sleep (10) if ($debug);
 
 #    unless (-e "plot.$outname.sum.pdf") {
     unless (-e "$outname.poly.success") {
@@ -2845,22 +2864,22 @@ if ($danscore_file ne "") {
 
 
 #	&mysystem ("cp $outname.poly.out.txt $distdir");
-	&mysystem ("tar -cvzf danscore_$outname.tar.gz *sumprofile");
-	&mysystem ("tar -cvzf danscore_$outname.cov.tar.gz *sumprofile_cov");
+	&mysystem ("tar -czf danscore_$outname.tar.gz *sumprofile");
+	&mysystem ("tar -czf danscore_$outname.cov.tar.gz *sumprofile_cov");
 	&mysystem ("cp danscore_$outname.tar.gz $distdir");
 	&mysystem ("cp danscore_$outname.cov.tar.gz $distdir");
 
 
 
 	
-	print "copy successfull\n";
+	print "copy successfull\n" if ($debug);
     }
-    print "count SNPs\n";
+    print "count SNPs\n" if ($debug) ;
 
     my $danscore_file_loc = "$danscore_file.txt";
     my $danscore_file_loc_short = "$danscore_file.txt.short";
     my $sysloc = "gunzip -c $rootdir/$danscore_file > $danscore_file_loc";
-    print "$sysloc\n";
+    print "$sysloc\n" if ($debug);
     &mysystem ($sysloc) unless (-e $danscore_file_loc);
 
 
@@ -2901,7 +2920,7 @@ if ($danscore_file ne "") {
 	    foreach my $refind (@refind_arr) {
 		my $ident = "$bfile.$refind";
 		my $mapfile = "$dasudir_loc/dos_$ident.out.dosage.map";
-		&mysystem ("cat $mapfile | cut -f 2 -d \" \" >> score.map.tmp");
+		&mysystem ("cat $mapfile | cut -f 2 -d \" \" >> score.map.tmp") if (-e $mapfile);
 	    }
 
 	}
@@ -2914,8 +2933,8 @@ if ($danscore_file ne "") {
 
 #    chdir ($distdir);
 #    $sysloc = "join $refdir/$suminfo_s $danscore_file.sorted | cut -f 1,10 -d \" \" | sort -k2,2g > $danscore_file.sorted.inref.sorted";
-    $sysloc = "join score.map.sorted $danscore_file.sorted | cut -f 1,2 -d \" \" | sort -k2,2g > $danscore_file.sorted.inref.sorted";
-    print "$sysloc\n";
+    $sysloc = "join score.map.sorted $danscore_file.sorted | cut -f 1,2 -d \" \" | sort -k2,2g > $danscore_file.sorted.inref.sorted;";
+    print "$sysloc\n" if ($debug);
     &mysystem ($sysloc) unless (-e "$danscore_file.sorted.inref.sorted");
 
 
@@ -3041,7 +3060,7 @@ if (@daner_meta_arr > 0) {
 
 
 &mysystem ("touch $rootdir/daner_$outname.done");
-print "daner done\n";
+print "daner done\n" if ($debug);
 
 #exit;
 
@@ -3112,9 +3131,9 @@ push  @daner_chunkdirs,$dametadir;
 #########################################
 
 unless ($result_name){
-    print "bimfli_files:\n";
+    print "bimfli_files:\n" if ($debug);
     foreach (@bimfli_files) {
-	print "$_\n";
+	print "$_\n" if ($debug);
 	my $bfile = $_;
 	$bfile =~ s/.bim$//;
 	my $danerdir_loc = "$danerdir/da_$bfile";
@@ -3161,11 +3180,11 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 	    push  @daner_chunkdirs,$outdir;
 
 	    unless (-e $outdir) {
-		print "create $outdir\n";
+		print "create $outdir\n" if ($debug);
 		&mysystem("mkdir -p $outdir");
 	    }
 	    unless (-e "$outdir/$rf.gz") {
-		print "create link\n";
+		print "create link\n" if ($debug);
 		chdir ($outdir);
 		&mysystem("$linksub_script $reportdir/$rf.gz");
 		chdir ($reportdir);
@@ -3177,7 +3196,7 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 		    $Xchr_txt = "--Xchr";
 		}
 		my $sys = "$chunker_script $Xchr_txt --workdir $outdir $rf.gz";
-		print "$sys\n";
+		print "$sys\n" if ($debug);
 		push @chunker_arr, $sys;
 	    }
 	    else {
@@ -3188,7 +3207,7 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 		    print "----------------------------------------------\n";
 		    exit;
 		}
-		print "read $fc\n";
+		print "read $fc\n" if ($debug);
 		my $rf_count = 0;
 		die $!."$fc" unless open FILE, "< $fc";
 		while (my $line = <FILE>){
@@ -3301,7 +3320,7 @@ if (@result_meta_arr > 0) {
 
 
 &mysystem ("touch $rootdir/resmeta_$outname.done");
-print "resmeta done\n";
+print "resmeta done\n" if ($debug);
 
 chdir ($reportdir);
 
@@ -3317,25 +3336,25 @@ chdir ($reportdir);
 #####################################
 ## write orientation file for forest-ploter
 unless (-e "danerdirs") {
-    print "create file danerdirs\n";
+    print "create file danerdirs\n" if ($debug);
     die $! unless open DD, "> danerdirs";
     foreach my $cd (@daner_chunkdirs) {
 	print DD "$cd\n";
-	print "putting $cd into file danerdirs\n";
+	print "putting $cd into file danerdirs\n" if ($debug);
     }
     close DD;
 }
 else {
-    print "file danerdirs already existing\n";
+    print "file danerdirs already existing\n" if ($debug);
 }
 #exit;
 
 #####################################
 ## write directory file for each directory
 foreach my $cd (@daner_chunkdirs) {
-    print "CD: $cd\n";
+    print "CD: $cd\n" if ($debug);
     unless (-e "$cd/dirlist"){
-	print "not existing: $cd/dirlist\n";
+	print "not existing: $cd/dirlist\n" if ($debug);
 
 
 	opendir(DIR, "$cd") || die "can't opendir : $cd";
@@ -3377,7 +3396,7 @@ if (@zehn == 0 ) {
 }
 unless (-e "$reportdir/$daner_meta") {
     unless ($cox) {   
-	print "concatenate meta-results\n";
+	print "concatenate meta-results\n" if ($debug);
 	if (@dameta_files == 0){
 	    print "****\nError: no dameta files in list\n";
 	    print "please remove daner_done:\n  $rootdir/daner_$outname.done\n";
@@ -3425,7 +3444,7 @@ unless ($nomega) {
     }
     unless (-e "$reportdir/$daner_all") {
 	die "error, since missing: $zehn[0]" unless (-e $zehn[0]);
-	print "concatenate $zehn[0]\n";
+	print "concatenate $zehn[0]\n" if ($debug);
 #    &mysystem ("rm $zehn[0]");
 	
 	
@@ -3491,7 +3510,7 @@ unless ($result_name){
 		if (@zehn == 0 ) {
 		    @zehn = @dalofiles;
 		}	  
-		print "$zehn[0]\n";
+		print "$zehn[0]\n" if ($debug);
 		my $sys_loc = "$damecat_script $danerdir_loc $reportdir/$daner_bim @dalofiles";
 		push @dametacat_arr, $sys_loc;
 
@@ -3545,7 +3564,7 @@ if ($nomega) {
 unless ($nohet_sw) {
 unless (-e "$reportdir/$daner_all_het") {
     unless ($cox) {   
-	print "create het_p_result\n";
+	print "create het_p_result\n" if ($debug);
 	my $sys_loc = "$danerhet2p_script $reportdir/$daner_all $reportdir/$daner_all_het";
 	push @daner_het2p_arr, $sys_loc;
 
@@ -3571,7 +3590,7 @@ if (@daner_het2p_arr > 0) {
 
 
 
-print "daner_summing done\n";
+print "daner_summing done\n" if ($debug);
 
 chdir ($reportdir);
 
@@ -3590,13 +3609,15 @@ if ($polyfrom_file ne "") {
 
 
     unless (-e $clu_out_file) {
-	my $sys = "$clumpnavi2_script --pfile $daner_all --hq_f .02 --hq_i .9 --out $outname --clu_p1 1 --clu_p2 1 --clu_window 500 --clu_r2 0.25 --refdir $refdir --reinvo $reinvo_file";
+	my $sys = "$clumpnavi2_script --pfile $daner_all --hq_f .02 --hq_i .9 --out $outname --clu_p1 1 --clu_p2 1 --clu_window 500 --clu_r2 0.25 --refdir $refdir --reinvo $reinvo_file --sepa $sepa";
 #	&mysystem($sys);
 	print "clump_navi needs to run on euro directory, with clump_nav3\n";#
 	print "$sys\n";#
 	exit;
 
 	&mysystem("echo $sys | $blueprint_script --njob $job_bn_th -b \"prefix\" -j --na clump_$outname");
+
+	
 	
 	my $now = localtime time;
 	my $message = $info_txt."\tclump\t$now";
@@ -3928,7 +3949,7 @@ unless (-e $prekno_file) {
 
     my @gwascat_files = `ls -rt $refdir/gwascatalog.*.rp.txt`;
     if (@gwascat_files > 0) {
-	print "using as gwas catalog file: ".$gwascat_files[$#gwascat_files]."\n";
+	print "using as gwas catalog file: ".$gwascat_files[$#gwascat_files]."\n" if ($debug);
 	$prekno_file = $gwascat_files[$#gwascat_files];
 	chomp($prekno_file)
 	    #	$prekno_txt = "--prekno $prekno_file";
@@ -4028,19 +4049,19 @@ my $areator_forplot = $areator_all.".locsorted.sorted.forplot";
 my $wc_loc = 0;
 
 unless (-e $areator_regplot) {
-    print "will do regioner\n";
+    print "will do regioner\n" if ($debug);
     my @pth_arr = qw /5.0e-08 1.0e-06 1.0e-05 1.0e-04 1.0e-03 1.0e-02 1.0e-01/;
     foreach my $pth_loc (@pth_arr) {
 	my $sys_str = "$comp1mhcreg_script --out $areator_all --pth $pth_loc $areator_all";
-	print "$sys_str\n";
+	print "$sys_str\n" if ($debug);
 	&mysystem ($sys_str);
 	$wc_loc = `wc -l $areator_regplot`;
 	if ($wc_loc > 5) {
-	    print "pth: $pth_loc\n";
+	    print "pth: $pth_loc\n"  if ($debug);
 	    last ;
 	}
 	else  {
-	    print "under five lines: $areator_regplot\n";
+	    print "under five lines: $areator_regplot\n" if ($debug);
 #	    last ;
 	}
     }
@@ -4050,7 +4071,7 @@ else {
 }
 
 if ($wc_loc < 1) {
-    print "no SNP meets e-04....\n";
+    print "no SNP meets e-04....\n" if ($debug);
     exit;
 }
 #exit;
@@ -4223,8 +4244,8 @@ my $area_plot_collection = "areas.$outname.pdf";
 #exit;
 
 unless (-e "$distdir/$area_plot_collection") {
-    print "join area_plots\n";
-    &mysystem ("$pdfjoin_script --rotateoversize false --outfile $area_plot_collection @areap_files");
+    print "join area_plots\n" if ($debug);
+    &mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile $area_plot_collection @areap_files");
 #    &mysystem ("gzip $area_plot_collection");
     &mysystem ("cp $area_plot_collection $distdir");
 
@@ -4234,8 +4255,8 @@ if ($regplot_file) {
     my $regplot_collection = "areas.$regplot_file.pdf";
 
     unless (-e "$distdir/$regplot_collection.gz") {
-	print "join reg_plots\n";
-	&mysystem ("$pdfjoin_script --rotateoversize false --outfile $regplot_collection @regplot_files");
+	print "join reg_plots\n" if ($debug);
+	&mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile $regplot_collection @regplot_files");
 	&mysystem ("gzip $regplot_collection");
 	&mysystem ("cp $regplot_collection.gz $distdir");
 	
@@ -4244,14 +4265,14 @@ if ($regplot_file) {
 
 }
 
-print "debug\n";
+print "debug\n" if ($debug);
 my $forest_plot_collection = "areas.fo.$outname.pdf";
 if (@forestp_files > 0) {
-    print "debug2\n";
+    print "debug2\n" if ($debug);
     unless (-e "$distdir/$forest_plot_collection") {
-	print "debug3\n";
-	print "join forest_plots\n";
-	&mysystem ("$pdfjoin_script --rotateoversize false --outfile $forest_plot_collection @forestp_files");
+	print "debug3\n" if ($debug);
+	print "join forest_plots\n" if ($debug);
+	&mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile $forest_plot_collection @forestp_files");
 #	&mysystem ("gzip $forest_plot_collection");
 	&mysystem ("cp $forest_plot_collection $distdir");
 	
@@ -4262,8 +4283,8 @@ if (@forestp_files > 0) {
 my $forest_plot_collection_het = "areas.fo.het.$outname.pdf";
 if (@forestphet_files > 0) {
     unless (-e "$distdir/$forest_plot_collection_het.gz") {
-	print "join forest_plots het\n";
-	&mysystem ("$pdfjoin_script --rotateoversize false --outfile $forest_plot_collection_het @forestphet_files");
+	print "join forest_plots het\n" if ($debug);
+	&mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile $forest_plot_collection_het @forestphet_files");
 	&mysystem ("gzip $forest_plot_collection_het");
 	&mysystem ("cp $forest_plot_collection_het.gz $distdir");
 	
@@ -4338,7 +4359,7 @@ foreach my $dc_loc (@daner_allcoll) {
 
 	my $sys4 = "$manhattanplot_script --lastp 0.001 --pth 0.001 $p_gene_txt --title Manhattan-Plot --sig-gwa --cols 2,11,1,3 -areator $dc_loc.p4.clump.areator.sorted.1mhc --out $dc_loc $infile";
 	unless (-e "manhattan.$dc_loc.pdf.empty") {
-	    print "$sys4\n";
+	    print "$sys4\n" if ($debug);
 	    push @gwa_arr, $sys4;
 	}
 
@@ -4376,21 +4397,21 @@ foreach my $dc_loc (@daner_allcoll) {
     if ($mn_loc < 2) {
 	&mysystem ("touch manhattan.$dc_loc.nog.pdf.empty");
 	&mysystem ("touch manhattan.$dc_loc.nog2.pdf.empty");
-	print "empty: manhattan.$dc_loc.nog.pdf.empty\n";
+	print "empty: manhattan.$dc_loc.nog.pdf.empty\n" if ($debug);
     }
     
     
     unless (-e "manhattan.$dc_loc.nog.pdf") {
 	my $sys4 = "$manhattanplot2_script --maxy 32  $p_gene_txt_nog --title Manhattan-Plot --sig-gwa --cols 2,11,1,3 -areator $m1mhcfile --out $dc_loc.nog $infile";
 	unless (-e "manhattan.$dc_loc.nog.pdf.empty") {
-	    print "$sys4\n";
+	    print "$sys4\n" if ($debug);
 	    push @gwa_arr, $sys4;
 	}
     }
     unless (-e "manhattan.$dc_loc.nog2.pdf") {
 	my $sys4 = "$manhattanplot2_script  $p_gene_txt_nog --title Manhattan-Plot --sig-gwa --cols 2,11,1,3 -areator $m1mhcfile --out $dc_loc.nog2 $infile";
 	unless (-e "manhattan.$dc_loc.nog2.pdf.empty") {
-	    print "$sys4\n";
+	    print "$sys4\n" if ($debug);
 	    push @gwa_arr, $sys4;
 	}
     }
@@ -4531,7 +4552,7 @@ if (@qq_arr > 0) {
 #    print "qq done\n";
 #}
 
-print "debug2b\n";
+print "debug2b\n" if ($debug);
 
 &mysystem ("cp $outname"."-qq.pdf $distdir/qq.$outname.pdf") unless (-e "$distdir/qq.$outname.pdf");
 unless ($nohet_sw) {
@@ -4554,10 +4575,17 @@ unless (-e "manhattan.daner_$outname.gz.nog2.pdf.empty") {
 }
 
 
-print "debug3\n";
+print "debug3\n" if ($debug);
 if ($gwclump) {
     chdir "$distdir";
+
     my $sys_tmp  = "echo $clumpnavi2_script --noindel --pfile $daner_all --hq_f .05 --hq_i .9 --out $daner_all --clu_p1 1.0 --clu_p2 1.0 --clu_window 500 --clu_r2 0.1 --refdir $areat_refdir  | $blueprint_script -b \"prefix\" --wa 4 -j --na _clumpnav_$daner_all";
+    my $bsys = $sys_tmp;
+
+    if ($serial) {
+	$sys_tmp  = "$clumpnavi2_script --noindel --pfile $daner_all --hq_f .05 --hq_i .9 --out $daner_all --clu_p1 1.0 --clu_p2 1.0 --clu_window 500 --clu_r2 0.1 --refdir $areat_refdir --serial --sepa $sepa";
+    }
+    
     my $bsys = $sys_tmp;
     
     
@@ -4566,9 +4594,13 @@ if ($gwclump) {
 	unless ($noclumper) {
 	    if (1) {
 
-		
-		my $sys_re = "$blueprint_script -b \"$bsys\" --wa 2 --di -j  --na _cl_$daner_all";
-		&mysystem ($sys_re);
+		if ($serial) {
+		    &mysystem ($bsys);
+		}
+		else {
+		    my $sys_re = "$blueprint_script -b \"$bsys\" --wa 2 --di -j  --na _cl_$daner_all";
+		    &mysystem ($sys_re);
+		}
 		
 #		&mysystem ($bsys);
 	    }
@@ -4598,7 +4630,7 @@ if ($gwclump) {
 	
 }
 
-print "debug4\n";
+print "debug4\n" if ($debug);
 
 my $numbers_file = "basic.$outname.num.xls";
 unless (-e "$distdir/$numbers_file") {
@@ -4617,7 +4649,7 @@ unless (-e "$distdir/$numbers_file") {
 
 
 
-print "debug5\n";
+print "debug5\n" if ($debug);
 
 
 if ($onlymeta) {
@@ -4650,7 +4682,7 @@ if ($onlymeta) {
 
 
 
-print "debug6\n";
+print "debug6\n" if ($debug);
 
 
 ###################################
@@ -4849,9 +4881,9 @@ unless ($nolahunt){
 	unless (-e "$distdir/report.qc.$outname.pdf.gz") {
 	    
 	    #### lahunts
-	    &mysystem ("$pdfjoin_script --rotateoversize false --outfile lahunt.$outname.pdf @lahu_pdf_arr");
+	    &mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile lahunt.$outname.pdf @lahu_pdf_arr");
 	    #    &mysystem ("pdfjoin --outfile lahunt.$outname.pdf @lahu_pdf_arr $scameta_out");
-	    &mysystem ("$pdfnup_script --nup 2x2 lahunt.$outname.pdf");
+	    &mysystem ("$pdfnup_script --quiet --nup 2x2 lahunt.$outname.pdf");
 	    
 	    &mysystem ("gzip -f lahunt.$outname-nup.pdf");
 	    &mysystem ("mv lahunt.$outname-nup.pdf.gz report.qc.$outname.pdf.gz");
@@ -4866,7 +4898,7 @@ unless ($nolahunt){
 if ($onlymeta){
 
 
-    print "exit after onlymeta\n";
+    print "exit after onlymeta\n" ;
 
 #############################################################
 ## SUCCESSSS
@@ -4930,18 +4962,18 @@ if (0) {
     ##sgwas and sqq
 unless (-e "$distdir/report.si.$outname.pdf.gz") {
     unless ($result_name){
-	print "join SGWAS and SQQ\n";
-	print "here single files: @sgwa_files\n";
-	&mysystem ("$pdfjoin_script --rotateoversize false --outfile sgwa.$outname.pdf @sgwa_files");
-	&mysystem ("$pdfjoin_script --rotateoversize false --outfile sqq.$outname.pdf @sqq_files");
-	&mysystem ("$pdfnup_script --nup 2x2 sgwa.$outname.pdf");
-	&mysystem ("$pdfnup_script --nup 2x2 sqq.$outname.pdf");
+	print "join SGWAS and SQQ\n" if ($debug);
+	print "here single files: @sgwa_files\n" if ($debug);
+	&mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile sgwa.$outname.pdf @sgwa_files");
+	&mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile sqq.$outname.pdf @sqq_files");
+	&mysystem ("$pdfnup_script --quiet --nup 2x2 sgwa.$outname.pdf");
+	&mysystem ("$pdfnup_script --quiet --nup 2x2 sqq.$outname.pdf");
 
 	unless ($nohet_sw) {
-	    &mysystem ("$pdfjoin_script --rotateoversize false --outfile report.si.$outname.pdf $outname"."-qq.pdf $outname.het"."-qq.pdf sqq.$outname-nup.pdf manhattan.daner_$outname.gz.pdf sgwa.$outname-nup.pdf");
+	    &mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile report.si.$outname.pdf $outname"."-qq.pdf $outname.het"."-qq.pdf sqq.$outname-nup.pdf manhattan.daner_$outname.gz.pdf sgwa.$outname-nup.pdf");
 	}
 	else {
-	    &mysystem ("$pdfjoin_script --rotateoversize false --outfile report.si.$outname.pdf $outname"."-qq.pdf sqq.$outname-nup.pdf manhattan.daner_$outname.gz.pdf sgwa.$outname-nup.pdf");
+	    &mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile report.si.$outname.pdf $outname"."-qq.pdf sqq.$outname-nup.pdf manhattan.daner_$outname.gz.pdf sgwa.$outname-nup.pdf");
 	}
 	&mysystem ("gzip -f report.si.$outname.pdf");
 	&mysystem ("cp report.si.$outname.pdf.gz $distdir");
@@ -5002,7 +5034,7 @@ chdir ($rootdir);
 my $performerdir = "$rootdir/performer";
 
 unless (-e $performerdir){
-    print "performer_dir is not existing, create one for you\n";
+    print "performer_dir is not existing, create one for you\n" if ($debug);
     my @created = mkpath(   ## $created ?
 			    $performerdir,
 			    {verbose => 0, mode => 0750},

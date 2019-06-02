@@ -103,6 +103,8 @@ version: $version
 
   --bfile          input is binary plink file (e.g. whole genome best guess)
 
+  --debug          extended output
+
  batch_identifier: files matching this should all have no double id-entries
 
  expects a running plink and beagle version somewhere in the path, 
@@ -146,6 +148,7 @@ GetOptions(
     "bfile=s"=> \my $bfile,
     "sout=s"=> \$sout,
     "range=s"=> \$range_file,
+    "debug"=> \my $debug,
     );
 
 
@@ -199,7 +202,7 @@ sub count_lines {
 
 sub get_files(){
     foreach (@_) {
-	print "$_\n";
+	print "$_\n" if ($debug);
 	copy ($_,".") or die $!."($_)";
     }
 }
@@ -262,7 +265,7 @@ my $workdir="$scratchdir/dan_$workname";
     }
 #}
 
-print "workdir: $workdir\n";
+print "workdir: $workdir\n" if ($debug);
 
 my @created_work = mkpath(   ## $created ?
 			"$workdir",
@@ -390,7 +393,7 @@ if ($danscore_file) {
    
     unless (-e $score_p_file) {
 	my $beta = 0;
-	print "read map\n";
+	print "read map\n" if ($debug);
 	my %snp_coll ;
 
 	unless ($bfile) {
@@ -403,7 +406,7 @@ if ($danscore_file) {
 	    close IFILE;
 	}
 
-	print "write score files\n";
+	print "write score files\n" if ($debug);
 	die ":".$! unless open IFILE, "< $danscore_nogz";
 	die ":".$! unless open PFILE, "> $score_p_file";
 	die ":".$! unless open WFILE, "> $score_w_file";
@@ -422,7 +425,7 @@ if ($danscore_file) {
 	unless (exists $col_hash{"OR"}) {
 	    if (exists $col_hash{"BETA"}) {
 		$beta = 1;
-		print "found BETA column\n";
+		print "found BETA column\n" if ($debug);
 	    }
 	    else {
 		print "no OR column\n";
@@ -481,7 +484,7 @@ if ($danscore_file) {
 	close WFILE;
     }
     if ($counts ==0) {
-	print "no SNPs for polyscore left for this chunk\n";
+	print "no SNPs for polyscore left for this chunk\n" if ($debug);
 	&mysystem("echo chunk empty > $outdir/dan_$workname.profile.log");
 	
 	exit;
@@ -492,7 +495,7 @@ if ($danscore_file) {
 }
 
 
-print "copy done\n";
+print "copy done\n" if ($debug);
 #exit;
 
 #dos_chr1_1.out.dosage.ngt
@@ -765,9 +768,12 @@ if ($mds_name){
 	$mdsin{"$cells[0]\t$cells[1]"} = 1;
 	my $covstr = "";
 	foreach my $cc (@mcols) {
+	    print "$cc\n" if ($debug);
 	    $covstr .= " ".$cells[$cc+2];
 	}
 	$mdsvals{"$cells[0]\t$cells[1]"} = $covstr;
+	print "$covstr\n" if ($debug);
+	sleep (4) if ($debug);
     }
     close FILE;
 }
@@ -915,27 +921,17 @@ close IFILE;
 close OFILE;
 close EFILE;
 
-print "Nall: $Nall\n";
+print "Nall: $Nall\n" if ($debug);
 #sleep (5);
 
-print "star: $star\n";
-print "cases: $ncaco{2}\n";
-print "controls: $ncaco{1}\n";
-if (0) {
-    if ($ncaco{1} ==0){
-	print "no controls left\n";
-	exit;
-    }
-    if ($ncaco{2} ==0){
-	print "no cases left\n";
-	exit;
-    }
-}
+print "star: $star\n" if ($debug);
+print "cases: $ncaco{2}\n" if ($debug);
+print "controls: $ncaco{1}\n" if ($debug);
 
 my $quant_pt = 0;
 if ($ncaco{1} + $ncaco{2} < 5) {
     $quant_pt = 1;
-    print "quantitative_phenotype\n";
+    print "quantitative_phenotype\n" if ($debug);
 }
 
 
@@ -996,23 +992,23 @@ my $caco_txt = "case-control-freqs";
 #}
 
 unless ($danscore_file) {
-    $sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2  $caco_txt --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
+    $sys = "$p2loc/plink --silent --memory 2000 --dosage $dosfile format=2  $caco_txt --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";
 
 
 }
 else {
 
     unless ($bfile) {
-	$sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $idex_str --q-score-range $range_file $score_p_file --score $score_w_file";
+	$sys = "$p2loc/plink --silent --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $idex_str --q-score-range $range_file $score_p_file --score $score_w_file";
     }
     else {
-	$sys = "$p2loc/plink --memory 2000 --bfile $bfile --keep $bfile.fam.pt --allow-no-sex --out $workname $idex_str --q-score-range $range_file $score_p_file --score $score_w_file sum";
+	$sys = "$p2loc/plink --silent --memory 2000 --bfile $bfile --keep $bfile.fam.pt --allow-no-sex --out $workname $idex_str --q-score-range $range_file $score_p_file --score $score_w_file sum";
     }
 
 }
 
 
-print "$sys\n";
+print "$sys\n" if ($debug);
 
 
 #sleep(10);
@@ -1132,9 +1128,9 @@ if ($danscore_file) {
 	my $nn=1;
 
 	while ($line = <IFILE>){
-	    print "nn:    $nn\n";
-	    print "count: $count_bin[$nn]\n";
-	    print "nbin:  $n_bin[$nn]\n";
+	    print "nn:    $nn\n" if ($debug);
+	    print "count: $count_bin[$nn]\n" if ($debug);
+	    print "nbin:  $n_bin[$nn]\n" if ($debug);
 	    my $mean_loc = int(($count_bin[$nn]/$n_bin[$nn])/2 + 0.5);
 	    print PFILE "$mean_loc\t$line";
 	    $nn++;
@@ -1199,8 +1195,8 @@ foreach my $iperm (1..$permut) {
 	close IFILE;
 	close PFILE;
 	
-	my $sys = "$p2loc/plink --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt.perm --allow-no-sex --out $workname.perm --map $mapfile $cov_str";
-	print "$sys\n";
+	my $sys = "$p2loc/plink --silent --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt.perm --allow-no-sex --out $workname.perm --map $mapfile $cov_str";
+	print "$sys\n" if ($debug);
 	
 	&mysystem($sys);
 	

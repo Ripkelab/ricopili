@@ -29,7 +29,7 @@ else {
     die;
 }
 
-print "Config_file: $conf_file\n";
+#print "Config_file: $conf_file\n";
 #print "sleep\n";
 #sleep(10);
 

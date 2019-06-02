@@ -47,6 +47,9 @@ version: $version
   --out STRING     outname
   --keep STRING    keep file
 
+  --debug             extended output
+
+
  created by Stephan Ripke 2016 at MGH, Boston, MA
  
 ";
@@ -59,6 +62,7 @@ GetOptions(
     "bfile=s"=> \my $bfile,
     "out=s"=> \my $out,
     "keep=s"=> \my $keep,
+    "debug"=> \my $debug,
     );
 
 
@@ -88,15 +92,15 @@ sub mysystem(){
 ##########################################
 
 
-my $sys = "$p2loc/plink --memory 2000 --bfile $bfile --keep $keep --freq gz --out $out --make-bed --threads 10\n";
-print ("$sys\n");
+my $sys = "$p2loc/plink --silent --memory 2000 --bfile $bfile --keep $keep --freq gz --out $out --make-bed --threads 10\n";
+print ("$sys\n") if ($debug);
 &mysystem ("$sys");
 
 
 
-print "--------------------\n";
-print "rewriting frq-file\n";
-print "--------------------\n";
+print "--------------------\n" if ($debug);
+print "rewriting frq-file\n" if ($debug);
+print "--------------------\n" if ($debug);
 
 ## read positions
 ##################

@@ -6,6 +6,7 @@ my $version = "1.0.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 
+my $debug = 0;
 
 
 ##### help message
@@ -71,9 +72,9 @@ while ($line = <MDI>) {
 close MDI;
 
 my $nst = $cc;  ## Nstudies
-print "$nst\n";
+print "$nst\n" if ($debug);
 foreach (keys %studies) {
-    print "$_\n";
+    print "$_\n" if ($debug);
 }
 #exit;
 

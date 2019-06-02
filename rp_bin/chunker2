@@ -49,7 +49,8 @@ GetOptions(
 #	    "pfile=s"=> \$pfile,
 	    "chunk_window=i"=> \$cwindow,
 	    "workdir=s"=> \my $workdir,
-	    "Xchr"=> \my $Xchr,
+    "Xchr"=> \my $Xchr,
+        "debug"=> \my $debug,
     );
 
 
@@ -65,7 +66,7 @@ version: $version
         --chunk_window INT  in Mb
         --workdir STRING    if directory to work in is different 
         --Xchr              one chromosome
-
+        --debug             extended output
 
  created by Stephan Ripke 2011 at MGH, Boston, MA
  in the frame of the PGC
@@ -141,7 +142,7 @@ if ($pfile =~ /.gz$/) {
     $pfile_nogz =~ s/.gz$//;
 
     unless (-e $pfile_nogz) {
-	print "unzip file: $pfile\n";
+	print "unzip file: $pfile\n"if ($debug);
 	&mysystem("gunzip -c $pfile > $pfile_nogz.tmp");
 	&mysystem("mv $pfile_nogz.tmp $pfile_nogz");
     }
@@ -176,7 +177,7 @@ if ($Xchr){
 ###########################
 my $pfile_chr = $pfile.".chromed";
 unless (-e $pfile_chr) {
-    print "split into chromosomes\n";
+    print "split into chromosomes\n" if ($debug);
     my %ccount ;
     my @filehandles;
     push @filehandles, "nichts";
@@ -228,7 +229,7 @@ unless (-e $pfile_chr) {
     foreach my $chr ($chr_start..$chr_end) {
 	my $file_loc = $filehandles[$chr];
 	close $file_loc;
-	print "size of $pfile.chr$chr: $ccount{$chr}"."\n";
+	print "size of $pfile.chr$chr: $ccount{$chr}"."\n" if ($debug);
     }
 
     &mysystem("touch $pfile_chr");
@@ -245,7 +246,7 @@ my $pfile_sorted = $pfile.".sorted";
 unless (-e $pfile_sorted){
 
     foreach my $chr ($chr_start..$chr_end) {
-	print "sort $pfile.chr$chr\n";
+	print "sort $pfile.chr$chr\n" if ($debug);
 	&mysystem("sort -k$poscol,$poscol"."n $pfile.chr$chr > $pfile.chr$chr.sorted.tmp");
 	&mysystem("mv $pfile.chr$chr.sorted.tmp $pfile.chr$chr.sorted");
 	&mysystem("rm $pfile.chr$chr");
@@ -266,19 +267,19 @@ unless (-e $pfile_sorted){
 ##########################
 
 my $pfile_chunked = $pfile.".chunked";
-print "$pfile_chunked: debug 4\n";
+print "$pfile_chunked: debug 4\n" if ($debug);
 
 unless (-e $pfile_chunked){
 
 
 
-    print "debug 5\n";
+    print "debug 5\n" if ($debug);
     
     my %scount;
     my %cname;
 
     foreach my $chr ($chr_start..$chr_end) {
-	print "chunk Chr. $chr\n";
+	print "chunk Chr. $chr\n" if ($debug);
 #    my $old_mpos = 0;
 	my $lowpos = 0;
 	my $highpos = 0;
@@ -360,7 +361,7 @@ unless (-e $pfile_chunked){
 
 
 foreach my $chr ($chr_start..$chr_end) {
-    print "remove $pfile.chr$chr.sorted\n";
+    print "remove $pfile.chr$chr.sorted\n" if ($debug);
     &mysystem("rm $pfile.chr$chr.sorted");
 }
 &mysystem("rm $pfile_nogz");

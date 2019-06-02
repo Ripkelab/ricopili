@@ -43,6 +43,7 @@ GetOptions(
     "vcf=s"=> \$vcffile,
     "out=s"=> \$outprefix,
     "mac_th=i"=> \$mac_th,
+    "debug"=> \my $debug,
     );
 
 
@@ -57,7 +58,7 @@ version: $version
         --vcf STRING        name of vcf file
         --out STRING        prefix, haps.gz, legend.gz will be appended
 
-
+        --debug             extended output
 
  converts cvf into hp/lagend format for impute2
 
@@ -71,7 +72,7 @@ version: $version
 
 
 my $sys = "$bcloc"."bcftools convert --vcf-ids -h  $outprefix $vcffile";
-print "$sys\n";
+print "$sys\n" if ($debug);
 #exit;
 
 my $sc =system ($sys);

@@ -46,6 +46,7 @@ version: $version
 
   --out STRING  for outfile
 
+  --debug       more output
 
 
   ############ for standalone users #####################
@@ -73,18 +74,22 @@ GetOptions(
     "xlim=s"=> \$xlim,
     "out=s"=> \$out,
     "rloc=s"=> \$rloc,
-
+    "debug"=> \my $debug,
+    
     );
 
 die "$usage\n" if $help;
 die "$usage\n" if $out eq "outname";
 
-
+my $r_silent = "> /dev/null 2>&1";
+if ($debug) {
+    $r_silent = "";
+}
 
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -178,7 +183,7 @@ while (my $line = <FILE>){
 close FILE;
 close HP;
 
-print "$lc values\n";
+print "$lc values\n" if ($debug);
 
 
 
@@ -265,12 +270,12 @@ $R_hist_in=~ s/TITLE/$file/g;
 
 &a2file ("$file.hisplo.Rin", $R_hist_in);
 
-my $system="$r_sys --vanilla < $file.hisplo.Rin";
+my $system="$r_sys --vanilla < $file.hisplo.Rin $r_silent";
 #my $system="source /broad/software/scripts/useuse; use R-2.14; R --vanilla < $file.hisplo.Rin";
 &mysystem($system);
 
 
-print "success: $out.pdf\n";
+print "success: $out.pdf\n" if ($debug);
 
 
 #exit;

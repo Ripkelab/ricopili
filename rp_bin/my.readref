@@ -22,6 +22,9 @@ version: $version
   --chr INT  chromosome
   --help     print this help message and exit
 
+  --debug    extended output
+
+
  works with gzipped files on the ref-side
 
  created by Stephan Ripke 2012 at MGH, Boston, MA
@@ -35,7 +38,8 @@ GetOptions(
 
     "help"=> \my $help,
 #    "col=i"=> \ $coln,
-#    "th=i"=> \ $th,
+    #    "th=i"=> \ $th,
+    "debug"=> \my $debug,
     "ref=s"=> \my $reffile,
     "chr=s"=> \my $chrstr,
     );
@@ -62,7 +66,7 @@ if ($chrstr == "X") {
 
 my $outfile = $bimfile.".ref.chr$chrstr"; 
 
-print "$bimfile\n$reffile\t$chrstr\n";
+print "$bimfile\n$reffile\t$chrstr\n" if ($debug);
 
 ##########################################
 # subroutine to split a plink-output-line with references
@@ -97,7 +101,7 @@ use Compress::Zlib ;
 #####################################
 
 #read bimfile
-print "read bimfile into hash\n";
+print "read bimfile into hash\n" if ($debug);
 my %snphash;
 my %lochash;
 my %lochash_frq;
@@ -251,5 +255,5 @@ close OF;
 
 &mysystem ("mv $outfile.tmp $outfile");
 
-print "done\n";
+print "done\n" if ($debug);
 

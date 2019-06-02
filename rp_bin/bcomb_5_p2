@@ -52,6 +52,9 @@ version: $version
 
   --b1ref             take first one as reference
 
+  --debug             extended output
+
+
   here HM3 reference
 
 
@@ -129,6 +132,7 @@ GetOptions( "out=s"=> \my $out,
 	    "iefile=s"=> \my $iefile,
 	    "ref=s"=> \$reffile,
 	    "nidout=i"=> \$nidout,
+	    "debug"=> \my $debug,
 	    "help!"=> \my $help );
 
 
@@ -187,7 +191,7 @@ while (-e $workdir) {
 
 
 
-print "workdir: $workdir\n";
+print "workdir: $workdir\n"  if ($debug);
 
 
 my @created = mkpath(
@@ -235,7 +239,7 @@ $flip{"GT"} = "AC";
 my %gts;
 
 foreach my $bele (@bfile_list) {
-    print "processing $bele.bim\n";
+    print "processing $bele.bim\n"  if ($debug);
     my $inbele = "$rootdir/$bele";
     if ($bele =~ /^\//) {
 	$inbele = "$bele";
@@ -391,7 +395,7 @@ else {
 #print "n_common_snps: ".@common_snps.", rand_th_snps: $rand_th_snps"."\n";
 #exit;
 #	print "lkdsjlk@bfile_list\n";		
-print "print Intersection-List\n";
+print "print Intersection-List\n"  if ($debug);
 
 
 ###############################################
@@ -423,7 +427,7 @@ foreach my $iname (@idarr) {
     }
 }
 close (INTERID);
-print "$cc in final dataset\n";
+print "$cc in final dataset\n"  if ($debug);
 
 
 my $keep_str = "";
@@ -445,7 +449,7 @@ if ($b1ref) {
     print "create reference\n";
     print "create freq\n";
 
-    my $cmd="$p2loc/plink --memory 2000 --bfile $rootdir/$fbfile --out $fbfile.f --freq --extract SNPs.intersec" ;
+    my $cmd="$p2loc/plink --silent --memory 2000 --bfile $rootdir/$fbfile --out $fbfile.f --freq --extract SNPs.intersec" ;
     &mysystem ("$cmd");
 
     my $header= <INFILE>;
@@ -512,7 +516,7 @@ foreach my $bele (@bfile_list) {
     my $btemp = $bele;
     $btemp =~ s/.*\///;
     push @bfile_short, $btemp;
-    print "$bele, $btemp\n";
+    print "$bele, $btemp\n"  if ($debug);
 }
 #exit;
 
@@ -529,7 +533,7 @@ open MERGE, ">", "$merge_list_name" or die $!;
 my $bfile_count=0;
 my $bs_count=0;
 foreach my $bele (@bfile_list) {
-    print "create single-sub of $bele"."\n";
+    print "create single-sub of $bele"."\n"  if ($debug);
 
     my $b_short = $bfile_short[$bs_count];
 
@@ -542,12 +546,12 @@ foreach my $bele (@bfile_list) {
 
     if ($flip_sw) {
     
-	my $cmd = "$p2loc/plink --memory 2000 --bfile $inbele --out $b_short.tmp --make-bed $remove_str $keep_str --extract SNPs.intersec";
-	print "1: $cmd\n";
+	my $cmd = "$p2loc/plink --silent --memory 2000 --bfile $inbele --out $b_short.tmp --make-bed $remove_str $keep_str --extract SNPs.intersec";
+	print "1: $cmd\n"  if ($debug);
 	&mysystem ($cmd);
 
-	$cmd = "$p2loc/plink --memory 2000 --bfile $b_short.tmp --make-bed --out $b_short --flip $rootdir/$bele.bim.flip";
-	print "2: $cmd\n";
+	$cmd = "$p2loc/plink --silent --memory 2000 --bfile $b_short.tmp --make-bed --out $b_short --flip $rootdir/$bele.bim.flip";
+	print "2: $cmd\n"  if ($debug);
 	&mysystem ($cmd);
 
 	&mysystem ("rm $b_short.tmp.bed");
@@ -560,7 +564,7 @@ foreach my $bele (@bfile_list) {
     }
     else {
 
-	my $cmd = "$p2loc/plink --memory 2000 --bfile $inbele --out $b_short --make-bed $remove_str $keep_str --extract SNPs.intersec";
+	my $cmd = "$p2loc/plink --silent --memory 2000 --bfile $inbele --out $b_short --make-bed $remove_str $keep_str --extract SNPs.intersec";
 	&mysystem ($cmd);
 	
     }
@@ -608,7 +612,7 @@ close (MERGE);
 #exit 2;
 
 
-print "Merging now\n";
+print "Merging now\n"  if ($debug);
 
 
 if ($reffile ne "NOFILE") {
@@ -624,7 +628,7 @@ if (@ARGV == 1) {
     $merge_txt = "";
 }
 
-my $system="$p2loc/plink --memory 2000 --allow-no-sex --bed $fbfile_short.bed --bim $fbfile_short.bim --fam $fbfile_short.fam $merge_txt --out $out.s1 --make-bed" ;
+my $system="$p2loc/plink --silent --memory 2000 --allow-no-sex --bed $fbfile_short.bed --bim $fbfile_short.bim --fam $fbfile_short.fam $merge_txt --out $out.s1 --make-bed" ;
 #    print "$system\n";
 &mysystem ("$system");
 
@@ -678,11 +682,11 @@ else {
 
 if ($s2_count != $s1_count) {
     print "create stage2\n";
-    my $system="$p2loc/plink --memory 2000 --bfile $out.s1 --out $out --extract SNPs.intersec.s2 --make-bed" ;
+    my $system="$p2loc/plink --silent --memory 2000 --bfile $out.s1 --out $out --extract SNPs.intersec.s2 --make-bed" ;
     &mysystem ($system);
 }
 else {
-    print "no further adjustment on overlap\n";
+    print "no further adjustment on overlap\n"  if ($debug);
     &mysystem ("mv $out.s1.bed $out.bed");
     &mysystem ("mv $out.s1.bim $out.bim");
     &mysystem ("mv $out.s1.fam $out.fam");
@@ -691,7 +695,7 @@ else {
 
 
 
-print "cleaning up\n";
+print "cleaning up\n"  if ($debug);
 
 &mysystem ("mv $out.bim $rootdir");
 &mysystem ("mv $out.bed $rootdir");

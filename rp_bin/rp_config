@@ -15,6 +15,7 @@ $progname =~ s!^.*/!!;
 
 my $rp_custom_installation_file = "rp_config.custom.txt";
 
+my $setting_path_text = "";
 
 my $custom_txt = "
 -----------------------------------------------
@@ -48,6 +49,9 @@ Usage : $progname [options] --help
 
  --rphome STRING       different homedirectory for ricopili.conf (by default it is environement HOME)
  --depdir STRING       replace expression DEPDIR with STRING in the customfile (e.g. dependency_directory tends to get used multiple times)
+
+ --nointeract          do not interact with the user about changing .bashrc
+                           PATH wont be set so user needs to logout and login again
 
 
  this script is trying to make the configuration of the ricopili pipeline as convenient as possible.
@@ -146,6 +150,7 @@ use Getopt::Long;
 GetOptions( 
     
     "help"=> \my $help,
+    "nointeract"=> \my $nointeract,
     "customfile=s"=> \$rp_custom_installation_file,
     "rphome=s"=> \$rphome,
     "depdir=s"=> \my $depdir,
@@ -489,8 +494,9 @@ if ($shell ne "bash" && $shell ne "tcsh") {
     print "Warning! Shell not recognized: $shell\n";
     print "Please send email to rp_dev\@broadinstitute.org\n";
 }
-print "Detected you are using the following shell: $shell\n\n";
 
+print "\n\nYou are using the following shell (is this correct? if not please stop with ctr-c): $shell\n\n";
+sleep(5);
 
 #############################
 # Determine the shell-bashrc
@@ -753,23 +759,29 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
 	close FILE;
     }
 
-
     print "\n\n";
     print "*********************************************************************\n";
-    print "*** Setting the path (permanantly and for this sesion ***************\n";
+    print "*** Setting the path (permanantly)                    ***************\n";
     print "***     for the ricopili scripts and for pdfjam       ***************\n";
     print "*********************************************************************\n";
     print "\n";
+    
+    
+    
+    unless ($nointeract) {
 
-    print "*********************************************************************\n";
-    print "*****  please read and follow instructions below, *******************\n";
-    print "*****              only then restart ./rp_config  *******************\n";
-    print "**********************************************************************\n";
-    print "\n\n";
+	print "*********************************************************************\n";
+	print "*****  please read and follow instructions below, *******************\n";
+	print "*****              only then restart ./rp_config  *******************\n";
+	print "**********************************************************************\n";
+	print "\n\n";
+	
+	print "## Please run the following commands to permanently add rp_bin to the default search path: \n";
+	print "##     (the last two add the necessary paths also to your current session) \n\n";
 
-    print "## Please run the following commands to permanently add rp_bin to the default search path: \n";
-    print "##     (the last two add the necessary paths also to your current session) \n\n";
+    }
 
+    
 
     if ($clusters{broad}){
         my $i = 1;
@@ -912,28 +924,43 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
 
 
     elsif ($clusters{custom}){
-	my $i = 1;    
 	if ($shell eq "bash") {
-	    print "\tcat $bash >> $bashrc\n";
-	    $i += 1;
-	    print "\tPATH=$cdir:\$PATH\n";
-	    $i += 1;
-	    print "\tPATH=$cdir/pdfjam:\$PATH\n";
-	    $i += 1;
-	    print "\texport rp_perlpackages=$path_to_perlmodules\n";
-	    print "\texport RPHOME=$rphome\n";
-	    $i += 1;
+
+	    my $cmd_loc = "";
+	    $cmd_loc .= "\tPATH=$cdir:\$PATH;\n";
+	    $cmd_loc .= "\tPATH=$cdir/pdfjam:\$PATH;\n";
+	    $cmd_loc .= "\texport rp_perlpackages=$path_to_perlmodules;\n";
+	    $cmd_loc .= "\texport RPHOME=$rphome;\n";
+
+	    $setting_path_text = $cmd_loc;
+	    
+	    if ($nointeract) {
+		&mysystem ("cat $bash >> $bashrc");
+	    }
+	    else {
+		$cmd_loc .= "\tcat $bash >> $bashrc;\n";
+		print "$cmd_loc";
+	    }
 	}
 
 	if ($shell eq "tcsh") {
-	    print "\tcat $csh >> $bashrc\n";
-	    $i += 1;
-            print "\tset path=($cdir \$path)\n";
-            $i += 1;
-            print "\tset path=($cdir/pdfjam \$path)\n";
-            $i += 1;
-            print "\tsetenv RPHOME $rphome\n";
-            $i += 1;
+
+	    my $cmd_loc = "";
+	    
+	    $cmd_loc .= "\tset path=($cdir \$path)\n";
+	    $cmd_loc .= "\tset path=($cdir/pdfjam \$path)\n";
+	    $cmd_loc .= "\tsetenv RPHOME $rphome\n";
+	    $cmd_loc .= "\tsetenv rp_perlpackages $path_to_perlmodules\n";
+	    
+	    $setting_path_text = $cmd_loc;
+	    
+	    if ($nointeract) {		
+		&mysystem ("cat $csh >> $bashrc");
+	    }
+	    else {
+		$cmd_loc .= "\tcat $csh >> $bashrc\n";
+		print "$cmd_loc";
+	    }
 	}
 	
     }
@@ -969,18 +996,24 @@ unless ($status_bin == 0  && $status_pdfjam == 0) {
     
     &mysystem("touch install_true");        
     print "\n\n";
-    print "*********************************************************************\n";
-    print "*****  please read and follow instructions above, *******************\n";
-    print "*****              only then restart ./rp_config  *******************\n";
-    print "**********************************************************************\n";
-    print "\n\n";
-    exit;
+    
+    unless ($nointeract){
+	print "*********************************************************************\n";
+	print "*****  please read and follow instructions above, *******************\n";
+	print "*****              only then restart ./rp_config  *******************\n";
+	print "**********************************************************************\n";
+	print "\n\n";
+	exit;
+    }
+
 
 }
 
-print "Required directories found in search path:\n";
-print "\trp_bin/ -- success\n";
-print "\trp_bin/pdfjam/ -- success\n\n";
+unless ($nointeract){
+    print "Required directories found in search path:\n";
+    print "\trp_bin/ -- success\n";
+    print "\trp_bin/pdfjam/ -- success\n\n";
+}
 
 system("latex small2e > /dev/null"); # dummy script that doesn't do anything
 my $status_latex = ($? >> 8);
@@ -1079,24 +1112,26 @@ if ($clusters{unc_slurm} == 1){
 if ($clusters{custom} == 1){
 
 #    print  "path2perl:".$path_to_perlmodules."\n";
-#    sleep(10);
-    unless (exists $ENV{rp_perlpackages}) {
-        print "Run the following commands to add rp_perlpackages as an environmental variable:\n";
-        print "echo \"export rp_perlpackages=$path_to_perlmodules\" >> ~/.bashrc\n";
-        print "export rp_perlpackages=$path_to_perlmodules\n";
-        print "./rp_config\n\n";
-        exit;
-    }
-    else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
+    #    sleep(10);
+    unless ($nointeract){
+	unless (exists $ENV{rp_perlpackages}) {
+	    print "Run the following commands to add rp_perlpackages as an environmental variable:\n";
+	    print "echo \"export rp_perlpackages=$path_to_perlmodules\" >> ~/.bashrc\n";
+	    print "export rp_perlpackages=$path_to_perlmodules\n";
+	    print "./rp_config\n\n";
+	    exit;
+	}
+	else { print "Detected rp_perlpackages as an environmental variable.\n\n";}
 
-    unless (exists $ENV{RPHOME}) {
-        print "Run the following commands to add RPHOME as an environmental variable:\n";
-        print "echo \"export RPHOME=$rphome\" >> ~/.bashrc\n";
-        print "export RPHOME=$rphome\n";
-        print "./rp_config\n\n";
-        exit;
+	unless (exists $ENV{RPHOME}) {
+	    print "Run the following commands to add RPHOME as an environmental variable:\n";
+	    print "echo \"export RPHOME=$rphome\" >> ~/.bashrc\n";
+	    print "export RPHOME=$rphome\n";
+	    print "./rp_config\n\n";
+	    exit;
+	}
+	else { print "Detected RPHOME as an environmental variable.\n\n";}
     }
-    else { print "Detected RPHOME as an environmental variable.\n\n";}
     
 }
 
@@ -2089,7 +2124,6 @@ if ($#fail_path != -1) {
 
 
 &mysystem("rm install_true");    
-&mysystem("echo \"Configuration for RP was successful.\" | mail -s rp_config  $conf{'email'}");    
 
 
 
@@ -2152,11 +2186,21 @@ print "*********************************************************************\n";
 print "*********************************************************************\n";
 print "*********************************************************************\n";
 print "*****  you should be able to use the pipeline as described        ***\n";
-print "*****  if you want to use it from a different login:              ***\n";
-print "*****      logout and relogin so that PATH is set correctly       ***\n";
+
+unless ($nointeract){
+    print "*****  if you want to use it from a different login:              ***\n";
+}
+
+print "*****    please logout and relogin so that PATH is set correctly  ***\n";
+print "*****    or if you want to use ricopili in this session, please   ***\n";
+print "*****       run the following from the command line               ***\n";
+print "*********************************************************************\n";
+print $setting_path_text;
 print "*********************************************************************\n";
 print "\n\n";
-print "If you do not receive a success email with the subject rp_config, please check your email address is entered correctly at $conf_file\n\n";
+unless ($nointeract){
+    print "If you do not receive a success email with the subject rp_config, please check your email address is entered correctly at $conf_file\n\n";
+}
 
 
 exit;

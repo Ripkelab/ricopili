@@ -89,7 +89,7 @@ use Ricopili::Version;
 
 
 
-
+my $serial = 0;
 
 my $ploc = &trans("p2loc");
 my $qloc = &trans("queue");
@@ -99,6 +99,7 @@ my $hmloc = &trans("hmloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
 my $bcrloc = &trans("bcrloc");
+my $bcmd = &trans("batch_jobcommand");
 
 #######################################
 
@@ -106,6 +107,16 @@ my $bcrloc = &trans("bcrloc");
 ###################################
 # variables
 ####################################
+
+
+if ($bcmd eq "SERIAL") {
+    $serial = 1;
+    print "-----------------------------------------------------\n";
+    print "switched on SERIAL mode because of configuration file\n";
+}
+
+
+
 
 #my $version = "1.0.2";
 my $progname = $0;
@@ -186,11 +197,16 @@ GetOptions(
     "qheadd=i"=> \$q16_head,
     "mac_th=i"=> \$mac_th,
     "walltimeplus=i"=> \$walltimeplus,
-    "serial"=> \my $serial,
+    "serial"=> \my $serial_sw,
     "sepa=i"=> \$sepa,
     
     );
 
+
+
+if ($serial_sw) {
+    $serial = 1;
+}
 
 
 ############################################################
@@ -250,11 +266,11 @@ push @test_scripts, $refinfo_script ;
 
 $rp_header =~ s/MODULE/refdir_navi  /;
 
-print "$rp_header\n";
+print "$rp_header\n" ;
 
 
 
-print ".......testing necessary binaries....\n";
+print ".......testing necessary binaries....\n" if ($debug);
 
 my $err_scr = 0;
 die $! unless open FILE1, "> get_scripts_on_broad.txt";
@@ -263,7 +279,7 @@ foreach my $scr_name (@test_scripts) {
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$scr_name" && -x _ ) {
-	    print "$scr_name\tfound in $path\n";
+	    print "$scr_name\tfound in $path\n" if ($debug);
 	    $scr_path = "$path/$scr_name";
 	    last;
 	}
@@ -286,7 +302,7 @@ if ($err_scr == 1) {
 
 
 
-print ".......testing email program....\n";
+print ".......testing email program....\n" if ($debug);
 
 my $err_scr = 0;
 my $noti = 1;
@@ -295,26 +311,26 @@ my $noti = 1;
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$mutt_script" && -x _ ) {
-	    print "$mutt_script\tfound in $path\n";
+	    print "$mutt_script\tfound in $path\n" if ($debug);
 	    $scr_path = "$path/$mutt_script";
 	    last;
 	}
     }
     unless ( $scr_path ) {
 
-	print "!!Warning!! : No $mutt_script command available, trying mutt\n" ;
+	print "!!Warning!! : No $mutt_script command available, trying mutt\n" if ($debug);
 
 	$mutt_script = "mutt";
 	for my $path ( split /:/, $ENV{PATH} ) {
 	    if ( -f "$path/$mutt_script" && -x _ ) {
-		print "$mutt_script\tfound in $path\n";
+		print "$mutt_script\tfound in $path\n" if ($debug);
 		$scr_path = "$path/$mutt_script";
 		last;
 	    }
 	}
 	unless ( $scr_path ) {
 #	    $err_scr = 1;
-	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" ;
+	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" if ($debug);
 	    $noti=0;
 	    sleep (3);
 	}
@@ -324,8 +340,8 @@ my $noti = 1;
 die if $err_scr == 1;
 
 
-print "....all necessary binaries found....\n";
-print "------------------------------------\n";
+print "....all necessary binaries found....\n" if ($debug);
+print "------------------------------------\n" if ($debug);
 #push @scripts,"id_tager_3";
 
 
@@ -570,6 +586,7 @@ sub send_jobarray {
     die "send_jobarray with undefined variables, time" if ($sjatime < 0);
     die "send_jobarray with undefined variables, info" if ($sjainfotxt eq "");
 
+    print "Running job: $sjaname\n";
 
     my $now = localtime time;
     $now =~ s/ /_/g;
@@ -673,9 +690,7 @@ sub send_jobarray {
 	    close ERR;
 
 	    if ($noti == 1) {
-		
 		&mysystem ('cat error_file | '.$mutt_script.' -s RP_refdir_error '.$email) ;
-
 	    }
 	    
 	    exit;
@@ -690,8 +705,8 @@ sub send_jobarray {
     ##################################
     if ($serial) {
 
-	print "starting step $sjaname with ".@sjaarray." jobs\n";
-	print "running up to $sepa parallel jobs.\n";
+	print "starting step $sjaname with ".@sjaarray." jobs\n" if ($debug);
+	print "running up to $sepa parallel jobs.\n" if ($debug);
 
 
 	my $jc = 1;
@@ -699,7 +714,7 @@ sub send_jobarray {
 	my @job_sepa_arr;
 
 	foreach (@sjaarray) {
-	    print "running job $jc...\n";
+	    print "running job $jc...\n" ;
 	    push @job_sepa_arr, "$_ &";
 #	    $job_str .= "$_ & \n";
 
@@ -708,7 +723,7 @@ sub send_jobarray {
 		#		$job_str .= "wait\n";
 		my $sepa_file = "$sjaname.sepa.$jc";
 		&a2filenew ($sepa_file,@job_sepa_arr);
-		print "sepa_file: ".$sepa_file."\n";
+		print "sepa_file: ".$sepa_file."\n" if ($debug);
 		&mysystem("chmod u+x $sepa_file");
 		&mysystem("./$sepa_file");
 		@job_sepa_arr = ();
@@ -723,7 +738,7 @@ sub send_jobarray {
 	    
 	    my $sepa_file = "$sjaname.sepa.$jc";
 	    &a2filenew ($sepa_file,@job_sepa_arr);
-	    print "sepa_file: ".$sepa_file."\n";
+	    print "sepa_file: ".$sepa_file."\n" if ($debug);
 	    &mysystem("chmod u+x $sepa_file");
 	    &mysystem("./$sepa_file");
 	}
@@ -892,23 +907,23 @@ if (@refgene_files == 0) {
 	my $sys = "wget -nv http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz ";
 	&mysystem ($sys);
 	
-	print "unzip...\n";
+	print "unzip...\n" if ($debug);
 	$sys = "gunzip -c refGene.txt.gz > refGene.txt";	
 	&mysystem ($sys);
 
-	print "reformat...\n";
+	print "reformat...\n" if ($debug);
 	$sys = "$preprefgene_script refGene.txt";
 	&mysystem ($sys);
 
-	print "rename...\n";
+	print "rename...\n" if ($debug);
 	$sys = "mv refGene.txt.out refGene.txt.$date.out";
 	&mysystem ($sys);
 
-	print "backup...\n";
+	print "backup...\n" if ($debug);
 	$sys = "mv refGene.txt.gz bak.refGene.txt.gz";
 	&mysystem ($sys);
 	
-	print "clean...\n";
+	print "clean...\n" if ($debug);
 	$sys = "rm refGene.txt";
 	&mysystem ($sys);
 	
@@ -959,13 +974,14 @@ chomp($refgene_file);
 
 
 #my @refgene_files = `ls $subchr_dir/refGene*`;
-my @cat_files = `ls gwascatalog.$date.rp.txt`;
-if (@cat_files == 0) {
+unless (-e "gwascatalog.$date.rp.txt") {
+#my @cat_files = `ls gwascatalog.$date.rp.txt`;
+#if (@cat_files == 0) {
     
     print "********************************\n";
     print "no gwascatalog.txt file found\n";
     print "********************************\n";
-    print "pleas create one yourself\n";
+    print "please create one yourself\n";
     print "********************************\n";
 #    print "cd $subchr_dir\n";
 
@@ -984,7 +1000,7 @@ if (@cat_files == 0) {
 
 
     print "You can do that yourself or let this pipeline do it.\n";
-    print "Do you want to have that done right now (y/n)?\n";
+    print "Or do you want to have that done right now by the pipeline (y/n)?\n";
 
 
 
@@ -1011,7 +1027,7 @@ if (@cat_files == 0) {
 
 
 	
-	print "reformat...\n";
+	print "reformat...\n" if ($debug);
 	die $!."(full)" unless open IN, "< full";
 	die $!."(gwascatalog.txt.ow.short)" unless open OUT, "> gwascatalog.txt.ow.short";
 	while (my $line = <IN>) {
@@ -1042,7 +1058,7 @@ if (@cat_files == 0) {
 	    }
 	}
 
-	print "sort...\n";
+	print "sort...\n" if ($debug);
 	$sys = 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short > gwascatalog.'.$date.'.rp.txt';	
 	&mysystem ($sys);
         $sys = 'gzip -f full';
@@ -1052,9 +1068,17 @@ if (@cat_files == 0) {
 #	exit;
 
 
+
+	print "success with gwascatalog file...\n";
+	print "press any key and <return> to continue\n";
+
 	print "********************************\n";
 	print "********************************\n";
-	
+
+
+
+	$answer = lc <>;
+
 	
     }
     else {
@@ -1122,7 +1146,7 @@ unless (-e "$sample_root") {
     print "********************************\n";
     print "--sample_root ($sample_root) not found, should I try to download at $vcf_site (y/n)?\n";
 
-    my $sys = "wget -nv $vcf_site/$sample_root ";
+    my $sys = "wget -n $vcf_site/$sample_root ";
 
     my $answer = lc <>;
     chomp $answer;
@@ -1130,7 +1154,7 @@ unless (-e "$sample_root") {
 
 	print "trying this:\n$sys\n";
 	&mysystem ($sys);
-	print "seems to have worked...\n";
+	print "seems to have worked...\n" if ($debug);
 
     }
     else {
@@ -1141,6 +1165,10 @@ unless (-e "$sample_root") {
     }
     
 }
+
+print "********************************\n";
+print "********************************\n";
+print "********************************\n";
 
 unless (-e "$sample_root") {
     print "********************************\n";
@@ -1187,7 +1215,7 @@ my %ca_hash;
 
 ## read out the collection of continental ancestries
 unless (-e $sample_ca) {
-    print "read continental info from $sample_root\n";
+    print "read continental info from $sample_root\n" if ($debug);
     
     die $!."($sample_root)" unless open IN, "< $sample_root";
 
@@ -1200,7 +1228,7 @@ unless (-e $sample_ca) {
 	}
     }
     if ($super_pop_col == -1){
-	print "Error: no super_pop header in $sample_root\n";
+	print "Error: no super_pop header in $sample_root\n" ;
 	exit;
     }
     while (my $line = <IN>){
@@ -1211,11 +1239,11 @@ unless (-e $sample_ca) {
     }
     close IN;
 
-    print "write continental info into $sample_ca\n";
+    print "write continental info into $sample_ca\n"  if ($debug);
     die $!."($sample_ca)" unless open OUT, "> $sample_ca";
     foreach my $ca (keys %ca_hash){
 	print OUT "$ca\n";
-	print "$ca\n";
+	print "$ca\n"  if ($debug);
     }
     close OUT;
 
@@ -1224,7 +1252,7 @@ unless (-e $sample_ca) {
 #exit;
 
 
-print "reading existing populations\n";
+print "reading existing populations\n"  if ($debug);
 ## read ancesty collection
 die $!."($sample_ca)" unless open IN, "< $sample_ca";
 while (my $line = <IN>){
@@ -1238,7 +1266,7 @@ close IN;
 unless (-e $sample_fini) {
 
 
-    print  "read sex of panel file\n";
+    print  "read sex of panel file\n"  if ($debug);
     die $!."($sample_root)" unless open IN, "< $sample_root";
 
     my $line = <IN>; #1
@@ -1322,7 +1350,7 @@ unless (-e $sample_fini) {
     
 
     
-    print "creating root population famfiles\n";
+    print "creating root population famfiles\n"  if ($debug);
     my @famlines;
     die $!."($sample_root)" unless open IN, "< $sample_root";
     die $!."($sample_fam)" unless open OUT, "> $sample_fam";
@@ -1405,7 +1433,7 @@ unless (-e $sample_fini) {
     ### write the other ancestry famfiles
     foreach my $ca (@pop_fams) {
 
-	print "creating population famfile for $ca\n";
+	print "creating population famfile for $ca\n"  if ($debug);
 	die $!."($sample_fam.$ca)" unless open OUT, "> $sample_fam.$ca";
 	
 	foreach my $line (@famlines) {
@@ -1515,7 +1543,7 @@ foreach my $chrint ($chr_start..$chr_end){
 
 	}
 	if (@vcf_files == 0) {
-	    print "Warning: cannot find any matching samples filenames\n";
+	    print "Warning: cannot find any matching samples filenames\n"  if ($debug);
 	}
 	if (@vcf_files > 1) {
 	    print "Error: too many matching samples filenames\n";
@@ -1620,7 +1648,7 @@ foreach my $chrint ($chr_start..$chr_end){
 		print "vcf-file ($vcf_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
 	    }
 	    
-	    my $sys = "my.wget -nv $vcf_site $vcf_name ";
+	    my $sys = "$wget_script $vcf_site $vcf_name ";
 	    #		print "$sys\n";
 
 
@@ -1689,7 +1717,7 @@ foreach my $chrint ($chr_start..$chr_end){
 
 		    print "gm-file ($gm_name_loc) not found, should I try to download this and all other chromosomes(y/n)?\n";
 		}
-		my $sys = "$wget_script -nv $gm_site $gm_name ";
+		my $sys = "$wget_script $gm_site $gm_name ";
 		if ($debug){
 		    print "debug: $sys\n";
 		    sleep(1);
@@ -2435,7 +2463,7 @@ if (@job_pobed > 0 ) {
 
 
 unless (-e "infosum_pos.nsnps") {
-    print "write infosum_pos.nsnps\n";
+    print "write infosum_pos.nsnps\n" if ($debug);
 
     if (-e "infosum_pos.nsnps.tmp") {
 	&mysystem ("rm infosum_pos.nsnps.tmp");
@@ -2451,7 +2479,7 @@ unless (-e "infosum_pos.nsnps") {
 
 
 unless (-e "infosum_pos.chunks_T3") {
-    print "write infosum_pos.chunks_T3\n";
+    print "write infosum_pos.chunks_T3\n" if ($debug);
     if (-e "infosum_pos.chunks_T3.tmp") {
 	&mysystem ("rm infosum_pos.chunks_T3.tmp");
     }
@@ -2466,7 +2494,7 @@ unless (-e "infosum_pos.chunks_T3") {
 
 
 unless (-e "infosum_pos.chunks_1") {
-    print "write infosum_pos.chunks_1\n";
+    print "write infosum_pos.chunks_1\n" if ($debug);
     if (-e "infosum_pos.chunks_1.tmp") {
 	&mysystem ("rm infosum_pos.chunks_1.tmp");
     }
@@ -2480,7 +2508,7 @@ unless (-e "infosum_pos.chunks_1") {
 
 
 unless (-e "infosum_pos.chunks_2") {
-    print "write infosum_pos.chunks_2\n";
+    print "write infosum_pos.chunks_2\n" if ($debug);
     if (-e "infosum_pos.chunks_2.tmp") {
 	&mysystem ("rm infosum_pos.chunks_2.tmp");
     }
@@ -2494,7 +2522,7 @@ unless (-e "infosum_pos.chunks_2") {
 
 
 unless (-e "infosum_pos.chunks_5") {
-    print "write infosum_pos.chunks_5\n";
+    print "write infosum_pos.chunks_5\n" if ($debug);
     if (-e "infosum_pos.chunks_5.tmp") {
 	&mysystem ("rm infosum_pos.chunks_5.tmp");
     }
@@ -2508,7 +2536,7 @@ unless (-e "infosum_pos.chunks_5") {
 
 
 unless (-e "infosum_pos.chunks_10") {
-    print "write infosum_pos.chunks_10\n";
+    print "write infosum_pos.chunks_10\n" if ($debug);
     if (-e "infosum_pos.chunks_10.tmp") {
 	&mysystem ("rm infosum_pos.chunks_10.tmp");
     }
@@ -2522,7 +2550,7 @@ unless (-e "infosum_pos.chunks_10") {
 
 
 unless (-e "infosum_pos.chunks_20") {
-    print "write infosum_pos.chunks_20\n";
+    print "write infosum_pos.chunks_20\n" if ($debug);
     if (-e "infosum_pos.chunks_20.tmp") {
 	&mysystem ("rm infosum_pos.chunks_20.tmp");
     }
@@ -2609,14 +2637,14 @@ foreach my $pf_loc (@pop_fams) {
     
     unless (-e "pop_$pf_loc") {&mysystem ("mkdir pop_$pf_loc")};#
 
-    print "----------------------------------------------\n";
-    print "----------------------------------------------\n";
-    print "work on ancestry subdir pop_$pf_loc\n";
-    print "----------------------------------------------\n";   
+    print "----------------------------------------------\n" if ($debug);
+    print "----------------------------------------------\n" if ($debug);
+    print "work on ancestry subdir pop_$pf_loc\n" if ($debug);
+    print "----------------------------------------------\n" if ($debug);   
 
-    print "create reference_templ to ancestry subdir\n";   
+    print "create reference_templ to ancestry subdir\n" if ($debug);   
     unless (-e "pop_$pf_loc/reference_templ") {
-	print "create file reference_templ\n";
+	print "create file reference_templ\n" if ($debug);
 	die $! unless open RT, "> pop_$pf_loc/reference_templ";
 	print RT "vcf_site      $vcf_site\n";
 	print RT "vcf_template  $vcf_templ\n";
@@ -2625,42 +2653,42 @@ foreach my $pf_loc (@pop_fams) {
 	close RT;
     }
 
-    print "copy chunkinfo to ancestry subdir\n";   
+    print "copy chunkinfo to ancestry subdir\n" if ($debug);   
 
-    print "copy chunkinfo_T3 to ancestry subdir\n";   
+    print "copy chunkinfo_T3 to ancestry subdir\n" if ($debug);   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_T3") {
 	&mysystem ("cp infosum_pos.chunks_T3 pop_$pf_loc/");
     }
     
-    print "copy chunkinfo_1 to ancestry subdir\n";   
+    print "copy chunkinfo_1 to ancestry subdir\n" if ($debug);   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_1") {
 	&mysystem ("cp infosum_pos.chunks_1 pop_$pf_loc/");
     }
     
-    print "copy chunkinfo_2 to ancestry subdir\n";   
+    print "copy chunkinfo_2 to ancestry subdir\n" if ($debug);   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_2") {
 	&mysystem ("cp infosum_pos.chunks_2 pop_$pf_loc/");
     }
-    print "copy chunkinfo_5 to ancestry subdir\n";   
+    print "copy chunkinfo_5 to ancestry subdir\n" if ($debug);   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_5") {
 	&mysystem ("cp infosum_pos.chunks_5 pop_$pf_loc/");
     }
-    print "copy chunkinfo_10 to ancestry subdir\n";   
+    print "copy chunkinfo_10 to ancestry subdir\n" if ($debug);   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_10") {
 	&mysystem ("cp infosum_pos.chunks_10 pop_$pf_loc/");
     }
-    print "copy chunkinfo_20 to ancestry subdir\n";   
+    print "copy chunkinfo_20 to ancestry subdir\n" if ($debug);   
     unless (-e "pop_$pf_loc/infosum_pos.chunks_20") {
 	&mysystem ("cp infosum_pos.chunks_20 pop_$pf_loc/");
     }
     
  
-    print "copy gwascatalog to ancestry subdir\n";   
+    print "copy gwascatalog to ancestry subdir\n" if ($debug);   
     unless (-e "pop_$pf_loc/gwascatalog.$date.rp.txt") {
 	&mysystem ("cp gwascatalog.$date.rp.txt pop_$pf_loc/");
     }
 
-    print "copy refGene to ancestry subdir\n";   
+    print "copy refGene to ancestry subdir\n" if ($debug);   
     unless (-e "pop_$pf_loc/$refgene_file") {
 	&mysystem ("cp $refgene_file pop_$pf_loc/");
     }
@@ -2681,7 +2709,7 @@ foreach my $pf_loc (@pop_fams) {
 	my $bfile_pf = "$plink_name.$pf_loc";
 	
 	unless (-e "pop_$pf_loc/$bfile_pf.fam") {
-	    print "moving $bfile_pf.bed/bim/fam\n";
+	    print "moving $bfile_pf.bed/bim/fam\n" if ($debug);
 	    system ("mv $bfile_pf.bed pop_$pf_loc/");
 	    system ("mv $bfile_pf.bim pop_$pf_loc/");
 	    system ("mv $bfile_pf.fam pop_$pf_loc/");

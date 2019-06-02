@@ -38,7 +38,7 @@ my %stuna ;
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -109,6 +109,8 @@ version: $version
 
   --gc FLOAT     genomic control with FLOAT = lsmbda
 
+  --debug        extended output
+
  created by Stephan Ripke 2008 at MGH, Boston, MA
  
  pfile will be sorted for pvalue if nercessary, iv you do it in advance you save time and money
@@ -140,6 +142,7 @@ GetOptions(
     "pth=f"=> \$pth,
     "last=f"=> \$last_th,
     "fac=i"=> \$fac,
+    "debug"=> \my $debug,
 
     "ceiling=i"=> \my $ceiling_sw,
     "maxy=i"=> \my $maxy_sw,
@@ -155,7 +158,10 @@ GetOptions(
 die "$usage\n" if @ARGV ne 1 || $help;
 
 
-
+my $r_silent = "> /dev/null 2>&1";
+if ($debug) {
+    $r_silent = "";
+}
 
 my $prekno_th = 5.0e-08;
 
@@ -374,7 +380,7 @@ system ($systemcheck);
 my $status = ($? >> 8);
 if ($status != 0){
 
-    print "pfile not sorted, will do it for you\n";
+    print "pfile not sorted, will do it for you\n" if ($debug);
     my $systemsort="head -1 $pfile > sorted_$pfile; tail -n +2 $pfile | sort -k$pcol,$pcol"."g"." >> sorted_$pfile";
     &mysystem ($systemsort);
     $pfile = "sorted_$pfile";
@@ -1038,7 +1044,7 @@ $R_templ =~ s/MAXY/$maxy/g;
 
 
 #my $systemGWA="source /broad/software/scripts/useuse; use R-2.14; R < $outdir/R_GWAplot.in_tmp --vanilla\n";
-my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --save --no-restore > $outdir/R_GWA_log.txt\n";
+my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --save --no-restore > $outdir/R_GWA_log.txt 2>&1\n";
 &mysystem ($systemGWA);
 
 &mysystem ("shrinkpdf $pdfout");
@@ -1047,11 +1053,11 @@ my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --save --no-restore > $outdir/R
 &mysystem ("cp $outdir/prekno_new $rootdir/$pdfout.prekno_new");
 &mysystem ("cp $pdfout.prekno.gc $rootdir/$pdfout.prekno_new.gc");
 
-&mysystem ("tar -cvzf $pdfout.tar.gz $outdir/R_GWAplot.in_tmp $outdir/ticks.txt_tmp $outdir/Best_processed.txt_tmp");
+&mysystem ("tar -czf $pdfout.tar.gz $outdir/R_GWAplot.in_tmp $outdir/ticks.txt_tmp $outdir/Best_processed.txt_tmp");
 &mysystem ("cp $pdfout.tar.gz $rootdir");
 &mysystem ("rm -rf  $workdir");
 
-print "$pdfout\n\n";
+print "$pdfout\n\n" if ($debug);
 
 
 

@@ -95,6 +95,8 @@ version: $version
 
   --exmulti, --nokeep and --subdir are in effect, as long as --ncreate is not switched
 
+  --debug             extended output
+
  created by Stephan Ripke 2010: sripke\@broadinstitute.org
 
 ";
@@ -110,6 +112,8 @@ GetOptions(
     "nokeep"=> \my $nokeep,
     "exmulti"=> \my $exmulti,
     "subdir=s"=> \$subdir,
+    "debug"=> \my $debug,
+
     );
 
 die "$usage\n" if (@ARGV != 1 || $help);
@@ -171,7 +175,9 @@ my $bim_extr=$bim_file.".extract";
 my $bim_updated=$bim_file.".updated";
 
 my $bfile = $bim_file;
-print "Warning, no bim_file no create please\n" unless ($bfile =~ /.bim$/);
+if ($debug) {
+    print "Warning, no bim_file no create please\n" unless ($bfile =~ /.bim$/);
+}
 $bfile =~ s/.bim$//;
 
 my $bfile_chr = $bfile."_chr";
@@ -246,7 +252,7 @@ my $work_dir = "$sloc/checkpos_$bim_file";
 while (-e $work_dir) {
     $work_dir .= ".p";
 }
-print "work_dir: $work_dir\n";
+print "work_dir: $work_dir\n" if ($debug);
 #&mysystem ("rm -rf $work_dir");
 
 my @created = mkpath(
@@ -266,7 +272,7 @@ push @log_lines,  "\nsummary checkpos, version: $version\n\n";
 
 
 
-print "read bim-file\n";
+print "read bim-file\n" if ($debug);
 
 
 ################################################
@@ -299,7 +305,7 @@ close FI;
 close OUT;
 close MU;
 
-print "number of multisnp renamings: $nmult\n";
+print "number of multisnp renamings: $nmult\n" if ($debug);
 #print "debug\n";
 #exit;
 
@@ -417,10 +423,10 @@ close FD;
 
 
 
-print "number of rs_name extractions: $name_rs\n";
-print "number of no rs_name extractions: $name_nrs\n";
-print "number of position extractions: $name_pos\n";
-print "number of warning extractions: $name_war\n";
+print "number of rs_name extractions: $name_rs\n" if ($debug);
+print "number of no rs_name extractions: $name_nrs\n" if ($debug);
+print "number of position extractions: $name_pos\n" if ($debug);
+print "number of warning extractions: $name_war\n" if ($debug);
 
 #exit;
 
@@ -489,7 +495,7 @@ my %dbsnp_hash_loc_indel;
 my %dbsnp_hash_loc_indel_multi;
 my %dbsnp_hash_multiloc;
 my %dbsnp_hash_name;
-print "read reference into hash\n";
+print "read reference into hash\n" if ($debug);
 
 die "$dbsnp_file".$! unless open FILE , "< $dbsnp_file";
 
@@ -685,7 +691,7 @@ while (my $line = <FILE>){
 	    }
 	    else {
 		if (exists $addpos_hash{$info_loc}) {
-		    print "Warning: multiple position translations on $chr:$loc:$a1:$a2\n";
+		    print "Warning: multiple position translations on $chr:$loc:$a1:$a2\n" if ($debug);
 		    #		    exit;
 		    push @trans_multi, "Warning: double position at $info_loc\n";
 		}
@@ -717,7 +723,7 @@ while (my $line = <FILE>){
 ######################################################################
 ## read reference file
 #####################################################################
-print "read reference-file: $dbsnp_file\n";
+print "read reference-file: $dbsnp_file\n" if ($debug);
 my %bim_in_ref;  ## safe snp names that are found in reference
 die "$dbsnp_file".$! unless open FILE , "< $dbsnp_file";
 die "$bim_joined".$! unless open OF , "> $bim_joined";
@@ -757,7 +763,7 @@ while (my $line = <FILE>){
 }
 close FILE;
 
-print "print remainder\n";
+print "print remainder\n" if ($debug);
 foreach my $snp_loc (keys %bim_info) {
     print OF $snp_loc.$bim_info{$snp_loc}."\n";
 }
@@ -783,7 +789,7 @@ close AP;
 
 ### read bim-file
 
-print "read bim-file\n";
+print "read bim-file\n" if ($debug);
 my %mupos; ## multiple positions in reference file
 my %pos_count;
 my %multi_ref;
@@ -810,13 +816,15 @@ my %usnp;  ## update snpname
 my $usnp;  ## count
 my $unsnp = 0;  ## non update snpname count
 
-print "analyze joined file\n";
+print "analyze joined file\n" if ($debug);
 die $!." <$bim_joined>" unless open POS, "< $bim_joined";
 my $cc = 0;
 my $old_snp = "";
 while (my $line = <POS>) {
     $cc++;
-    print "$cc entries analysed\n" if ($cc % 100000 == 0);
+    if ($debug) {
+	print "$cc entries analysed\n" if ($cc % 100000 == 0);
+    }
     my @cells = @{&split_line_ref(\$line)};
 
 
@@ -881,12 +889,14 @@ foreach (keys %pos_count) {
 
 ## here it also makes sure that SNPs that are found in the database dont get translated
 
-print "read addpos file for translating SNP names\n";
+print "read addpos file for translating SNP names\n" if ($debug);
 die $!." <$bim_addpos>" unless open AP, "< $bim_addpos";
 die $!." <$bim_addpos.det>" unless open AD, "> $bim_addpos.det";
 while (my $line = <AP>) {
     $cc++;
-    print "$cc entries analysed\n" if ($cc % 100000 == 0);
+    if ($debug) {
+	print "$cc entries analysed\n" if ($cc % 100000 == 0);
+    }
     my @cells = @{&split_line_ref(\$line)};
     unless (exists $bim_in_ref{$cells[1]}) {
 	print AD "$cells[1] $cells[0] $cells[2] $cells[3] replace\n";
@@ -901,8 +911,8 @@ while (my $line = <AP>) {
 close AP;
 close AD;
 
-print "$bim_addpos\n";
-print "$bim_addpos.det\n";
+print "$bim_addpos\n" if ($debug);
+print "$bim_addpos.det\n" if ($debug);
 #exit;
 
 ##########################################
@@ -925,7 +935,7 @@ sub excl_multi {
 @snp_xkb = &excl_multi (@snp_xkb);
 @snp_xpos = &excl_multi (@snp_xpos);
 
-print "write files...\n";
+print "write files...\n" if ($debug);
 &a2file($bim_xpos,@snp_xpos);
 &a2file($bim_xchr,@snp_xchr);
 &a2file($bim_xkb,@snp_xkb);
@@ -973,7 +983,7 @@ push @log_lines,  "** multiple Annotation contains possibly SNPs from the wrong-
 push @log_lines,  "\n\n -> have a look at the ouput files\n";
 
 
-print "update bim...\n";
+print "update bim...\n" if ($debug);
 #foreach my $line (@bim_lines) {
 die "$bfile.bim.ow".$! unless open FILE , "< $bfile.bim.ow";
 die "$bim_updated".$! unless open OF , "> $bim_updated";
@@ -1001,16 +1011,16 @@ while (my $line = <FILE>){
 close FILE;
 close OF;
 
-print "copy files...\n";
+print "copy files...\n" if ($debug);
 #&mysystem ("mv $bim_updated $bim_file");
 &mysystem ("cat $bim_rpos $bim_ukb $bim_uchr $bim_addpos > $bim_extr");
 
 
 my $exclude_txt = ""; 
 $exclude_txt = "--exclude $bim_xdup" if ($exmulti);
-my $cmd3 = "$p2loc/plink --memory 2000 --bed $bfile.bed --fam $bfile.fam --bim $bim_updated --out $bfile_dbsnp --extract $bim_extr $exclude_txt --make-bed \n";
+my $cmd3 = "$p2loc/plink --silent --memory 2000 --bed $bfile.bed --fam $bfile.fam --bim $bim_updated --out $bfile_dbsnp --extract $bim_extr $exclude_txt --make-bed 2> /dev/null > /dev/null\n";
 
-print "make new bed...\n";
+print "make new bed...\n" if ($debug);
 &mysystem ($cmd3) unless (-e "$bfile_dbsnp.bed");
 
 
@@ -1023,7 +1033,7 @@ push @log_lines, $cmd3;
 
 
 
-&mysystem ("tar -cvzf $bfile_dbsnp.tar.gz $bim_xpos $bim_xchr $bim_xkb $bim_rpos $bim_npos $bim_xdup $bim_ukb $bim_uchr $bim_addpos.det $bfile.bim.ow.det $bim_trans_indel $bim_trans_snp $bim_trans_multi $bim_notrans_variant $bfile.bim.multidet");
+&mysystem ("tar -czf $bfile_dbsnp.tar.gz $bim_xpos $bim_xchr $bim_xkb $bim_rpos $bim_npos $bim_xdup $bim_ukb $bim_uchr $bim_addpos.det $bfile.bim.ow.det $bim_trans_indel $bim_trans_snp $bim_trans_multi $bim_notrans_variant $bfile.bim.multidet");
 
 
 &mysystem ("mv $bfile_dbsnp.tar.gz $rootdir/");
@@ -1101,7 +1111,7 @@ chdir ($rootdir);
 
 &mysystem ("rm -r $work_dir");
 
-print "have a look at this file: $bim_log\n";
+print "have a look at this file: $bim_log\n" if ($debug);
 
 
 

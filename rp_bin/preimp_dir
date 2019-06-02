@@ -24,6 +24,9 @@ my $disname = "";
 my $popname = "eur";
 my $job_bn_th = 1000;
 
+my $serial = 0;
+
+my $debug = 0;
 
 
 #### version
@@ -38,6 +41,13 @@ my $qloc = &trans("queue");
 my $init = &trans("init");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
+my $bcmd = &trans("batch_jobcommand");
+
+if ($bcmd eq "SERIAL") {
+    $serial = 1;
+    print "-----------------------------------------------------\n";
+    print "switched on SERIAL mode because of configuration file\n";
+}
 
 
 my $mind=0.02; # per ID	
@@ -89,6 +99,7 @@ version: $rp_version
   --sjatime_inc INT    add INT hour to walltime of imputation jobs (also on top of minilong)
   --sjamem_incr INT   increase all memore requests by INT Mb in steps of 1000 (1000 is 1Gb)
 
+  --debug        extended output
 
 default thresholds:
 
@@ -139,7 +150,7 @@ use Getopt::Long;
 GetOptions( 
 
     "trio"=> \my $trio,
-    "serial"=> \my $serial,
+    "serial"=> \my $serial_sw,
     "sepa=i"=> \$sepa,
 
     "sleep=i"=> \my $sleep_sw,
@@ -168,10 +179,16 @@ GetOptions(
     "withpna=i"=> \$withpna, # mono threshold
 
 
-
+    "debug"=> \my $debug,
 
 
     );
+
+
+if ($serial_sw) {
+    $serial = 1;
+}
+
 
 if ($sleep_sw) {
   print "sleeping for $sleep_sw seconds (only use if suspect of race condition)\n";
@@ -185,6 +202,7 @@ if ($sleep_sw) {
 
 if ($hwe_th == 0 || $hwe_th_ca == 0) {
     print "please do not use 0 for hwe thresholds, use 1.0e-300\n";
+    exit;
 }
 
 ############################################################
@@ -228,7 +246,7 @@ print "$rp_header\n";
 
 
 
-print ".......testing necessary binaries....\n";
+print ".......testing necessary binaries....\n" if ($debug);
 my @miss_scripts;
 
 
@@ -238,7 +256,7 @@ foreach my $scr_name (@test_scripts) {
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$scr_name" && -x _ ) {
-	    print "$scr_name\tfound in $path\n";
+	    print "$scr_name\tfound in $path\n"  if ($debug);
 	    $scr_path = "$path/$scr_name";
 	    last;
 	}
@@ -275,7 +293,7 @@ if (@miss_scripts > 0) {
 
 
 
-print ".......testing email program....\n";
+print ".......testing email program....\n"  if ($debug);
 
 my $err_scr = 0;
 my $noti = 1;
@@ -284,26 +302,26 @@ my $noti = 1;
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$mutt_script" && -x _ ) {
-	    print "$mutt_script\tfound in $path\n";
+	    print "$mutt_script\tfound in $path\n"  if ($debug);
 	    $scr_path = "$path/$mutt_script";
 	    last;
 	}
     }
     unless ( $scr_path ) {
 
-	print "!!Warning!! : No $mutt_script command available, trying mutt\n" ;
+	print "!!Warning!! : No $mutt_script command available, trying mutt\n"   if ($debug);
 
 	$mutt_script = "mutt";
 	for my $path ( split /:/, $ENV{PATH} ) {
 	    if ( -f "$path/$mutt_script" && -x _ ) {
-		print "$mutt_script\tfound in $path\n";
+		print "$mutt_script\tfound in $path\n"  if ($debug);
 		$scr_path = "$path/$mutt_script";
 		last;
 	    }
 	}
 	unless ( $scr_path ) {
 #	    $err_scr = 1;
-	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" ;
+	    print "!!Warning!! : No $mutt_script command available, no email notifications\n"  if ($debug);
 	    $noti = 0;
 	    sleep (3);
 	}
@@ -313,22 +331,22 @@ my $noti = 1;
 die if $err_scr == 1;
 
 
-print "....all necessary binaries found....\n";
-print "------------------------------------\n";
+print "....all necessary binaries found....\n"  if ($debug);
+print "------------------------------------\n"   if ($debug);
 
 
 #####################################
 # "testing environment variable rp_perlpackages
 ####################################
 
-print "testing environment variable rp_perlpackages....\n";
+print "testing environment variable rp_perlpackages....\n"  if ($debug);
 unless (exists $ENV{rp_perlpackages}) {
     print "Error: no environment variable for perl-packages, please re-install ricopili and make sure to follow all instructions\n";
     print "------------------------------------\n";
     exit;
 }
-print "....all set....\n";
-print "------------------------------------\n";
+print "....all set....\n"  if ($debug);
+print "------------------------------------\n"  if ($debug);
 
 
 
@@ -528,6 +546,7 @@ sub send_jobarray {
     die "send_jobarray with undefined variables, time" if ($sjatime < 0);
     die "send_jobarray with undefined variables, info" if ($sjainfotxt eq "");
 
+    print "Running job: $sjaname\n";
 
     my $now = localtime time;
     $now =~ s/ /_/g;
@@ -597,57 +616,7 @@ sub send_jobarray {
 
 
 
-    if ($serial) {
-
-	print "starting step $sjaname with ".@sjaarray." jobs\n";
-	print "running up to $sepa parallel jobs.\n";
-
-
-	my $jc = 1;
-#	my $job_str = "";
-	my @job_sepa_arr;
-
-	foreach (@sjaarray) {
-	    print "running job $jc...\n";
-	    push @job_sepa_arr, "$_ &";
-#	    $job_str .= "$_ & \n";
-
-	    if ($jc % $sepa == 0) {
-		push @job_sepa_arr, "wait";
-		#		$job_str .= "wait\n";
-		my $sepa_file = "$sjaname.sepa.$jc";
-		&a2filenew ($sepa_file,@job_sepa_arr);
-		print "sepa_file: ".$sepa_file."\n";
-		&mysystem("chmod u+x $sepa_file");
-		&mysystem("./$sepa_file");
-		@job_sepa_arr = ();
-	    }
-	    $jc++;
-	    
-	}
-
-	if (@job_sepa_arr > 0) {
-	    $jc--;
-	    push @job_sepa_arr, "wait";
-	    
-	    my $sepa_file = "$sjaname.sepa.$jc";
-	    &a2filenew ($sepa_file,@job_sepa_arr);
-	    print "sepa_file: ".$sepa_file."\n";
-	    &mysystem("chmod u+x $sepa_file");
-	    &mysystem("./$sepa_file");
-	}
-
-	
-    }
-    else {    
-	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";
-	print "$sys_loc\n";
-	#    sleep(3);
-	&mysystem ($sys_loc);
-    }
-
-
-
+    
     my $old_cmd = `tail -1 $sjainfofile | head -1`;
 
     my $sjacontent = "$sjaname.".@sjaarray;
@@ -658,7 +627,13 @@ sub send_jobarray {
 
     &a2filenew_app("$sjainfofile",$sjarow);
 
+    print "$old_cmd\n"  if ($debug);
+    print "$sjarow_part\n"  if ($debug);
+
+    
+    
     if ($old_cmd =~ /$sjarow_part/){
+#	print "bnei\n";
 	unless ($force1 ){
 	    my $err_message ;
 	    $err_message .= "##################################################################\n";
@@ -686,12 +661,64 @@ sub send_jobarray {
 
 	    }
 
-	    unless ($serial) {
+#	    unless ($serial) {
 		exit;
-	    }
+#	    }
 	}
 
     }
+#    die;
+
+    if ($serial) {
+
+	print "starting step $sjaname with ".@sjaarray." jobs\n"  if ($debug);
+	print "running up to $sepa parallel jobs.\n"  if ($debug);
+
+
+	my $jc = 1;
+#	my $job_str = "";
+	my @job_sepa_arr;
+
+	foreach (@sjaarray) {
+	    print "running job $jc...\n"  if ($debug);
+	    push @job_sepa_arr, "$_ &";
+#	    $job_str .= "$_ & \n";
+
+	    if ($jc % $sepa == 0) {
+		push @job_sepa_arr, "wait";
+		#		$job_str .= "wait\n";
+		my $sepa_file = "$sjaname.sepa.$jc";
+		&a2filenew ($sepa_file,@job_sepa_arr);
+		print "sepa_file: ".$sepa_file."\n"  if ($debug);
+		&mysystem("chmod u+x $sepa_file");
+		&mysystem("./$sepa_file");
+		@job_sepa_arr = ();
+	    }
+	    $jc++;
+	    
+	}
+
+	if (@job_sepa_arr > 0) {
+	    $jc--;
+	    push @job_sepa_arr, "wait";
+	    
+	    my $sepa_file = "$sjaname.sepa.$jc";
+	    &a2filenew ($sepa_file,@job_sepa_arr);
+	    print "sepa_file: ".$sepa_file."\n"  if ($debug);
+	    &mysystem("chmod u+x $sepa_file");
+	    &mysystem("./$sepa_file");
+	}
+
+	
+    }
+    else {    
+	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";
+	print "$sys_loc\n"  if ($debug);
+	#    sleep(3);
+	&mysystem ($sys_loc);
+    }
+
+
 
 
     $command_line =~ s/--force1//;
@@ -728,7 +755,7 @@ sub send_jobarray {
     }
     else {
 	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 4 --di -j --fwt $wt_file --na _pr_$outname";
-	print "$sys_re\n";
+	print "$sys_re\n"  if ($debug);
 	&mysystem ($sys_re);
     }
     
@@ -836,7 +863,7 @@ else {
 	    $name_hash{$cells[1]} = $cells[0];
 	    $qcc_hash{$cells[0]} = $qccycle;
 	    push @name_arr, $cells[0];
-	    print "included: $cells[1]\t$qccycle\n";
+	    print "included: $cells[1]\t$qccycle\n"  if ($debug);
 	}
     }
     close NF;
@@ -880,7 +907,7 @@ my @created = mkpath(   ## $created ?
 #############################################
 #### check famfiles
 #############################################
-print "\n";
+
 foreach my $bf (@bim_files) {
     my $bprefix = $bf;
     $bprefix =~ s/.bim$//;
@@ -888,7 +915,7 @@ foreach my $bf (@bim_files) {
     if (-e "$famfile.nocaco")  {
 	&mysystem ("rm $famfile.nocaco");
     }
-#    print "\ntesting $famfile\n";
+    print "\ntesting $famfile\n" if ($debug);
 
     my %count_pt;
     my %id_hash;
@@ -904,7 +931,7 @@ foreach my $bf (@bim_files) {
 	my $id = "$cells[0]\t$cells[1]";
 	while (exists $id_hash{$id}) {
 	    $id .= ".d";
-	    print "$id\n";
+#	    print "$id\n";
 	    $dup_id = 1;
 	}
 	$id_hash{$id} = 1;
@@ -989,7 +1016,7 @@ unless (-e "$disname.tag.done") {
 		print "please remove $bimprefix.plague and restart pipeline\n";
 	    }
 	    else {
-		print "$bimprefix platform: <$platform>\n";
+		print "$bimprefix platform: <$platform>\n" if ($debug);
 	    }
 #	    print "s:$sumper_max\tp:$platform\tb:$bimprefix\n";
 #	    exit;
@@ -1105,8 +1132,10 @@ foreach my $name (@name_arr) {
 my @qc_arr;
 my $qc_fini = 0;
 my @meta_files;
-print "\n------------------------\n";
-print "starting QC scripts\n";
+
+print "\n------------------------\n" if ($debug);
+print "starting QC scripts\n" if ($debug);
+
 foreach my $bprefix (@bfiles_pi) {
 #    print "$bprefix-qc.bim\n";
 

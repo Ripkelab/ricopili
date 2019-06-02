@@ -17,6 +17,7 @@ use strict;
 my $txt_name = "no_input";
 my $xls_name = "no_output";
 
+
 use Getopt::Long;
 GetOptions( 
    "txt=s"=> \$txt_name,
@@ -24,7 +25,8 @@ GetOptions(
    "pcol=s"=> \my $pcol_str,
    "cogr=s"=> \my $cogr_str,
    "check"=> \my $check,
-   "xls=s"=> \$xls_name,
+    "xls=s"=> \$xls_name,
+    "debug"=> \my $debug,
  );
 
 if ($help || $txt_name eq "no_input"){
@@ -41,6 +43,8 @@ if ($help || $txt_name eq "no_input"){
 
         --check         header with numbers
 
+        --debug             extended output
+
 
 
 
@@ -55,7 +59,7 @@ if ($help || $txt_name eq "no_input"){
 if ($xls_name eq "no_output"){
     $xls_name = $txt_name.".xls";
 }
-print "xls_name: $xls_name\n";
+print "xls_name: $xls_name\n" if ($debug);
 
 my @pcol_arr;
 if ($pcol_str) {
@@ -228,7 +232,7 @@ while (my $line = <FILE>){
     }
     $lc++;
     if ($lc > 2000){
-	print "cut at 2000 rows\n";
+	print "cut at 2000 rows\n" if ($debug);
 	last;
     }
 
@@ -238,7 +242,7 @@ close FILE;
 $workbook->close();
 
 &mysystem("mv $xls_name.tmp $xls_name");
-print "$xls_name\n";
+print "$xls_name\n" if ($debug);
 
 exit;
 

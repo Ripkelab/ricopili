@@ -15,6 +15,7 @@ version: $version
 
   --help          print this mssage and exit
   --out STRING    take STRING as output filename, default: $out
+  --debug         extended output
 
  transfers PCAs (from mds-file) to members (in famlocfile: one row: fid <TAB> iid <TAB> fid-mds <TAB> iid-mds)
 
@@ -27,6 +28,7 @@ use Getopt::Long;
 GetOptions( 
     "help" => \my $help,
     "out=s" => \$out,
+    "debug"=> \my $debug,
     );
 
 die "$usage\n" if (@ARGV ne 2 || $help);
@@ -109,7 +111,7 @@ while (my $line = <ID>){
 #    print @cells."\n";
     next if ($cells[0] eq "FID1" || $cells[0] eq "FID2") ;
     if (@cells != 4){
-	print "$cells[0]\t$cells[1]\t without friend, full exclusion\n";
+	print "$cells[0]\t$cells[1]\t without friend, full exclusion\n" if ($debug);
 	next;
     }
 
@@ -133,7 +135,7 @@ while (my $line = <ID>){
     my @cells = &split_line ($line);
     next if ($cells[0] eq "FID1" || $cells[0] eq "FID2") ;
     if (@cells != 4){
-	print "$cells[0]\t$cells[1]\t without friend, full exclusion\n";
+	print "$cells[0]\t$cells[1]\t without friend, full exclusion\n" if ($debug);
 	next;
     }
     my $id1 = "$cells[0]\t$cells[1]";
@@ -149,7 +151,7 @@ while (my $line = <ID>){
     else {
 	if (exists $mds_id{$mds_loc{$id2}}){
 	    $mds_id{$id1} =  $mds_id{$mds_loc{$id2}};
-	    print "took secondary mds for $id2\n";
+	    print "took secondary mds for $id2\n" if ($debug);
 	}
 	else {
 	    print "error: no mds info of $id2 , partner of $id1\n";

@@ -53,6 +53,7 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --chr23male       some special options for phasing and postimputation
 
 
+ --debug           extended output
 
 ";
 
@@ -88,6 +89,8 @@ GetOptions(
     "noref"=> \my $noref,
     "empty=s"=> \ $emptyname,
     "chr23male"=> \my $chr23male,
+    "debug"=> \my $debug,
+
 
     
     );
@@ -191,7 +194,7 @@ if ($refind) {
     my $chrind = $tcells[0];
     $chrind =~ s/chr//;    
 
-    $sys = "$p2loc/plink --memory 2000 --bfile $inname --out $outname --make-bed --chr $chrind --from-kb $kb_start --to-kb $kb_end $mendel_clean";
+    $sys = "$p2loc/plink --silent --memory 2000 --bfile $inname --out $outname --make-bed --chr $chrind --from-kb $kb_start --to-kb $kb_end $mendel_clean";
     $sc = system ($sys);
 
     
@@ -213,13 +216,13 @@ if ($refind) {
     
 }
 else {
-    $sys = "$p2loc/plink --memory 2000 --bfile $inname --out $outname --make-bed --extract $sfile $mendel_clean";
+    $sys = "$p2loc/plink --silent --memory 2000 --bfile $inname --out $outname --make-bed --extract $sfile $mendel_clean";
     $sc = system ($sys);
 }
 
 
 if ($sc != 0 ) {
-    print "Error with running plink: $sys\n";
+    print "Error with running plink: $sys\n"  if ($debug);
 #    exit;
 }
 
@@ -260,7 +263,7 @@ if ($empty == 1) {
 
 
 
-print "chunk successfully extracted\n";
+print "chunk successfully extracted\n"  if ($debug);
 
 
 
@@ -284,10 +287,12 @@ if ($eagle_sw or $eagle_vcf) {
     $gemafile =~ s/.txt$/.chr.txt/;
 }
 if ($eagle_sw) {
-    print "---------------------------------------------------------------------\n";
-    print "Warning: eagle is not working with idnum famfile, possible dangerous\n";
-    print "---------------------------------------------------------------------\n";
-    sleep (3);
+    if ($debug) {
+	print "---------------------------------------------------------------------\n";
+	print "Warning: eagle is not working with idnum famfile, possible dangerous\n";
+	print "---------------------------------------------------------------------\n";
+	sleep (3);
+    }
     $sys_loc = "$ealoc/$eagle_bin --maxMissingPerIndiv=1.0 --maxMissingPerSnp=1.0  --bfile=$outname --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt > $outname.log 2> $outname.loge";
 }
 
@@ -316,21 +321,21 @@ if ($eagle_vcf) {
     
     # NOTE: the temporary name is 'unphased0' because Eagle itself writes a file
     # out.unphased.vcf.gz
-    my $sys_loc_plink = "$p2loc/plink --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out $outname.unphased0";
+    my $sys_loc_plink = "$p2loc/plink --silent --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out $outname.unphased0";
     print BC "$sys_loc_plink\n";
-    print "starting: $sys_loc_plink\n";
+    print "starting: $sys_loc_plink\n"  if ($debug);
     $sc += system ($sys_loc_plink) ;
 
     
     my $tabix = trans("tabixloc") . "/tabix";    
     my $sys_loc_tabix = "$tabix -f $outname.unphased0.vcf.gz";
     print BC "$sys_loc_tabix\n";
-    print "starting: $sys_loc_tabix\n";
+    print "starting: $sys_loc_tabix\n"  if ($debug);
     $sc += system ($sys_loc_tabix) ;
 
 
     if ($chrx_sw == 1) {
-	print "on chrX I use a differenct genetic map file\n";
+	print "on chrX I use a differenct genetic map file\n"  if ($debug);
 	$gemafile .= ".23";
     }
 
@@ -338,7 +343,7 @@ if ($eagle_vcf) {
     unless ($chr23male) {
 	my $sys_loc_eagle = "$ealoc/$eagle_bin $opt_txt --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt > $outname.eag.log 2> $outname.eag.loge";
 	print BC "$sys_loc_eagle\n";
-	print "starting: $sys_loc_eagle\n";
+	print "starting: $sys_loc_eagle\n"  if ($debug);
 	$sc += system ($sys_loc_eagle) ;
     }
 
@@ -386,7 +391,7 @@ if ($eagle_vcf) {
 
 }
 else {
-    print "$sys_loc\n";
+    print "$sys_loc\n"  if ($debug);
     $sc = system ($sys_loc) ;
 }
 
@@ -400,7 +405,7 @@ close BC;
 if (0) {
     if ($sc != 0) {
 	print "something went seriously wrong\n";
-	my $sys_loc = "$p2loc/plink --memory 2000  --bfile $inname --out $inname.miss --missing";
+	my $sys_loc = "$p2loc/plink --silent --memory 2000  --bfile $inname --out $inname.miss --missing";
 	$sc = system ($sys_loc) ;
 
 
@@ -459,7 +464,7 @@ if ($sc == 0 ) {
     
 }
 else {
-    print "job finished with error\n";
+    print "job finished with error\n"  if ($debug);
 }
 
 

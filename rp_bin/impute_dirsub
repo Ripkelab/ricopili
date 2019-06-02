@@ -139,6 +139,8 @@ my $fth_th = 0.15;
 use Sys::Hostname;
 my $host = hostname;
 
+my $serial = 0;
+
 #my $broad = 1 if ($ENV{"DOMAINNAME"} =~ /broadinstitute/);
 
 
@@ -155,7 +157,7 @@ my $i2loc = &trans("i2loc");
 my $liloc = &trans("liloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
-
+my $bcmd = &trans("batch_jobcommand");
 
 ###############################################
 
@@ -163,6 +165,13 @@ my $loloc = &trans("loloc");
 #    $hmloc = "/home/radon01/sripke/bakker_ripke/hapmap_ref/";
 #    $homedir = "/home/radon01/sripke/";
 #}
+
+if ($bcmd eq "SERIAL") {
+    $serial = 1;
+    print "-----------------------------------------------------\n";
+    print "switched on SERIAL mode because of configuration file\n";
+}
+
 
 
 $ref_coll[5] = "$hmloc"."1KG/phased/subchr" ;
@@ -286,8 +295,12 @@ version: $rp_version
                    will still be using impute2 for imputation 
 
 
- --minimac3        use minimac3 for imputation, here eagle will be used for prephasing
-                   prephasing will happen reference informed with phased vcf
+## different imputation algorithm
+
+minimac3 is now default imputation algorithm (its no flag any more), here eagle will be used for prephasing
+                   prephasing will happen reference informed with phased vcf (switched on be default)
+
+ --impute2         use impute4/shapeit2 for prephasing / imputation 
 
  --impute4         use impute4/shapeit3 for prephasing / imputation 
                        (right now done with shapeit2, since trios do not work with shapeit3)
@@ -386,12 +399,14 @@ version: $rp_version
 
   --onlyalign         stop after alignment (no prephasing or imputation), to be used for imputation servers
 
+  --debug             extended output
 
 ### remarks 
 
   --phase is not mandatory any more, refdir is fine as well
 
   --outname is mandatory!!
+
 
 
 
@@ -506,7 +521,11 @@ my $phase_txt = "
 
 
 
-";
+    ";
+
+
+
+my $mm3_sw = 1;
 
 
 use Getopt::Long;
@@ -520,7 +539,7 @@ GetOptions(
     "triset=s"=> \my $trioset_file,
 
     "help"=> \my $help,
-    "serial"=> \my $serial,
+    "serial"=> \my $serial_sw,
     "sepa=i"=> \$sepa,
 
     "sleep=i"=> \my $sleep_sw,
@@ -542,8 +561,9 @@ GetOptions(
     "force1"=> \my $force1,
     "eagle"=> \my $eagle_sw,
 #    "eaglvcf"=> \my $eagle_vcf_sw,
-    "minimac3"=> \my $mm3_sw,
+    "minimac3"=> \my $mm3_sw_outdated,
     "impute4"=> \my $imp4_sw,
+    "impute2"=> \my $imp2_sw,
     "noref"=> \my $noref,
 
 
@@ -559,11 +579,23 @@ GetOptions(
     "chr23trios"=> \my $chr23trios,
     "onlyalign"=> \my $onlyalign,
 #    "chunk10"=> \my $chunk10,
-
+    "debug"=> \my $debug,	
     );
 
 
 
+if ($serial_sw) {
+    $serial = 1;
+}
+if ($mm3_sw_outdated) {
+    print "--minimac3 is outdated (its default now), please start without this flag\n";
+    exit;
+}
+
+
+If ($imp2_sw) {
+    $mm3_sw = 0;
+}
 
 
 if ($sleep_sw) {
@@ -662,7 +694,7 @@ $rp_header =~ s/MODULE/impute_dirsub/;
 print "$rp_header\n";
 
 
-print ".......testing necessary binaries....\n";
+print ".......testing necessary binaries....\n" if ($debug);
 my @miss_scripts;
 
 
@@ -672,7 +704,7 @@ foreach my $scr_name (@test_scripts) {
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$scr_name" && -x _ ) {
-	    print "$scr_name\tfound in $path\n";
+	    print "$scr_name\tfound in $path\n" if ($debug);
 	    $scr_path = "$path/$scr_name";
 	    last;
 	}
@@ -707,7 +739,7 @@ if (@miss_scripts > 0) {
 
 
 
-print ".......testing email program....\n";
+print ".......testing email program....\n" if ($debug);
 
 my $err_scr = 0;
 my $noti =1;
@@ -716,26 +748,26 @@ my $noti =1;
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$mutt_script" && -x _ ) {
-	    print "$mutt_script\tfound in $path\n";
+	    print "$mutt_script\tfound in $path\n" if ($debug);
 	    $scr_path = "$path/$mutt_script";
 	    last;
 	}
     }
     unless ( $scr_path ) {
 
-	print "!!Warning!! : No $mutt_script command available, trying mutt\n" ;
+	print "!!Warning!! : No $mutt_script command available, trying mutt\n" if ($debug);
 
 	$mutt_script = "mutt";
 	for my $path ( split /:/, $ENV{PATH} ) {
 	    if ( -f "$path/$mutt_script" && -x _ ) {
-		print "$mutt_script\tfound in $path\n";
+		print "$mutt_script\tfound in $path\n" if ($debug);
 		$scr_path = "$path/$mutt_script";
 		last;
 	    }
 	}
 	unless ( $scr_path ) {
 	    #	    $err_scr = 1;
-	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" ;
+	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" if ($debug);
 	    $noti = 0;
 	    sleep (3);
 	}
@@ -745,8 +777,8 @@ my $noti =1;
 die if $err_scr == 1;
 
 
-print "....all necessary binaries found....\n";
-print "------------------------------------\n";
+print "....all necessary binaries found....\n" if ($debug);
+print "------------------------------------\n" if ($debug);
 #push @scripts,"id_tager_3";
 
 
@@ -755,14 +787,14 @@ print "------------------------------------\n";
 # "testing environment variable rp_perlpackages
 ####################################
 
-print "testing environment variable rp_perlpackages....\n";
+print "testing environment variable rp_perlpackages....\n" if ($debug);;
 unless (exists $ENV{rp_perlpackages}) {
-    print "Error: no environment variable for perl-packages, please re-install ricopili and make sure to follow all instructions\n";
-    print "------------------------------------\n";
+    print "Error: no environment variable for perl-packages, please re-install ricopili and make sure to follow all instructions\n" ;
+    print "------------------------------------\n" ;
     exit;
 }
-print "....all set....\n";
-print "------------------------------------\n";
+print "....all set....\n" if ($debug);
+print "------------------------------------\n" if ($debug);
 
 
 
@@ -1022,6 +1054,7 @@ sub send_jobarray {
     die "send_jobarray with undefined variables, time" if ($sjatime < 0);
     die "send_jobarray with undefined variables, info" if ($sjainfotxt eq "");
 
+    print "Running job: $sjaname\n";
 
     my $now = localtime time;
     $now =~ s/ /_/g;
@@ -1117,8 +1150,8 @@ sub send_jobarray {
     
     if ($serial) {
 
-	print "starting step $sjaname with ".@sjaarray." jobs\n";
-	print "running up to $sepa parallel jobs.\n";
+	print "starting step $sjaname with ".@sjaarray." jobs\n" if ($debug);
+	print "running up to $sepa parallel jobs.\n" if ($debug);
 
 
 	my $jc = 1;
@@ -1126,7 +1159,7 @@ sub send_jobarray {
 	my @job_sepa_arr;
 
 	foreach (@sjaarray) {
-	    print "running job $jc...\n";
+	    print "running job $jc...\n" if ($debug);
 	    push @job_sepa_arr, "$_ &";
 #	    $job_str .= "$_ & \n";
 
@@ -1135,7 +1168,7 @@ sub send_jobarray {
 		#		$job_str .= "wait\n";
 		my $sepa_file = "$sjaname.sepa.$jc";
 		&a2filenew ($sepa_file,@job_sepa_arr);
-		print "sepa_file: ".$sepa_file."\n";
+		print "sepa_file: ".$sepa_file."\n" if ($debug);
 		&mysystem("chmod u+x $sepa_file");
 		&mysystem("./$sepa_file");
 		@job_sepa_arr = ();
@@ -1150,7 +1183,7 @@ sub send_jobarray {
 	    
 	    my $sepa_file = "$sjaname.sepa.$jc";
 	    &a2filenew ($sepa_file,@job_sepa_arr);
-	    print "sepa_file: ".$sepa_file."\n";
+	    print "sepa_file: ".$sepa_file."\n" if ($debug);
 	    &mysystem("chmod u+x $sepa_file");
 	    &mysystem("./$sepa_file");
 	}
@@ -1217,9 +1250,9 @@ sub send_jobarray {
 
 	    }
 
-	    unless ($serial) {
+#	    unless ($serial) {
 		exit;
-	    }
+#	    }
 
 	}
 
@@ -1323,7 +1356,7 @@ my $archive_dir = "/archive/gwas/scz/archive/$outname";
 #exit;
 
 unless (-e $impute_dir){
-    print "impute_dir is not existing, create one for you\n";
+    print "impute_dir is not existing, create one for you\n" if ($debug);
     my @created = mkpath(   ## $created ?
 			    $impute_dir,
 			    {verbose => 0, mode => 0750},
@@ -1334,7 +1367,7 @@ unless (-e $impute_dir){
 
 
 unless (-e $pcaer_dir){
-    print "pcaer_dir is not existing, create one for you\n";
+    print "pcaer_dir is not existing, create one for you\n" if ($debug);
     my @created = mkpath(   ## $created ?
 			    $pcaer_dir,
 			    {verbose => 0, mode => 0750},
@@ -1379,7 +1412,7 @@ my $suminfo_s_v2_sw = 0;
 
 my %ref_hash;
 if (-e "$refdir/reference_templ") {
-    print "new format (reference_template) found.\n";
+    print "new format (reference_template) found.\n" if ($debug);
     die unless open IN, "< $refdir/reference_templ";
     while (my $line = <IN>) {
 	my @cells = &split_line($line);
@@ -1400,7 +1433,7 @@ if (-e "$refdir/reference_templ") {
 
 
 
-print "reference_v2: $suminfo_s_v2_sw\n";
+print "reference_v2: $suminfo_s_v2_sw\n" if ($debug);
 #print "refvcf_v2: $refvcf_s_v2\n";
 #exit;
 #####################################
@@ -1458,7 +1491,7 @@ my $cc=0;
 
 my %refiex;
 if ($refiex_file) {
-    print "read $refiex_file\n";
+    print "read $refiex_file\n" if ($debug);
     die $!." <$refiex_file>" unless open IN, "< $refiex_file";
     while (my $line = <IN>){
 	chomp($line);
@@ -1480,7 +1513,7 @@ my @reffiles;
 
 
 #if ($suminfo_s_v2 eq "") {
-print "read $refdir/$suminfo_n....\n";
+print "read $refdir/$suminfo_n....\n" if ($debug);
 die $!." <$refdir/$suminfo_n>" unless open IN, "< $refdir/$suminfo_n";
 while (my $line = <IN>){
     my @cells = &split_line($line);
@@ -1499,7 +1532,7 @@ while (my $line = <IN>){
 	}
 	
 	if (exists $refiex{$refind}){
-	    print "exclude: $bgl_file\n" ;
+	    print "exclude: $bgl_file\n" if ($debug);
 	    next;
 	}
 	
@@ -1592,7 +1625,7 @@ if (-e "$rootdir/puting_done") {
 }
 
 #print @bimfli_files."\n";
-print "@bimhg19_files\n";
+print "@bimhg19_files\n" if ($debug);
 #print "debug\n";
 #sleep(10);
 #exit;
@@ -1741,7 +1774,7 @@ if ($suminfo_s_v2_sw == 0) {
 	
 	
 	push @refind_arr, $refind;
-	print "refind: $refind\n";
+	print "refind: $refind\n" if ($debug);
 	
 	
 	#    my $chrind = $rf;
@@ -1785,7 +1818,7 @@ if ($suminfo_s_v2_sw == 0) {
 
 unless (-e "$rootdir/reference_info") {
 
-    print "write reference_info\n";
+    print "write reference_info\n" if ($debug);
     
     die $! unless open REF, "> reference_info.tmp";
     print REF "$refdir\n";
@@ -1867,7 +1900,7 @@ if ($suminfo_s_v2_sw) {
 	    push @chr_in, $chrloc;
 	}
 	else {
-	    print "Warning: $reffi is not existing, skipping this chromosome\n";
+	    print "Warning: $reffi is not existing, skipping this chromosome\n" if ($debug);
 	}
     }
 
@@ -1882,10 +1915,10 @@ if ($suminfo_s_v2_sw) {
 	
 	if (-e $reffi) {
 	    push @chr_in, $chrloc;
-	    print "found $reffi, this seems to be chrX imputation\n";
+	    print "found $reffi, this seems to be chrX imputation\n" if ($debug);
 	}
 	else {
-	    print "Warning: $reffi is not existing, skipping this chromosome\n";
+	    print "Warning: $reffi is not existing, skipping this chromosome\n" if ($debug);
 	}
 	
 	if (@chr_in == 0) {
@@ -1962,7 +1995,7 @@ unless (-e "$rootdir/buigue_done") {
 	}
 	else {
 	    &mysystem ("touch $rootdir/buigue_done");
-	    print "build_guess done\n";
+	    print "build_guess done\n" if ($debug);
 	}
     }
 }
@@ -2007,6 +2040,7 @@ if ($suminfo_s_v2_sw == 1) {
 
 		    unless (-e $reffi) {
 			print "Error: $reffi not existing\n";
+			exit;
 		    }
 
 		    
@@ -2035,7 +2069,7 @@ if ($suminfo_s_v2_sw == 1) {
 	}
 	else {
 	    &mysystem ("touch $rootdir/readref_done");
-	    print "readref done\n";
+	    print "readref done\n" if ($debug);
 	}
     }
 }
@@ -2088,7 +2122,7 @@ if ($suminfo_s_v2_sw == 1) {
 	}
 	else {
 	    &mysystem ("touch $rootdir/readrefsum_done");
-	    print "readrefsum done\n";
+	    print "readrefsum done\n" if ($debug);
 	}
     }
 }
@@ -2130,7 +2164,7 @@ unless (-e "$rootdir/posing_done") {
 	    }
 	}
 	else {
-	    print "locref $locref is not existing! would be better if it did\n";
+	    print "locref $locref is not existing! would be better if it did\n" if ($debug);
 	    unless (exists $bimpos_array{$accfli}) {
 		push @chepos_arr, "$checkpos_script --dbcol 1,8,9,3,5 --dbsnp $refdir/$suminfo_s $bfile.hg19.bim" ;#
 	    }
@@ -2156,7 +2190,7 @@ unless (-e "$rootdir/posing_done") {
     }
     else {
 	&mysystem ("touch $rootdir/posing_done");
-	print "checkpos done\n";
+	print "checkpos done\n" if ($debug);
     }
 }
 
@@ -2195,9 +2229,9 @@ unless (-e "$rootdir/flipping_done") {
 	    }
 	}
 	else {
-	    print "locref $locref is not existing! would be better if it did\n";
+	    print "locref $locref is not existing! would be better if it did\n" if ($debug);
 	    unless (exists $bimfli_array{$accfli}) {
-		print "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim\n" ;
+		print "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim\n" if ($debug);
 		push @chefli_arr, "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim" ;
 	    }
 	    else {
@@ -2228,7 +2262,7 @@ unless (-e "$rootdir/flipping_done") {
     }
     else {
 	&mysystem ("touch $rootdir/flipping_done");
-	print "checkflip done\n";
+	print "checkflip done\n" if ($debug);
     }
 }
 
@@ -2237,8 +2271,8 @@ unless (-e "$rootdir/flipping_done") {
 #print "debug\n" ;  
 #exit;
 
-print "N_bimfli: ".@bimfli_files."\n";
-print "N_bim: ".@bim_files."\n";
+print "N_bimfli: ".@bimfli_files."\n" if ($debug);
+print "N_bim: ".@bim_files."\n" if ($debug);
 
 #print "debug\n";
 #exit;
@@ -2252,7 +2286,7 @@ print "N_bim: ".@bim_files."\n";
 my %info_n;
 unless (-e "$rootdir/puting_done"){
 
-    print "read reference_info into memory\n";
+    print "read reference_info into memory\n" if ($debug);
     die $!." <$refdir/$suminfo_n>" unless open IN, "< $refdir/$suminfo_n";
     
     while (my $line = <IN>){
@@ -2272,7 +2306,7 @@ unless (-e "$rootdir/puting_done"){
 ############################
 
 
-print "prepare famfiles for shapeit\n";
+print "prepare famfiles for shapeit\n" if ($debug);
 
 unless (-e "$rootdir/puting_done") {
     foreach (@bim_files) {
@@ -2285,7 +2319,7 @@ unless (-e "$rootdir/puting_done") {
 	if ($phas == 923 || $phas == 9123 || $phas == 91231) {
 	    if (-e "$bprefix.hg19.ch.fl.fam") {
 		unless (-e "$bprefix.hg19.ch.fl.sexcheck") {
-		    my $sx = "$ploc/plink --memory 2000  --bfile $bprefix.hg19.ch.fl --check-sex --out $bprefix.hg19.ch.fl";
+		    my $sx = "$ploc/plink --silent --memory 2000  --bfile $bprefix.hg19.ch.fl --check-sex --out $bprefix.hg19.ch.fl";
 		    &mysystem ($sx);
 		}
 		
@@ -2418,7 +2452,7 @@ if ($deploy) {
 	}
 	else {
 	    &mysystem ("touch $rootdir/prepdep_done");
-	    print "prepare deploy done\n";
+	    print "prepare deploy done\n" if ($debug);
 	}
     }
 }
@@ -2467,7 +2501,7 @@ if ($suminfo_s_v2_sw == 1) {
 	my $refind_loc = "chr$cells[0]"."_".$cells[1]."_".$cells[2];
 
 	if (exists $refiex{$refind_loc}){
-	    print "exclude chunk $refind_loc\n" ;
+	    print "exclude chunk $refind_loc\n" if ($debug);
 	    next;
 	}
 
@@ -2641,7 +2675,7 @@ if ($chucking_done == 0) {
     }
     else {
 	&mysystem ("touch $rootdir/chucking_done");
-	print "chucking done\n";
+	print "chucking done\n" if ($debug);
     }
 }
 # die "debug_chuck";
@@ -2696,7 +2730,7 @@ if ($prephase_done == 0) {
 	    $trio_sw = 1 ;
 	}
 
-	print "read emptydir....\n";
+	print "read emptydir....\n" if ($debug);
 	opendir(IND, $subdir_empty) || die "can't opendir .: $!";
 	my @indirempty = grep {/\.empty$/} readdir(IND);
 	closedir IND;
@@ -2713,7 +2747,7 @@ if ($prephase_done == 0) {
 	my %finifiles_hash = ();
 #	my %errorfiles_hash = ();
 
-	print "read outdir....\n";
+	print "read outdir....\n" if ($debug);
 	opendir(DIR, $subdir) || die "can't opendir .: $!";
 	@dirfiles = readdir(DIR);
 	@finifiles = grep {/\.fini$/} @dirfiles;
@@ -2734,7 +2768,7 @@ if ($prephase_done == 0) {
 
 	if ($trio_sw == 1) {
 	    unless (-e "$bprefix.fam.shape"){
-		print "create shapefile for trios\n";
+		print "create shapefile for trios\n" if ($debug);
 		my $sys = "$trisha_script $bprefix.fam";
 		&mysystem ($sys);
 	    }
@@ -2754,7 +2788,7 @@ if ($prephase_done == 0) {
 	}
 
 
-	print "start refdirloop....\n";
+	print "start refdirloop....\n" if ($debug);
 	#### loop for reference chunks
 	foreach my $ccc (0..$#refind_arr) {
 
@@ -2770,7 +2804,7 @@ if ($prephase_done == 0) {
 	    my $bgz_file = "$refdir/$suminfo_s_v2.impute.bcf.bgz"; 
 	    $bgz_file =~ s/XXX/$chrind/;
 #	    push @bgz_arr, $bgz_file;
-	    print $bgz_file."\n";
+	    print $bgz_file."\n" if ($debug);
 
 	    my $extract_txt = "";
 	    
@@ -2845,7 +2879,7 @@ if ($prephase_done == 0) {
 		unless (exists $finifiles_hash{$haps_ch_out_fini} ) {
 
 #		    print "didnt find this one: $haps_ch_out_fini\n";
-#		    exit;
+#		    sleep (3);
 		    
 #		if (exists $finifiles_hash{$haps_ch_out_fini} ) {
 #
@@ -3087,7 +3121,7 @@ if ($prephase_done == 0) {
 #	print "debug\n";
 #	exit;
 	&mysystem ("touch $rootdir/prephase_done");
-	print "prephasing done\n";
+	print "prephasing done\n" if ($debug);
     }
 }
 #print "debug\n";
@@ -3156,7 +3190,7 @@ if ($pseudo_done == 0) {
 	my $splitn =  int ($nfam / $spliha_n);
 	$splitn++;
 
-	print "read emptydir....\n";
+	print "read emptydir....\n" if ($debug);
 	opendir(IND, $subdir_empty) || die "can't opendir .: $!";
 	my @indirempty = grep {/\.empty$/} readdir(IND);
 	closedir IND;
@@ -3167,7 +3201,7 @@ if ($pseudo_done == 0) {
 	my @dirfiles = ();
 	my @finifiles = ();
 
-	print "read outdir....\n";
+	print "read outdir....\n" if ($debug);
 	opendir(DIR, $subdir_in) || die "can't opendir .: $!";
 	@dirfiles = readdir(DIR);
 	@finifiles = grep {/\.fini$/} @dirfiles;
@@ -3175,7 +3209,7 @@ if ($pseudo_done == 0) {
 
 	my %finifiles_hash = map { $_ => 1 } @finifiles;
 
-	print "start pseudo refdirloop....\n";
+	print "start pseudo refdirloop....\n" if ($debug);
 	#### loop for reference chunks
 	foreach my $ccc (0..$#refind_arr) {
 
@@ -3186,7 +3220,7 @@ if ($pseudo_done == 0) {
 	    my $refchunk = "$refdir/$rf";
 
 	    if (exists $indirempty_hash{$empty_ch_out} ) {
-		print "$bprefix.$refind.empty\n";
+		print "$bprefix.$refind.empty\n" if ($debug);
 	    }
 	    else {
 #		print "N:$splitn\n";
@@ -3238,7 +3272,7 @@ if ($pseudo_done == 0) {
     }
     else {
 	&mysystem ("touch $rootdir/pseudo_done");
-	print "pseudo done\n";
+	print "pseudo done\n" if ($debug);
     }
 
 }
@@ -3296,7 +3330,7 @@ if ($imp_done == 0) {
 	my $splitn =  int ($nfam / $spliha_n);
 	$splitn++;
 
-	print "read emptydir....\n";
+	print "read emptydir....\n" if ($debug);
 	opendir(IND, $subdir_empty) || die "can't opendir .: $!";
 	my @indirempty = grep {/\.empty$/} readdir(IND);
 	closedir IND;
@@ -3308,7 +3342,7 @@ if ($imp_done == 0) {
 	my @finifiles = ();
 	my @sumfiles = ();
 
-	print "read outdir....\n";
+	print "read outdir....\n" if ($debug);
 	opendir(DIR, $subdir) || die "can't opendir .: $!";
 	@dirfiles = readdir(DIR);
 	@finifiles = grep {/\.fini$/} @dirfiles;
@@ -3318,7 +3352,7 @@ if ($imp_done == 0) {
 	my %finifiles_hash = map { $_ => 1 } @finifiles;
 	my %sumfiles_hash = map { $_ => 1 } @sumfiles;
 
-	print "start imp refdirloop....\n";
+	print "start imp refdirloop....\n" if ($debug);
 	#### loop for reference chunks
 
 
@@ -3361,7 +3395,7 @@ if ($imp_done == 0) {
 
 
 	    if (exists $indirempty_hash{$empty_ch_out} ) {
-		print "$bprefix.$refind.empty\n";
+		print "$bprefix.$refind.empty\n" if ($debug);
 	    }
 	    else {
 
@@ -3402,7 +3436,7 @@ if ($imp_done == 0) {
 			    my @errlog = `grep ERROR $subdir/$pi_ch_out_summary`;
 			    if ($errlog[0] =~ /^ERROR: There are no type 2 SNPs/) {
 				$empty = 1;
-				print "empty: $pi_ch_out_summary\n";
+				print "empty: $pi_ch_out_summary\n" if ($debug);
 			    }
 #			    print "$errlog[0]\n";
 #			    exit;
@@ -3591,7 +3625,7 @@ if ($imp_done == 0) {
 
     
     &mysystem ("touch $rootdir/imp_done");
-    print "imp done\n";
+    print "imp done\n" if ($debug);
 
 }
 
@@ -3649,7 +3683,7 @@ if ($impdeploy_done == 0) {
 	my @finifiles = ();
 	#	my @sumfiles = ();
 
-	print "read outdir....\n";
+	print "read outdir....\n"  if ($debug);
 	opendir(DIR, $subdir) || die "can't opendir .: $!";
 	@dirfiles = readdir(DIR);
 	@finifiles = grep {/\.fini$/} @dirfiles;
@@ -3662,7 +3696,7 @@ if ($impdeploy_done == 0) {
 	my %finifiles_hash = map { $_ => 1 } @finifiles;
 	#	my %sumfiles_hash = map { $_ => 1 } @sumfiles;
 
-	print "start vcf2dos_deploy refdirloop....\n";
+	print "start vcf2dos_deploy refdirloop....\n"  if ($debug);
 	#### loop for reference chunks
 
 	## not needed here, but maybe later, usually done in prephasing step
@@ -3734,7 +3768,8 @@ if ($impdeploy_done == 0) {
 		my $vcf_file = "$subdir_in/$refchr.vcf.gz"; ## sanger format
 		
 		unless (-e $vcf_file) {
-		    $vcf_file = "$subdir_in/chr$refchr.dose.vcf.gz"; ## michigan format    
+		    $vcf_file = "$subdir_in/chr$refchr.dose.vcf.gz"; ## michigan format
+#		    $vcf_file = "$subdir_in/chr_$refchr.zip"; ## michigan format, may 2019    
 		    unless (-e $vcf_file) {
 			print "------------------------------------------------------------------------------------------------------------\n";
 			print "Error: $vcf_file not found\n";
@@ -3754,7 +3789,7 @@ if ($impdeploy_done == 0) {
 		
 	    }
 	    else {
-		print "this is existing: ".$finifiles_hash{$vcf2dos_deploy_fini}."\n";
+		print "this is existing: ".$finifiles_hash{$vcf2dos_deploy_fini}."\n"  if ($debug);
 		$vcf2dos_deploy_fini++;
 		$n_vcf2dos_deploy_done++;
 	    }
@@ -3788,7 +3823,7 @@ if ($impdeploy_done == 0) {
 
     
     &mysystem ("touch $rootdir/impdeploy_done");
-    print "impdeploy done\n";
+    print "impdeploy done\n"  if ($debug);
 
 }
 
@@ -3855,7 +3890,7 @@ if ($dos_done == 0) {
 	my $splitn =  int ($nfam / $spliha_n);
 	$splitn++;
 
-	print "read emptydir....\n";
+	print "read emptydir....\n"  if ($debug);
 	opendir(IND, $subdir_empty) || die "can't opendir .: $!";
 	my @indirempty = grep {/\.empty$/} readdir(IND);
 	closedir IND;
@@ -3866,7 +3901,7 @@ if ($dos_done == 0) {
 	my @dirfiles = ();
 	my @finifiles = ();
 
-	print "read outdir....\n";
+	print "read outdir....\n"  if ($debug);
 	opendir(DIR, $dasudir_loc) || die "can't opendir .: $!";
 	@finifiles = grep {/\.out.dosage.fini$/} readdir(DIR);
 	closedir DIR;
@@ -3875,7 +3910,7 @@ if ($dos_done == 0) {
 
 	my %finifiles_hash = map { $_ => 1 } @finifiles;
 
-	print "start dos refdirloop....\n";
+	print "start dos refdirloop....\n"  if ($debug);
 	#### loop for reference chunks
 	foreach my $ccc (0..$#refind_arr) {
 
@@ -3897,7 +3932,7 @@ if ($dos_done == 0) {
 
 
 	    if (exists $indirempty_hash{$empty_ch_out} ) {
-		print "$bprefix.$refind.empty\n";
+		print "$bprefix.$refind.empty\n"  if ($debug);
 	    }
 	    else {
 #		print "N:$splitn\n";
@@ -3998,7 +4033,7 @@ if ($dos_done == 0) {
     }
     else {
 	&mysystem ("touch $rootdir/dos_done");
-	print "dos done\n";
+	print "dos done\n"  if ($debug);
     }
 
 }
@@ -4040,14 +4075,14 @@ if ($dabg_done == 0) {
 	    $trio_sw = 1 ;
 	}
 
-	print "read emptydir....\n";
+	print "read emptydir....\n"  if ($debug);
 	opendir(IND, $subdir_empty) || die "can't opendir .: $!";
 	my @indirempty = grep {/\.empty$/} readdir(IND);
 	closedir IND;
 	my %indirempty_hash = map { $_ => 1 } @indirempty;
 
 
-	print "read outdir....\n";
+	print "read outdir....\n"  if ($debug);
 	opendir(DIR, "$dasudir_loc_qc1/qc1") || die "can't opendir : $!";
 	my @finifiles = grep {/\.out.dosage.gz.fini$/} readdir(DIR);
 	closedir DIR;
@@ -4069,7 +4104,7 @@ if ($dabg_done == 0) {
 #	    print "$dasuqc1_fini\n";
 
 	    if (exists $indirempty_hash{$empty_ch_out} ) {
-		print "$bprefix.$refind.empty\n";
+		print "$bprefix.$refind.empty\n"  if ($debug);
 	    }
 	    else {
 		unless (exists $finifiles_hash{$dasuqc1_fini} ) {
@@ -4114,7 +4149,7 @@ if ($dabg_done == 0) {
     }
     else {
 	&mysystem ("touch $rootdir/dabg_done");
-	print "dabg done\n";
+	print "dabg done\n"  if ($debug);
     }
 }
 
@@ -4180,100 +4215,99 @@ if (@bimfli_files == 0 ) {
 my $cobg_dir = "$rootdir/cobg_dir_$outname";    
 if (0) {
 
-unless (-e $cobg_dir) {
-    &mysystem ("mkdir -p $cobg_dir");
-}
-print "start cobg\n";
-my @cobg_arr;
-my @prune_arr;   
-my @merge_arr; 
-unless (-e "$rootdir/cobg_done"){
+    unless (-e $cobg_dir) {
+	&mysystem ("mkdir -p $cobg_dir");
+    }
+    print "start cobg\n"  if ($debug);
+    my @cobg_arr;
+    my @prune_arr;   
+    my @merge_arr; 
+    unless (-e "$rootdir/cobg_done"){
 
-    foreach my $rf (@reffiles) {
-	my $refind = $rf;
-	if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
-	    $refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
-	}
-	else {
-	    $refind =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
-	}
-#	print "$refind\n";
-	
-	my $cobg_fini = "$impute_dir/cobg.$outname.$refind.fini";
-
-	my $arrs = @cobg_arr;
-#	print "$cobg_fini, n = $arrs\n";
-
-	my $in = 1;
-	unless (-e $cobg_fini) {
-	    
-	    my $in_list = "";
-	    foreach (@bimfli_files) {
-		my $bprefix = $_;
-		$bprefix =~ s/.bim$//;
-#		print "PREFIX: $bprefix\n";		
-		
-		my $dasudir_loc_qc1 = "$dasudir"."qc1_$bprefix";
-		my $bfile_loc = "$dasudir_loc_qc1/bgs/dos_$bprefix.$refind.out.dosage.gz.qc2";
-		my $bfile_check = "$dasudir_loc_qc1/bgs/dos_$bprefix.$refind.out.dosage.gz.qc2.bim";
-#		my $bfile_check = "$dasudir_loc_qc1/qc1/dos_$bprefix.$refind.out.dosage.gz.empty";
-		if (-e $bfile_check) {
-		    $in_list .= " $bfile_loc";		
-		}
-		else {
-		    print " $bfile_loc has no $bfile_check\n";		
-		    $in = 0;
-#		    exit;
-		}
-	    }
-
-	    my $sys_loc = "$cobg_script --targetdir $rootdir/cobg_dir_$outname --out cobg.$outname.$refind $in_list";
-#	    print "inist: $sys_loc\n";
-#	    exit;
-
-	    
-	    if ($in_list ne "") {
-		if ($in == 1){
-		    push @cobg_arr,$sys_loc;
-		}
-
-#		if ($in == 0){
-#		    print "$sys_loc\n";
-#		    exit;
-#		}
-	    }
-
-	}
-	else {
-	    my $prune_fini = "$cobg_dir/prune.cobg.$outname.$refind.fini";
-	    my $prune_out = "$cobg_dir/prune.cobg.$outname.$refind.out";
-	    unless (-e $prune_fini) {
-		unless (-e $prune_out) {
-
-		    if (-e "$cobg_dir/cobg.$outname.$refind.bim") {
-			my $sys_loc = "$prune_script cobg.$outname.$refind";
-			push @prune_arr,$sys_loc;
-		    }
-
-		}
+	foreach my $rf (@reffiles) {
+	    my $refind = $rf;
+	    if ($refind =~ /chr[0-9]*_[0-9]*_[0-9]*/){
+		$refind =~ s/.*(chr[0-9]*_[0-9]*_[0-9]*).*/\1/;
 	    }
 	    else {
-		my $bfile_loc = "prune.bfile.cobg.$outname.$refind";
-		if (-e "$cobg_dir/$bfile_loc.bim") {
-		    unless (-e "$cobg_dir/prune.bfile.cobg.$outname.fini") {
-			push @merge_arr, $bfile_loc;
+		$refind =~ s/.*(chr[0-9]*_[0-9]*).*/\1/;
+	    }
+	    #	print "$refind\n";
+	    
+	    my $cobg_fini = "$impute_dir/cobg.$outname.$refind.fini";
+
+	    my $arrs = @cobg_arr;
+	    #	print "$cobg_fini, n = $arrs\n";
+
+	    my $in = 1;
+	    unless (-e $cobg_fini) {
+		
+		my $in_list = "";
+		foreach (@bimfli_files) {
+		    my $bprefix = $_;
+		    $bprefix =~ s/.bim$//;
+		    #		print "PREFIX: $bprefix\n";		
+		    
+		    my $dasudir_loc_qc1 = "$dasudir"."qc1_$bprefix";
+		    my $bfile_loc = "$dasudir_loc_qc1/bgs/dos_$bprefix.$refind.out.dosage.gz.qc2";
+		    my $bfile_check = "$dasudir_loc_qc1/bgs/dos_$bprefix.$refind.out.dosage.gz.qc2.bim";
+		    #		my $bfile_check = "$dasudir_loc_qc1/qc1/dos_$bprefix.$refind.out.dosage.gz.empty";
+		    if (-e $bfile_check) {
+			$in_list .= " $bfile_loc";		
+		    }
+		    else {
+			print " $bfile_loc has no $bfile_check\n"  if ($debug);		
+			$in = 0;
+			#		    exit;
 		    }
 		}
-	    }
 
+		my $sys_loc = "$cobg_script --targetdir $rootdir/cobg_dir_$outname --out cobg.$outname.$refind $in_list";
+		#	    print "inist: $sys_loc\n";
+		#	    exit;
+
+		
+		if ($in_list ne "") {
+		    if ($in == 1){
+			push @cobg_arr,$sys_loc;
+		    }
+
+		    #		if ($in == 0){
+		    #		    print "$sys_loc\n";
+		    #		    exit;
+		    #		}
+		}
+
+	    }
+	    else {
+		my $prune_fini = "$cobg_dir/prune.cobg.$outname.$refind.fini";
+		my $prune_out = "$cobg_dir/prune.cobg.$outname.$refind.out";
+		unless (-e $prune_fini) {
+		    unless (-e $prune_out) {
+
+			if (-e "$cobg_dir/cobg.$outname.$refind.bim") {
+			    my $sys_loc = "$prune_script cobg.$outname.$refind";
+			    push @prune_arr,$sys_loc;
+			}
+
+		    }
+		}
+		else {
+		    my $bfile_loc = "prune.bfile.cobg.$outname.$refind";
+		    if (-e "$cobg_dir/$bfile_loc.bim") {
+			unless (-e "$cobg_dir/prune.bfile.cobg.$outname.fini") {
+			    push @merge_arr, $bfile_loc;
+			}
+		    }
+		}
+
+	    }
 	}
     }
-}
 
-#print "@cobg_arr\n";
-#print "debug\n";
-#exit;
-
+    #print "@cobg_arr\n";
+    #print "debug\n";
+    #exit;
 
 
 
@@ -4283,88 +4317,89 @@ unless (-e "$rootdir/cobg_done"){
 
 
 
-chdir ($impute_dir);
 
-#my $n_cobg = @cobg_arr;
-#print "NCOBG: $n_cobg\n";
-#sleep(10);
+    chdir ($impute_dir);
 
-
-###################################
-## combine the best-guess chunks
-###################################
-
-if (@cobg_arr > 0) {
-    
-    $sjadir = $cobg_dir;
-    $sjaname = "cobg";
-    $sjatime = 2;
-    $sjamem = 1000;
-    @sjaarray = @cobg_arr;
-    
-    &send_jobarray;
-    
-}
-else {
-    print "cobg done\n";
-}
+    #my $n_cobg = @cobg_arr;
+    #print "NCOBG: $n_cobg\n";
+    #sleep(10);
 
 
+    ###################################
+    ## combine the best-guess chunks
+    ###################################
 
-###################################
-## prune best-guess chunks
-###################################
-
-
-if (@prune_arr > 0) {
-    
-    $sjadir = $cobg_dir;
-    $sjaname = "prune";
-    $sjatime = 2;
-    $sjamem = 1000;
-    @sjaarray = @prune_arr;
-    
-    &send_jobarray;
-    
-}
-else {
-    print "prune_bg done\n";
-}
-
-
-
-###################################
-## merge pruned best-guess chunks
-###################################
-
-if (@merge_arr > 0) {
-
-
-    chdir ("$cobg_dir");
-
-    my $fbfile = shift(@merge_arr);
-    open ML, ">", "MERGE_list" or die $!;
-    foreach my $bf (@merge_arr) {
-	print ML "$bf.bed $bf.bim $bf.fam\n";
+    if (@cobg_arr > 0) {
+	
+	$sjadir = $cobg_dir;
+	$sjaname = "cobg";
+	$sjatime = 2;
+	$sjamem = 1000;
+	@sjaarray = @cobg_arr;
+	
+	&send_jobarray;
+	
     }
-    close ML;
+    else {
+	print "cobg done\n"  if ($debug);
+    }
 
-    my @merge_job;
-    push @merge_job, "$merge_script prune.bfile.cobg.$outname $fbfile MERGE_list";
-    
-    $sjadir = $cobg_dir;
-    $sjaname = "merge";
-    $sjatime = 2;
-    $sjamem = 2000;
-    @sjaarray = @merge_job;
-    
-    &send_jobarray;
-    
-}
-else {
-    &mysystem ("touch $rootdir/cobg_done");
-    print "merge pruned combined done\n";
-}
+
+
+    ###################################
+    ## prune best-guess chunks
+    ###################################
+
+
+    if (@prune_arr > 0) {
+	
+	$sjadir = $cobg_dir;
+	$sjaname = "prune";
+	$sjatime = 2;
+	$sjamem = 1000;
+	@sjaarray = @prune_arr;
+	
+	&send_jobarray;
+	
+    }
+    else {
+	print "prune_bg done\n"  if ($debug);
+    }
+
+
+
+    ###################################
+    ## merge pruned best-guess chunks
+    ###################################
+
+    if (@merge_arr > 0) {
+
+
+	chdir ("$cobg_dir");
+
+	my $fbfile = shift(@merge_arr);
+	open ML, ">", "MERGE_list" or die $!;
+	foreach my $bf (@merge_arr) {
+	    print ML "$bf.bed $bf.bim $bf.fam\n";
+	}
+	close ML;
+
+	my @merge_job;
+	push @merge_job, "$merge_script prune.bfile.cobg.$outname $fbfile MERGE_list";
+	
+	$sjadir = $cobg_dir;
+	$sjaname = "merge";
+	$sjatime = 2;
+	$sjamem = 2000;
+	@sjaarray = @merge_job;
+	
+	&send_jobarray;
+	
+    }
+    else {
+	&mysystem ("touch $rootdir/cobg_done");
+	print "merge pruned combined done\n"  if ($debug);
+    }
 
 
 }
@@ -4384,7 +4419,7 @@ my $cobg_gw_dir = "$rootdir/cobg_dir_genome_wide";
 unless (-e $cobg_gw_dir) {
     &mysystem ("mkdir -p $cobg_gw_dir");
 }
-print "start cobg genome wide\n";
+print "start cobg genome wide\n"  if ($debug);
 my @cobg_gw_arr;
 my $cobg_gw_fini= 0;    
 
@@ -4454,7 +4489,7 @@ if (@cobg_gw_arr > 0) {
 else {
     &mysystem ("touch $rootdir/cobg_gw_done");
 	
-    print "cobg done\n";
+    print "cobg done\n"  if ($debug);
 }
 
 
@@ -4505,7 +4540,7 @@ chdir ($rootdir);
 
 unless ($noclean) {
     
-    print "start cleaning\n";
+    print "start cleaning\n"  if ($debug);
     my @clean_arr;    
 
     unless (-e "$rootdir/clean_done"){
@@ -4604,7 +4639,7 @@ unless ($noclean) {
 	}
 	else {
 	    &mysystem ("touch $rootdir/clean_done");
-	    print "cleaning done\n";
+	    print "cleaning done\n"  if ($debug);
 	}
 
     }
@@ -4629,7 +4664,7 @@ else {
 chdir ($rootdir);
 
 
-print "start du\n";
+print "start du\n"  if ($debug);
 my @du_arr;    
 
 push @du_arr,  "$du_script" unless (-e "du.fini");    
@@ -4664,7 +4699,7 @@ if (@du_arr > 0) {
 my $blueprint_sich_dir = "blueprint_bak";
 
 unless (-e $blueprint_sich_dir){
-    print "$blueprint_sich_dir is not existing, create one for you\n";
+    print "$blueprint_sich_dir is not existing, create one for you\n"  if ($debug);
     my @created = mkpath(   ## $created ?
 			    $blueprint_sich_dir,
 			    {verbose => 0, mode => 0750},
@@ -4675,7 +4710,7 @@ unless (-e $blueprint_sich_dir){
 foreach my $floc (@files) {
 
     if ($floc =~ /^blueprint_jobs__/){
-	print "mv $floc\n";
+	print "mv $floc\n"  if ($debug);
 	my $target = $floc;
 	while (-e "$blueprint_sich_dir/$target") {
 	    $target = $target.".c";
@@ -4771,7 +4806,7 @@ if ($qloc eq "qsub_b") {
 	
     }
     else {
-	print "performer done\n";
+	print "performer done\n"  if ($debug);
     }
 
 }

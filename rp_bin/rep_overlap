@@ -5,7 +5,7 @@ my $version = "1.0.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 
-
+my $debug = 0;
 
 
 ##########################
@@ -169,8 +169,10 @@ while (<GEN>) {
 
 close GEN;
 
-foreach my $key (sort keys %orcount) {
-    print "$key\t$orcount{$key}\n";
+if ($debug) {
+    foreach my $key (sort keys %orcount) {
+	print "$key\t$orcount{$key}\n";
+    }
 }
 
 #exit;
@@ -381,9 +383,10 @@ $tab_all.= "\\subsection {related}\n";
 
 &tab2pdf($tab_all);
 
-print "---------\n";
-print "$tab_all\n";
-
+if ($debug) {
+    print "---------\n";
+    print "$tab_all\n";
+}
 exit;
 
 my @out_str;

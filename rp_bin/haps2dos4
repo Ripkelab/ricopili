@@ -47,6 +47,8 @@ version: $version
 
 ##  --prefix STRING     prefix into famfile
 
+  --debug             extended output
+
 
  created by Stephan Ripke 2012 at MGH, Boston, MA
  in the frame of the PGC
@@ -63,6 +65,7 @@ GetOptions(
 #    "deployfam"=> \my $deployfam,
     "prefix=s"=> \my $prefix,
     "outdir=s"=> \my $outdir,
+    "debug"=> \my $debug,
     "fam=s"=> \my $famname,
 #    "transfam=s"=> \my $transfamname,
     "bim=s"=> \my $bimname,
@@ -105,7 +108,7 @@ sub mytime(){
     my $secs = time-$t0;
     my $mins = $secs/60;
     my $hours = $secs/3600;
-    print $secs." seconds gone since start of the script\n";
+    print $secs." seconds gone since start of the script\n" if ($debug);
 
     
 }
@@ -151,7 +154,7 @@ my $haps_file_gz = "$haps_file1.combined.gz";
 my $haps_file_gz_map = "$haps_file1.combined.gz.map";
 
 unless (-e $haps_fam) {
-    print "Warning: $haps_fam not existing\n";
+    print "Warning: $haps_fam not existing\n" if ($debug);
 #    $haps_fam =~ s/.imp.gz.fam/.imp.GP.gz.fam/;
 #    unless (-e $haps_fam) {
 #	print "Error: $haps_fam not existing\n";
@@ -176,7 +179,7 @@ $info_file .= "_info";
 
 
 
-print "merge files\n";
+print "merge files\n" if ($debug);
 &mytime();
 
 
@@ -194,7 +197,7 @@ if ($nf > 0) {
     }
     
     
-    print "open $haps_file_gz\n";
+    print "open $haps_file_gz\n" if ($debug);
     
     my $ogz = gzopen("$haps_file_gz", "wb")  or die "Cannot open file $haps_file_gz: $gzerrno\n" ;
     #$ogz->gzwrite($header) ;
@@ -231,7 +234,7 @@ if ($nf > 0) {
 	$igz->gzclose();
     }
 
-    print "close $haps_file_gz\n";    
+    print "close $haps_file_gz\n" if ($debug);  
     $ogz->gzclose();
 
 
@@ -398,7 +401,7 @@ else {
 my $twodos_tmp = "$haps_file1.combined.tmp2dos.gz";
 my $twodos_tmp_success = "$twodos_tmp.fini";
 my $imp_proc = "impprob_to_2dos $haps_file_gz $twodos_tmp";
-print "improb script: $imp_proc\n";
+print "improb script: $imp_proc\n" if ($debug);
 
 #print "debug\n";
 #    sleep(10);
@@ -407,7 +410,7 @@ unless (-e $twodos_tmp_success) {
     &mysystem ($imp_proc);
 }
 
-print "finished, now plink\n";
+print "finished, now plink\n" if ($debug);
 &mytime();
 
 # check success
@@ -423,11 +426,11 @@ print "finished, now plink\n";
 
 
 #my $sys_loc = "$ploc/plink --dosage $haps_file_gz noheader skip0=1 skip1=1 format=3 Z --fam $famname_in.ow --allow-no-sex --write-dosage --out $dosout";
-my $sys_loc = "$ploc/plink --memory 2000 --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famout --allow-no-sex --write-dosage --out $dosout";
-print "$sys_loc\n";
+my $sys_loc = "$ploc/plink --silent --memory 2000 --dosage $twodos_tmp noheader skip0=1 skip1=1 format=2  Zout --fam $famout --allow-no-sex --write-dosage --out $dosout";
+print "$sys_loc\n" if ($debug);
 &mysystem ($sys_loc);
 
-print "finished\n";
+print "finished\n" if ($debug);
 &mytime();
 
 #&mysystem ("rm $famout.ow");
@@ -456,7 +459,7 @@ my $mapin = $haps_file1;
 $mapin .= ".map";
 
 
-print "create various mapfiles and ngtfiles\n";
+print "create various mapfiles and ngtfiles\n" if ($debug);
 
 if (-e $info_file) {
     die $!."($info_file)" unless open IF, "< $info_file";
@@ -566,4 +569,4 @@ close BC;
 &mysystem ("rm $twodos_tmp.fini");
 &mysystem("rm $haps_file_gz");
     
-print "done\n";
+print "done\n" if ($debug);

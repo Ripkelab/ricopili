@@ -27,7 +27,7 @@ my $sloc = &trans("sloc");
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -56,6 +56,9 @@ Usage : $progname [options] mds_file
 
    --tarball STRING  directly from tarball, does not need profiles files.
 
+    --debug           extended output
+
+
   mdsfile and out is mandatory
 
 version: $version
@@ -78,6 +81,7 @@ GetOptions(
     "tarball=s" => \my $tarball,
     "nref=i" => \$nref,
     "prev=f" => \$prevalence,
+    "debug"=> \my $debug,
 );
 
 
@@ -193,7 +197,7 @@ unless ($tarball) {
     my %apt = ();
     
     if ($mdsfile) {
-	print "before\n";
+	print "before\n" if ($debug);
 	unless ($trio) {
 	    die "$mdsfile: ".$! unless open MDI, "< $mdsfile";
 	    
@@ -205,7 +209,7 @@ unless ($tarball) {
 		}
 	    }
 	    close MDI;
-	    print "after: ".keys (%amds)."\n";
+	    print "after: ".keys (%amds)."\n" if ($debug);
 	}
     }
 
@@ -240,7 +244,7 @@ foreach my $st (1..10) {
     my $infile_cov = $infile."_cov";
     my $cov_str = "";
     my $cov_str_a = "";
-    print "create range $st\n";
+    print "create range $st\n" if ($debug);
 #    print "create range @profiles_st\n";
     unless (-e $infile_cov) {
 #	print "create $infile_cov\n";
@@ -314,13 +318,13 @@ foreach my $st (1..10) {
 		    print FILE $amds{$id};
 		    print FILE "\n";
 		    if ($prof_count{$id} - $nref < -12|| $prof_count{$id} - $nref > 12){
-			print "count problem $id: $prof_count{$id}, soll $nref\n";
+			print "count problem $id: $prof_count{$id}, soll $nref\n" if ($debug);
 #			exit;
 		    }
 		}
 		else {
 		    unless ($trio) {
-			print "no mds-score for $id\n";
+			print "no mds-score for $id\n" if ($debug);
 		    }
 		}
 	    }
@@ -331,15 +335,15 @@ foreach my $st (1..10) {
 		print FILE "\t$profiles{$id}";
 		print FILE "\n";
 		if ($prof_count{$id} - $nref < -12|| $prof_count{$id} - $nref > 12){
-		    print "warning: trio count problem $id: $prof_count{$id}, soll $nref\n";
+		    print "warning: trio count problem $id: $prof_count{$id}, soll $nref\n" if ($debug);
 #		    exit;
 		}
 	    }
 	}
 	if (keys %prof_count_collect > 1) {
-	    print "Warning: different profile-counts for different individuals, please check if this happens only for distinct datasets\n";
+	    print "Warning: different profile-counts for different individuals, please check if this happens only for distinct datasets\n" if ($debug);
 	    foreach my $key (keys %prof_count_collect) {
-		print $key." ".$prof_count_collect{$key}."\n";
+		print $key." ".$prof_count_collect{$key}."\n" if ($debug);
 	    }
 #	    exit;
 	}
@@ -362,7 +366,7 @@ foreach my $st (1..10) {
     $cov_str = "";
     foreach my $i (2..$#cells) {
 	#	    my $coln = $i + 1;
-	print $cells[$i]."\n";
+	print $cells[$i]."\n" if ($debug);
 	if ($cells[$i] =~ /[cC][0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
 	    $cov_str .= " + $cells[$i]" ;
 	}
@@ -394,7 +398,9 @@ else {
     chdir ($workdir);
 
     &mysystem("cp $rootdir/$tarball .");
-    &mysystem("tar -xvf $tarball");
+    print "....d1\n" if ($debug);
+    &mysystem("tar -xf $tarball");
+    print "....d2\n" if ($debug);
     my $intempl = $tarball;
 
     $intempl =~ s/^danscore_//;
@@ -839,7 +845,7 @@ my $cov_str_a;
 	my @cells = &split_line($header);
 	$cov_str = "";
 	foreach my $i (2..$#cells) {
-	    print $cells[$i]."\n";
+	    print $cells[$i]."\n" if ($debug);
 	    if ($cells[$i] =~ /[cC][0-9]+/ || $cells[$i] =~ /st[0-9]+/) {
                 if ($cov_str eq "") {
 		  $cov_str = "$cells[$i]" ;
@@ -916,7 +922,7 @@ $trio_sw = 1 if ($trio);
 #exit;
 
         unless ($quan) {
-	   &mysystem("$r_sys < $R_file --vanilla");
+	   &mysystem("$r_sys < $R_file --vanilla > /dev/null 2>&1");
 #	   &mysystem("source /broad/software/scripts/useuse; use R-2.14; R < $R_file --vanilla");
 
         }
@@ -926,7 +932,7 @@ $trio_sw = 1 if ($trio);
 
 	   &mysystem("touch $out.poly.success");
 
-print "end of danscore_result_3\n";
+print "end of danscore_result_3\n" if ($debug);
 
 if ($tarball) {
     &mysystem("cp $out.pdf $rootdir");

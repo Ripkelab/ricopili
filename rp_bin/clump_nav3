@@ -23,14 +23,21 @@ my $qloc = &trans("queue");
 #my $hmloc = &trans("hmloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
+my $bcmd = &trans("batch_jobcommand");
+
 
 
 #######################################
 
 
+my $serial = 0;
 
 
-
+if ($bcmd eq "SERIAL") {
+    $serial = 1;
+    print "-----------------------------------------------------\n";
+    print "switched on SERIAL mode because of configuration file\n";
+}
 
 
 
@@ -102,16 +109,19 @@ GetOptions( "outname=s"=> \$outname,
 	    "det=i"=> \$detformat,
 
 	    "force1"=> \my $force1,
-	    "serial"=> \my $serial,
+	    "serial"=> \my $serial_sw,
 	    "sepa=i"=> \$sepa,
 
 	    "noclean"=> \my $noclean,
 	    "bn_job=i"=> \$job_bn_th,
-	    
+	    "debug"=> \my $debug,
 	    
     );
 
 
+if ($serial_sw) {
+    $serial = 1;
+}
 
 if ($help || $outname eq ""){
     print "usage: $progname 
@@ -159,7 +169,7 @@ version: $version
 
   --popname STRING    population for clumping, right now: eur, eas, sas, amr, afr
 
-
+  --debug             extended output
 
 
  --outname is mandatory
@@ -309,7 +319,7 @@ my $mutt_script = "mutt";
 my $blueprint_script = "blueprint";            ### my.pipeline_tar
 
 
-print ".......testing email program....\n";
+print ".......testing email program....\n" if ($debug);
 
 my $err_scr = 0;
 {
@@ -317,26 +327,26 @@ my $err_scr = 0;
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$mutt_script" && -x _ ) {
-	    print "$mutt_script\tfound in $path\n";
+	    print "$mutt_script\tfound in $path\n" if ($debug);
 	    $scr_path = "$path/$mutt_script";
 	    last;
 	}
     }
     unless ( $scr_path ) {
 
-	print "!!Warning!! : No $mutt_script command available, trying mail\n" ;
+	print "!!Warning!! : No $mutt_script command available, trying mail\n"  if ($debug);
 
 	$mutt_script = "mail";
 	for my $path ( split /:/, $ENV{PATH} ) {
 	    if ( -f "$path/$mutt_script" && -x _ ) {
-		print "$mutt_script\tfound in $path\n";
+		print "$mutt_script\tfound in $path\n" if ($debug);
 		$scr_path = "$path/$mutt_script";
 		last;
 	    }
 	}
 	unless ( $scr_path ) {
 	    $err_scr = 1;
-	    print "!!Error!! : No $mutt_script command available\n" ;
+	    print "!!Error!! : No $mutt_script command available\n"  if ($debug);
 	}
     }
  
@@ -497,8 +507,8 @@ sub send_jobarray {
     if ($serial) {
 
 
-	print "starting step $sjaname with ".@sjaarray." jobs\n";
-	print "running up to $sepa parallel jobs.\n";
+	print "starting step $sjaname with ".@sjaarray." jobs\n" if ($debug);
+	print "running up to $sepa parallel jobs.\n" if ($debug);
 
 
 	my $jc = 1;
@@ -506,7 +516,7 @@ sub send_jobarray {
 	my @job_sepa_arr;
 
 	foreach (@sjaarray) {
-	    print "running job $jc...\n";
+	    print "running job $jc...\n" if ($debug);
 	    push @job_sepa_arr, "$_ &";
 #	    $job_str .= "$_ & \n";
 
@@ -515,7 +525,7 @@ sub send_jobarray {
 		#		$job_str .= "wait\n";
 		my $sepa_file = "$sjaname.sepa.$jc";
 		&a2filenew ($sepa_file,@job_sepa_arr);
-		print "sepa_file: ".$sepa_file."\n";
+		print "sepa_file: ".$sepa_file."\n" if ($debug);
 		&mysystem("chmod u+x $sepa_file");
 		&mysystem("./$sepa_file");
 		@job_sepa_arr = ();
@@ -530,7 +540,7 @@ sub send_jobarray {
 	    
 	    my $sepa_file = "$sjaname.sepa.$jc";
 	    &a2filenew ($sepa_file,@job_sepa_arr);
-	    print "sepa_file: ".$sepa_file."\n";
+	    print "sepa_file: ".$sepa_file."\n" if ($debug);
 	    &mysystem("chmod u+x $sepa_file");
 	    &mysystem("./$sepa_file");
 	}
@@ -623,14 +633,14 @@ my @created = mkpath(   ## $created ?
 
 
 if (-e "$outname.clumped.xmhc.gz") {
-    print "output files is already existing\n";
+    print "output files is already existing\n" if ($debug);
 #    exit;
 }
 
 my %ccount ;
 
 
-print "splitting daner files in to chromosomes...\n";
+print "splitting daner files in to chromosomes...\n" if ($debug);
 
 
 #if ($pfile =~ /.gz$/){
@@ -652,7 +662,7 @@ foreach my $chr (1..22) {
     if (-e "$out_loc.n"){
 	$ccount{$chr} = `cat $out_loc.n`;
 	chomp($ccount{$chr});
-	print "found $ccount{$chr} SNPs for chromosome $chr\n";
+	print "found $ccount{$chr} SNPs for chromosome $chr\n" if ($debug);
 	next ;
     }
     local *FILE;
@@ -789,7 +799,7 @@ if (@filehandles > 1) {
 
 }
 $inz -> gzclose();
-print "split successful\n\n";
+print "split successful\n\n" if ($debug);
 
 #exit;
 
@@ -883,10 +893,10 @@ my @clump_files;
 	    
 	my $cmd;
 	    
-	$cmd = "$p2loc/plink --memory 2000 --bfile $bfile_sc --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
+	$cmd = "$p2loc/plink --silent --memory 2000 --bfile $bfile_sc --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
 	    
 	if ($detformat == 2) {
-	    $cmd = "$p2loc/plink --memory 2000 --bfile $bfile_sc --clump-range $gene_list_0610_plink --clump-verbose --clump-range-border $gene_range --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
+	    $cmd = "$p2loc/plink --silent --memory 2000 --bfile $bfile_sc --clump-range $gene_list_0610_plink --clump-verbose --clump-range-border $gene_range --clump $in_loc --clump-p1 $cp1 --clump-p2 $cp2 --clump-r2 $cr2 --clump-kb $cwindow --out $outname_loc";
 	}
 	
 	my $out_loc = "$outname_loc.clumped";
@@ -923,7 +933,7 @@ if (@job_arr > 0 ) {
 #    print "debug:\n";
 #    print "$job_arr[0]\n";
 #    exit;
-    print "now clumping\n\n";    
+    print "now clumping\n\n" if ($debug);    
     
     $sjadir = $rootdir;
     $sjaname = "clump";
@@ -950,7 +960,7 @@ unless (-e "$outname.cfiles") {
     
 #    &mysystem ("touch $outname.pliclu.done");
 
-print "clump successful\n\n";
+print "clump successful\n\n" if ($debug);
 
 
 #exit;
@@ -964,7 +974,7 @@ print "clump successful\n\n";
 
 
 if (@clump_files == 0){
-    print "read file: $outname.cfiles\n";
+    print "read file: $outname.cfiles\n" if ($debug);
     die $! unless open LDI, "< $outname.cfiles";
     while (my $line = <LDI>){
 	chomp($line);
@@ -1024,7 +1034,7 @@ if ($detformat == 1) {
     unless (-e "$outname.clumped"){
 #	print "create $outname.$pfile.chr$chr.clumped ";
 #	print "out of $outname.chr$chr.clumped and  $pfile.chr$chr \n";
-	print "read $outname.sum.clumped\n";
+	print "read $outname.sum.clumped\n" if ($debug);
 	my %snp_coll = ();
 	die $! unless open LDI, "< $outname.sum.clumped";
 	while (my $line = <LDI>){
@@ -1037,7 +1047,7 @@ if ($detformat == 1) {
 	close LDI;
 	
 	
-	print "change $pfile\n";
+	print "change $pfile\n" if ($debug);
 	
 	my $inz = gzopen("$pfile", "rb")  or die "Cannot open $pfile\n" ;
 	
@@ -1064,7 +1074,7 @@ if ($detformat == 1) {
 
 elsif ($detformat == 2) { 
     unless (-e "$outname.clumped"){
-	print "read $outname.sum.clumped\n";
+	print "read $outname.sum.clumped\n" if ($debug);
 	my %ind_coll = ();
 	my %ind_genes = ();
 	$ind_coll{"SNP"} = "LD_friends";
@@ -1154,10 +1164,10 @@ elsif ($detformat == 2) {
 
 
 #	if (0) {	
-	print "change $pfile\n";
+	print "change $pfile\n" if ($debug);
 
 
-	print "here is problem with pfile and pfile.chr\n";
+	print "here is problem with pfile and pfile.chr\n" if ($debug); 
 	exit;
 	
 
@@ -1209,7 +1219,7 @@ else {
 #####################################
 
 unless (-e "$outname.clumped.xmhc"){
-    print "clean for MHC\n";
+    print "clean for MHC\n" if ($debug);
     die $! unless open LDI, "< $outname.clumped";
     die $! unless open LDO, "> $outname.clumped.xmhc";
     my $best_mhc = 1;
@@ -1247,10 +1257,10 @@ close PRES;
 
 
 if ($prekno_file){
-    print "prekno_clump\n";
+    print "prekno_clump\n" if ($debug);
     my $cmd = "prekno_clump --clump $outname.clumped.xmhc  --prekno $prekno_file --refdir $refdir";
     unless (-e "$outname.clumped.xmhc.prekno") {
-	print "$cmd\n";
+	print "$cmd\n" if ($debug);
 	&mysystem ($cmd);
     }
     unless (-e "$outname.xmhc.prekno.xls") {
@@ -1311,7 +1321,7 @@ if ($reinvo_file) {
 
 
 unless ($noclean) {
-    print "remove tmp filies, if not wished use --noclean\n";
+    print "remove tmp filies, if not wished use --noclean\n" if ($debug);
     &mysystem ("rm -fr $chr_subdir");
     &mysystem ("rm -f $outname.sum.clumped");
     &mysystem ("rm -f $outname.clumped.xmhc.start.prekno");

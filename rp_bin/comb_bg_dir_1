@@ -38,6 +38,8 @@ version: $version
   --targetdir STRING  target diretory, mandatory
   --help              print help massage and exits
 
+  --debug             extended output
+
  created by Stephan Ripke 2014 at MGH, Boston, MA
  
 combined all bfiles from specified directory
@@ -83,6 +85,7 @@ sub mysystem(){
 use Getopt::Long;
 GetOptions( "out=s"=> \my $out,
 	    "targetdir=s"=> \my $targetdir,
+	    "debug"=> \my $debug,
 	    "help"=> \my $help );
 
 
@@ -107,7 +110,7 @@ my @files = readdir(DIR);
 closedir DIR;
 @bfile_list = grep {/.bim$/} @files;
 @bfile_list = grep {!/merge.bim$/} @bfile_list;
-print "take every bim file in this directory ($workdir)\n";
+print "take every bim file in this directory ($workdir)\n" if ($debug);
 
 
 
@@ -124,7 +127,7 @@ use Cwd;
 
 
 my $merge_list_name="MERGE-LIST-$out";
-print "write $merge_list_name\n";
+print "write $merge_list_name\n" if ($debug);
 
 open MERGE, ">", "$merge_list_name" or die $!;
 my $bfile_count=0;
@@ -149,9 +152,9 @@ close (MERGE);
 #print "debug\n";
 #exit;
 
-print "merge ".@bfile_list." chunks in the directory\n";
+print "merge ".@bfile_list." chunks in the directory\n" if ($debug);
 
-my $system="$p2loc/plink --memory 8000  --allow-no-sex --bfile $bfile_list[0] --merge-list $merge_list_name --out $out --make-bed" ;
+my $system="$p2loc/plink --silent --memory 8000  --allow-no-sex --bfile $bfile_list[0] --merge-list $merge_list_name --out $out --make-bed" ;
 #print "$system\n";
 #exit;
 &mysystem ("$system");

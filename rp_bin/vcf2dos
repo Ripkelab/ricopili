@@ -57,6 +57,8 @@ version: $version
 
   --outname            use different outname (especially for deployed imputations
 
+  --debug              extended output
+
  created by Stephan Ripke 2017 at MGH, Boston, MA
  in the frame of the PGC
 
@@ -75,6 +77,7 @@ GetOptions(
     "chr=s"=> \my $chr,
     "gp4"=> \my $gp4,
     "outname=s"=> \my $outname,
+    "debug"=> \my $debug,
     #    "buff=i"=> \ $buff,
     
     );
@@ -146,7 +149,7 @@ sub mytime(){
     my $secs = time-$t0;
     my $mins = $secs/60;
     my $hours = $secs/3600;
-    print $secs." seconds gone since start of the script\n";
+    print $secs." seconds gone since start of the script\n" if ($debug);
 #    print $mins." minutes gone since start of the script\n";
 #    print $hours." hours gone since start of the script\n";
     
@@ -206,7 +209,7 @@ if ($vcf_file eq $outdos || $vcf_file eq $outvcf ) {
 my %snp;
 
 if ($legend_sw == 1) {
-    print "reading into hash file: $legend_file\n";
+    print "reading into hash file: $legend_file\n" if ($debug);
 
     my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $gzerrno\n" ;
 
@@ -245,7 +248,7 @@ die $!."$outmap" unless open MAP, "> $outmap";
 
 
 
-print "translating $vcf_file into $outvcf and $outdos\n";
+print "translating $vcf_file into $outvcf and $outdos\n" if ($debug);
 
 my $nwarnings=0;
 while ($igz->gzreadline(my $line)){
@@ -315,7 +318,7 @@ while ($igz->gzreadline(my $line)){
 	    }
 	    else {
 		if ($nwarnings<10) {
-		    print "Warning: <$key> not found in $legend_file\n";
+		    print "Warning: <$key> not found in $legend_file\n" if ($debug);
 		    $nwarnings++;
 		}
 		$cells[2] = "$chr:$cells[1]"."_$cells[3]"."_$cells[4]"."_noref";
@@ -422,4 +425,4 @@ unless ($keepvcf) {
 #&mysystem ("rm $vcf_file");
 
     
-print "done\n";
+print "done\n" if ($debug);

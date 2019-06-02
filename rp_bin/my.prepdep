@@ -43,7 +43,7 @@ sub split_line_ref {
 
 
 
-my $debug = 0;
+my $mockmode = 0;
 
 
 
@@ -53,9 +53,11 @@ my $bfile = "";
 my $outdir = "";
 
 
+
 use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
+    "debug"=> \my $debug,
 
     "bfile=s"=> \$bfile,
     "legend=s"=> \$legendfile,
@@ -77,6 +79,7 @@ version: $version
         --famfile STRING    different famfile
         --bfile STRING      plink binary
 
+        --debug             extended output
 
 
 
@@ -94,12 +97,12 @@ my $sc = 0;
 
 
 #/psych/ripke/share/gio/Ricopili_Dependencies_sr_1118b/plink/plink --vcf pop_euro_eur_SEQ.det.vcf --a2-allele pop_euro_eur_SEQ.det.bim.exc.det 2 1  --recode vcf --real-ref-alleles --out pop_euro_eur_SEQ.det.vcf.refalleles --double-id
-my $sys = "$p2loc"."/plink --bed $bfile.bed --bim $bfile.bim --fam $famfile  --a2-allele $legendfile 3 1 --recode vcf --real-ref-alleles --out $outdir/$bfile.dep.tmp";
-print "$sys\n";
-unless ($debug == 1) {
+my $sys = "$p2loc"."/plink --silent --bed $bfile.bed --bim $bfile.bim --fam $famfile  --a2-allele $legendfile 3 1 --recode vcf --real-ref-alleles --out $outdir/$bfile.dep.tmp";
+print "$sys\n" if ($debug);
+unless ($mockmode == 1) {
     system ("echo $sys > $bfile.dep.log");
 }
-unless ($debug == 1) {
+unless ($mockmode == 1) {
     $sc =system ($sys);
 }
 if ($sc != 0){
@@ -110,8 +113,8 @@ if ($sc != 0){
 
 ## for michigan server
 foreach my $chr (1..22) {
-    my $sys = "$p2loc"."/plink --chr $chr --bed $bfile.bed --bim $bfile.bim --fam $famfile  --a2-allele $legendfile 3 1 --recode vcf --real-ref-alleles --out $outdir/$bfile.chr$chr";
-    print "$sys\n";
+    my $sys = "$p2loc"."/plink --silent --chr $chr --bed $bfile.bed --bim $bfile.bim --fam $famfile  --a2-allele $legendfile 3 1 --recode vcf --real-ref-alleles --out $outdir/$bfile.chr$chr";
+    print "$sys\n"  if ($debug);
 #    unless ($debug) {
 	$sc =system ($sys);
 #    }
@@ -127,7 +130,7 @@ foreach my $chr (1..22) {
 
 chdir ($outdir);
 
-unless ($debug == 1) {
+unless ($mockmode == 1) {
     $sc =system ("gzip $bfile.dep.tmp.vcf");
 }
 
@@ -136,7 +139,7 @@ if ($sc != 0){
     exit;
 }
 
-unless ($debug == 1) {
+unless ($mockmode == 1) {
     $sc =system ("mv $bfile.dep.tmp.vcf.gz $bfile.dep.vcf.gz");
 }
 
@@ -153,9 +156,9 @@ if ($sc != 0){
 $sys = "$bcloc"."/bcftools norm -f $bcrloc/human_g1k_v37.fasta -c w $bfile.dep.vcf.gz > /dev/null 2> bcftools.$bfile.err";
 
 system ("echo \'$sys\' >> $bfile.dep.log");
-print "$sys\n";
+print "$sys\n"  if ($debug);
 
-unless ($debug == 1) {
+unless ($mockmode == 1) {
     $sc =system ($sys);
 }
 
@@ -167,9 +170,9 @@ if ($sc != 0){
 
 
 $sys = "wc -l bcftools.$bfile.err > bcftools.$bfile.err.wc";
-print "$sys\n";
+print "$sys\n"  if ($debug);
 
-unless ($debug == 1) {
+unless ($mockmode == 1) {
     $sc =system ($sys);
 }
 
@@ -196,11 +199,11 @@ close IN;
 #######################################
 
 
-print "sort  22 VCFs for Michigan Imputation Server\n";
+print "sort  22 VCFs for Michigan Imputation Server\n"  if ($debug);
 
 foreach my $chr (1..22) {
     $sys = "vcf-sort $bfile.chr$chr.vcf | $bgziploc/bgzip -c > $bfile.chr$chr.vcf.gz";
-    print "$sys\n";
+    print "$sys\n"  if ($debug);
 #    unless ($debug) {
 	system ("echo '$sys' >> $bfile.vcfsort.log");
 #    }
@@ -217,7 +220,7 @@ foreach my $chr (1..22) {
 ## clean up
 foreach my $chr (1..22) {
     $sys = "rm $bfile.chr$chr.vcf";
-    print "$sys\n";
+    print "$sys\n"  if ($debug);
     $sc =system ($sys);
 }
 
@@ -227,8 +230,8 @@ foreach my $chr (1..22) {
 
 
 
-if ($debug == 1) {
-    print "ran in debug mode\n";
+if ($mockmode == 1) {
+    print "ran in mockmode\n" ;
     sleep(10);
 }
 

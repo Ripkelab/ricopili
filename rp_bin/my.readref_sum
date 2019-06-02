@@ -18,6 +18,7 @@ Usage : $progname [options] bimfile
 version: $version
 
   --help     print this help message and exit
+  --debug    extended output
 
 
 
@@ -31,7 +32,7 @@ use Getopt::Long;
 GetOptions( 
 
     "help"=> \my $help,
-
+    "debug"=> \my $debug,
     );
 
 die $usage if $help;
@@ -79,7 +80,7 @@ use Compress::Zlib ;
 #####################################
 
 #read bimfile
-print "sum ref-files\n";
+print "sum ref-files\n" if ($debug);
 
 die "$outfile".$! unless open FD , "> $outfile";
 
@@ -88,7 +89,7 @@ my $nn=0;
 foreach my $chrloc(1..23) {
 
     unless (-e "$bimfile.ref.chr$chrloc") {
-	print "Warning: $bimfile.ref.chr$chrloc is not existing\n";
+	print "Warning: $bimfile.ref.chr$chrloc is not existing\n" if ($debug);
     }
     else {    
 	$nn++;
@@ -117,8 +118,8 @@ close FD;
 
 &mysystem ("touch $bimfile.ref.sum.done");
 
-system ("tar -cvzf $bimfile.ref.addinfo.tar.gz $bimfile.ref.chr*.leftloc $bimfile.ref.chr*.renames");
+system ("tar -czf $bimfile.ref.addinfo.tar.gz $bimfile.ref.chr*.leftloc $bimfile.ref.chr*.renames");
 
 &mysystem ("rm $bimfile.ref.chr*");
-print "done\n";
+print "done\n" if ($debug);
 

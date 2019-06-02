@@ -144,7 +144,7 @@ close NUM;
 
 system("txt2xls --txt $outname.num --xls $outname.num.xls --cogr 1");
 
-print "success2\n";
+
 
 
 

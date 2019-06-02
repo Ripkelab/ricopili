@@ -31,6 +31,7 @@ version: $version
   --filtnorm STRING    mandatory, vcf coming out of filtnorm step
   --help               print this message and exit
 
+  --debug             extended output
 
  filters and reformats the filtnorm vcf
 
@@ -46,6 +47,7 @@ GetOptions(
 
     "help"=> \my $help,
     "filtnorm=s"=> \my $filtnorm_file,
+    "debug"=> \my $debug,
 
     );
 
@@ -120,7 +122,7 @@ unless (-e $filtnorm_info) {
     my $ogz = gzopen("$filtnorm_info_tmp", "wb")  or die "Cannot open file $filtnorm_info_tmp: $gzerrno\n" ;
     
     
-    print "reading info out of $filtnorm_file into $filtnorm_info\n";
+    print "reading info out of $filtnorm_file into $filtnorm_info\n" if ($debug);
     my $icc = 0;
     
     $ogz->gzwrite("CHROM POS ID REF ALT QUAL FILTER INFO FORMAT\n");
@@ -142,7 +144,7 @@ unless (-e $filtnorm_info) {
 	}
 	
 	$icc++;
-	print "$icc lines read\n" if ($icc % 10000 == 0);
+	print "$icc lines read\n" if ($icc % 10000 == 0) if ($debug);
 	#    last if ($icc ==10000);
     }
     
@@ -231,7 +233,7 @@ $igz->gzclose();
 ###   go through the multi-indels and define the longest
 #############################################################
 
-print "define max allele counts of multi-indels\n";
+print "define max allele counts of multi-indels\n" if ($debug);
 
 my %ac_max_hash;
 foreach my $pos_loc (keys %multipos) {
@@ -253,7 +255,7 @@ my %out_hash; ## records the numbers that should get excluded
 
 
 
-print "define exclusion rows\n";
+print "define exclusion rows\n" if ($debug);
 
 foreach my $pos_loc (keys %multipos) {
 
@@ -284,7 +286,7 @@ foreach my $pos_loc (keys %multipos) {
 ## write the fitered filtnorm file
 ##############################################
 
-print "write filtered filtnorm file\n";
+print "write filtered filtnorm file\n" if ($debug);
 
 unless (-e $filtnorm_out) {
     my $igz = gzopen("$filtnorm_file", "rb")  or die "Cannot open file $filtnorm_file: $gzerrno\n" ;

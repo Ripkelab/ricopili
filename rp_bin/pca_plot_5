@@ -22,7 +22,7 @@ my $sloc = &trans("sloc");
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -51,7 +51,8 @@ GetOptions(
     "nsnps=i"=> \$nsnps,
    "help!"=> \my $help,
    "bfile=s"=> \my $bfile,
-   "pla=s"=> \$pla,
+    "pla=s"=> \$pla,
+        "debug"=> \my $debug,
    "fam=s"=> \my $famfile );
 
 
@@ -70,10 +71,18 @@ if ($help || @ARGV < 1){
 
         --spec          special switch (for publication)
 
+        --debug         no new directory, no big sorting and extracting
+
  created by Stephan Ripke 2008 at MGH, Boston, MA
  in the frame of the PGC
 \n";
     exit 2;
+}
+
+
+my $r_silent = "> /dev/null 2>&1";
+if ($debug) {
+    $r_silent = "";
 }
 
 
@@ -211,7 +220,7 @@ my $subdir_mds="./mdsplot.@ARGV[0]";
 
 
 #&mysystem("rm -rf $subdir_mds");
-print "create $subdir_mds\n";
+#print "create $subdir_mds\n";
 my @created = mkpath(
     "$subdir_mds",
     {verbose => 0, mode => 0750},
@@ -1045,7 +1054,7 @@ $R_templ =~ s/NUMBERSNPS/$nsnps/g;
 #print "debug\n";
 #exit;
 
-my $systemR = "$r_sys --vanilla < $R_in";
+my $systemR = "$r_sys < $R_in --vanilla $r_silent";
 #my $systemR = "source /broad/software/scripts/useuse; use R-2.14; R  --vanilla < $R_in";
 system ($systemR);
 

@@ -91,7 +91,9 @@ version: $version
   --areator STRING  areator-file with best areas
   --remeta       remeta-columns 
 
-  --cacohead          read ncases and ncontrols out of header
+  --cacohead     read ncases and ncontrols out of header
+
+  --debug        extended output
 
 
  for daner result file:
@@ -138,6 +140,7 @@ GetOptions(
     "areator=s"=> \my $areator,
     "remeta=s"=> \my $remeta,
     "cacohead"=> \my $cacohead, # read ncases and ncontrols out of header
+    "debug"=> \my $debug,
     );
 
 
@@ -168,12 +171,12 @@ my @created = mkpath(   ## $created ?
 chdir ($workdir);
 
 if ($pfile =~ /.gz$/){
-    print "unzip file $rootdir/$pfile\n";
+    print "unzip file $rootdir/$pfile\n" if ($debug);
     my $pfile_nogz = $pfile;
     $pfile_nogz =~ s/.gz$//;
     &mysystem ("gunzip -c $rootdir/$pfile > $pfile_nogz") unless (-e $pfile);
     $pfile = $pfile_nogz;
-    print "done unzipping\n";
+    print "done unzipping\n" if ($debug);
 }
 else {
     &mysystem ("cp $rootdir/$pfile .") unless (-e $pfile);
@@ -373,7 +376,7 @@ if ($check){
 }
 
 
-print "begin\n";
+print "begin\n" if ($debug);
 
 
 #############################
@@ -571,9 +574,9 @@ if ($areator) {
 			my @tcells = split '\t', $aarea {$_};
 			if ( $tcells[0] =~ /$rgenes[0]/) {
 			    next if ($tcells[0] =~ /$rgenes[0] (ms)/);
-			    print "1: <$rgenes[0]>\n";
+			    print "1: <$rgenes[0]>\n" if ($debug);
 			    $tcells[0] =~ s/$rgenes[0]/$rgenes[0] (ms)/ ;
-			    print "2: <$rgenes[0]>\n";
+			    print "2: <$rgenes[0]>\n" if ($debug);
 			    $aarea{$_} = "$tcells[0]\t$cells[$acol_po]\t$tcells[2]\t$tcells[3]";
 			    $fgene = s/$rgenes[0]//;
 			}
@@ -796,7 +799,7 @@ dev.off()
 
 
 #print "$pc\t$outdir/$top5Kfile\n";
-print "sorting,\t$outdir\t$top5Kfile\n";
+print "sorting,\t$outdir\t$top5Kfile\n" if ($debug); 
 #exit;
 
 my $systempos="sort -k3,3n -k4,4n $outdir/$top5Kfile > $outdir/$positionfile";
@@ -882,7 +885,7 @@ close IN;
 my $aaout_size = @area_lines;
 if ($aaout_size < 1) {
 
-    print  "plot empty, please change thresholds\n";
+    print  "plot empty, please change thresholds\n" if ($debug);
 
    my $R_templ='
 pdf("OUTNAME",title="GWA-Plot",PLOTSHAPE)
@@ -1335,7 +1338,7 @@ $R_templ =~ s/MAXY/$maxy/g;
 ##     start R
 #######################################
 
-my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --vanilla \n";
+my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --vanilla > /dev/null\n";
 #my $systemGWA="source /broad/software/scripts/useuse; use R-2.14; R < $outdir/R_GWAplot.in_tmp --vanilla > /dev/null\n";
 
 &mysystem ($systemGWA);
@@ -1343,10 +1346,10 @@ my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --vanilla \n";
 
 &mysystem ("cp $pdfout $rootdir");
 
-&mysystem ("tar -cvzf $pdfout.tar.gz $areator.aaout $outdir/R_GWAplot.in_tmp $outdir/ticks.txt_tmp $outdir/Best_processed.txt_tmp");
+&mysystem ("tar -czf $pdfout.tar.gz $areator.aaout $outdir/R_GWAplot.in_tmp $outdir/ticks.txt_tmp $outdir/Best_processed.txt_tmp");
 &mysystem ("cp $pdfout.tar.gz $rootdir");
 
-print "pdf: $pdfout\n";
+print "pdf: $pdfout\n" if ($debug);
 
 
 &mysystem ("rm -rf $workdir");

@@ -67,7 +67,8 @@ GetOptions(
     "pos=i"=> \my $pos_loc,
  
    "help!"=> \my $help,
-   "maf"=> \my $maf,
+    "maf"=> \my $maf,
+    "debug"=> \my $debug,
  );
 
 
@@ -85,6 +86,7 @@ if ($help || $snp eq ""){
         --snp STRING    take this SNP
         --maf           refer to minor allele
 #        --rep STRING    rep-info file, with summary at the end
+        --debug         extended output
 
  created by Stephan Ripke 2008 at MGH, Boston, MA
  in the frame of the PGC
@@ -120,7 +122,7 @@ my @created = mkpath(   ## $created ?
 			{verbose => 0, mode => 0750},
     );
 
-print "workdir: $workdir\n";
+print "workdir: $workdir\n" if ($debug);
 
 
 ###################################################
@@ -547,7 +549,7 @@ if (@file_list == 0) {
     exit;
 }
 foreach my $fl (@file_list) {
-    print "fl: $fl\n";
+    print "fl: $fl\n" if ($debug);
     unless ($fl =~ /^\//){
 	push @farr_tmp, "$rootdir/$fl";
     }
@@ -614,7 +616,7 @@ my %finfo;
 my $ws = '[[:space:]]';
 
 my $main = `gunzip -c $file_list[0] | grep -m 1 -w $gsnp`;
-print "$main\n";
+print "$main\n" if ($debug);
 #my $main = `zgrep -m 1 -w $gsnp $file_list[0]`;
 #my $main = `zgrep -m 1 -w $gsnp $rootdir/$file_list[0]`;
 foreach (0..$#file_list) {
@@ -623,7 +625,7 @@ foreach (0..$#file_list) {
     my $str_tmp = `gunzip -c $file_list[$_] | grep -m 1 -w $gsnp`;
     $finfo{$file_list[$_]} = $str_tmp;
 
-    print "$file_list[$_]: $str_tmp\n";
+    print "$file_list[$_]: $str_tmp\n" if ($debug);
 
 
 }
@@ -666,7 +668,7 @@ my $cc = 0;
 foreach (@cells_h){
     if ($_ eq "HetPVa"){
 	$hetp_col = $cc;
-	print "HetPVa found\n";
+	print "HetPVa found\n" if ($debug);
     }
     $cc++;
 }
@@ -733,9 +735,9 @@ my $oline = "";
 foreach my $study (sort keys %finfo){
     my $rep_sw =0;
     $oline = "";
-    print "$study\n";
+    print "$study\n" if ($debug);
 
-    print "info: ".$finfo{$study}."\n";
+    print "info: ".$finfo{$study}."\n" if ($debug);
 
     my @cells = &split_line($finfo{$study});
     next if (@cells < 5);
@@ -746,7 +748,7 @@ foreach my $study (sort keys %finfo){
 	    $direc = -1;
 	}
 	else {
-	    print "some strange alleles: $a1,$a2 and $cells[3] and $cells[4]\n";
+	    print "some strange alleles: $a1,$a2 and $cells[3] and $cells[4]\n" if ($debug);
 	}
     }
     $direc = $direc * $mafdir;
@@ -754,7 +756,7 @@ foreach my $study (sort keys %finfo){
     my $st_str = $study;
     my ($nca,$nco,$beta,$nocc,$ngtcol,$infocol,$pcol,$a1col,$a2col,$orcol,$secol,$ncacol,$ncocol,$neffcol) = &excaco($hh{$study});
 
-    print "hh_st($study): $hh{study}\n";
+    print "hh_st($study): $hh{study}\n" if ($debug);
 #    print "Nca: $nca\n";
 #    print "Nco: $nco\n";
 #    print "ncacol: $ncacol\n";
@@ -1012,11 +1014,11 @@ if (@forest_head_lines == 3) {
     my @tmp_lines = ();
     foreach (@forest_head_lines) {
 	if ($_ =~ /^replication.META/) {
-	    print "no.\n";
+	    print "no.\n" if ($debug);
 #	    $tmp_lines[2] = $_;
 	}
 	elsif ($_ =~ /^replication.REP/) {
-	    print "no.\n";
+	    print "no.\n" if ($debug);
 #	    $tmp_lines[1] = $_;
 	}
 	else {
@@ -1434,11 +1436,11 @@ $R_templ_for =~ s/LIBRARY/$lib_txt/g ;
 my $tarfile = "$forest_file.pdf.tar.gz";
 $tarfile =~ s/:/_/g;
 
-&mysystem ("tar -cvzf $tarfile R_forest_$out.in_tmp $forest_file");
+&mysystem ("tar -czf $tarfile R_forest_$out.in_tmp $forest_file");
 &mysystem ("cp $tarfile $rootdir");
 
 chdir($rootdir);
 
 &mysystem ("rm -rf $workdir");
 
-print "$forest_file.pdf\n";
+print "$forest_file.pdf\n" if ($debug);

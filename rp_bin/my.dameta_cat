@@ -33,6 +33,6 @@ for (my $i=0; $i <= $#opt; $i++) {
 $sc =system ("mv $outname.tmp $outname");
 
 
-print "success2\n";
+#print "success2\n";
 
 

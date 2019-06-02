@@ -32,7 +32,7 @@ my $rloc = &trans("rloc");
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -53,7 +53,8 @@ GetOptions(
     "detout"=> \my $detout,
 
    "xdf"=> \my $xdf,
-
+    "debug"=> \my $debug,
+    
  );
 
 if ($help || $out_name eq "metaber"){
@@ -75,6 +76,7 @@ if ($help || $out_name eq "metaber"){
         --xdf              do a xdf-P instead of weighted meta
         --out STRING       outname
 
+        --debug            extended output
 
  works with files coming out of daner (incl. ngt)
  uses metal
@@ -188,7 +190,7 @@ my $workdir="$scratchdir/dameta_$out_short";
 while (-e $workdir) {
     $workdir .= ".d";
 }
-print "workdir: $workdir\n";
+print "workdir: $workdir\n" if ($debug);
 
 sleep(4);
 my @created_work = mkpath(   ## $created ?
@@ -234,7 +236,7 @@ foreach my $file (@ARGV) {
 
     my $dfile_short = $file;
     $dfile_short =~ s!.*/!!;
-    print  "check header of: $dfile_short\n";
+    print  "check header of: $dfile_short\n" if ($debug);
 
     $or_txt = "";
     
@@ -471,15 +473,15 @@ foreach my $dfile (@ARGV) {
     }
 
     unless (exists $col{"FRQA"}){
-	print "$dfile; no FRQ_A, so I take FRQ\n";
+	print "$dfile; no FRQ_A, so I take FRQ\n" if ($debug);
 
 
 	if (exists $col{"FRQ"}){
-	    print "found FRQ\n" ;
+	    print "found FRQ\n"  if ($debug);
 	    $col{"FRQA"} = $col{"FRQ"};
 	}
 	elsif (exists $col{"FRQU"}) {	    
-	    print "found FRQU\n" ;
+	    print "found FRQU\n"  if ($debug);
 	    $col{"FRQA"} = $col{"FRQU"};
 	}
 	else {
@@ -517,7 +519,7 @@ foreach my $dfile (@ARGV) {
 #	sleep (10);	
     }
     else {
-	print "no Nca, Nco, Neff in $dfile\n";
+	print "no Nca, Nco, Neff in $dfile\n" if ($debug);
     }
     
 
@@ -672,10 +674,10 @@ foreach my $dfile (@ARGV) {
 
 	if ($cells[$col{"P"}] == "NA"){
 		if ($nwarnings < 10) {
-		    print "Warning: invalid P, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+		    print "Warning: invalid P, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n" if ($debug);
 		}
 		if ($nwarnings == 10) {
-		    print "more than 10 warnings, not printing out more....\n";
+		    print "more than 10 warnings, not printing out more....\n" if ($debug);
 		}
 		$nwarnings++;
 		
@@ -689,10 +691,10 @@ foreach my $dfile (@ARGV) {
 
 	    if ($cells[$col{"BETA"}] < $min_BETA || $cells[$col{"BETA"}] > $max_BETA){
 		if ($nwarnings < 10) {
-		    print "Warning: invalid BETA, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+		    print "Warning: invalid BETA, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n" if ($debug);
 		}
 		if ($nwarnings == 10) {
-		    print "more than 10 warnings, not printing out more....\n";
+		    print "more than 10 warnings, not printing out more....\n" if ($debug);
 		}
 		$nwarnings++;
 		
@@ -703,10 +705,10 @@ foreach my $dfile (@ARGV) {
 	else {
 	    if ($cells[$col{"OR"}] < $min_OR || $cells[$col{"OR"}] > $max_OR){
 		if ($nwarnings < 10) {
-		    print "Warning: invalid OR, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n";
+		    print "Warning: invalid OR, exclude this SNP from Nca, Nco, Neff: ".$cells[$col{"SNP"}]."\n" if ($debug);
 		}
 		if ($nwarnings == 10) {
-		    print "more than 10 warnings, not printing out more....\n";
+		    print "more than 10 warnings, not printing out more....\n" if ($debug);
 		}
 		$nwarnings++;
 		
@@ -746,11 +748,11 @@ foreach my $dfile (@ARGV) {
     $neff_max += $neff_max_per_cohort;
 }
 
-print "$nca\n";
-print "$nco\n";
-print "$metal_script_name\n";
+print "$nca\n" if ($debug);
+print "$nco\n" if ($debug);
+print "$metal_script_name\n" if ($debug);
 
-print "neff_max: $neff_max\n";
+print "neff_max: $neff_max\n" if ($debug);
 #sleep(3);
 
 
@@ -816,7 +818,7 @@ foreach my $dfile (@ARGV) {
     $df -> gzclose();
     $dfo -> gzclose();
     
-    print "$dfile cleaned\n";
+    print "$dfile cleaned\n" if ($debug);
 #    print "$dfile.clean.gz\n";
 #    exit;
 }
@@ -1004,7 +1006,7 @@ my $neff_max_half = $neff_max/2;
 #if ($nca>0 || $nco > 0){
 #    $neff_max_half = (4*$nca*$nco/($nca+$nco))/4;;
 #}
-print "neff_max_half: $neff_max_half\n";
+print "neff_max_half: $neff_max_half\n" if ($debug);
 #sleep(3);
 
 
@@ -1069,12 +1071,12 @@ while (<META>){
 #    printf DANER "\t%.3g",$fco{$snp_name}/$nco;
 #    printf DANER "\t%.3g",$info{$snp_name}/$nco;
     if ($nca{$snp_name} == 0) {
-	print "***warning: no meta case-number for $snp_name\n";
+	print "***warning: no meta case-number for $snp_name\n" if ($debug);
 	$nca{$snp_name} = 1;
 	$fca{$snp_name} = 0;
     }
     if ($nco{$snp_name} == 0) {
-	print "***warning: no meta control-number for $snp_name\n";
+	print "***warning: no meta control-number for $snp_name\n" if ($debug);
 	$nco{$snp_name} = 1;
 	$fco{$snp_name} = 0;
 	$info{$snp_name} = 0;
@@ -1121,12 +1123,12 @@ while (<META>){
 	unless ($no_neff_filter) {
 	    if ($neff_str < $neff_max_half) {
 		if ($neff_ex_n < 10){
-		    print "Warning: exclude $snp_name because of low Neff";
-		    print "\t$neff_str\n";
+		    print "Warning: exclude $snp_name because of low Neff" if ($debug);
+		    print "\t$neff_str\n" if ($debug);
 		    #		sleep (3);
 		}
 		if ($neff_ex_n == 10){
-		    print "more exclusions not printing\n";
+		    print "more exclusions not printing\n" if ($debug);
 		}	
 		$neff_ex = 1;
 		$neff_ex_n++;
@@ -1156,6 +1158,6 @@ close DANER;
 &mysystem ("mv $out_name.metadaner.tmp.gz $out_name.metadaner.gz");
 &mysystem ("rm $out_name.meta1.tbl");
 
-print "cleaning up\n";
+print "cleaning up\n" if ($debug);
 &mysystem ("rm -rf $workdir");
 

@@ -26,9 +26,10 @@ my $home = &trans("home");
 
 
 my $r_sys = "$rloc";
+
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -43,12 +44,14 @@ if ($status != 0) {
 ## read study names
 
 my %stuna ;
-print "study.names not found in homedir\n" unless open FILE, "< $home/study.names";
-while (my $line = <FILE>){
-    my @cells = split /\s+/, $line;
-    $stuna{$cells[0]} = $cells[1];
+if (-e "$home/study.names") {
+    print "study.names not found in homedir\n" unless open FILE, "< $home/study.names";
+    while (my $line = <FILE>){
+	my @cells = split /\s+/, $line;
+	$stuna{$cells[0]} = $cells[1];
+    }
+    close FILE;
 }
-close FILE;
 
 ########################
 
@@ -85,6 +88,8 @@ options:
   --ac INT            allele-count of max. INT (cases and controls together)
 
   --frcol INT         changing frequency columne (default 7, starting with 1)
+
+  --debug             verbose messaging
 
 
 here for lambda1000:
@@ -153,15 +158,21 @@ GetOptions(
     "cacohead"=> \my $cacohead, # read ncases and ncontrols out of header
     "exhla=s"=> \my $exhla_str, # read ncases and ncontrols out of header
     "title=s"=> \$title, # title of plot
+    "debug"=> \my $debug,
+
     );
 
 
 die "$usage\n" if $help;
 #die "please try $progname --help\n" if @ARGV ne 1;
 
+#$r_sys .= " --silent" unless ($debug);
 
 
-
+my $r_silent = "> /dev/null 2>&1";
+if ($debug) {
+    $r_silent = "";
+}
 
 foreach my $sn (keys %stuna) {
     $title = $stuna{$sn} if ($title =~ /$sn/);
@@ -181,15 +192,15 @@ my @created = mkpath(   ## $created ?
 
 
 chdir ($workdir);
-print "workdir: $workdir\n";
+print "workdir: $workdir\n" if ($debug);
 
 my $pfile = $ARGV[0];
 
-print "copy files\n";
+print "copy files\n" if ($debug);
 &mysystem ("cp $rootdir/$pfile .");
 &mysystem ("cp $rootdir/$famfile .") if ($famfile);
 
-print "unzip files\n";
+print "unzip files\n" if ($debug);
 if ($pfile =~ /.gz$/){
     &mysystem ("gunzip -f $pfile");
     $pfile =~ s/.gz$//;
@@ -296,7 +307,7 @@ sub excaco {
     ($nca,$nco);
 }
 
-print "walk through p-file\n";
+print "walk through p-file\n" if ($debug);
 
 ##########################
 ### BEGIN
@@ -313,7 +324,7 @@ if ($pcol==0){
     my @cells = &split_line($line);
     my $cc=1;
     foreach my $cellx(@cells){
-	print "$cc\t$cellx\n";
+	print "$cc\t$cellx\n" if ($debug);
 	$cc++;
     }
     die "please choose now\n";
@@ -339,7 +350,7 @@ while (<FILE>){
 
     if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0){
 	if ($nwarni < 5) {
-	    print "very strange: $cells[1] $cells[$pcol-1]\n";
+	    print "very strange: $cells[1] $cells[$pcol-1]\n" if ($debug);
 	    $nwarni++;
 	}
 	next;
@@ -381,7 +392,9 @@ while (<FILE>){
     print OFILE $single_pval."\n";
 #    push @pvals, $single_pval;
     $lc++;
-    print $lc." lines read\n" if ($lc % 1000000 == 0);
+    if ($debug) {
+	print $lc." lines read\n" if ($lc % 1000000 == 0)
+    }
 }
 close FILE;
 close OFILE;
@@ -395,7 +408,7 @@ die "no p_values left" if ($lc == 0);
 my $Np=$lc;  ## keep number of p_vals
 
 ### sort pvals
-print "sort pvals\n";
+print "sort pvals\n" if ($debug);
 my @spvals ;
 #my @spvals = sort by_number @pvals;
 
@@ -407,14 +420,16 @@ while (<FILE>){
     chomp($line);
     push @spvals, $line;
     $lc++;
-    print $lc." lines read\n" if ($lc % 1000000 == 0);
+    if ($debug) {
+	print $lc." lines read\n" if ($lc % 1000000 == 0) ;
+    }
 }
 close FILE;
 
 
 
 
-print "empty pvals\n";
+print "empty pvals\n" if ($debug);
 @pvals = ();
 
 
@@ -468,7 +483,7 @@ push @lapa_out, "p-thresshold\tLambda\tN\n";
 foreach (0..($nlasteps-1)) {
 
 
-    print "$_\t";
+    print "$_\t" if ($debug);
 
     while  ($spvals[$datloc] < $lapart) {
 	$datloc++;
@@ -495,7 +510,7 @@ foreach (0..($nlasteps-1)) {
 
 }
 
-print "\n";
+print "\n" if ($debug);
 
 &a2file ("$outname.lapa",@lapa_out);
 
@@ -530,7 +545,7 @@ $R_templ =~ s/OUTNAME/$lapaname/g;
 &a2file ( "$pfile.lapa.Rwork_tmp" , $R_templ);
 
 #&mysystem ("source /broad/software/scripts/useuse; use R-2.14; R < $pfile.lapa.Rwork_tmp --slave --vanilla \n");
-&mysystem ("$r_sys < $pfile.lapa.Rwork_tmp --slave --vanilla \n");
+&mysystem ("$r_sys < $pfile.lapa.Rwork_tmp --slave --vanilla $r_silent\n");
 
 
 
@@ -700,7 +715,7 @@ close OUT;
 
 
 ## system call
-my $system=" $r_sys --vanilla --slave < $pfile.qq.Rwork_tmp ";
+my $system=" $r_sys --vanilla --slave < $pfile.qq.Rwork_tmp $r_silent";
 #my $system="source /broad/software/scripts/useuse; use R-2.14; R --vanilla --slave < $pfile.qq.Rwork_tmp ";
 
 &mysystem ($system);
@@ -710,15 +725,15 @@ my $system=" $r_sys --vanilla --slave < $pfile.qq.Rwork_tmp ";
 &mysystem ("cp $pfile.qq.la $rootdir");
 
 
-print "$pfile.forQQ_tmp\n";
+print "$pfile.forQQ_tmp\n" if ($debug);
 #exit;
 
 
-print "tar -cvzf $outname.tar.gz $pfile.qq.Rwork_tmp $pfile.forQQ_tmp\n";
-&mysystem ("tar -cvzf $outname.tar.gz $pfile.qq.Rwork_tmp $pfile.forQQ_tmp");
+print "tar -czf $outname.tar.gz $pfile.qq.Rwork_tmp $pfile.forQQ_tmp\n" if ($debug);
+&mysystem ("tar -czf $outname.tar.gz $pfile.qq.Rwork_tmp $pfile.forQQ_tmp");
 &mysystem ("cp  $outname.tar.gz $rootdir");
 
-print "$outname\n";
+print "$outname\n" if ($debug);
 
 chdir ($rootdir);
 

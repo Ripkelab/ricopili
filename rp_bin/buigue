@@ -52,6 +52,8 @@ version: $version
   --lift19         lift dataset to hg19
   --noclean        do not remove temporary files
 
+  --debug          extended ouput
+
 
 
  guesses the build of a bim file out of ucsc snp file
@@ -67,6 +69,7 @@ version: $version
 use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
+    "debug"=> \my $debug,
     "lift19"=> \my $lift19,
     "noclean"=> \my $noclean,
     );
@@ -116,7 +119,7 @@ my %bpos=();
 use Compress::Zlib ;
 
 ## read bim-file
-print "read bim-file positons\n";
+print "read bim-file positons\n" if ($debug);
 die "$!:$bim_file" unless open BIM, "< $bim_file";   
 while (<BIM>) {
     my @cells = @{&split_line_ref(\$_)};
@@ -127,7 +130,7 @@ while (<BIM>) {
 close BIM;
 
 my $nbim=keys(%bpos);
-print "size of bim-file: $nbim\n\n";
+print "size of bim-file: $nbim\n\n" if ($debug);
 
 
 
@@ -137,7 +140,7 @@ my $min_noma = 100000000;
 my $max_ma = 0;
 my $buig;
 
-print "start comparison\n";
+print "start comparison\n" if ($debug);
 
 
 
@@ -165,7 +168,7 @@ foreach my $bufile (@bu_files) {
     $bush =~ s/.txt.pos.gz//;
 #    print "$bush\n";
 #    exit;
-    print "comparing with $bufile\n";
+    print "comparing with $bufile\n" if ($debug);
     
     my $nmatch= 0;
     my $nnomatch= 0;
@@ -264,7 +267,7 @@ close BU;
 die $!."($bim_file).buigue" unless open BU, "> $bim_file.buigue";
 print BU "$buig\n";
 close BU;
-print "success: $bim_file.buigue\n";
+print "success: $bim_file.buigue\n" if ($debug);
 
 &mysystem("touch $bim_file.fini");
 

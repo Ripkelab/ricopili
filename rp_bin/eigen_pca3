@@ -29,6 +29,8 @@ my $sigma = 4;
 my $npcas = 20;
 my $outliter = 0;
 
+my $debug = 0;
+
 my $ref_bfile = "";
 
 use Getopt::Long;
@@ -178,7 +180,7 @@ my $long = "" ;
 $long = $keep if ($keep);
 
 my $subdir_eigen="$sloc/eigen_pca.$dat_bfile.$ref_bfile.".$long;
-print "workdir: $subdir_eigen\n";
+print "workdir: $subdir_eigen\n" if ($debug);
 
 
 
@@ -245,7 +247,7 @@ sub shorten_fam (){
     $refpre = "dat" if ($ref_sw == 0);
     
 ## shorten ID-names and remember their prefix
-    print "processing ",$bfile,".fam.long\n";
+    print "processing ",$bfile,".fam.long\n" if ($debug);
 
     open INFILE, "< $bfile.fam.long" or die $!;
     open SHORT, "> $bfile.fam" or die $!;
@@ -372,7 +374,7 @@ else {
 
 
 
-print "comb done\n";
+print "comb done\n" if ($debug);
 #exit;
 #######################################
 ### overwork merged_fam, create pedind
@@ -396,7 +398,7 @@ while (<INFAM>) {
 close INFAM;
 close OUT;
 
-print "pedind done\n";
+print "pedind done\n" if ($debug);
 
 ## set genetic distance to 0
 open INBIM, "< $merge_name.bim" or die $!;
@@ -420,7 +422,7 @@ while (<INBIM>) {
 close INBIM;
 close OUTBIM;
 
-print "rewrite bim ($merge_name.ow.bim) done\n";
+print "rewrite bim ($merge_name.ow.bim) done\n" if ($debug);
 #exit;
 #sleep(3);
 
@@ -451,14 +453,16 @@ $pop_list_txt
 &a2file("$merge_name.par",$par_stuff);
 &a2file("POPlist","REF");
 
-my $sys = "$eloc/smartpca -p $merge_name.par\n";
+my $smart_silent = "> /dev/null";
+$smart_silent = "" if ($debug);
+my $sys = "$eloc/smartpca -p $merge_name.par $smart_silent\n";
 
 #if ($queue eq "slurm") {
 #    $sys = "source /com/extra/lapack/3.5.0/load.sh; $eloc/smartpca -p $merge_name.par\n";
 #}
 
 
-print "$sys\n";
+print "$sys\n" if ($debug);
 #exit;
 &mysystem ("$sys");
 
@@ -535,7 +539,14 @@ $outf_file = "$dat_bfile.$keep.full.emds" if ($keep);
 
 copy ("$dat_bfile.emds","$rootdir/$out_file") or print "no emds\n";
 copy ("$dat_bfile.full.emds","$rootdir/$outf_file") or print "no full_emds\n";
-copy ("$merge_name.eval","$rootdir/") or print "no eval\n";
+if (-e "$merge_name.eval"){
+    copy ("$merge_name.eval","$rootdir/");
+}
+else {
+    if ($debug) {
+	print "no eval\n";
+    }
+}
 
 
 &mysystem("rm -rf $subdir_eigen");

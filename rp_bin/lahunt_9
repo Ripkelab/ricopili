@@ -28,15 +28,20 @@ my $rloc = &trans("rloc");
 ###############################################
 
 
+
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
+
+
+
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
     exit;
 }
+
 
 
 
@@ -109,6 +114,13 @@ GetOptions(
 die "$usage\n" if $help;
 die "$usage\n" if (@ARGV==0);
 
+
+
+my $r_silent = "> /dev/null 2>&1";
+if ($debug) {
+    $r_silent = "";
+}
+
 my $pfile=$ARGV[0];
 
 #my $t = 1.6;
@@ -121,6 +133,7 @@ if ($best == -1){
     $best = 7;
 #    exit;
 }
+
 
 
 $best = sprintf "%.10f\n", 1 / 10**($best) if ($best);
@@ -195,9 +208,13 @@ my $pid = $$;
 
 sub mem_p {
     my $mem_loc = `grep VmPeak /proc/$pid/status`;
-    print "$mem_loc";
+    if ($debug) {
+	print "$mem_loc";
+    }
     $mem_loc = `grep VmSize /proc/$pid/status`;
-    print "$mem_loc";
+    if ($debug) {
+	print "$mem_loc";
+    }
 #    my $mesg = shift;
 #    print "$mesg used memory = ".&BSD::Resource::getrusage()."\n";
 #    print "$mesg used memory = ".print GTop->new->proc_mem($$)->size."\n";
@@ -448,7 +465,9 @@ sub calc_lambda_file {
 #	exit;
 #	my $la_zahl = $la*1;
 	$la = "NA" if ($la eq "Inf");
-	print "la:$la\n";
+	if ($debug) {
+	    print "la:$la\n";
+	}
 	$la;
     }
     else {
@@ -475,7 +494,9 @@ unless ($debug) {
     }
 }
 
-print "workdir: $workdir\n";
+if ($debug) {
+    print "workdir: $workdir\n";
+}
 #&mysystem("rm -rf $workdir");
 
 use File::Path;
@@ -562,7 +583,9 @@ sub lamco3_alt (){
     
     
     my $line;
-    print  "read file, define min and max of C1 and C2\n";
+    if ($debug) {
+	print  "read file, define min and max of C1 and C2\n";
+    }
     $igz->gzreadline($line);
 #    my $line = <PF>;
     my @cells = &split_line($line);
@@ -652,7 +675,9 @@ sub lamco3_alt (){
 #		$nbest++;
 		if ($p_val < $min_p) {
 		    $min_p = $p_val;
-		    print "min_p: $min_p\n";
+		    if ($debug) {
+			print "min_p: $min_p\n";
+		    }
 		}
 	    }
 
@@ -660,7 +685,9 @@ sub lamco3_alt (){
 	    
 	    $lc++;
 	    if ($lc % 100000 == 0){
-		print "$lc lines read\n" ;
+		if ($debug) {
+		    print "$lc lines read\n" ;
+		}
 #		&mem_p;
 	    }
 	}
@@ -668,7 +695,9 @@ sub lamco3_alt (){
 	if ($min_p == 2){
 	    $igz -> gzclose ();
 	    $best = 10 * $best;
-	    print "hier: $min_p\t$best\n";
+	    if ($debug) {
+		print "hier: $min_p\t$best\n";
+	    }
 	    if ($best > 1) {
 		print "-----------------------\n";
 		print "Error: reaching p > 1\n";
@@ -686,7 +715,7 @@ sub lamco3_alt (){
 
 		    $R_templ =~ s/OUTNAME1/$pdfname1/g;
 		    &a2file ( $R_infile , $R_templ);
-		    &mysystem ("$r_sys < $R_infile --vanilla \n");
+		    &mysystem ("$r_sys < $R_infile --vanilla $r_silent\n");
 
 		}
 		exit;
@@ -713,7 +742,9 @@ sub lamco3_alt (){
 	&mysystem("sort -k1,1g $matrixfile.tmp | head -n $top_int > $matrixfile");
 #    }
 
-    print  "finished....., $lc lines\n";
+    if ($debug) {
+	print  "finished....., $lc lines\n";
+    }
     
 #    exit;
     
@@ -743,7 +774,9 @@ sub lamco3_alt (){
 
 ##
 
-    print  "min1: $cc1_min, max: $cc1_max, step: $step1\n";
+    if ($debug) {
+	print  "min1: $cc1_min, max: $cc1_max, step: $step1\n";
+    }
     if ($step1 > 0) {
 ########################################
 ##    overall lambda
@@ -757,14 +790,18 @@ sub lamco3_alt (){
 #    print "$step1\t$cc1_min\n";
 	#    exit;
 
-	print  "sort file 1....\n";
+	if ($debug) {
+	    print  "sort file 1....\n";
+	}
 
 
 	unless ($debug) {
 	    &mysystem ("sort -k1,1g $file1 > $file1.sorted") unless (-e "$file1.sorted");
 	}
 
-	print  "... finished\n";
+	if ($debug) {
+	    print  "... finished\n";
+	}
 	#    print  "sort file 2\n";
 	#    &mysystem ("sort -k1,1g $file2 > $file2.sorted");
 
@@ -780,8 +817,10 @@ sub lamco3_alt (){
 #	if ($debug) {
 #	    $cc_loc_next = $cc_loc_min + $step1 + $step1;
 #	}
-	
-	print  "go through sorted file....$file_loc\n";
+
+	if ($debug) {
+	    print  "go through sorted file....$file_loc\n";
+	}
 	$lasi_str_c1= "$cc1head\tlambda\tsize\n";
 
 	
@@ -795,11 +834,12 @@ sub lamco3_alt (){
 	    my $cc_loc = $cells[0];
 	    my $p_loc = $cells[1];
 	    
-	    if ($debug) {
-		if ($cc_loc > 0) {
+	    if ($cc_loc > 0) {
+		if ($debug) {
 		    print "CC:$cc_loc\t$p_loc\n";
 		}
 	    }
+
 
 
 	    $pcount++;
@@ -816,7 +856,7 @@ sub lamco3_alt (){
 
 		$afterfirst++;
 		if ($debug) {
-		    print "found!!!!!\n";
+		    print "found!!!!!\n" ;
 		    sleep(1);
 		}
 		    
@@ -838,12 +878,12 @@ sub lamco3_alt (){
 			$lambda_loc =  &calc_lambda_file ($file_bin,$pcount);
 		    }
 		    $p_n_loc = $pcount;
-		    print "tfile on with $p_n_loc values\n";
+		    print "tfile on with $p_n_loc values\n" if ($debug);
 		}
 		else {
 		    $lambda_loc =  &calc_lambda_qs (\@p_bowl_loc);
 		    $p_n_loc = @p_bowl_loc;
-		    print "tfile off\n";
+		    print "tfile off\n" if ($debug);
 		}
 		#	    my $lambda_loc =  &calc_lambda (\@p_bowl_loc);
 
@@ -855,7 +895,7 @@ sub lamco3_alt (){
 			$cc_val_loc = $cc_loc_min ;
 		    }
 
-		    print "one_bin\nmiddle_point:$cc_val_loc\tlambda:$lambda_loc\tN:$p_n_loc\n";
+		    print "one_bin\nmiddle_point:$cc_val_loc\tlambda:$lambda_loc\tN:$p_n_loc\n" if ($debug);
 		    #	    exit;
 		    #if ()
 		    $lasi_str_c1 .= "$cc_val_loc\t$lambda_loc\t$p_n_loc\n";
@@ -867,8 +907,8 @@ sub lamco3_alt (){
 
 		    $cc_loc_min = $cc_loc_next;
 		    $cc_loc_next = $cc_loc_min + $step1;
-		    print "cc_loc_min: $cc_loc_min\n";
-		    print "cc_loc_next: $cc_loc_next\n";
+		    print "cc_loc_min: $cc_loc_min\n" if ($debug);
+		    print "cc_loc_next: $cc_loc_next\n" if ($debug);
 
 
 	    }
@@ -884,7 +924,7 @@ sub lamco3_alt (){
 	if ($p_n_loc > 0) {
 	    my $cc_val_loc = ($cc_loc_min + $cc_loc_next) / 2 ;
 
-	    print "$cc_val_loc\t$p_n_loc\n";
+	    print "$cc_val_loc\t$p_n_loc\n" if ($debug);
 	    my $lambda_loc ;
 	    
 	    if ($tfile) {
@@ -909,7 +949,7 @@ sub lamco3_alt (){
 #    print  "$lasifile_c1\n";
 #    exit;
 
-    print  "use R to plot\n";
+#    print  "use R to plot\n";
 #    exit;
 
 ################
@@ -918,7 +958,7 @@ sub lamco3_alt (){
 
     unless ($nopdf){
 
-print  "R-scripting-for plot and regression\n";
+print  "R-scripting-for plot and regression\n" if ($debug);
 
 my $R_templ='
 
@@ -1080,9 +1120,10 @@ $R_templ =~ s/OUTNAME1/$pdfname1/g;
 
 &a2file ( $R_infile , $R_templ);
 
-print "after file-writing\n";
+print "after file-writing\n" if ($debug);
+#print "after file-writing\n" ;
 
-&mysystem ("$r_sys < $R_infile --vanilla \n");
+&mysystem ("$r_sys < $R_infile --vanilla $r_silent\n");
 #&mysystem ("source /broad/software/scripts/useuse; use R-2.14; R < $R_infile --vanilla \n");
 
 ## source /broad/software/scripts/useuse; use R-2.14; R
@@ -1148,5 +1189,7 @@ unless ($debug) {
     &mysystem("rm -rf $workdir");
 }
 
+#print "end lahunt\n";
 exit 0;
+
 

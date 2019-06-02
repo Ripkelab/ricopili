@@ -23,6 +23,8 @@ version: $version
   --col INT  column to filter (first is 0), default = $coln
   --th INT   value to be filter at (-log10), default = $th
 
+  --debug    extended output
+
 
 
  works with gzipped files (default for daner-file)
@@ -41,6 +43,7 @@ GetOptions(
     "col=i"=> \ $coln,
     "th=i"=> \ $th,
     "outfile=s"=> \ $out_file,
+    "debug"=> \my $debug,
     );
 
 die $usage if $help;
@@ -63,7 +66,7 @@ else {
     $lth = 10 ** (-$th);
 }
 
-print "$in_file\n$out_file\t$lth\n";
+print "$in_file\n$out_file\t$lth\n"  if ($debug);
 
 ##########################################
 # subroutine to split a plink-output-line with references
@@ -132,9 +135,9 @@ unless (-e "$out_file.n") {
     close FILE;
 }
 
-print "nin: $nin\n";
-print "nout: $nout\n";
+print "nin: $nin\n"  if ($debug);
+print "nout: $nout\n"  if ($debug);
 
 &mysystem ("mv $out_file_tmp $out_file");
 
-print "done\n";
+print "done\n"  if ($debug);

@@ -34,6 +34,8 @@ version: $version
   --help              print this message and exit
   --outfile STRING    mandatory, outfile
 
+  --debug             extended output
+
  creates sensible chunks for legend files 
 
  nssnps must be above 10000
@@ -52,7 +54,8 @@ GetOptions(
     "legend=s"=> \my $legend_file,
     "nsnps=i"=> \$nsnps,
     "outfile=s"=> \my $outfile,
-
+    "debug"=> \my $debug,
+    
     );
 
 die ($usage) if $help;
@@ -186,7 +189,7 @@ $cc=0;
 
 my %snp_hash; ## snp hash
 
-print "read legend file ($legend_file)\n";
+print "read legend file ($legend_file)\n" if ($debug);
 
 my $igz = gzopen("$legend_file", "rb")  or die "Cannot open file $legend_file: $gzerrno\n" ;
 
@@ -212,7 +215,7 @@ while ($igz->gzreadline(my $line)){
 	if ($scc_pos != $scc_pos_last+1) {
 	    
 	    if ($cs < $nsnps/5 && $nc > 0) {
-		print "appending small last chunk to the last one\n";
+		print "appending small last chunk to the last one\n" if ($debug);
 		my $out_str = pop @out;
 		my @ocells = @{&split_line_ref(\$out_str)};
 		$ocells[2] = sprintf "%03d", $scc_pos_last + 1;
@@ -281,7 +284,7 @@ while ($igz->gzreadline(my $line)){
 
     $cc++;
     if ($cc % $cc_break == 0) {
-	print "$cc lines processed\n";
+	print "$cc lines processed\n" if ($debug);
     }
 
 }

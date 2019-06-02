@@ -32,6 +32,7 @@ version: $version
   --gm STRING         mandatory, genetic map file
   --help              print this message and exit
 
+  --debug             extended output
 
  rewrites legend files and bimfiles so that indels get coded as I and D and for SNP names it just takes the first.
 
@@ -49,7 +50,8 @@ GetOptions(
     "root=s"=> \my $root,
     "sample=s"=> \my $sample_file,
     "gm=s"=> \my $gm_file,
-
+    "debug"=> \my $debug,
+    
     );
 
 die ($usage) if $help;
@@ -154,7 +156,7 @@ my %id_sex;
 
 
 
-print "read $sample_file\n";
+print "read $sample_file\n" if ($debug);
 die $!."($sample_file)" unless open IFILE, "< $sample_file";
 #my $head = <IFILE>;
 while (my $line = <IFILE>){
@@ -179,7 +181,7 @@ close IFILE;
 ## translate fam file
 ##############################################
 
-print "translate $fam_file\n";
+print "translate $fam_file\n" if ($debug);
 die $!."($fam_file)" unless open IFILE, "< $fam_file";
 die $!."($fam_out)" unless open OFILE, "> $fam_out";
 
@@ -209,7 +211,7 @@ close OFILE;
 ## translate samples file
 ##############################################
 
-print "translate $samples_file\n";
+print "translate $samples_file\n" if ($debug);
 die $!."($samples_file)" unless open IFILE, "< $samples_file";
 die $!."($samples_out)" unless open OFILE, "> $samples_out";
 
@@ -254,7 +256,7 @@ $gm_out =~ s/.txt$/.chr.txt/;
 
 
 
-print "translate $gm_file\n";
+print "translate $gm_file\n" if ($debug);
 
 if ($gm_file eq $gm_out) {
     print "Error: in and out file ($gm_file) are the same\n";
@@ -367,7 +369,7 @@ my @snppos_array; ## snp array
 my @snp_array_legend; ## snp array
 my %snp_count; ## snp hash
 
-print "print reading $legend_file, checking and resolving for multiple SNP names\n";
+print "print reading $legend_file, checking and resolving for multiple SNP names\n" if ($debug);
 
 
 my $ocgz_cc = 0;
@@ -442,7 +444,7 @@ while ($igz->gzreadline(my $line)){
     ## progress report
     $cc++;
     if ($cc % $cc_break == 0) {
-	print "$cc lines processed\n";
+	print "$cc lines processed\n" if ($debug);
     }  
 
 }
@@ -460,7 +462,7 @@ $cc=0;
 
 my %snp_hash; ## snp hash
 
-print "reformat legend file ($legend_file)\n";
+print "reformat legend file ($legend_file)\n" if ($debug);
 
 
 
@@ -508,7 +510,7 @@ while ($igz->gzreadline(my $line)){
     while (exists $snp_hash{$cells[$snp_col]}) {
 
 	if ($chrind == "X") {
-	    print "Warning: multi occurrence of $cells[$snp_col], $snppos_array[$cc], $cc, is accepted for chrX\n";
+	    print "Warning: multi occurrence of $cells[$snp_col], $snppos_array[$cc], $cc, is accepted for chrX\n" if ($debug);
 	    $cells[$snp_col] .= "m";
 	}
 	else {
@@ -564,7 +566,7 @@ while ($igz->gzreadline(my $line)){
 
     $cc++;
     if ($cc % $cc_break == 0) {
-	print "$cc lines processed\n";
+	print "$cc lines processed\n" if ($debug);
     }
 
 }
@@ -582,7 +584,7 @@ $ocgz->gzclose();
 ######### bim file
 ########################################
 
-print "reformat $bim_file\n";
+print "reformat $bim_file\n" if ($debug);
 
 
 $snp_col = 1;
@@ -654,7 +656,7 @@ while (my $line = <IFILE>){
 
     $cc++;
     if ($cc % $cc_break == 0) {
-	print "$cc lines processed\n";
+	print "$cc lines processed\n" if ($debug);
     }
 
 }

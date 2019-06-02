@@ -56,7 +56,9 @@ GetOptions(
    "r2th=f"=> \$r2th,
    "kbwin=i"=> \$kbwin,
    "out=s"=> \$out_name,
-   "r6"=> \my $r6,
+    "r6"=> \my $r6,
+    "debug"=> \my $debug,
+
  );
 
 #if ($help || $txt_name eq "no_input"){
@@ -81,6 +83,8 @@ if ($help){
         --repl          do the same with meta-file (different columns): remeta*rep.txt
         --repdis        discovery pvalue from remeta file
            --r6         take r2 = 0.6 (works only for repl)
+
+         --debug        extended output
 
  created by Stephan Ripke 2012 at MGH, Boston, MA
  Psychiatric Genomics Consortium
@@ -273,7 +277,7 @@ while (my $line = <IN>){
     $pv_loc *= 1;
 
 
-    print "$pv_loc\n";
+    print "$pv_loc\n" if ($debug);;
 #    next if ($cells[$pvcol] eq "NA");
 
 #    next if ($cells[$pvcol]*1 = 0);
@@ -308,7 +312,7 @@ while (my $line = <IN>){
 
 
 #    if ($snp_loc eq "rs9607782" || $snp_loc eq "rs6002655" || $snp_loc eq "rs12691307") {
-    if (0) {
+    if ($debug) {
 	print "$snp_loc";
 	print "\t$chr_loc";
 #	print "\t$pos_loc";
@@ -418,7 +422,7 @@ close FOR;
 #&mysystem ("mv $txt_name_sorted.regplot.tmp $txt_name_sorted.regplot");
 
 #print "old: $old_index, $old_left, $old_right\n";
-print "$cc regions\n";
+print "$cc regions\n" if ($debug);
 exit;
 
 

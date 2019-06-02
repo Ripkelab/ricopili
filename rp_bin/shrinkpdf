@@ -38,6 +38,8 @@ version: $version
 
   --help              print this message and exit
 
+  --debug           more output
+
  created by Stephan Ripke 2010: sripke\@broadinstitute.org
 
 ";
@@ -46,6 +48,7 @@ use Getopt::Long;
 GetOptions( 
     "out=s"=> \my $outstr,
     "help"=> \my $help,
+    "debug"=> \my $debug,
     );
 
 use Cwd;
@@ -71,24 +74,24 @@ my @created = mkpath(
 
 chdir ($workdir);
 
-print "$workdir\n";
+#print "$workdir\n";
 
 &mysystem ("cp $rootdir/$infile .");
-print "convert into PNGs\n";
+# print "convert into PNGs\n";
 my $sc1 = system ("convert -density 300x300 $infile $infile-%03d.png 2> convert1");
 my $ec = -s "convert1";
 if ($ec > 0){
-    print "something went wrong during conversion into PNGs\n";
+    print "something went wrong during conversion into PNGs\n" if ($debug);
     exit;
 }
 #print "first out: $sc1\n";
 
-print "back-convert into PDF\n";
+# print "back-convert into PDF\n";
 my $sc2 = system ("convert $infile*.png $outstr 2> convert2");
 #print "second out: $sc2\n";
 my $ec = -s "convert2";
 if ($ec > 0){
-    print "something went wrong during back conversion into PDF\n";
+    print "something went wrong during back conversion into PDF\n" if ($debug);
     exit;
 }
 
@@ -100,13 +103,13 @@ chdir ($rootdir);
 my $ins = -s $infile;
 my $outs = -s $outstr;
 
-print "infile: $ins\n";
-print "outfile: $outs\n";
+# print "infile: $ins\n";
+# print "outfile: $outs\n";
 
 
 if ($ins > $outs*5) {
 
-    print "considerable shrinking, rename files\n";
+#    print "considerable shrinking, rename files\n";
     &mysystem ("mv $infile orig.$infile");
     &mysystem ("mv $outstr $infile");
 }

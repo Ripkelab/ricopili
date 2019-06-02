@@ -15,6 +15,7 @@ my $cpus = 1;
 GetOptions( 
     "help" => \my $help,
     "cpus=i" => \$cpus,
+    "debug"=> \my $debug,
     );
 
 
@@ -38,6 +39,9 @@ DESCRIPTION
     Note that the script processes the files sequentially, except the --cpu=N
     option that is passed to Minimac3. To achieve parallelism, split VCF files
     into chunks and distribute across multiple invocations of this script.
+
+    --debug             extended output
+    
 EOF
     exit 2;
 }
@@ -87,7 +91,7 @@ foreach my $file (@ARGV) {
     $prefix =~ s/(\.vcf)?\.gz$//;
     my $file_bgz = $file;
     $file_bgz =~ s/\.gz$/.bgz/;
-    print STDERR "$progname: recompressing $file into $file_bgz";
+    print STDERR "$progname: recompressing $file into $file_bgz"  if ($debug);
     system("zcat " . shell_quote($file) . " | " . shell_quote($bgzip) . " > " . shell_quote($file_bgz)) == 0
         or die "bgzipping failed; aborting\n";
 

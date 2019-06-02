@@ -78,7 +78,7 @@ close FILE;
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -152,6 +152,10 @@ options:
 
   --withpna 1       inlcude SNPs with p=NA (monomorph)
   --noassoc         restricted QC for datasets without both, cases and controls
+
+
+  --debug        extended output
+
 
    Defaults:
 
@@ -277,11 +281,17 @@ GetOptions(
     "hwe_th_ca=f"=> \$hwe_th_ca,
     "sexmin=i"=> \$sexcheck_min,
 
+    "debug"=> \my $debug,
+
 
 #    "co"=> \my $conly,  # case/control only
     );
 
 
+my $r_silent = "> /dev/null 2>&1";
+if ($debug) {
+    $r_silent = "";
+}
 
 if ($noassoc) {
     print "restricted QC\n";
@@ -834,7 +844,7 @@ sub a2file {
     close FILE;
 }
 
-print  "Progress of the QC-Report of $prefix\n";
+print  "Progress of the QC-Report of $prefix\n" if ($debug);
 
 
 ##############################################
@@ -920,13 +930,13 @@ if ($noassoc) {
 
 
 
-    print  "-> analysis without filter\n";
+    print  "-> analysis without filter\n" if ($debug);
 if ($calc){
     unless (-e "$nofiprefix.imiss") {
-	my $sys = "$ploc/plink $allow --bfile $prefix --out $nofiprefix.tmp --geno 1 --mind 1 --noweb $assotdt --missing";
-#	print "$sys\n";
+	my $sys = "$ploc/plink $allow --silent --bfile $prefix --out $nofiprefix.tmp --geno 1 --mind 1 --noweb $assotdt --missing 2> /dev/null";
+	print "$sys\n"  if ($debug);
 #	exit;  
-	&mysystem ("$ploc/plink $allow --bfile $prefix --out $nofiprefix.tmp --geno 1 --mind 1 --noweb $assotdt --missing --freq");  
+	&mysystem ("$ploc/plink $allow --silent --bfile $prefix --out $nofiprefix.tmp --geno 1 --mind 1 --noweb $assotdt --missing --freq 2> /dev/null");  
 
 
 
@@ -1028,13 +1038,13 @@ close DXN;
 
 #### without snps with miss > .05 to get ID-exclusions
 ############################################################################
-    print  "-> analysis after pre-filter filter\n";
+    print  "-> analysis after pre-filter filter\n"  if ($debug);
 if ($calc){
     my $mend_txt ="";
     $mend_txt = "--mendel" if ($tdt);
 
     unless (-e "$idfiprefix.imiss") {
-	&mysystem ("$ploc/plink $allow --bfile $prefix $mend_txt --out $idfiprefix.tmp1 --geno 1 --mind 1 --exclude $nofiprefix.snpex.detex.txt --noweb --missing ") ;  
+	&mysystem ("$ploc/plink $allow --silent --bfile $prefix $mend_txt --out $idfiprefix.tmp1 --geno 1 --mind 1 --exclude $nofiprefix.snpex.detex.txt --noweb --missing 2> /dev/null") ;  
 	if ($tdt) {
 	    &mysystem ("mv $idfiprefix.tmp1.imendel $idfiprefix.imendel");
 	}
@@ -1043,7 +1053,7 @@ if ($calc){
     }
     
     unless (-e "$idfiprefix.het") {
-	&mysystem ("$ploc/plink $allow --bfile $prefix --out $idfiprefix.tmp2 --het --geno 1 --mind 1 --exclude $nofiprefix.snpex.detex.txt --noweb ");  
+	&mysystem ("$ploc/plink $allow --silent --bfile $prefix --out $idfiprefix.tmp2 --het --geno 1 --mind 1 --exclude $nofiprefix.snpex.detex.txt --noweb 2> /dev/null");  
 	
 	&mysystem ("mv $idfiprefix.tmp2.het $idfiprefix.het");
     }
@@ -1286,7 +1296,7 @@ if ($tdt) {
 }
 
 
-print  "-> perform sex-check\n";
+print  "-> perform sex-check\n"  if ($debug);
 unless (-e "$idfiprefix.sex.sexcheck") {
     
     die $!."$prefix.bim" unless open BIM, "< $prefix.bim";
@@ -1309,10 +1319,10 @@ unless (-e "$idfiprefix.sex.sexcheck") {
 #	print "N23: $n23\n";
 #	exit;
     if ($n23 >= $sexcheck_min) {
-	&mysystem ("$ploc/plink $allow --bfile $prefix --out $idfiprefix.sextmp --mind 1 --geno 1 --check-sex $extract --exclude $nofiprefix.snpex.detex.txt --noweb ");  
+	&mysystem ("$ploc/plink $allow --silent --bfile $prefix --out $idfiprefix.sextmp --mind 1 --geno 1 --check-sex $extract --exclude $nofiprefix.snpex.detex.txt --noweb 2> /dev/null");  
     }
     else {
-	print "no X chromosome\n";
+	print "no X chromosome\n"  if ($debug);
 	
 	die $!."" unless open SC, "> $idfiprefix.sextmp.sexcheck";
 	print SC "                            FID       IID       PEDSEX       SNPSEX       STATUS            F\n";
@@ -1463,7 +1473,7 @@ close DXN;
 
 #### without IDs below TH to get addional SNP-exclusion numbers < TH -> append snp-excl-list
 ############################################################################
-    print  "-> analysis without filter\n";
+    print  "-> analysis without filter\n"  if ($debug);
 if ($calc){
     unless (-e "$idfiprefix.lmiss") {
 
@@ -1474,8 +1484,8 @@ if ($calc){
 	    &mysystem ("cat $fifiprefix.idmiss.detex.txt $idfiprefix.idhet.detex.txt $idfiprefix.idsexcheck.detex.txt > $fifiprefix.idfi.combex");  
 	}
 
-	&mysystem ("$ploc/plink $allow --bfile $prefix --out $idfiprefix --geno 1 --remove $fifiprefix.idfi.combex --noweb --make-bed ");  
-	&mysystem ("$ploc/plink $allow --bfile $idfiprefix --out $idfiprefix.misstmp --geno 1 --exclude $nofiprefix.snpex.detex.txt --noweb --missing ");  
+	&mysystem ("$ploc/plink $allow --silent --bfile $prefix --out $idfiprefix --geno 1 --remove $fifiprefix.idfi.combex --noweb --make-bed 2> /dev/null");  
+	&mysystem ("$ploc/plink $allow --silent --bfile $idfiprefix --out $idfiprefix.misstmp --geno 1 --exclude $nofiprefix.snpex.detex.txt --noweb --missing 2> /dev/null");  
 	&mysystem ("mv $idfiprefix.misstmp.lmiss $idfiprefix.lmiss");
     }
 }
@@ -1540,7 +1550,7 @@ close DXN;
 #}
 
 
-    print  "-> apply first filter\n";
+    print  "-> apply first filter\n"  if ($debug);
 if ($calc) {
 
     unless (-e "$fifiprefix.fam") {
@@ -1553,13 +1563,13 @@ if ($calc) {
 	&mysystem ("cat $idfiprefix.snpex.detex.txt $nofiprefix.snpex.detex.txt > $idfiprefix.snpex.detex.txt.comb");
 
 
-	&mysystem ("$ploc/plink $allow --bfile $idfiprefix --out $fifiprefix.tmp1 --exclude $idfiprefix.snpex.detex.txt.comb  --noweb --make-bed $extract ");
+	&mysystem ("$ploc/plink $allow --silent --bfile $idfiprefix --out $fifiprefix.tmp1 --exclude $idfiprefix.snpex.detex.txt.comb  --noweb --make-bed $extract 2> /dev/null");
 	&mysystem ("mv $fifiprefix.tmp1.bed $fifiprefix.bed");
 	&mysystem ("mv $fifiprefix.tmp1.bim $fifiprefix.bim");
 	&mysystem ("mv $fifiprefix.tmp1.fam $fifiprefix.fam");
     }
 
-    my $fifi_base = "$ploc/plink $allow --bfile $fifiprefix --noweb";
+    my $fifi_base = "$ploc/plink $allow --silent --bfile $fifiprefix --noweb 2> /dev/null";
 #    my $fifi_base_p1 = "$ploc/plink $allow --bfile $fifiprefix --noweb";
 
     unless (-e "$fifiprefix.frq") {
@@ -1613,7 +1623,7 @@ if ($calc) {
     }
 
     if ($tdt){
-	print  "-> checking for medelian errors\n";
+	print  "-> checking for medelian errors\n"  if ($debug);
 
 	unless (-e "$fifiprefix.lmendel") {
 	    &mysystem ("$fifi_base --out $fifiprefix.mendtmp --mendel ");  
@@ -1659,7 +1669,7 @@ if ($calc) {
 ##########################
 ### prepare / check hwe file
 #########################
-   print  "-> analysis HWE\n";
+   print  "-> analysis HWE\n"  if ($debug);
 
 
 #print "ncases: $ncases $cc_num{2}\n";
@@ -1898,7 +1908,7 @@ close DXN;
 #########################
 
 unless ($noassoc) {
-   print  "-> analysis missing\n";
+   print  "-> analysis missing\n"  if ($debug);
 if ($calc){
     push  @detex_files, "$fifiprefix.snpex.temiss.detex.txt";
     unless (-e "$fifiprefix.snpex.temiss.detex.txt") {
@@ -1929,7 +1939,7 @@ if ($calc){
 		next if exists ($midi_snps{$cells[1]}) ;
 
 		if ($cells[4] > 0 && $cells[4] < 1 ) {
-		    print "warning: $cells[1] not null in $fifiprefix.lmiss, but without entry in $fifiprefix.missing\n";
+		    print "warning: $cells[1] not null in $fifiprefix.lmiss, but without entry in $fifiprefix.missing\n"  if ($debug);
 		}
 		print OUT "$cells[1]\t0\t1.0\t$cells[4]\t$cells[4]\n";
 	    }
@@ -2007,13 +2017,13 @@ close DXN;
 ##########################
 ### check frq file
 #########################
-   print  "-> analysis frequency\n";
+   print  "-> analysis frequency\n" if ($debug);
 
 
 push  @detex_files, "$fifiprefix.snpex.frq.detex.txt";
 unless (-e "$fifiprefix.snpex.frq.detex.txt" ) {
 
-    print "$fifiprefix.snpex.frq.detex.txt not existing, dir: $out_dir\n";
+    print "$fifiprefix.snpex.frq.detex.txt not existing, dir: $out_dir\n" if ($debug);
 
 #    exit;
 
@@ -2065,7 +2075,7 @@ close DXN;
 ##########################
 ### check mendelian file
 #########################
-   print  "-> analysis medelian\n";
+   print  "-> analysis medelian\n" if ($debug);
 
 if ($tdt) {
     push  @detex_files, "$fifiprefix.snpex.lmendel.detex.txt";
@@ -2188,7 +2198,7 @@ $snpex_sefi_faf = &count_lines_high($faf_th,2,"$fifiprefix.missmatch_faf.txt",">
 ###########
 
 unless ($noassoc) {
-print  "-> analysis p-value present\n";
+print  "-> analysis p-value present\n" if ($debug);
 push  @detex_files, "$fifiprefix.snpex.nassoc.detex.txt";
 unless (-e "$fifiprefix.snpex.nassoc.detex.txt" ) {
     die $!."($fifiprefix.assoc)" unless open IN, "< $fifiprefix.assoc";
@@ -2375,7 +2385,7 @@ if ($calc) {
 	}
 
 #	&mysystem ("$ploc/plink $allow --bfile $fifiprefix --out $pofiprefix.tmp  --noweb --exclude $sefiprefix.snpex --make-bed --missing ");
-	&mysystem ("$ploc/plink $allow --bfile $fifiprefix --out $pofiprefix.tmp  --noweb --exclude $fifiprefix.snpex.detex.txt.comb --make-bed --missing ");
+	&mysystem ("$ploc/plink $allow --silent --bfile $fifiprefix --out $pofiprefix.tmp  --noweb --exclude $fifiprefix.snpex.detex.txt.comb --make-bed --missing 2> /dev/null");
 	&mysystem ("mv $pofiprefix.tmp.lmiss $pofiprefix.lmiss");
 	&mysystem ("mv $pofiprefix.tmp.imiss $pofiprefix.imiss");
 	&mysystem ("mv $pofiprefix.tmp.bed $pofiprefix.bed");
@@ -2392,14 +2402,14 @@ if ($calc) {
 	if ($fam_excl != 0){
 	    print "$fam_excl";
 	    unless (-e "$ccprefix.fam") {
-		&mysystem ("$ploc/plink $allow --bfile $pofiprefix --out $ccprefix.tmp --noweb --remove $fifiprefix.imendel --make-bed --missing ");
+		&mysystem ("$ploc/plink $allow --silent --bfile $pofiprefix --out $ccprefix.tmp --noweb --remove $fifiprefix.imendel --make-bed --missing 2> /dev/null");
 		&mysystem ("mv $ccprefix.tmp.bed $ccprefix.bed");
 		&mysystem ("mv $ccprefix.tmp.bim $ccprefix.bim");
 		&mysystem ("mv $ccprefix.tmp.fam $ccprefix.fam");
 	    }
 
 	    unless (-e "$tdtprefix.fam") {
-		&mysystem ("$ploc/plink $allow --bfile $pofiprefix --out $tdtprefix.tmp  --noweb --keep $fifiprefix.imendel --make-bed --missing ");
+		&mysystem ("$ploc/plink $allow --silent --bfile $pofiprefix --out $tdtprefix.tmp  --noweb --keep $fifiprefix.imendel --make-bed --missing 2> /dev/null");
 		&mysystem ("mv $tdtprefix.tmp.bed $tdtprefix.bed");
 		&mysystem ("mv $tdtprefix.tmp.bim $tdtprefix.bim");
 		&mysystem ("mv $tdtprefix.tmp.fam $tdtprefix.fam");
@@ -2421,7 +2431,7 @@ if ($calc) {
 	############# null mendel errors in family files
 	
 	unless (-e "$tdtprefix.mendel") {
-	    &mysystem ("$ploc/plink $allow --bfile $tdtprefix --out $tdtprefix.tmp2  --noweb --mendel ");
+	    &mysystem ("$ploc/plink $allow --silent --bfile $tdtprefix --out $tdtprefix.tmp2  --noweb --mendel 2> /dev/null");
 	    &mysystem ("mv $tdtprefix.tmp2.mendel $tdtprefix.mendel");
 	}
 	
@@ -2448,7 +2458,7 @@ if ($calc) {
 	close CLST;
 
 	unless (-e "$tdtnomeprefix.fam") {
-	    &mysystem ("$ploc/plink  $allow --bfile $tdtprefix --out $tdtnomeprefix.tmp --make-bed --noweb --zero-cluster $tdtprefix.zero  --within $tdtprefix.clst ");
+	    &mysystem ("$ploc/plink  $allow --silent --bfile $tdtprefix --out $tdtnomeprefix.tmp --make-bed --noweb --zero-cluster $tdtprefix.zero  --within $tdtprefix.clst 2> /dev/null");
 	    &mysystem ("mv $tdtnomeprefix.tmp.bed $tdtnomeprefix.bed");
 	    &mysystem ("mv $tdtnomeprefix.tmp.bim $tdtnomeprefix.bim");
 	    &mysystem ("mv $tdtnomeprefix.tmp.fam $tdtnomeprefix.fam");
@@ -2489,7 +2499,7 @@ if ($calc) {
 #########################################
 ## produce combined dataset
 ########################################
-    print  "-> create smart combined set (maf, hwe, cr, ...) step 1\n";
+    print  "-> create smart combined set (maf, hwe, cr, ...) step 1\n" if ($debug);
 
 
 if ($combine_sm){
@@ -2514,7 +2524,7 @@ if ($combine_sm){
     sub add_info {
 	$filenumber++;
 	my ($file,$col_snp,@col_array) = @_;
-	print "adding $file\n";
+#	print "adding $file\n";
 	die "$!: $file" unless open FILE, "< $file";
 	my $headtmp=<FILE>;
 	chomp($headtmp);
@@ -2537,7 +2547,7 @@ if ($combine_sm){
     sub add_info_bim {
 	$filenumber++;
 	my ($file,$col_snp,@col_array) = @_;
-	print "adding bim $file\n";
+#	print "adding bim $file\n";
 	die "$!: $file" unless open FILE, "< $file";
 	my $headtmp="CHR SNP NA POS A1 A2";
 	chomp($headtmp);
@@ -2714,14 +2724,14 @@ close DXN;
 #############################
 
 unless ($noassoc) {
-    print  "-> make QQ-Plots (external script)\n";
+    print  "-> make QQ-Plots (external script)\n" if ($debug);
 if ($qq_sm) {
 
 #                fifi_dummy_cd_wtc_eur-qq.pdf 
     my $outy = $pofiprefix;
 #    my $system = "qqplot_5 --ceiling 10 --out $outy --pcol 4 --lafa1000 $pofiprefix.fam combined_set_alt.txt";
     my $system = "qqplot_5 --maf 0.02 --ceiling 10 --out $outy --frcol 6 --pcol 8 --lafa1000 $pofiprefix.fam combined_set_alt.txt";
-#    print "$system\n";
+    print "$system\n" if ($debug);
 #    exit;
     &mysystem ($system) unless (-e "$outy-qq.pdf");
 
@@ -2747,24 +2757,24 @@ if ($qq_sm) {
 ######################################################################
 
 unless ($noassoc) {
-    print  "-> make manhattan-Plots (external script)\n";
+    print  "-> make manhattan-Plots (external script)\n" if ($debug);
 if ($gwa_plot) {
 
     my $systemGWA="gwa_plot_3 $prekno_txt --cols 2,9,1,3 --title GWA-Plot_nofi --sig-gwa $nofiprefix.assoc";
-    print "$systemGWA\n";
+    print "$systemGWA\n" if ($debug);
 #    exit;
     &mysystem ($systemGWA) unless (-e "GWA-Plot_nofi_gwa.pdf");
 
 
 #    exit;
     my $systemGWA="gwa_plot_3 $prekno_txt --cols 2,9,1,3 --title GWA-Plot_fifi --sig-gwa $fifiprefix.assoc";
-    print "$systemGWA\n";
+    print "$systemGWA\n" if ($debug);
     &mysystem ($systemGWA) unless (-e "GWA-Plot_fifi_gwa.pdf");
 
 
 #    my $systemGWA="gwa_plot_3 $prekno_txt --cols 1,4,17,18 --title GWA-Plot --sig-gwa combined_set_alt.txt_tmp";
     my $systemGWA="gwa_plot_3 $prekno_txt --cols 1,8,2,3 --title GWA-Plot --sig-gwa combined_set_alt.txt";
-    print "$systemGWA\n";
+    print "$systemGWA\n" if ($debug);
     &mysystem ($systemGWA) unless (-e "GWA-Plot_gwa.pdf");
 
 
@@ -2776,7 +2786,7 @@ if ($gwa_plot) {
 #    die if ($la_comb > 20);
 
     my $systemGWA="gwa_plot_3 $prekno_txt --gc $la_comb --cols 1,8,2,3 --title GWA-Plot_gc --sig-gwa combined_set_alt.txt";
-    print "$systemGWA\n";
+    print "$systemGWA\n" if ($debug);
     &mysystem ($systemGWA) unless (-e "GWA-Plot_gc_gwa.pdf");
 
 
@@ -2883,7 +2893,7 @@ $cc_num_pofi {1} =0;
 $cc_num_pofi {2} =0;
 $cc_num_pofi {-9} =0;
 
-print  "-> analysing step1 (general information)\n";
+print  "-> analysing step1 (general information)\n" if ($debug);
 if ($prop_ana){
 
     # read the log-file
@@ -3246,14 +3256,14 @@ if ($lambda_matrix){
     ###    Lambda Matrix
     ###############################
 unless ($noassoc) {
-print "doing lambd-hunting....\n";
+print "doing lambd-hunting....\n" if ($debug);
 
 #    $minsize =10 unless ($lisa);   LA2cd_wtc_eur-qc_lama-page1.pdf
 my $best_val = 4;
 
 #### missing
 my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 12,10 --pcol 8 --minsi $minsize --out LA1$outprefix combined_set_alt.txt";
-#    print "$systemstr\n";
+#print "$systemstr\n";
 #sleep(5);
 &mysystem($systemstr) unless (-e "LA1$outprefix"."_lama-page1.pdf");
 
@@ -3268,7 +3278,7 @@ my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 11,15 --pcol 
 #### MAF with <.05
 my $mn;
 unless (-e "combined_set_alt.txt.maf_restr.n" && "combined_set_alt.txt.maf_restr") {
-    print "rewrite MAF\n";
+    print "rewrite MAF\n" if ($debug);
     die $! unless open IN , "< combined_set_alt.txt";
     die $! unless open OUT , "> combined_set_alt.txt.maf_restr.tmp";
     my $head = <FAMI>;
@@ -3351,7 +3361,7 @@ my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 19,11 --pcol 
 #############################################
 ##  plot histogram of SNP-MRs
 #############################################
-    print  "-> plot SNP-Missing-Rates (no filter)\n";
+    print  "-> plot SNP-Missing-Rates (no filter)\n" if ($debug);
 if ($hist_snp_plot){
 
 
@@ -3389,7 +3399,9 @@ dev.off()
 
     &a2file ("lmiss_hist_Rin", $R_hist_in);
 
-    my $system="$r_sys < lmiss_hist_Rin  --vanilla";
+    my $system="$r_sys < lmiss_hist_Rin  --vanilla $r_silent";
+#    print "$system\n";
+#    die;
 #    my $system="source /broad/software/scripts/useuse; use R-2.14;  R < lmiss_hist_Rin  --vanilla";
     &mysystem($system) unless (-e $pdf_name);
 
@@ -3401,7 +3413,7 @@ dev.off()
 #############################################
 ##  plot histogram of ID-MRs
 #############################################
-    print  "-> plot ID-Missing-Rates\n";
+    print  "-> plot ID-Missing-Rates\n" if ($debug);
 if ($hist_id_plot){
 
 
@@ -3480,7 +3492,7 @@ dev.off()
 
 
     &a2file ("imiss_hist_Rin", $R_hist_in);
-    my $system="$r_sys < imiss_hist_Rin  --vanilla";
+    my $system="$r_sys < imiss_hist_Rin  --vanilla $r_silent";
 #    my $system="source /broad/software/scripts/useuse; use R-2.14; R < imiss_hist_Rin  --vanilla";
     &mysystem($system) unless (-e $pdf_name);
 
@@ -3497,7 +3509,7 @@ dev.off()
 
 
     &a2file ("imiss_hist_Rin", $R_hist_in);
-    $system="$r_sys < imiss_hist_Rin --vanilla";
+    $system="$r_sys < imiss_hist_Rin --vanilla $r_silent";
 #    $system="source /broad/software/scripts/useuse; use R-2.14; R < imiss_hist_Rin --vanilla";
     &mysystem($system) unless (-e $pdf_name);
 
@@ -3513,7 +3525,7 @@ dev.off()
     $R_hist_in=~ s/IMISS/$pofiprefix.imiss.tmp/g;
 
     &a2file ("imiss_hist_Rin", $R_hist_in);
-    $system="$r_sys < imiss_hist_Rin  --vanilla";
+    $system="$r_sys < imiss_hist_Rin  --vanilla $r_silent";
 #    $system="source /broad/software/scripts/useuse; use R-2.14; R < imiss_hist_Rin  --vanilla";
     &mysystem($system) unless (-e $pdf_name);
 
@@ -3528,7 +3540,7 @@ dev.off()
 #############################################
 my $imend_hist_txt = "";
 
-    print  "-> plot ID-ME (no filter)\n";
+    print  "-> plot ID-ME (no filter)\n" if ($debug);
 
 
 
@@ -3581,7 +3593,7 @@ $Fhet_hist_txt =~ s/IDFIPREFIX/$idfiprefix/g;
 ###################################################
 
 unless ($noassoc) {
-    print  "-> create top-plot (to maf, missing, hwe, cc-missing)\n";
+    print  "-> create top-plot (to maf, missing, hwe, cc-missing)\n" if ($debug);
 if ($top_plot){
     unless (-e "topplot.plotted"){
 
@@ -3808,7 +3820,7 @@ mtext(paste("p_ (Kol-Smi) to TOP1000 = ", ptou ," and to TOP100 = ", phu, sep=""
 #    print "$R_in\n";
     &a2file ("R_tp.in_tmp",$R_in);
 
-    my $systemR= "$r_sys < R_tp.in_tmp --vanilla  ";
+    my $systemR= "$r_sys < R_tp.in_tmp --vanilla $r_silent ";
 #    my $systemR= "source /broad/software/scripts/useuse; use R-2.14; R < R_tp.in_tmp --vanilla  ";
 #    my $systemR= "$rloc/R --save --no-restore < R_tp.in_tmp > R_tp_log.txt_tmp 2> R_tp_error.txt_tmp";
     &mysystem($systemR) ;
@@ -3861,7 +3873,7 @@ close IN;
 my $long_prefix= "qc2_".$prefix;
 my $long_prefix= $outprefix;
 
-    print  "-> create TEX-File (look fo success)\n";
+    print  "-> create TEX-File (look fo success)\n" if ($debug);
 if ($tex_sum){
 
 
@@ -4321,29 +4333,32 @@ if ($tdt) {
 #&repwifile("CHINFO",$prefix.".bim.chinfo",2);
 
 
-my $substr="";
-if ($sub_filter){
-    $substr = '*** filtering on subgroups has been done ****}
-NSUBIDINCL IDs left (NSUBIDEXCL excluded) --- NSUBSNPINCL SNPs left (NSUBSNPEXCL excluded) \\
-'
-} 
-else {
-    $substr = '*** filtering on subgroups has \textcolor{red}{not} been done ****}'
+    my $substr="";
+    if ($sub_filter){
+	$substr = '*** filtering on subgroups has been done ****}
+	NSUBIDINCL IDs left (NSUBIDEXCL excluded) --- NSUBSNPINCL SNPs left (NSUBSNPEXCL excluded) \\
+    '
+    } 
+    else {
+	$substr = '*** filtering on subgroups has \textcolor{red}{not} been done ****}'
 }
-$substr=~ s/NSUBIDINCL/$n_subid/;
-$substr=~ s/NSUBIDEXCL/$n_subid_excl/;
-$substr=~ s/NSUBSNPINCL/$n_subsnp/;
-$substr=~ s/NSUBSNPEXCL/$n_subsnp_excl/;
-
+    $substr=~ s/NSUBIDINCL/$n_subid/;
+    $substr=~ s/NSUBIDEXCL/$n_subid_excl/;
+    $substr=~ s/NSUBSNPINCL/$n_subsnp/;
+    $substr=~ s/NSUBSNPEXCL/$n_subsnp_excl/;
+    
     $latex_templ=~ s/SUBGROUPHEADER/$substr/;
+    
+    &a2file ("$reportprefix.tex",$latex_templ);
+    
+    
 
-&a2file ("$reportprefix.tex",$latex_templ);
-
-
-my $systemtex="pdflatex -halt-on-error $reportprefix.tex ";
-#my $systemtex="pdflatex -halt-on-error $reportprefix.tex > /dev/null";
-&mysystem ($systemtex);
-&mysystem ($systemtex);
+    my $systemtex="pdflatex -halt-on-error $reportprefix.tex > /dev/null";
+    if ($debug ) {
+	$systemtex="pdflatex -halt-on-error $reportprefix.tex ";
+    }
+    &mysystem ($systemtex);
+    &mysystem ($systemtex);
 
 
 
@@ -4358,9 +4373,9 @@ use File::Copy;
 #copy( $reportprefix.".pdf.gz","../".$long_prefix.".pdf.gz") or die "Copy failed: $!";
 copy( $reportprefix.".pdf","../".$long_prefix.".pdf") or die "Copy failed: $!";
 
-print  "-> succeess\n";
+print  "-> succeess\n" if ($debug);
 
-print "name of report:\nsd $long_prefix.pdf\n";
+print "name of report:\nsd $long_prefix.pdf\n" if ($debug);
 
 }
 
@@ -4611,10 +4626,10 @@ copy( "$pofiprefix.bed","../".$long_prefix.".bed") or die "Copy failed: $!";
 #copy( "$preknoprefix.bed","../".$long_prefix.".bed") or die "Copy failed: $!";
 
 unless ($noassoc) {
-    &mysystem ("tar -cvzf $long_prefix.ex.tar.gz @detex_files README.ex.txt $prekno_info_file\n");
+    &mysystem ("tar -czf $long_prefix.ex.tar.gz @detex_files README.ex.txt $prekno_info_file\n");
 }
 else {
-    &mysystem ("tar -cvzf $long_prefix.ex.tar.gz @detex_files README.ex.txt\n");
+    &mysystem ("tar -czf $long_prefix.ex.tar.gz @detex_files README.ex.txt\n");
 }
 
 copy( "$long_prefix.ex.tar.gz","../") or die "Copy failed: $!";
@@ -4639,12 +4654,12 @@ print DXN "--------------------------\n";
 print DXN "## look at genomewide significant SNPs (and their coverage in prekno-file): $long_prefix.prekno_info\n";
 print DXN "## exclude the not covered from the QCed dataset:\n\n";
 print DXN "awk \'\$5==1\' $long_prefix.prekno_info > $long_prefix.prekno_info.new\n";
-print DXN "$ploc/plink --bfile $long_prefix --out $long_prefix"."2 --make-bed --exclude $long_prefix.prekno_info.new\n\n";
+print DXN "$ploc/plink --bfile $long_prefix --out $long_prefix"."2 --make-bed --exclude $long_prefix.prekno_info.new 2> /dev/null\n\n";
 
 print DXN "## list GWS from the QCed dataset:\n\n";
 print DXN "awk \'\$8<5.0e-08 || NR ==1\' $long_prefix.detres > $long_prefix.detres.gws\n";
 print DXN "column -t $long_prefix.detres.gws\n";
-print DXN "$ploc/plink --bfile $long_prefix --out $long_prefix"."2 --make-bed --exclude $long_prefix.detres.gws.ex\n\n";
+print DXN "$ploc/plink --bfile $long_prefix --out $long_prefix"."2 --make-bed --exclude $long_prefix.detres.gws.ex 2> /dev/null\n\n";
 
 
 print DXN "--------------------------------------------\n";
@@ -4655,7 +4670,7 @@ close DXN;
 
 
 
-print "QC success\n";
+print "QC success\n" if ($debug);
 #close ;
 
 

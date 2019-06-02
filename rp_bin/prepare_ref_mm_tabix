@@ -11,6 +11,7 @@ my $progname = $0;
 $progname =~ s!^.*/!!;
 
 my $cpus = 1;
+my $debug = 0;
 
 GetOptions( 
     "help" => \my $help,
@@ -87,7 +88,7 @@ foreach my $file (@ARGV) {
     my $file_bgz = $file;
     $file_bgz =~ s/\.gz$/.bgz/;
 
-    print STDERR "$progname: indexing $file_bgz";
+    print STDERR "$progname: indexing $file_bgz" if ($debug);
     system($tabix, "-f", $file_bgz) == 0 or die "Indexing failed; aborting";
 
     system("touch",

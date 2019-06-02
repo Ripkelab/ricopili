@@ -7,6 +7,9 @@ my $version = "1.0.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 
+
+my $debug =0;
+
 #my $t = 1;
 #my $tt = sprintf "%04d",$t;
 #print "$t\t$tt\n";
@@ -63,11 +66,11 @@ foreach my $file (@filenames) {
 	    next;
 	}
 	else {
-	    print "path $path\n";
+	    print "path $path\n" if ($debug);
 	    my $path_loc = $path;
 	    $path_loc =~ s/..\/dasuqc1.*scz_//;
 	    $path_loc =~ s/_eur.*//;
-	    print "$name exists already and gets $path_loc addition\n";
+	    print "$name exists already and gets $path_loc addition\n"  if ($debug);
 
 	    $name =$name.".$path_loc";
 	    if (-e $name) {

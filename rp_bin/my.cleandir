@@ -14,6 +14,7 @@ GetOptions(
     "help"=> \my $help,
     "cobg"=> \my $cobg,
     "full"=> \my $full,
+    "debug"=> \my $debug,
     );
 
 
@@ -30,6 +31,8 @@ version: $version
         --full          delete the whole directory
 
         --help          print this message then quit
+
+        --debug             extended output
 
  cleans a imputation dir for files not used any more.
 
@@ -73,14 +76,14 @@ sub mysystem(){
 
 
 
-print "reading directory...\n";
+print "reading directory...\n" if ($debug);
 
 my $target_dir = $ARGV[0];
 
 die unless (@ARGV == 1);
 die unless (-e $target_dir);
 
-print "cleaning $target_dir\n";
+print "cleaning $target_dir\n" if ($debug);
 
 chdir ($target_dir);
 
@@ -100,14 +103,14 @@ my $deldir = "deldir";
 my $safedir = "safedir";
 
 unless (-e $deldir){
-    print "deldir is not existing, create one for you\n";
+    print "deldir is not existing, create one for you\n" if ($debug);
     my @created = mkpath(   ## $created ?
 			    $deldir,
 			    {verbose => 0, mode => 0750},
 	);
 }
 unless (-e $safedir){
-    print "safedir is not existing, create one for you\n";
+    print "safedir is not existing, create one for you\n" if ($debug);
     my @created = mkpath(   ## $created ?
 			    $safedir,
 			    {verbose => 0, mode => 0750},
@@ -117,7 +120,7 @@ unless (-e $safedir){
 
 if (-e "cleaned.tar.gz") {
 
-    print "cleaned.tar.gz already existing, trying to clean up and set as cleaned\n";
+    print "cleaned.tar.gz already existing, trying to clean up and set as cleaned\n" if ($debug);
 
 
     &mysystem ("rm -r $safedir") if (-e $safedir);
@@ -165,7 +168,7 @@ $exclude {$deldir} = 1;
 
 
 
-print "going through files...\n";
+print "going through files...\n" if ($debug);
 
 die $! unless open EM, ">> empty_files";
 die $! unless open EX, ">> removed_nonempty_files";
@@ -193,7 +196,7 @@ foreach my $fi (@files) {
 	
 	unless ($fi =~ /chr[0-9]/) {
 	    if ($fi =~ /.bed$/ || $fi =~ /.bim$/ || $fi =~ /.fam$/) {
-		print "excluding pruned bed/bim/fam\n";
+		print "excluding pruned bed/bim/fam\n" if ($debug);
 	    }
 	    else {
 		push @tar_files, $fi;
@@ -316,17 +319,17 @@ close EX;
 
 
 #exit;
-print "moving files into $deldir: empty files and target files (spli[0-9], bed, fam, nosex...\n";
+print "moving files into $deldir: empty files and target files (spli[0-9], bed, fam, nosex...\n" if ($debug);
 
-print "N = ".@ex_files."\n";
+print "N = ".@ex_files."\n" if ($debug);
 
 foreach (@ex_files) {
     move ($_,"$deldir/$_");
 }
 
 
-print "moving files into $safedir: the ones to keep...\n";
-print "N = ".@tar_files."\n";
+print "moving files into $safedir: the ones to keep...\n" if ($debug);
+print "N = ".@tar_files."\n" if ($debug);
 
 foreach (@tar_files) {
 #    print "$safedir/$_\n";
@@ -336,7 +339,7 @@ foreach (@tar_files) {
 
 
 
-print "tarball the rest...\n";
+print "tarball the rest...\n" if ($debug);
 my $stro = system ("tar --ignore-failed-read -czf cleaned.tmp.tar.gz $safedir");
 
 if ($stro !=0 ) {
@@ -348,13 +351,13 @@ if ($stro !=0 ) {
 &mysystem ("mv cleaned.tmp.tar.gz cleaned.tar.gz");
 
 
-print "deleting safedir...\n";
+print "deleting safedir...\n" if ($debug);
 &mysystem ("rm -r $safedir");
-print "deleting deldir...\n";
+print "deleting deldir...\n" if ($debug);
 &mysystem ("rm -r $deldir");
 
 system ("touch $target_dir/cleaned");
-print "success...\n";
+print "success...\n" if ($debug);
 
 exit;
 

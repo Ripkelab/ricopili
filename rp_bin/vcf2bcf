@@ -11,6 +11,7 @@ my $progname = $0;
 $progname =~ s!^.*/!!;
 
 my $cpus = 1;
+my $debug =0;
 
 GetOptions( 
     "help" => \my $help,
@@ -57,12 +58,12 @@ foreach my $file (@ARGV) {
     my $outfile = $file;
     $outfile =~ s/\.vcf\.bgz$/.bcf.bgz/;
 
-    print STDERR "$progname: transferring $file into $outfile";
+    print STDERR "$progname: transferring $file into $outfile" if ($debug);
     system("$bcftools view -Ob $file > $outfile") == 0
 #    system("zcat " . shell_quote($file) . " | " . shell_quote($bgzip) . " > " . shell_quote($file_bgz)) == 0
         or die "bgzipping failed; aborting\n";
 
-    print STDERR "$progname: indexing $outfile";
+    print STDERR "$progname: indexing $outfile" if ($debug);
     system("$tabix -f $outfile") == 0 or die "Indexing failed; aborting";
 #        system($tabix, "-f", $file_bgz) == 0 or die "Indexing failed; aborting";
 

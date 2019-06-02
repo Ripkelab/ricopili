@@ -31,6 +31,8 @@ version: $version
   --out STRING   outname (mandatory)
   --vcf STRING   vcf file (mandatory)
 
+  --debug             extended output
+
 
  created by Stephan Ripke 2016 at MGH, Boston, MA
  
@@ -43,6 +45,7 @@ GetOptions(
     "help"=> \my $help,
     "vcf=s"=> \my $vcffile,
     "out=s"=> \my $out,
+     "debug"=> \my $debug,
     );
 
 
@@ -85,8 +88,8 @@ sub split_line_ref {
 ##########################################
 
 
-my $sys = "$p2loc/plink --memory 2000 --vcf $vcffile --make-bed --out $out\n";
-print ("$sys\n");
+my $sys = "$p2loc/plink --silent --memory 2000 --vcf $vcffile --make-bed --out $out\n";
+print ("$sys\n")  if ($debug);
 &mysystem ("$sys");
 
 my $sys = "touch $out.fini\n";

@@ -12,6 +12,8 @@ use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans $conf_file);
 use Ricopili::Version;
 
+my $serial = 0;
+
 
 #############################
 # read config file
@@ -23,6 +25,15 @@ my $qloc = &trans("queue");
 my $hmloc = &trans("hmloc");
 my $email = &trans("email");
 my $loloc = &trans("loloc");
+my $bcmd = &trans("batch_jobcommand");
+
+
+if ($bcmd eq "SERIAL") {
+    $serial = 1;
+    print "-----------------------------------------------------\n";
+    print "switched on SERIAL mode because of configuration file\n";
+}
+
 
 #######################################
 ## v12: with pops as reference
@@ -165,10 +176,11 @@ my $sepa = 1;
 
 
 
+
 use Getopt::Long;
 GetOptions( "out=s"=> \$outname,
 	    "help"=> \my $help,
-            "serial"=> \my $serial,
+            "serial"=> \my $serial_sw,
             "sleep=i"=> \my $sleep_sw,
 
 	    "trio"=> \my $trio,
@@ -191,14 +203,21 @@ GetOptions( "out=s"=> \$outname,
             "force1"=> \my $force1,
 	    "ref=s"=> \$reffile,
 	    "projection"=> \my $projection,
-    "dfile=s"=> \my $dfile,
+	    "dfile=s"=> \my $dfile,
 	    "longq"=> \my $longq,
 	    "sepa=i"=> \$sepa,
+	    
+	    "debug"=> \my $debug,
 
-
+	    
 
     );
 
+
+
+if ($serial_sw) {
+    $serial = 1;
+}
 
 
 if ($sleep_sw) {
@@ -258,7 +277,7 @@ $rp_header =~ s/MODULE/pcaer        /;
 print "$rp_header\n";
 
 
-print ".......testing necessary binaries....\n";
+print ".......testing necessary binaries....\n" if ($debug);
 
 my @miss_scripts;
 my $err_scr = 0;
@@ -268,7 +287,7 @@ foreach my $scr_name (@test_scripts) {
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$scr_name" && -x _ ) {
-	    print "$scr_name\tfound in $path\n";
+	    print "$scr_name\tfound in $path\n" if ($debug);
 	    $scr_path = "$path/$scr_name";
 	    last;
 	}
@@ -328,7 +347,7 @@ if ($err_scr == 1) {
 
 
 
-print ".......testing email program....\n";
+print ".......testing email program....\n" if ($debug);
 
 my $err_scr = 0;
 {
@@ -336,26 +355,26 @@ my $err_scr = 0;
     
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$mutt_script" && -x _ ) {
-	    print "$mutt_script\tfound in $path\n";
+	    print "$mutt_script\tfound in $path\n" if ($debug);
 	    $scr_path = "$path/$mutt_script";
 	    last;
 	}
     }
     unless ( $scr_path ) {
 
-	print "!!Warning!! : No $mutt_script command available, trying mail\n" ;
+	print "!!Warning!! : No $mutt_script command available, trying mail\n" if ($debug);
 
 	$mutt_script = "mail";
 	for my $path ( split /:/, $ENV{PATH} ) {
 	    if ( -f "$path/$mutt_script" && -x _ ) {
-		print "$mutt_script\tfound in $path\n";
+		print "$mutt_script\tfound in $path\n" if ($debug);
 		$scr_path = "$path/$mutt_script";
 		last;
 	    }
 	}
 	unless ( $scr_path ) {
 	    $err_scr = 1;
-	    print "!!Error!! : No $mutt_script command available\n" ;
+	    print "!!Error!! : No $mutt_script command available\n" if ($debug);
 	}
     }
  
@@ -363,22 +382,22 @@ my $err_scr = 0;
 die if $err_scr == 1;
 
 
-print "....all necessary binaries found....\n";
-print "------------------------------------\n\n";
+print "....all necessary binaries found....\n" if ($debug);
+print "------------------------------------\n\n" if ($debug);
 
 
 #####################################
 # "testing environment variable rp_perlpackages
 ####################################
 
-print "testing environment variable rp_perlpackages....\n";
+print "testing environment variable rp_perlpackages....\n" if ($debug);
 unless (exists $ENV{rp_perlpackages}) {
     print "Error: no environment variable for perl-packages, please re-install ricopili and make sure to follow all instructions\n";
     print "------------------------------------\n";
     exit;
 }
-print "....all set....\n";
-print "------------------------------------\n";
+print "....all set....\n" if ($debug);
+print "------------------------------------\n" if ($debug);
 
 
 #push @scripts,"id_tager_3";
@@ -434,6 +453,9 @@ sub send_jobarray {
     die "send_jobarray with undefined variables, mem" if ($sjamem == 0);
     die "send_jobarray with undefined variables, time" if ($sjatime < 0);
     die "send_jobarray with undefined variables, info" if ($sjainfotxt eq "");
+
+
+    print "Running job: $sjaname\n";
 
 
     my $now = localtime time;
@@ -503,8 +525,8 @@ sub send_jobarray {
 
     if ($serial) {
 	
-	print "starting step $sjaname with ".@sjaarray." jobs\n";
-	print "running up to $sepa parallel jobs.\n";
+	print "starting step $sjaname with ".@sjaarray." jobs\n" if ($debug);
+	print "running up to $sepa parallel jobs.\n" if ($debug);
 
 
 	my $jc = 1;
@@ -512,7 +534,7 @@ sub send_jobarray {
 	my @job_sepa_arr;
 
 	foreach (@sjaarray) {
-	    print "running job $jc...\n";
+	    print "running job $jc...\n" if ($debug);
 	    push @job_sepa_arr, "$_ &";
 #	    $job_str .= "$_ & \n";
 
@@ -521,7 +543,7 @@ sub send_jobarray {
 		#		$job_str .= "wait\n";
 		my $sepa_file = "$sjaname.sepa.$jc";
 		&a2filenew ($sepa_file,@job_sepa_arr);
-		print "sepa_file: ".$sepa_file."\n";
+		print "sepa_file: ".$sepa_file."\n" if ($debug);
 		&mysystem("chmod u+x $sepa_file");
 		&mysystem("./$sepa_file");
 		@job_sepa_arr = ();
@@ -536,7 +558,7 @@ sub send_jobarray {
 	    
 	    my $sepa_file = "$sjaname.sepa.$jc";
 	    &a2filenew ($sepa_file,@job_sepa_arr);
-	    print "sepa_file: ".$sepa_file."\n";
+	    print "sepa_file: ".$sepa_file."\n" if ($debug);
 	    &mysystem("chmod u+x $sepa_file");
 	    &mysystem("./$sepa_file");
 	}
@@ -712,6 +734,8 @@ version: $rp_version
         --longq          forces long queue for some jobs (bcomb)
                                   bfile merges: me300, mepr
                                   eigenstrat: epca
+
+         --debug        extended output
 
 
 
@@ -1156,7 +1180,7 @@ my $bfile_me300="$outname.me300";
 
 unless (-e "$bfile_me300.bim") {
     my $cmd_str = "$bcomb_script --flip --ref $reffile --autos $ie_file --out $outname.me300 --nsout 1000000 --nidout $ld_subgr @bimfiles";
-    print "$cmd_str\n";
+    print "$cmd_str\n" if ($debug);
 
 
 
@@ -1258,7 +1282,7 @@ unless (-e "$subdir_prune/$bfile300_prune2.prune.in.check") {
     my $cmd_str ;
 #    $cmd_str .= "$ploc/plink --keep $bfile300.idexcl --hwe2 0.001 --geno 0.02 --make-founders --bfile $bfile300 --out $bfile300_found --make-bed; " unless (-e "$bfile300_found.bed");
     unless (-e "$bfile300_found.bed") {
-	$cmd_str = "$ploc/plink --hwe2 0.001 --geno 0.02 --make-founders --bfile $bfile300 --out $bfile300_found --make-bed ";
+	$cmd_str = "$ploc/plink --silent --hwe 0.001 --geno 0.02 --make-founders --bfile $bfile300 --out $bfile300_found --make-bed ";
 
 
 
@@ -1277,7 +1301,7 @@ unless (-e "$subdir_prune/$bfile300_prune2.prune.in.check") {
     }
 
     unless (-e "$bfile300_prune.prune.in"){
-	$cmd_str = "$ploc/plink --exclude $bfile300.excl --bfile $bfile300_found --indep-pairwise $nwind $nwind_h 0.2 --maf 0.05 --out $bfile300_prune " ;
+	$cmd_str = "$ploc/plink --silent --exclude $bfile300.excl --bfile $bfile300_found --indep-pairwise $nwind $nwind_h 0.2 --maf 0.05 --out $bfile300_prune " ;
 
 
 	$sjadir = "$pcaer_dir/$subdir_prune";
@@ -1293,7 +1317,7 @@ unless (-e "$subdir_prune/$bfile300_prune2.prune.in.check") {
     }
 
     unless (-e "$bfile300_prune.bed"){
-	$cmd_str = "$ploc/plink --bfile $bfile300_found --extract $bfile300_prune.prune.in --out $bfile300_prune --make-bed " ;
+	$cmd_str = "$ploc/plink --silent --bfile $bfile300_found --extract $bfile300_prune.prune.in --out $bfile300_prune --make-bed " ;
 
 
 	$sjadir = "$pcaer_dir/$subdir_prune";
@@ -1310,7 +1334,7 @@ unless (-e "$subdir_prune/$bfile300_prune2.prune.in.check") {
     }
 
     unless (-e "$bfile300_prune2.prune.in") {
-	$cmd_str = "$ploc/plink --bfile $bfile300_prune --indep-pairwise $nwind $nwind_h 0.2 --out $bfile300_prune2 " ;
+	$cmd_str = "$ploc/plink --silent --bfile $bfile300_prune --indep-pairwise $nwind $nwind_h 0.2 --out $bfile300_prune2 " ;
 
 	$sjadir = "$pcaer_dir/$subdir_prune";
 	$sjaname = "prune2";
@@ -1338,7 +1362,7 @@ unless (-e "$subdir_prune/$bfile300_prune2.prune.in.check") {
     if (@pns > $maxn) {
 
 	$rand_sth = $maxn / @pns;
-	print "randomly shorten to $maxn SNPs: $rand_sth\n";
+	print "randomly shorten to $maxn SNPs: $rand_sth\n" if ($debug);
     }
     
     die "$bfile300_prune2.prune.in.check.tmp: ".$! unless open PO, "> $bfile300_prune2.prune.in.check.tmp";
@@ -1354,7 +1378,7 @@ unless (-e "$subdir_prune/$bfile300_prune2.prune.in.check") {
 
     chdir ($pcaer_dir);
     
-#    $cmd_str .= "$ploc/plink --nonfounders --bfile $bfile300 --extract $bfile300_prune2.prune.in --out $bfile300_cp --make-bed";
+#    $cmd_str .= "$ploc/plink --silent --nonfounders --bfile $bfile300 --extract $bfile300_prune2.prune.in --out $bfile300_cp --make-bed";
     
     
 #    &mysystem ("blueprint -b \"$cmd_str\" --di --wa 2 -j --na prune$bfile300");
@@ -1441,6 +1465,8 @@ unless (-e "$bfile_mepr.overlap.pdf") {
     my %fam_arr = ();
     my %out_arr = ();
 
+
+
     my @files = ();
     opendir(DIR, ".") || die "can't opendir .: $!";
     @files = readdir(DIR);
@@ -1453,7 +1479,8 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 	$log_hash {$_} = 1;
     }
 
-    print "number of log_files: ".@logfiles."\n";
+    print "number of log_files: ".@logfiles."\n" if ($debug);
+
 
 
 
@@ -1583,7 +1610,10 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 #	my $npa = 10; # number of parallel jobs
 	foreach my $i (1..$npa){
 #	    print "i: $i\n";
-	    my $fini = `tail -3 data.sub.$i.log | head -1`;		
+	    my $fini = "na";
+	    if (-e "data.sub.$i.log") {
+		$fini = `tail -3 data.sub.$i.log | head -1`;
+	    }
 #	    print "fini: $fini\n";
 	    if ($fini =~ /^Finished/) {
 		$gj ++;
@@ -1613,7 +1643,7 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 #    exit;
 
 
-    &mysystem ("$ploc/plink --allow-no-sex --bfile $bfile_mepr --nonfounders --freq --out $bfile_mepr.frq") unless (-e "$bfile_mepr.frq.frq");
+    &mysystem ("$ploc/plink --silent --allow-no-sex --bfile $bfile_mepr --nonfounders --freq --out $bfile_mepr.frq") unless (-e "$bfile_mepr.frq.frq");
 
 
 
@@ -1626,7 +1656,7 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 	my @job_arr_out ;
 	foreach (@job_arr) {
 #	    print "$_\n";
-	    push @job_arr_out, "$ploc/plink --memory 2000  --allow-no-sex --bfile $bfile_mepr --read-freq $bfile_mepr.frq.frq --genome gz --min $rel_th_half $_";
+	    push @job_arr_out, "$ploc/plink --silent --memory 2000  --allow-no-sex --bfile $bfile_mepr --read-freq $bfile_mepr.frq.frq --genome gz --min $rel_th_half $_";
 	}
 
 
@@ -1824,13 +1854,16 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 
 	    my $printfam = "8683_0";
 
-	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
-		print "--------\n";
-	    }
+	    if ($debug) {
+		if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		    print "--------\n";
+		}
 
 
-	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
-		print "famex1:$id1\t$id2\n";
+
+		if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		    print "famex1:$id1\t$id2\n";
+		}
 	    }
 
 	    if (exists $fam_in{$id1}  && exists $fam_in{$id2}){
@@ -1846,8 +1879,10 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 		next;
 	    }
 
-	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
-		print "famex2:$id1\t$id2\n";
+	    if ($debug) {
+		if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		    print "famex2:$id1\t$id2\n";
+		}
 	    }
 
 	    ## both have been already excluded
@@ -1855,8 +1890,10 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 		next;
 	    }
 
-	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
-		print "famex3:$id1\t$id2\n";
+	    if ($debug) {
+		if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		    print "famex3:$id1\t$id2\n";
+		}
 	    }
 
 
@@ -1867,8 +1904,10 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 		next;
 	    }
 
-	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
-		print "famex4:$id1\t$id2\n";
+	    if ($debug) {
+		if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		    print "famex4:$id1\t$id2\n";
+		}
 	    }
 
 	    ## the other is already a reference
@@ -1878,8 +1917,10 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 		next;
 	    }
 
-	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
-		print "famex5:$id1\t$id2\n";
+	    if ($debug) {
+		if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		    print "famex5:$id1\t$id2\n";
+		}
 	    }
 
 	    ## one is already out
@@ -1888,8 +1929,10 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 		next;
 	    }
 
-	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
-		print "famex6:$id1\t$id2\n";
+	    if ($debug) {
+		if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		    print "famex6:$id1\t$id2\n";
+		}
 	    }
 
 	    ## one is already out
@@ -1898,8 +1941,10 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 		next;
 	    }
 
-	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
-		print "famex7:$id1\t$id2\n";
+	    if ($debug) {
+		if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		    print "famex7:$id1\t$id2\n";
+		}
 	    }
 
 
@@ -1991,7 +2036,7 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 # merge 300 individuals on all overlapping SNPs
 #####################################
     if ($nomds){
-	&mysystem ("$ploc/plink --allow-no-sex --bfile $bfile_mepr --out $bfile_mepr.dedup") unless (-e "$bfile_mepr.dedup");
+	&mysystem ("$ploc/plink --silent --allow-no-sex --bfile $bfile_mepr --out $bfile_mepr.dedup") unless (-e "$bfile_mepr.dedup");
     }
 #    exit;
 #    &mysystem("rm -rf $genome_dir");
@@ -2004,7 +2049,7 @@ unless (-e "$bfile_mepr.overlap.pdf") {
 #####################################
 
 unless (-e "$bfile_menv.bim"){
-    &mysystem ("$ploc/plink --allow-no-sex --remove $bfile_mepr.famex --bfile $bfile_mepr --out $bfile_menv --make-bed");
+    &mysystem ("$ploc/plink --silent --allow-no-sex --remove $bfile_mepr.famex --bfile $bfile_mepr --out $bfile_menv --make-bed");
 }
 
 
@@ -2066,7 +2111,7 @@ unless (-e "$bfile_menv.mds") {
 
     
     unless (-e "bim_nolong") {
-	print "remove long SNP ID names\n";
+	print "remove long SNP ID names\n" if ($debug);
 	die "$bfile_menv.bim: ".$! unless open IN, "< $bfile_menv.bim";
 	die "$bfile_menv.bim.nolong: ".$! unless open OUT, "> $bfile_menv.bim.nolong";
 	my $cc = 0;
@@ -2217,7 +2262,7 @@ unless (-e "$bfile_menv.mds") {
 	    close NOOV;
 #	    print "debug: $bfile_ref\t$refpop\n";
 #	    system("pwd");
-	    my $sys_tmp = "$ploc/plink  --allow-no-sex  --extract $bfile_menv.bim --bfile $refpop --out $bfile_ref --make-bed";
+	    my $sys_tmp = "$ploc/plink --silent --allow-no-sex  --extract $bfile_menv.bim --bfile $refpop --out $bfile_ref --make-bed";
 #	    print "$sys_tmp\n";
 	    &mysystem ($sys_tmp) unless (-e "$bfile_ref.bed");
 #	    exit;
@@ -2235,7 +2280,7 @@ unless (-e "$bfile_menv.mds") {
 		}
 		close NOOV;
 		close REF;
-		&mysystem ("$ploc/plink  --allow-no-sex --keep $bfile_ref.ref --bfile $bfile_menv --out $bfile_ref --make-bed");
+		&mysystem ("$ploc/plink --silent --allow-no-sex --keep $bfile_ref.ref --bfile $bfile_menv --out $bfile_ref --make-bed");
 	    }
 
 	    else {
@@ -2270,14 +2315,14 @@ unless (-e "$bfile_menv.mds") {
 	my @flip_arr;
 
 
-	print "$bfile_ref.fam\n";
+	print "$bfile_ref.fam\n" if ($debug);
 	die $!." ($bfile_ref.fam)" unless open REF, "< $bfile_ref.fam";
 	#	while (<REF>){
 	my $line_tmp = <REF>;
 	my @cells = &split_line ($line_tmp);
 	push @ref_id_arr, $cells[0];
 	push @ref_id_arr, $cells[1];
-	print "@ref_id_arr\n";
+	print "@ref_id_arr\n" if ($debug);
 #	my $ref_id = "$cells[0]\t$cells[1]";
 #	foreach my $cc (2..$#cells) {
 #	    push @ref_id_arr, $cells[$cc];	    
@@ -2335,7 +2380,7 @@ unless (-e "$bfile_menv.mds") {
 					push @flip_arr,1;
 					push @ref_id_arr,$cells[$cc];
 					if ($cells[$cc] == 0) {
-					    print "flip not determinable in  $cells[0], $cells[1], $bfile_menv.chuids$count_chunk.full.emds\n";
+					    print "flip not determinable in  $cells[0], $cells[1], $bfile_menv.chuids$count_chunk.full.emds\n" if ($debug);
 					}
 					
 				    }
@@ -2349,7 +2394,7 @@ unless (-e "$bfile_menv.mds") {
 					    $flip_arr[$cc] = 1;
 					}
 					else {
-					    print "Warning: no match, not at all: $cells[$cc], $ref_id_arr[$cc], $cells[0], $cells[1], $bfile_menv.chuids$count_chunk.full.emds\n";
+					    print "Warning: no match, not at all: $cells[$cc], $ref_id_arr[$cc], $cells[0], $cells[1], $bfile_menv.chuids$count_chunk.full.emds\n" if ($debug);
 					}
 #					print $count_chunk."\t".$cells[$cc]."\t".$ref_id_arr[$cc]."\t".$flip_arr[$cc]."\n";
 				    }
@@ -2400,21 +2445,23 @@ unless (-e "$bfile_menv.mds") {
 				    }
 				    $c++;
 				}
-				if ($sigdiff) {
-				    print "Warning: different mds outcomes for $id_tmp in $bfile_menv.chuids$count_chunk.full.emds\n";
-				    print "$emds_hash{$id_tmp}";
-				    print "@cells\n";
-#				    print "-------------------------------------\n";
-				    print "$sigdiff_txt";
-				    print "-------------------------------------\n";
-				    
-
-#				    exit;
-
-				}
-				else {
+				if ($debug) {
+				    if ($sigdiff) {
+					print "Warning: different mds outcomes for $id_tmp in $bfile_menv.chuids$count_chunk.full.emds\n";
+					print "$emds_hash{$id_tmp}";
+					print "@cells\n";
+					#				    print "-------------------------------------\n";
+					print "$sigdiff_txt";
+					print "-------------------------------------\n";
+					
+					
+					#				    exit;
+					
+				    }
+				    else {
 #				    print "Warning: trivial difference in mds outcomes for $id_tmp in $bfile_menv.chuids$count_chunk.full.emds\n";
-				    $warn++;
+					$warn++;
+				    }
 				}
 				    
 				if (0) {
@@ -2500,7 +2547,7 @@ unless (-e "$bfile_menv.mds") {
 
 	
     }
-    print "$warn warnings\n";
+    print "$warn warnings\n" if ($debug);
     #    exit;
 }
 
@@ -2522,7 +2569,7 @@ if (1) {
 	    $sys = "$transfuse_script --out $bfile_menv.trans.mds $bfile_mepr.famex $bfile_menv.mds";
 	}
 
-	print $sys."\n";
+	print $sys."\n" if ($debug);
 
 	&mysystem ($sys);
 #	exit;
@@ -2565,7 +2612,7 @@ unless (-e "$bfile_menv.mds.lambda") {
 
     foreach (1..$npcas){
 
-	push @assocmd, "$ploc/plink --memory 2000  --allow-no-sex --bfile $bfile_menv --assoc --pheno $bfile_menv.mds --pheno-name C$_ --out $bfile_menv.assomds.C$_" unless (-e "$bfile_menv.assomds.C$_.qassoc");
+	push @assocmd, "$ploc/plink --silent --memory 2000  --allow-no-sex --bfile $bfile_menv --assoc --pheno $bfile_menv.mds --pheno-name C$_ --out $bfile_menv.assomds.C$_" unless (-e "$bfile_menv.assomds.C$_.qassoc");
     }
 
     if (@assocmd > 0 ) {
@@ -2601,7 +2648,7 @@ unless (-e "$bfile_menv.mds.lambda") {
 
 
 
-	push @gcmd, "$gwapl_script --cols 2,9,1,3 --ceiling 40 --maxy 40 --sig-gwa --title C$cc $bfile_menv.assomds.C$cc.qassoc" unless (-e "C$cc"."_gwa.pdf");
+	push @gcmd, "$gwapl_script --last 0.2 --cols 2,9,1,3 --ceiling 40 --maxy 40 --sig-gwa --title C$cc $bfile_menv.assomds.C$cc.qassoc" unless (-e "C$cc"."_gwa.pdf");
 	unless (-e "qqC$cc-qq.pdf") {
 	    push @qcmd, "$qqpl_script --ceiling 20 --out qqC$cc --pcol 9 $bfile_menv.assomds.C$cc.qassoc";
 	}
@@ -2690,12 +2737,12 @@ unless (-e "$bfile_menv.mds.lambda") {
 #	}
  #   }
 
-    &mysystem ("$pdfjoin_script --outfile $bfile_menv.mds.asso.pdf $join_list");
-    &mysystem ("$pdfjoin_script --outfile $bfile_menv.mds.qq.pdf $join_list_q");
-    &mysystem ("$pdfjoin_script --outfile $bfile_menv.mds.lahu.pdf $join_list_lh");
-    &mysystem ("$pdfnup_script --nup 2x2 $bfile_menv.mds.asso.pdf ");
-    &mysystem ("$pdfnup_script --nup 2x2 $bfile_menv.mds.qq.pdf ");
-    &mysystem ("$pdfnup_script --nup 2x2 $bfile_menv.mds.lahu.pdf ");
+    &mysystem ("$pdfjoin_script --quiet --outfile $bfile_menv.mds.asso.pdf $join_list");
+    &mysystem ("$pdfjoin_script --quiet --outfile $bfile_menv.mds.qq.pdf $join_list_q");
+    &mysystem ("$pdfjoin_script --quiet --outfile $bfile_menv.mds.lahu.pdf $join_list_lh");
+    &mysystem ("$pdfnup_script --quiet --nup 2x2 $bfile_menv.mds.asso.pdf ");
+    &mysystem ("$pdfnup_script --quiet --nup 2x2 $bfile_menv.mds.qq.pdf ");
+    &mysystem ("$pdfnup_script --quiet --nup 2x2 $bfile_menv.mds.lahu.pdf ");
     &mysystem ("gzip $bfile_menv.mds.asso-nup.pdf ");
     &mysystem ("gzip $bfile_menv.mds.qq-nup.pdf ");
     &mysystem ("gzip $bfile_menv.mds.lahu-nup.pdf ");
@@ -2850,8 +2897,8 @@ awk \'{print $4"_"$5"*"$6}\' OWINC.ww | tr -d "\""  > OWINC.ww_fam
     cat *.fam | grep -F -f OWINC_eur_fam  > IDS_eur
     cat *.fam | grep -F -f OWINC_noeur_fam  > IDS_noeur
 
-    ls *.bim|p | $blue_script -b "~/plink/plink --bfile prefix --out eur_prefix --keep IDS_eur --make-bed" --wa 4 -j
-    ls *.bim|p | $blue_script -b "~/plink/plink --bfile prefix --out noeur_prefix --keep IDS_noeur --make-bed" --wa 4 -j
+    ls *.bim|p | $blue_script -b "~/plink/plink --silent --bfile prefix --out eur_prefix --keep IDS_eur --make-bed" --wa 4 -j
+    ls *.bim|p | $blue_script -b "~/plink/plink --silent --bfile prefix --out noeur_prefix --keep IDS_noeur --make-bed" --wa 4 -j
 
 
 
@@ -2879,13 +2926,13 @@ $R_interact =~ s/OWINC/$bfile_menv/g;
 #&mysystem ("rm -f *genome.gz");
 
 unless ($onlymds) {
-&mysystem ("tar -cvzf $bfile_menv.mds.tar.gz $bfile_mepr.overlap $bfile_mepr.overlap.count $bfile_mepr.overlap.pdf $bfile_mepr.famex $bfile_mepr.genome $bfile_menv.Rpoly.script");
+&mysystem ("tar -czf $bfile_menv.mds.tar.gz $bfile_mepr.overlap $bfile_mepr.overlap.count $bfile_mepr.overlap.pdf $bfile_mepr.famex $bfile_mepr.genome $bfile_menv.Rpoly.script");
 }
 
 
 
 chdir "$rootdir";
-print "$rootdir\n";
+print "$rootdir\n" if ($debug);
 
 
 

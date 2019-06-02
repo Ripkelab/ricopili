@@ -32,6 +32,8 @@ version: $version
   --changes STRING     mandatory, changes file
   --help               print this message and exit
 
+  --debug             extended output
+
 
  rewrites filtnorm with legend changes from refdir_navi2
 
@@ -51,7 +53,8 @@ GetOptions(
     "help"=> \my $help,
     "filtnorm=s"=> \my $filtnorm_file,
     "changes=s"=> \my $changes_file,
-
+    "debug"=> \my $debug,
+    
     );
 
 die ($usage) if $help;

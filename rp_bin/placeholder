@@ -110,7 +110,7 @@ my $empty_txt = '\documentclass{article}
 
 
  &a2file ("placeholder.tex",$empty_txt);
- my $systemtex="pdflatex -halt-on-error placeholder.tex ";
+ my $systemtex="pdflatex -halt-on-error placeholder.tex > /dev/null";
  &mysystem ($systemtex);
 
 #exit;

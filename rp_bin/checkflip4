@@ -96,6 +96,8 @@ version: $version
 
 #  --replace           replace old dataset with new one
 
+  --debug             extended output
+
 
  for Broadies: the files are currently stored here (this script should be able to find them):
   $refdir
@@ -127,6 +129,7 @@ GetOptions(
     "dbcol=s"=> \my $dcolstr,
 #    "replace"=> \my $replace,
     "subdir=s"=> \$subdir,
+    "debug"=> \my $debug,
     );
 
 die "$usage\n" if ($help);
@@ -336,7 +339,7 @@ while (-e $workdir) {
     $workdir .= ".f";
 }
 
-print "workdir:\t$workdir\n";
+print "workdir:\t$workdir\n" if ($debug);
 
 my @created = mkpath(   ## $created ?
 			$workdir,
@@ -410,7 +413,7 @@ if ($pos_tr) {
 
 ####### create freq-file
 unless (-e $frq_file) {
-    print "creating frq-file\n";
+    print "creating frq-file\n" if ($debug);
     &mysystem ("$p2loc/plink --memory 2000 --bfile $bfile --out $bfile --freq --nonfounders> /dev/null");
 }
 
@@ -418,7 +421,7 @@ unless (-e $frq_file) {
 
 ### read bim-file
 #print "checker, version $version\n";
-print "read bim-file\n";
+print "read bim-file\n" if ($debug);
 my %pos;
 my %gt;
 my %a1;
@@ -452,7 +455,7 @@ close BIMI;
 ### read frq-file
 
 
-print "read frq-file\n";
+print "read frq-file\n" if ($debug);
 my %frq_info;
 
 die "$frq_file".$! unless open FILE , "< $frq_file";
@@ -463,7 +466,7 @@ while (my $line = <FILE>){
 close FILE;
 
 
-print "read reference-file\n";
+print "read reference-file\n" if ($debug);
 die "$info_file".$! unless open FILE , "< $info_file";
 die "$frq_joined".$! unless open OF , "> $frq_joined";
 while (my $line = <FILE>){
@@ -477,7 +480,7 @@ while (my $line = <FILE>){
 }
 close FILE;
 
-print "print remainder\n";
+print "print remainder\n" if ($debug);
 foreach my $snp_loc (keys %frq_info) {
     print OF $snp_loc.$frq_info{$snp_loc}."\n";
 }
@@ -525,7 +528,7 @@ if (0) {
 ###################################
 ### compare to allele_reference
 ##################################
-print "compare to strand reference\n";
+print "compare to strand reference\n" if ($debug);
 #### flipped genotypes
 my %trab =();
 $trab{"AC"}="GT";
@@ -563,7 +566,9 @@ my $sfh_hi = .5 + ($sec_freq / 2);  ### half of sec_freq
 my $cc=0;
 while (my $line = <FJ>) {
     $cc++;
-    print "$cc entries read\n" if ($cc % 1000000 == 0);
+    if ($debug) {
+	print "$cc entries read\n" if ($cc % 1000000 == 0);
+    }
     my @cells = &split_line($line);
 
     my $ncells = @cells;
@@ -799,7 +804,7 @@ push @log_lines,  $cmd2;
 &mysystem ("mv $bfile_flipped.bim $rootdir/");
 &mysystem ("mv $bfile_flipped.fam $rootdir/");
 
-&mysystem ("tar -cvzf $bfile_flipped.tar.gz $bim_inde $bim_xal $bim_gf $bim_bf $bim_fli $bim_uif $bim_usf $bim_nal");
+&mysystem ("tar -czf $bfile_flipped.tar.gz $bim_inde $bim_xal $bim_gf $bim_bf $bim_fli $bim_uif $bim_usf $bim_nal");
 
 &mysystem ("mv $bfile_flipped.tar.gz $rootdir/");
 
@@ -843,7 +848,7 @@ exit;
 
 
 
-print "checkflip completed, please read this report: $bim_log\n\n";
+print "checkflip completed, please read this report: $bim_log\n\n" if ($debug);
 
 
 

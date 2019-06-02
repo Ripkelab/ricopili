@@ -12,6 +12,7 @@ my $progname = $0;
 my $colp = 10;
 my $colhp = -1;
 my $coldf = -1;
+my $debug = 0 ;
 #my $th = 3;
 
 
@@ -63,7 +64,7 @@ my $out_file_tmp = $out_file.".tmp";
 #    $lth = 10 ** (-$th);
 #}
 
-print "$in_file\n$out_file\n";
+print "$in_file\n$out_file\n" if ($debug);
 
 ##########################################
 # subroutine to split a plink-output-line with references
@@ -169,5 +170,5 @@ $inz -> gzclose();
 
 &mysystem ("mv $out_file_tmp $out_file");
 
-print "done\n";
-print "$ns SNPs without het-p\n";
+print "done\n" if ($debug);
+print "$ns SNPs without het-p\n" if ($debug);
