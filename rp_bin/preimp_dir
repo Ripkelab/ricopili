@@ -321,9 +321,8 @@ my $noti = 1;
 	}
 	unless ( $scr_path ) {
 #	    $err_scr = 1;
-	    print "!!Warning!! : No $mutt_script command available, no email notifications\n"  if ($debug);
+	    print "!!Warning!! : No $mutt_script command available, no email notifications\n";
 	    $noti = 0;
-	    sleep (3);
 	}
     }
  

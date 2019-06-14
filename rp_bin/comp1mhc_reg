@@ -288,7 +288,7 @@ while (my $line = <IN>){
 
 
     if ($pv_loc > $pth) {
-	print "no\n";
+	print "no\n" if ($debug);
 	next;
     }
 #    next if ($cells[$pvcol] > 1.0e-06);

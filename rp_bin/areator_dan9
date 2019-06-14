@@ -896,7 +896,7 @@ if ($pliclu) {
 	    ## plink2 does not like --clump-range (if the file is  too long)
 
 
-	    print "$sys\n";
+	    print "$sys\n" if ($debug);
 #	    exit;
 
 	    if (-e "$out_name.clump.chr$chr.clumped") {

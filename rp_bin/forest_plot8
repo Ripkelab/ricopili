@@ -41,7 +41,7 @@ my $rpac = &trans("rpac");
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -100,6 +100,14 @@ $gsnp =~ s/\*/\\*/;
 #print "$snp\t$gsnp\n";
 #print "$gsnp\n";
 #exit;
+
+
+my $r_silent = "> /dev/null 2>&1";
+if ($debug) {
+    $r_silent = "";
+}
+
+
 
 use Cwd;
 use File::Path;
@@ -659,8 +667,8 @@ my $meta_line = `gunzip -c $metafile | grep -m 1 -w $gsnp `;
 #my $meta_line = `zgrep -m 1 -w $gsnp $metafile`;
 my $meta_hline = `gunzip -c $metafile | head -1`;
 #my $meta_line = `zgrep -m 1 -w $gsnp $rootdir/$metafile`;
-print $meta_hline."\n";
-print $meta_line."\n";
+print $meta_hline."\n" if ($debug);
+print $meta_line."\n"  if ($debug);
 #exit;
 
 my @cells_h = &split_line($meta_hline);
@@ -987,7 +995,7 @@ foreach my $study (sort keys %finfo){
 	    push @forest_lines_repl, $oline;
 	}
     }
-    print $oline;
+    print $oline  if ($debug);
 }
 
 #exit;
@@ -1428,7 +1436,7 @@ if ($rpac ne "NA") {
 $R_templ_for =~ s/INNAME/$forest_file/g ;
 $R_templ_for =~ s/LIBRARY/$lib_txt/g ;
 &a2file ( "R_forest_$out.in_tmp" , $R_templ_for);
-&mysystem("$r_sys < R_forest_$out.in_tmp --vanilla ");
+&mysystem("$r_sys < R_forest_$out.in_tmp --vanilla $r_silent");
 #&mysystem("source /broad/software/scripts/useuse; use R-2.14; R < R_forest_$out.in_tmp --vanilla");
 
 &mysystem("cp $forest_file.pdf $rootdir");

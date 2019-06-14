@@ -490,13 +490,20 @@ if ($clusters{uppmax}) {
 my $shell = '';
 if (exists $ENV{SHELL}){$shell = basename($ENV{SHELL});}
 if ($shell eq "bash-login-check"){$shell = "bash";}
-if ($shell ne "bash" && $shell ne "tcsh") {
-    print "Warning! Shell not recognized: $shell\n";
-    print "Please send email to rp_dev\@broadinstitute.org\n";
+#if ($shell ne "bash" && $shell ne "tcsh") {
+if ($shell ne "bash") {
+
+
+    print "Error: Shell recognized: $shell\n";
+    print "for now, only bash is supported\n";
+    exit;
+
+#    print "Warning! Shell not recognized: $shell\n";
+#    print "Please send email to rp_dev\@broadinstitute.org\n";
 }
 
 print "\n\nYou are using the following shell (is this correct? if not please stop with ctr-c): $shell\n\n";
-sleep(5);
+sleep(3);
 
 #############################
 # Determine the shell-bashrc
@@ -512,17 +519,22 @@ elsif (-e "$home/.bashrc") {
     $bashrc = "$home/.bashrc";
     print " - bash detected - \n\n";
 }
-elsif (-e "$home/.my.cshrc") {
-    $bashrc = "$home/.my.cshrc";
-    print " - csh detected - \n\n";
-}
-elsif (-e "$home/.cshrc") {
-    $bashrc = "$home/.my.cshrc";
-    print " - csh detected - \n\n";
-}
+
+
+#elsif (-e "$home/.my.cshrc") {
+#    $bashrc = "$home/.my.cshrc";
+#    print " - csh detected - \n\n";
+#}
+#elsif (-e "$home/.cshrc") {
+#    $bashrc = "$home/.my.cshrc";
+#    print " - csh detected - \n\n";
+#}
+
 else {
-    print "Could not find any shell-starting files ($home/.bashrc or $home/.cshrc)\n";
-    print "please consult your admins how to achieve the above tasks\n";
+#    print "Could not find any shell-starting files ($home/.bashrc or $home/.cshrc)\n";
+    print "Error: Could not find any shell-starting files ($home/.bashrc or $home/.my.bashrc)\n";
+    exit;
+#    print "please consult your admins how to achieve the above tasks\n";
 }
 
 
@@ -571,7 +583,27 @@ if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
     print "\n\nWarning: Ricopili is already installed.\n";
     print "Do you wish to uninstall the Ricopili PATH settings first (recommended)? <y/n>\n";
     while (1) {
-        my $answer = lc <>;
+
+	
+        my $answer;
+
+	if ($nointeract) {
+	    $answer = "y";
+	    print "*******************************************************************\n";
+	    print "*******************************************************************\n";
+	    print "  chose (y) since flag --nointeract is on\n";
+	    print "  removing old ricopili installation PATH\n";
+	    print "*******************************************************************\n";
+	    print "*******************************************************************\n";
+	    
+	    
+	}
+	else {
+	    $answer = lc <>;
+	}
+	
+
+	
         chomp $answer;
         if ($answer eq "y") {
 
@@ -666,13 +698,14 @@ if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
 #                    $i += 1;
 
 		    print "\n2) Run this command to remove rp_bin permanantly from the search path.\n";
+		    print "\t\t(-> a backup of $bashrc is available here: $bashrc.copy)\n";                    
                     print "\n\tmv $bashrc.minus_rpbin.txt $bashrc\n\n";
-		    print "\t\t## this will delete the following lines from your $bashrc file:\n\n";
-                    print "$found_txt\n";
+#		    print "\t\t## this will delete the following lines from your $bashrc file:\n\n";
+ #                   print "$found_txt\n";
 		    
 		  		    
 
-                    print "\n\t\t-> a backup of $bashrc is available here: $bashrc.copy\n";                    
+
                 }
 		else {
 
@@ -695,10 +728,11 @@ if ($status_bin == 0  && $status_pdfjam == 0 &&  !(-e "install_true")) {
 	    print "*********************************************************************\n";
 	    print "*********************************************************************\n";
 	    print "*****  please read and follow instructions above, *******************\n";
-	    print "*****              only then restart ./rp_config  *******************\n";
-	    print "**********************************************************************\n";
+	    print "*****              only then restart installation  ******************\n";
+	    print "*****              with the same command as before ******************\n";
+	    print "*********************************************************************\n";
 	    print "\n\n";
-            exit;
+            exit 2;
         }
         elsif ($answer eq "n") {&mysystem("touch install_true");last;}
         else {print "Please answer with y or n.\n";}
@@ -1163,7 +1197,20 @@ if (-e $conf_file) {
     print "        - if yes, a backup of the present file will be here: $conf_file.copy - \n";
     print "        - if not, then present $conf_file will be fully reused (choose this for simple update installation in the same environment) - \n";
     while (1) {
-        $ans_ow = lc <>;
+	if ($nointeract) {
+	    $ans_ow = "y";
+	    print "*******************************************************************\n";
+	    print "*******************************************************************\n";
+	    print "  chose (y) since flag --nointeract is on\n";
+	    print "  removing old config file and rebuilding it\n";
+	    print "*******************************************************************\n";
+	    print "*******************************************************************\n";
+	    
+	    
+	}
+	else {
+	    $ans_ow = lc <>;
+	}
         chomp $ans_ow;
         if ($ans_ow eq "y") {
 

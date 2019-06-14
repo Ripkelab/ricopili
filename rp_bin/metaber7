@@ -515,7 +515,7 @@ foreach my $dfile (@ARGV) {
 	    print "no Nco (but Neff) column in $dfile\n";
 	    die;
 	}
-	print "Nca, Nco, Neff found for $dfile\n";
+	print "Nca, Nco, Neff found for $dfile\n" if ($debug);
 #	sleep (10);	
     }
     else {

@@ -22,7 +22,7 @@ my $sloc = &trans("sloc");
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -95,6 +95,8 @@ version: $version
 
   --color        more color
 
+  --debug        verbose messaging
+
  for daner result file:
  --cols 2,11,1,3 d
 
@@ -139,6 +141,8 @@ GetOptions(
     "areator=s"=> \my $areator,
     "remeta=s"=> \my $remeta,
     "color"=> \my $color,
+    "debug"=> \my $debug,
+
     );
 
 
@@ -158,7 +162,12 @@ if (1) {
     }
 }
 
-print "create $workdir\n";
+my $r_silent = "> /dev/null 2>&1";
+if ($debug) {
+    $r_silent = "";
+}
+
+print "create $workdir\n" if ($debug);
 my @created = mkpath(   ## $created ?
 			"$workdir",
 			{verbose => 0, mode => 0750},
@@ -168,7 +177,7 @@ my @created = mkpath(   ## $created ?
 chdir ($workdir);
 
 if ($pfile =~ /.gz$/){
-    print "unzip file\n";
+    print "unzip file\n"  if ($debug);
     my $pfile_nogz = $pfile;
     $pfile_nogz =~ s/.gz$//;
     unless (-e $pfile_nogz){
@@ -512,7 +521,7 @@ if ($areator) {
 	    foreach my $r (0..$#rgenes) {
 		foreach my $pg (@prefgenes) {
 		    if ($rgenes[$r] eq $pg){
-			print "$pg\n";
+			print "$pg\n"  if ($debug);
 #my $tmp = 
 #		$rgenes[$cou+1] = $rgenes[$cou];#
 #		$rgenes[$cou] = $pg;
@@ -539,9 +548,9 @@ if ($areator) {
 			my @tcells = split '\t', $aarea {$_};
 			if ( $tcells[0] =~ /$rgenes[0]/) {
 			    next if ($tcells[0] =~ /$rgenes[0] (ms)/);
-			    print "1: <$rgenes[0]>\n";
+			    print "1: <$rgenes[0]>\n"  if ($debug);
 			    $tcells[0] =~ s/$rgenes[0]/$rgenes[0] (ms)/ ;
-			    print "2: <$rgenes[0]>\n";
+			    print "2: <$rgenes[0]>\n"  if ($debug);
 			    $aarea{$_} = "$tcells[0]\t$cells[$acol_po]\t$tcells[2]\t$tcells[3]";
 			    $fgene = s/$rgenes[0]//;
 			}
@@ -719,7 +728,7 @@ die "no values left" if ($pc == 0);
 
 
 #print "$pc\t$outdir/$top5Kfile\n";
-print "sorting,\t$outdir\t$top5Kfile\n";
+print "sorting,\t$outdir\t$top5Kfile\n"  if ($debug);
 #exit;
 
 my $systempos="sort -k3,3n -k4,4n $outdir/$top5Kfile > $outdir/$positionfile";
@@ -816,10 +825,10 @@ my $systemp="sort -k4,4g $outdir/Best_processed.txt_tmp > $outdir/Best_processed
 $min_pva = -log($min_pva)/log(10);
 $max_pva = -log($max_pva)/log(10);
 
-print "min_p: $min_pva\n";
-print "max_p: $max_pva\n";
-print "min_pos: $min_pos\n";
-print "max_pos: $max_pos\n";
+print "min_p: $min_pva\n"  if ($debug);
+print "max_p: $max_pva\n"  if ($debug);
+print "min_pos: $min_pos\n"  if ($debug);
+print "max_pos: $max_pos\n"  if ($debug);
 
 my $range_pos = $max_pos - $min_pos;
 my $range_pva = $max_pva - $min_pva;
@@ -1324,7 +1333,7 @@ $R_templ =~ s/MAXY/$maxy/g;
 ##     start R
 #######################################
 
-my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --vanilla \n";
+my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --vanilla $r_silent\n";
 #my $systemGWA="source /broad/software/scripts/useuse; use R-2.14; R < $outdir/R_GWAplot.in_tmp --vanilla > /dev/null\n";
 
 &mysystem ($systemGWA);
@@ -1332,9 +1341,9 @@ my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --vanilla \n";
 
 &mysystem ("cp $pdfout $rootdir");
 
-&mysystem ("tar -cvzf $pdfout.tar.gz $areator.aaout $outdir/R_GWAplot.in_tmp $outdir/ticks.txt_tmp $outdir/Best_processed.txt_tmp");
+&mysystem ("tar -czf $pdfout.tar.gz $areator.aaout $outdir/R_GWAplot.in_tmp $outdir/ticks.txt_tmp $outdir/Best_processed.txt_tmp");
 &mysystem ("cp $pdfout.tar.gz $rootdir");
-print "pdf: $pdfout\n";
+print "pdf: $pdfout\n"  if ($debug);
 
 
 chdir ($rootdir);

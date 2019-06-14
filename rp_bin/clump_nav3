@@ -322,6 +322,7 @@ my $blueprint_script = "blueprint";            ### my.pipeline_tar
 print ".......testing email program....\n" if ($debug);
 
 my $err_scr = 0;
+my $noti = 1;
 {
     my $scr_path = '';
     
@@ -345,8 +346,9 @@ my $err_scr = 0;
 	    }
 	}
 	unless ( $scr_path ) {
-	    $err_scr = 1;
-	    print "!!Error!! : No $mutt_script command available\n"  if ($debug);
+	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" ;
+	    $noti = 0;
+
 	}
     }
  
@@ -417,7 +419,10 @@ sub send_jobarray {
 	print SUC $fini_message."\n";
 	close SUC;
 
-	&mysystem ('cat success_file | '.$mutt_script.' -s RP_clump_finished '.$email) ;
+	
+	if ($noti == 1) {
+	    &mysystem ('cat success_file | '.$mutt_script.' -s RP_clump_finished '.$email) ;
+	}
 
 	my $sjarow      = $sjainfotxt."\t$sjaname\t$now";
 	&a2filenew_app("$sjainfofile",$sjarow);
@@ -489,7 +494,9 @@ sub send_jobarray {
 	    close ERR;
 
 
-	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_clump_error '.$email) ;
+	    if ($noti == 1) {
+		&mysystem ('cat error_file | '.$mutt_script.' -s RP_clump_error '.$email) ;
+	    }
 #	    unless ($serial) {
 		exit;
 #	    }

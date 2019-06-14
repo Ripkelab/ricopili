@@ -23,7 +23,7 @@ my $sloc = &trans("sloc");
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME");
+system("$r_sys RHOME > /dev/null");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -158,10 +158,10 @@ while (-e $workdir) {
     $workdir .= ".m";
 }
 
-print "pth: $pth\n";
-print "lastp: $last_th\n";
+print "pth: $pth\n" if ($debug);
+print "lastp: $last_th\n" if ($debug);
 #sleep(5);
-print "create $workdir\n";
+print "create $workdir\n" if ($debug);
 my @created = mkpath(   ## $created ?
 			"$workdir",
 			{verbose => 0, mode => 0750},

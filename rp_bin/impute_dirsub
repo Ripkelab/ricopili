@@ -593,7 +593,7 @@ if ($mm3_sw_outdated) {
 }
 
 
-If ($imp2_sw) {
+if ($imp2_sw) {
     $mm3_sw = 0;
 }
 
@@ -767,9 +767,8 @@ my $noti =1;
 	}
 	unless ( $scr_path ) {
 	    #	    $err_scr = 1;
-	    print "!!Warning!! : No $mutt_script command available, no email notifications\n" if ($debug);
+	    print "!!Warning!! : No $mutt_script command available, no email notifications\n";
 	    $noti = 0;
-	    sleep (3);
 	}
     }
  

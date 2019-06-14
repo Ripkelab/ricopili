@@ -27,11 +27,20 @@ print "$rp_header\n";
 
 my $loloc = &trans("loloc");
 my $email = &trans("email");
+my $bcmd = &trans("batch_jobcommand");
 my $force1 = 0;
 my $serial = 0;
 my $outname = "test";
 my $job_bn_th = 1000;
 my $sepa = 1;
+my $serial = 0;
+
+
+if ($bcmd eq "SERIAL") {
+    $serial = 1;
+    print "-----------------------------------------------------\n";
+    print "switched on SERIAL mode because of configuration file\n";
+}
 
 
 #######################################
@@ -51,7 +60,7 @@ my $walltime = 4;
 use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
-    "serial"=> \my $serial,
+    "serial"=> \my $serial_sw,
     "sepa=i"=> \$sepa,
     "noldsc"=> \my $noldsc,
     
@@ -80,6 +89,12 @@ version: $version
     exit 2;
 }
 
+
+
+
+if ($serial_sw) {
+    $serial = 1;
+}
 
 
 ###################################################
