@@ -453,7 +453,7 @@ foreach my $dfile (@ARGV) {
 	    $col{"FRQ"} = $cc;
 	}
 
-	if ($_ =~ /Neff/) {
+	if ($_ =~ /Neff_half/) {
 	    $col{"Neff"} = $cc;
 	    $ndet_switch = 1;
 	}
@@ -515,8 +515,10 @@ foreach my $dfile (@ARGV) {
 	    print "no Nco (but Neff) column in $dfile\n";
 	    die;
 	}
-	print "Nca, Nco, Neff found for $dfile\n" if ($debug);
-#	sleep (10);	
+	print "Nca for $dfile: ".$col{"Nca"}."\n" if ($debug);
+	print "Nco for $dfile: ".$col{"Nco"}."\n" if ($debug);
+	print "Neff for $dfile: ".$col{"Neff"}."\n" if ($debug);
+	sleep (3) if ($debug);	
     }
     else {
 	print "no Nca, Nco, Neff in $dfile\n" if ($debug);

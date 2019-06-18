@@ -146,7 +146,7 @@ while ($inz->gzreadline($line)){
     my @cells = @{&split_line_ref(\$line)};
     if (@cells < 17) {
 	$ns++;
-	print "not enough cells at:\n$head\n$line\n" ;
+	print "-------\nnot enough cells at:\n$head $line " if ($debug);
 	next;
 
 #	exit;
