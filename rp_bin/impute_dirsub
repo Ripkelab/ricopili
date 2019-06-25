@@ -596,6 +596,9 @@ if ($mm3_sw_outdated) {
 if ($imp2_sw) {
     $mm3_sw = 0;
 }
+if ($imp4_sw) {
+    $mm3_sw = 0;
+}
 
 
 if ($sleep_sw) {
