@@ -1,0 +1,670 @@
+#!/usr/bin/env perl
+use strict;
+
+
+##########################################################################################
+#
+#         takes a meta file (coming out of rep_qc2_14 and attaches flags
+##
+#
+#
+#
+#
+#
+#
+##########################################################################################
+
+my $meta_file = "no_input";
+
+my $dist_version = "July29th version c 2019";
+
+
+use Getopt::Long;
+GetOptions( 
+   "meta=s"=> \$meta_file,
+   "help"=> \my $help,
+    "debug"=> \my $debug,
+ );
+
+if ($help || $meta_file eq "no_input"){
+    print "usage: $0 --meta METAFILE ....
+
+      options:
+
+	--help          print this message and exit
+        --meta STRING   name of txt-file, white space delimited
+
+        --debug         extended output (e.g. output-filenames)
+
+
+
+ - outfiles: METAFLE.flags and METAFLE.flags_summary
+
+ created by Stephan Ripke 2019 at MGH, Boston, MA
+ Psychiatric GWAS Consortium
+
+ with extensive help from Vassily Trubetskoy
+ for details see here:
+   https://docs.google.com/document/d/1FQR6spN2wdx5vARSR2_si_jK4SPo-BL70wKUpiWaW9E
+\n";
+    exit 2;
+}
+
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+
+
+#####################################
+### BEGIN
+#####################################
+
+my %meta_vars;
+
+
+#### genotyping platforms and their 2df thresholds
+my %platf_low;
+my %platf_high;
+my %platf_low_4sd;
+my %platf_high_4sd;
+
+
+$platf_high{"A5.0"} = 466376;
+$platf_low{"A5.0"} = 186073;
+$platf_high{"A6.0"} = 739180;
+$platf_low{"A6.0"} = 429948;
+$platf_high{"AXIO"} = 741832;
+$platf_low{"AXIO"} = 466079;
+$platf_high{"COEX"} = 411893;
+$platf_low{"COEX"} = 190337;
+$platf_high{"I317"} = 388474;
+$platf_low{"I317"} = 212012;
+$platf_high{"I550"} = 576675;
+$platf_low{"I550"} = 390041;
+$platf_high{"I650"} = 653474;
+$platf_low{"I650"} = 229772;
+$platf_high{"Il1M"} = 638455;
+$platf_low{"Il1M"} = 336666;
+$platf_high{"OMEX"} = 789375;
+$platf_low{"OMEX"} = 408380;
+$platf_high{"P600"} = 587348;
+$platf_low{"P600"} = 216908;
+$platf_high{"PSYC"} = 421841;
+$platf_low{"PSYC"} = 255956;
+$platf_high{"UKAX"} = 780634;
+$platf_low{"UKAX"} = 387772;
+$platf_high{"GSA"} = 718150;
+$platf_low{"GSA"} = 435928;
+
+
+
+foreach my $platf (keys %platf_low) {
+    my $mean = ($platf_high{$platf} + $platf_low{$platf}) / 2;
+    my $sd2 = $mean - $platf_low{$platf};
+    $platf_low_4sd{$platf} = sprintf "%d", $mean - 2 * $sd2;
+    $platf_high_4sd{$platf} = sprintf "%d", ($mean + 2 * $sd2) + 0.6;
+}
+
+
+#################################################
+## read meta file
+##########################################
+
+my $lc = 0;
+die $!."($meta_file)" unless open FILE, "< $meta_file";
+
+while (my $line = <FILE>){
+    my @cells = @{&split_line_ref(\$line)};
+    $meta_vars{$cells[0]} = $cells[1];
+}
+close FILE;
+
+
+## create some intermediate vaiables
+my %meta_reads;
+$meta_reads{"ncases_preqc"} = 1;
+$meta_reads{"ncontrols_preqc"} = 1;
+$meta_reads{"ncases_postqc"} = 1;
+$meta_reads{"ncontrols_postqc"} = 1;
+$meta_reads{"nidex_sexcheck_warni"} = 1;
+$meta_reads{"platform"} = 1;
+
+my $counts_present = 0;
+foreach my $meta_name (keys %meta_reads) {
+    unless (exists $meta_vars{$meta_name}) {
+	print "Warning this variable is not existing in meta-file: $meta_name\n";
+    }
+    else {
+	$counts_present++;
+    }
+}
+
+if ($counts_present == keys %meta_reads) {
+    my $preqc_n = $meta_vars{"ncases_preqc"} + $meta_vars{"ncontrols_preqc"};
+    my $postqc_n = $meta_vars{"ncases_postqc"} + $meta_vars{"ncontrols_postqc"};
+#    print "preqcn: $preqc_n\n";
+#    print "postqcn: $postqc_n\n";
+    $meta_vars {"nids_lost_ratio"} = ($preqc_n - $postqc_n) / $preqc_n;
+    $meta_vars {"nids_sexcheck_ratio"} =  $meta_vars {"nidex_sexcheck_warni"} / $preqc_n;
+}
+
+
+my $platform = $meta_vars{"platform"};
+### two rewriting of platforms:
+if ($platform eq "GSAA") {
+    $platform = "GSA";
+}
+if ($platform eq "Il5M") {
+    $platform = "GSA";
+}
+
+
+
+
+
+my %color_name;
+    
+$color_name{0} = "green";
+$color_name{1} = "yellow";
+$color_name{2} = "red";
+$color_name{-9} = "blue";
+
+my %flag_count;
+$flag_count{-9} = 0;
+$flag_count{0} = 0;
+$flag_count{1} = 0;
+$flag_count{2} = 0;
+
+
+########################################################################################################################################
+### QC flags, checkout this document: https://docs.google.com/document/d/1FQR6spN2wdx5vARSR2_si_jK4SPo-BL70wKUpiWaW9E/edit?usp=sharing
+########################################################################################################################################
+my %flags_val;
+my %flags_col;
+my %flags_red_th;
+my %flags_yellow_th;
+my $flag_name;
+my %flag_name_coll;
+
+### NSNPS_POSTQC
+
+$flag_name = "01) nsnps_postqc";
+$flag_name_coll {$flag_name} = 1;
+$flags_red_th{$flag_name} = 200000;
+$flags_yellow_th{$flag_name} = 250000;
+
+my $meta_name ="nsnps_postqc";
+unless (exists $meta_vars{$meta_name}) {
+    print "Warning this variable is not existing in meta-file: $meta_name\n";
+    $flags_col{$flag_name} = -9;
+    $flag_count{-9}++;
+}
+else {
+    $flags_val{$flag_name} = $meta_vars{$meta_name};
+    if ($flags_val{$flag_name} < $flags_red_th{$flag_name}){
+	$flags_col{$flag_name} = 2;
+	$flag_count{2}++;
+    }
+    elsif ($flags_val{$flag_name} < $flags_yellow_th{$flag_name}){
+	$flags_col{$flag_name} = 1;
+	$flag_count{1}++;
+    }
+    else {
+	$flags_col{$flag_name} = 0;
+	$flag_count{0}++;
+    }
+}
+
+
+
+### NSNPS_POSTQC per platform
+
+$flag_name = "02) nsnps_postqc_per_platform($platform)";
+$flag_name_coll {$flag_name} = 1;
+
+$flags_val{$flag_name} = $meta_vars{"nsnps_postqc"};
+$flags_yellow_th{$flag_name} = "($platf_low{$platform}/$platf_high{$platform})";
+$flags_red_th{$flag_name} = "($platf_low_4sd{$platform}/$platf_high_4sd{$platform})";
+
+
+
+unless (exists $platf_low{$platform}) {
+    print "Warning: Unknown platform: $platform\n";
+    $flags_col{$flag_name} = -9;
+    $flags_red_th{$flag_name} = "NA";
+    $flags_yellow_th{$flag_name} = "NA";
+    $flag_count{-9}++;
+}
+else {
+
+    if ($flags_val{$flag_name} < $platf_low_4sd{$platform} || $flags_val{$flag_name} > $platf_high_4sd{$platform}){
+	$flags_col{$flag_name} = 2;
+	$flag_count{2}++;
+    }
+    elsif ($flags_val{$flag_name} < $platf_low{$platform} || $flags_val{$flag_name} > $platf_high{$platform}){
+	$flags_col{$flag_name} = 1;
+	$flag_count{1}++;
+    }
+    else {
+	$flags_col{$flag_name} = 0;
+	$flag_count{0}++;
+    }
+}
+
+if (1) {
+
+    #print "Flag for $flag_name: ".  $flags_col{$flag_name}."\n";
+    #exit;
+
+    ### NCASES_POSTQC
+
+    $flag_name = "03) ncases_postqc";
+    $flag_name_coll {$flag_name} = 1;
+    $flags_red_th{$flag_name} = 50;
+    $flags_yellow_th{$flag_name} = 100;
+    #$flags_val{$flag_name} = $cc_num_pofi{2};
+    my $meta_name ="ncases_postqc";
+    unless (exists $meta_vars{$meta_name}) {
+	print "Warning this variable is not existing in meta-file: $meta_name\n";
+	$flags_col{$flag_name} = -9;
+	$flag_count{-9}++;
+    }
+    else {
+	$flags_val{$flag_name} = $meta_vars{$meta_name};
+	if ($flags_val{$flag_name} < $flags_red_th{$flag_name}){
+	    $flags_col{$flag_name} = 2;
+	    $flag_count{2}++;
+	}
+	elsif ($flags_val{$flag_name} < $flags_yellow_th{$flag_name}){
+	    $flags_col{$flag_name} = 1;
+	    $flag_count{1}++;
+	}
+	else {
+	    $flags_col{$flag_name} = 0;
+	    $flag_count{0}++;
+	}
+    }
+
+    ### NCONTROLS_POSTQC
+
+    $flag_name = "04) ncontrols_postqc";
+    $flag_name_coll {$flag_name} = 1;
+    $flags_red_th{$flag_name} = 50;
+    $flags_yellow_th{$flag_name} = 100;
+    #$flags_val{$flag_name} = $cc_num_pofi{1};
+    my $meta_name ="ncontrols_postqc";
+    unless (exists $meta_vars{$meta_name}) {
+	print "Warning this variable is not existing in meta-file: $meta_name\n";
+	$flags_col{$flag_name} = -9;
+	$flag_count{-9}++;
+    }
+    else {
+	$flags_val{$flag_name} = $meta_vars{$meta_name};
+	if ($flags_val{$flag_name} < $flags_red_th{$flag_name}){
+	    $flags_col{$flag_name} = 2;
+	    $flag_count{2}++;
+	}
+	elsif ($flags_val{$flag_name} < $flags_yellow_th{$flag_name}){
+	    $flags_col{$flag_name} = 1;
+	    $flag_count{1}++;
+	}
+	else {
+	    $flags_col{$flag_name} = 0;
+	    $flag_count{0}++;
+	}
+    }
+
+
+    ### CASE/CONTROL ratio POSTQC
+
+    $flag_name = "05) case_control_ratio_postqc";
+    $flag_name_coll {$flag_name} = 1;
+    $flags_yellow_th{$flag_name} = "(0.25/4)";
+    $flags_red_th{$flag_name} = "(0.167/6)";
+
+    my $meta_name1 ="ncontrols_postqc";
+    my $meta_name2 ="ncases_postqc";
+    unless (exists $meta_vars{$meta_name1} && exists $meta_vars{$meta_name2}) {
+	print "Warning this variable is not existing in meta-file: $meta_name1, $meta_name2\n";
+	$flags_col{$flag_name} = -9;
+	$flag_count{-9}++;
+    }
+    else {
+	unless ($meta_vars{"ncontrols_postqc"} == 0) {
+	    $flags_val{$flag_name} = $meta_vars{"ncases_postqc"} / $meta_vars{"ncontrols_postqc"};
+	}
+	else {
+	    $flags_val{$flag_name} = 99999;
+	}
+	if ($flags_val{$flag_name} < 0.167 || $flags_val{$flag_name} > 6){
+	    $flags_col{$flag_name} = 2;
+	    $flag_count{2}++;
+	}
+	elsif ($flags_val{$flag_name} < 0.25 || $flags_val{$flag_name} > 4){
+	    $flags_col{$flag_name} = 1;
+	    $flag_count{1}++;
+	}
+	else {
+	    $flags_col{$flag_name} = 0;
+	    $flag_count{0}++;
+	}
+    }
+
+
+
+
+    
+    ### PROPORTION individuals lost
+
+    $flag_name = "06) nids_lost_ratio";
+    $flag_name_coll {$flag_name} = 1;
+    $flags_red_th{$flag_name} = 0.1;   #changed to 1 and 10% on july23rd
+    $flags_yellow_th{$flag_name} = 0.01;
+    #my $preqc_n = $cc_num{2} + $cc_num{1};
+    #my $postqc_n = $cc_num_pofi{2} + $cc_num_pofi{1};
+    #$flags_val{$flag_name} = ($preqc_n - $postqc_n) / $preqc_n;
+    my $meta_name = "nids_lost_ratio";
+    unless (exists $meta_vars{$meta_name}) {
+	print "Warning this variable is not existing in meta-file: $meta_name\n";
+	$flags_col{$flag_name} = -9;
+	$flag_count{-9}++;
+    }
+    else {
+	$flags_val{$flag_name} = $meta_vars{$meta_name};
+	if ($flags_val{$flag_name} > $flags_red_th{$flag_name}){
+	    $flags_col{$flag_name} = 2;
+	    $flag_count{2}++;
+	}
+	elsif ($flags_val{$flag_name} > $flags_yellow_th{$flag_name}){
+	    $flags_col{$flag_name} = 1;
+	    $flag_count{1}++;
+	}
+	else {
+	    $flags_col{$flag_name} = 0;
+	    $flag_count{0}++;
+	}
+    }
+
+    ### N individuals without phenotype after QC
+
+    $flag_name = "07) n_nopt_postqc";
+    $flag_name_coll {$flag_name} = 1;
+    $flags_red_th{$flag_name} = 10;
+    $flags_yellow_th{$flag_name} = 0;
+    #$flags_val{$flag_name} = $cc_num_pofi{-9};
+    my $meta_name ="nnopt_postqc";
+    unless (exists $meta_vars{$meta_name}) {
+	print "Warning this variable is not existing in meta-file: $meta_name\n";
+	$flags_col{$flag_name} = -9;
+	$flag_count{-9}++;
+    }
+    else {
+	$flags_val{$flag_name} = $meta_vars{$meta_name};
+	if ($flags_val{$flag_name} > $flags_red_th{$flag_name}){
+	    $flags_col{$flag_name} = 2;
+	    $flag_count{2}++;
+	}
+	elsif ($flags_val{$flag_name} > $flags_yellow_th{$flag_name}){
+	    $flags_col{$flag_name} = 1;
+	    $flag_count{1}++;
+	}
+	else {
+	    $flags_col{$flag_name} = 0;
+	    $flag_count{0}++;
+	}
+    }
+
+    ### PROPORTION individuals with sex check warnings
+
+    
+    $flag_name = "08) nids_sexcheck_ratio";
+    $flag_name_coll {$flag_name} = 1;
+    $flags_red_th{$flag_name} = 0.025;
+    $flags_yellow_th{$flag_name} = 0.005;
+    #$flags_val{$flag_name} = $chex_idfi_warni / $preqc_n; ## $preqc_n calculated above in section ration of IDs lost
+    my $meta_name ="nids_sexcheck_ratio";
+    unless (exists $meta_vars{$meta_name}) {
+	print "Warning this variable is not existing in meta-file: $meta_name\n";
+	$flags_col{$flag_name} = -9;
+	$flag_count{-9}++;
+    }
+    else {
+	$flags_val{$flag_name} = $meta_vars{$meta_name};
+	if ($flags_val{$flag_name} > $flags_red_th{$flag_name}){
+	    $flags_col{$flag_name} = 2;
+	    $flag_count{2}++;
+	}
+	elsif ($flags_val{$flag_name} > $flags_yellow_th{$flag_name}){
+	    $flags_col{$flag_name} = 1;
+	    $flag_count{1}++;
+	}
+	else {
+	    $flags_col{$flag_name} = 0;
+	    $flag_count{0}++;
+	}
+    }
+
+    ### LAMBDA_POSTQC
+
+    $flag_name = "09) lambda_postqc";
+    $flag_name_coll {$flag_name} = 1;
+    $flags_red_th{$flag_name} = 1.2;
+    $flags_yellow_th{$flag_name} = 1.1;
+    #$flags_val{$flag_name} = $lambda_pofi;
+    my $meta_name ="lambda_postqc";
+    unless (exists $meta_vars{$meta_name}) {
+	print "Warning this variable is not existing in meta-file: $meta_name\n";
+	$flags_col{$flag_name} = -9;
+	$flag_count{-9}++;
+    }
+    else {
+	$flags_val{$flag_name} = $meta_vars{$meta_name};
+	if ($flags_val{$flag_name} > $flags_red_th{$flag_name}){
+	    $flags_col{$flag_name} = 2;
+	    $flag_count{2}++;
+	}
+	elsif ($flags_val{$flag_name} > $flags_yellow_th{$flag_name}){
+	    $flags_col{$flag_name} = 1;
+	    $flag_count{1}++;
+	}
+	else {
+	    $flags_col{$flag_name} = 0;
+	    $flag_count{0}++;
+	}
+    }
+
+    ### Number of genome wide significant SNPs (autosomal)
+
+    $flag_name = "10) nsnps_gws";
+    $flag_name_coll {$flag_name} = 1;
+    $flags_red_th{$flag_name} = 1;
+    $flags_yellow_th{$flag_name} = 0;
+    #$flags_val{$flag_name} = $n_prekno_autos;
+    my $meta_name ="nsnpex_prekno_autosomes";
+    unless (exists $meta_vars{$meta_name}) {
+	print "Warning this variable is not existing in meta-file: $meta_name\n";
+	$flags_col{$flag_name} = -9;
+	$flag_count{-9}++;
+    }
+    else {
+	$flags_val{$flag_name} = $meta_vars{$meta_name};
+	if ($flags_val{$flag_name} > $flags_red_th{$flag_name}){
+	    $flags_col{$flag_name} = 2;
+	    $flag_count{2}++;
+	}
+	elsif ($flags_val{$flag_name} > $flags_yellow_th{$flag_name}){
+	    $flags_col{$flag_name} = 1;
+	    $flag_count{1}++;
+	}
+	else {
+	    $flags_col{$flag_name} = 0;
+	    $flag_count{0}++;
+	}
+    }
+}
+
+
+### write flag file
+
+my $flagsfile = "$meta_file.flags";
+my $flags_txt;
+
+#$flags_txt .= "Flagnumber\tFlagname\tvalue\tyellow\tred\tflag-number\tflag-color\n";
+
+##header
+$flags_txt .= sprintf "%-35s","N) Flagname";
+$flags_txt .= sprintf "%8s","value";
+$flags_txt .= sprintf "%17s","yellow-th";
+$flags_txt .= sprintf "%17s","red-th";
+$flags_txt .= sprintf "%7s","flag";
+$flags_txt .= sprintf "%8s","color";
+$flags_txt .= "\n";
+
+foreach my $fn (sort keys %flag_name_coll) {
+
+
+    my $tmp_value = $flags_val{$fn};
+    #print $flags_val{$fn}."\n";
+
+
+    #$flags_txt .= $fn;
+
+
+    $flags_txt .= sprintf "%-35s",$fn;
+
+    
+#    print "\t".$flags_val{$fn};
+#    print "orig: ".$flags_val{$fn}."\n";
+
+
+    unless (exists $flags_val{$fn}) {
+	$flags_val{$fn} = "NA";
+	$flags_txt .= sprintf "%8s",$flags_val{$fn};
+    }
+    elsif ($flags_val{$fn} < 100) {
+	$flags_txt .= sprintf "%8.4g",$flags_val{$fn};
+#	printf "%.4f\n",$flags_val{$fn};
+
+    }
+    else {#
+	$flags_txt .= sprintf "%8s",$flags_val{$fn};
+#	$flags_txt .= "\t$flags_val{$fn}";
+    }
+    
+    $flags_txt .= sprintf "%17s",$flags_yellow_th{$fn};
+    $flags_txt .= sprintf "%17s",$flags_red_th{$fn};
+    $flags_txt .= sprintf "%7s",$flags_col{$fn};
+    $flags_txt .= sprintf "%8s",$color_name{$flags_col{$fn}};
+    $flags_txt .= "\n";
+}
+
+die $!."($meta_file.flags)" unless open FLAGS, "> $flagsfile";
+print FLAGS $flags_txt;
+close FLAGS;
+
+
+
+
+
+### write summary file
+
+
+my $flagssumfile = "$meta_file.flags_summary";
+die $!."($meta_file.flags)" unless open SUM, "> $flagssumfile";
+
+print SUM "\n";
+print SUM "single flags (also separately in: ".$flagsfile."):\n";
+print SUM "--------------------------\n";
+
+print SUM $flags_txt;
+
+
+print SUM "\n\nDistribution of flags:\n";
+print SUM "--------------------------\n";
+
+print SUM $flag_count{0}." green; ";
+print SUM $flag_count{1}." yellow; ";
+print SUM $flag_count{2}." red; ";
+print SUM $flag_count{-9}." blue (unknown)\n";
+
+print SUM "\n \nAuto - Conclusion: \n";
+print SUM "--------------------------\n";
+
+my $summary_txt = '
+CONCLUSIONTXT
+
+ 
+General Comments:
+------------------
+
+ these QC flags are meant as guidelines, for more details have a look here
+  http://bit.ly/2ZfBNJj
+ 
+  Distributions and thresholds based on QC files from DISTVERSION
+';
+
+my $all_green_txt = '
+ Only green flags are shown, this dataset is most likely ready to go for imputation / meta analysis
+';
+
+my $some_yellow_txt = '
+ Some of flags are yellow / unknown. please review flags in combination with the detailed QC report
+ and dicuss with experienced colleagues and try to turn theem green.
+ under certain circumstances (e.g. no improvevement is to be expected), this cohort might still 
+ be valid for imputation / meta analysis.
+';
+
+my $some_red_txt = ' Some flags are red. These should be addressed since imputation / meta-analysis is likely to be affected';
+
+
+
+my $conclusion_txt = $all_green_txt;
+
+$conclusion_txt = $some_yellow_txt if ($flag_count{1} != 0 || $flag_count{-9} != 0);
+
+$conclusion_txt = $some_red_txt if ($flag_count{2} != 0);
+
+$summary_txt =~ s/DISTVERSION/$dist_version/;
+$summary_txt =~ s/CONCLUSIONTXT/$conclusion_txt/;
+#$summary_txt =~ s/FLAGFILE/$flagsfile/g;
+#print "flagsfile: $flagsfile\n";
+
+print SUM "$summary_txt\n";
+
+
+close SUM;
+
+
+if ($debug) {
+    print "--------------------------------------------\n";
+    print "susccess: please have a look at these files:\n";
+    print "$flagssumfile\n";
+    print "$flagsfile\n";
+}

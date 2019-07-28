@@ -202,7 +202,7 @@ my $prop_ana=1;
 my $qq_sm=1;
 my $combine_sm=1;
 my $checkfaf=1;
-my $lambda_matrix=1;
+my $lambda_hunting=1;
 my $top_plot=1;
 my $gwa_plot=1;
 my $hist_id_plot=1;
@@ -211,21 +211,23 @@ my $fmatr_plot=1;
 my $tex_sum=1;
 my $subgroups=1;
 my $noqc1b=1;
+my $lambda_matrix=1;
 
 if (0){
 
-    $prop_ana=0;
+    $prop_ana=1;  ## keep this on to get valid meta files
     $qq_sm=0;
-    $combine_sm=1;
+    $combine_sm=0;
     $checkfaf=0;
-    $lambda_matrix=1;
+    $lambda_hunting=0;
+    $lambda_matrix=0;
     $top_plot=0;
     $gwa_plot=0;
     $hist_id_plot=0;
     $hist_snp_plot=0;
     $tex_sum=1;
     $subgroups=0;
-    $noc = 1;
+    $noc = 0;
 
 }
 
@@ -3256,105 +3258,107 @@ if ($lambda_matrix){
     ###    Lambda Matrix
     ###############################
 unless ($noassoc) {
-print "doing lambd-hunting....\n" if ($debug);
 
-#    $minsize =10 unless ($lisa);   LA2cd_wtc_eur-qc_lama-page1.pdf
-my $best_val = 4;
+    if ($lambda_hunting) {
+	print "doing lambda-hunting....\n" if ($debug);
 
-#### missing
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 12,10 --pcol 8 --minsi $minsize --out LA1$outprefix combined_set_alt.txt";
-#print "$systemstr\n";
-#sleep(5);
-&mysystem($systemstr) unless (-e "LA1$outprefix"."_lama-page1.pdf");
+	#    $minsize =10 unless ($lisa);   LA2cd_wtc_eur-qc_lama-page1.pdf
+	my $best_val = 4;
 
-
-##### MAF
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 11,15 --pcol 8 --minsi $minsize --out LA2$outprefix combined_set_alt.txt";
-#    print "$systemstr\n";
-#    exit;
-&mysystem($systemstr) unless (-e "LA2$outprefix"."_lama-page1.pdf");
+	#### missing
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 12,10 --pcol 8 --minsi $minsize --out LA1$outprefix combined_set_alt.txt";
+	#print "$systemstr\n";
+	#sleep(5);
+	&mysystem($systemstr) unless (-e "LA1$outprefix"."_lama-page1.pdf");
 
 
-#### MAF with <.05
-my $mn;
-unless (-e "combined_set_alt.txt.maf_restr.n" && "combined_set_alt.txt.maf_restr") {
-    print "rewrite MAF\n" if ($debug);
-    die $! unless open IN , "< combined_set_alt.txt";
-    die $! unless open OUT , "> combined_set_alt.txt.maf_restr.tmp";
-    my $head = <FAMI>;
-    print OUT $head;
-    while (<IN>){#
-	chomp;
-	my @cells = @{&split_line_ref(\$_)};
-#	    my @cells = &split_line($_);
-	if ($cells[10] < .05) {
-	    print OUT "@cells\n";
-	    $mn++;
+	##### MAF
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 11,15 --pcol 8 --minsi $minsize --out LA2$outprefix combined_set_alt.txt";
+	#    print "$systemstr\n";
+	#    exit;
+	&mysystem($systemstr) unless (-e "LA2$outprefix"."_lama-page1.pdf");
+
+
+	#### MAF with <.05
+	my $mn;
+	unless (-e "combined_set_alt.txt.maf_restr.n" && "combined_set_alt.txt.maf_restr") {
+	    print "rewrite MAF\n" if ($debug);
+	    die $! unless open IN , "< combined_set_alt.txt";
+	    die $! unless open OUT , "> combined_set_alt.txt.maf_restr.tmp";
+	    my $head = <FAMI>;
+	    print OUT $head;
+	    while (<IN>){#
+		chomp;
+		my @cells = @{&split_line_ref(\$_)};
+		#	    my @cells = &split_line($_);
+		if ($cells[10] < .05) {
+		    print OUT "@cells\n";
+		    $mn++;
+		}
+	    }
+	    close IN;
+	    close OUT;
+	    die $! unless open OUT , "> combined_set_alt.txt.maf_restr.n";
+	    print OUT "$mn";
+	    close OUT;
+	    &mysystem("mv combined_set_alt.txt.maf_restr.tmp combined_set_alt.txt.maf_restr");
 	}
+
+	open INFILE, "combined_set_alt.txt.maf_restr.n" or die "(combined_set_alt.txt.maf_restr.n) $!";
+	my $mn = <INFILE>;
+	chomp($mn);
+	$mn=$mn*1;
+	close (INFILE);
+
+	#print "debug: $mn\n";
+	#exit;
+
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 11,15 --pcol 8 --minsi $minsize --out LA2b$outprefix combined_set_alt.txt.maf_restr";
+	#    print "$systemstr\n";
+	#    exit;
+	if ($mn > 50) {
+	    &mysystem($systemstr) unless (-e "LA2b$outprefix"."_lama-page1.pdf");
+	}
+	else {
+	    &mysystem("cp LA2$outprefix"."_lama-page1.pdf LA2b$outprefix"."_lama-page1.pdf");
+	}
+
+
+
+	my $midi_col = 15;
+	$midi_col = 20 if ($tdt);   # no midi, we want mendelerrors.
+
+	###MIDI
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 $midi_col,11 --pcol 8 --minsi $minsize --out LA3$outprefix combined_set_alt.txt";
+	&mysystem($systemstr) unless (-e "LA3$outprefix"."_lama-page1.pdf");
+
+	### chr
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 2,1 --pcol 8 --minsi $minsize --out LA4$outprefix combined_set_alt.txt";
+	&mysystem($systemstr) unless (-e "LA4$outprefix"."_lama-page1.pdf");
+
+	## HWE_con
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 18,11 --pcol 8 --minsi $minsize --out LA5$outprefix combined_set_alt.txt";
+	&mysystem($systemstr) unless (-e "LA5$outprefix"."_lama-page1.pdf");
+
+	## HWE_cas
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 17,11 --pcol 8 --minsi $minsize --out LA6$outprefix combined_set_alt.txt";
+	&mysystem($systemstr) unless (-e "LA6$outprefix"."_lama-page1.pdf");
+
+	## MISS_cas
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 13,11 --pcol 8 --minsi $minsize --out LA9$outprefix combined_set_alt.txt";
+	&mysystem($systemstr) unless (-e "LA9$outprefix"."_lama-page1.pdf");
+
+	## MISS_con
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 14,11 --pcol 8 --minsi $minsize --out LA10$outprefix combined_set_alt.txt";
+	&mysystem($systemstr) unless (-e "LA10$outprefix"."_lama-page1.pdf");
+
+	## HWE_all
+	my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 19,11 --pcol 8 --minsi $minsize --out LA12$outprefix combined_set_alt.txt";
+	&mysystem($systemstr) unless (-e "LA12$outprefix"."_lama-page1.pdf");
+
     }
-    close IN;
-    close OUT;
-    die $! unless open OUT , "> combined_set_alt.txt.maf_restr.n";
-    print OUT "$mn";
-    close OUT;
-    &mysystem("mv combined_set_alt.txt.maf_restr.tmp combined_set_alt.txt.maf_restr");
-}
-
-open INFILE, "combined_set_alt.txt.maf_restr.n" or die "(combined_set_alt.txt.maf_restr.n) $!";
-my $mn = <INFILE>;
-chomp($mn);
-$mn=$mn*1;
-close (INFILE);
-
-#print "debug: $mn\n";
-#exit;
-
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 11,15 --pcol 8 --minsi $minsize --out LA2b$outprefix combined_set_alt.txt.maf_restr";
-#    print "$systemstr\n";
-#    exit;
-if ($mn > 50) {
-    &mysystem($systemstr) unless (-e "LA2b$outprefix"."_lama-page1.pdf");
-}
-else {
-    &mysystem("cp LA2$outprefix"."_lama-page1.pdf LA2b$outprefix"."_lama-page1.pdf");
-}
-
-
-
-my $midi_col = 15;
-$midi_col = 20 if ($tdt);   # no midi, we want mendelerrors.
-
-###MIDI
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 $midi_col,11 --pcol 8 --minsi $minsize --out LA3$outprefix combined_set_alt.txt";
-&mysystem($systemstr) unless (-e "LA3$outprefix"."_lama-page1.pdf");
-
-### chr
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 2,1 --pcol 8 --minsi $minsize --out LA4$outprefix combined_set_alt.txt";
-&mysystem($systemstr) unless (-e "LA4$outprefix"."_lama-page1.pdf");
-
-## HWE_con
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 18,11 --pcol 8 --minsi $minsize --out LA5$outprefix combined_set_alt.txt";
-&mysystem($systemstr) unless (-e "LA5$outprefix"."_lama-page1.pdf");
-
-## HWE_cas
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 17,11 --pcol 8 --minsi $minsize --out LA6$outprefix combined_set_alt.txt";
-&mysystem($systemstr) unless (-e "LA6$outprefix"."_lama-page1.pdf");
-
-## MISS_cas
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 13,11 --pcol 8 --minsi $minsize --out LA9$outprefix combined_set_alt.txt";
-&mysystem($systemstr) unless (-e "LA9$outprefix"."_lama-page1.pdf");
-
-## MISS_con
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 14,11 --pcol 8 --minsi $minsize --out LA10$outprefix combined_set_alt.txt";
-&mysystem($systemstr) unless (-e "LA10$outprefix"."_lama-page1.pdf");
-
-## HWE_all
-my $systemstr="lahunt_9 --scol 1 $prepro_txt --best $best_val --c1 19,11 --pcol 8 --minsi $minsize --out LA12$outprefix combined_set_alt.txt";
-&mysystem($systemstr) unless (-e "LA12$outprefix"."_lama-page1.pdf");
 
 }
-
-
 
 
 
@@ -3863,6 +3867,273 @@ close IN;
 
 
 
+
+
+my @meta_str = ();
+push @meta_str, "study\t$prefix\n";
+push @meta_str, "platform\t$platform\n";
+
+push @meta_str, "miss-th\t$mind\n";
+push @meta_str, "fhet-th\t$Fhet_th\n";
+#push @meta_str, "imend-th\t$imend_th\n";
+
+push @meta_str, "lmiss-th\t$geno\n";
+push @meta_str, "midi-th\t$midi_th\n";
+push @meta_str, "hwe-th-co\t$hwe_th\n";
+unless ($noassoc) {
+    push @meta_str, "hwe-th-ca\t$hwe_th_ca\n";
+}
+else {
+    push @meta_str, "hwe-th-ca\tnan\n";
+}
+push @meta_str, "withpna\t$withpna\n";
+
+#push @meta_str, "smend-th\t$mend_th\n";
+
+
+
+
+push @meta_str, "ncases_preqc\t".$cc_num{2}."\n";
+push @meta_str, "ncases_postqc\t$cc_num_pofi{2}\n";
+push @meta_str, "ncontrols_preqc\t".$cc_num{1}."\n";
+push @meta_str, "ncontrols_postqc\t$cc_num_pofi{1}\n";
+push @meta_str, "nnopt_preqc\t".$cc_num{-9}."\n";
+push @meta_str, "nnopt_postqc\t$cc_num_pofi{-9}\n";
+
+
+push @meta_str, "nsnps_preqc\t$n_snps_nofi\n";
+push @meta_str, "nsnps_postqc\t$n_snps_pofi\n";
+
+push @meta_str, "nidex_miss\t$idex_fifi\n";
+push @meta_str, "nidex_miss_cases\t$idex_fifi_ca\n";
+push @meta_str, "nidex_miss_controls\t$idex_fifi_co\n";
+push @meta_str, "nidex_fhet\t$idex_fifi_fhet\n";
+push @meta_str, "nidex_fhet_cases\t$idex_fifi_fhet_ca\n";
+push @meta_str, "nidex_fhet_controls\t$idex_fifi_fhet_co\n";
+
+push @meta_str, "nidex_sexcheck_ex\t$chex_idfi\n";
+push @meta_str, "nidex_sexcheck_warni\t$chex_idfi_warni\n";
+push @meta_str, "nidex_sexcheck_undefined_snp\t$chex_idfi_warni_s\n";
+push @meta_str, "nidex_sexcheck_undefined_ped\t$chex_idfi_warni_p\n";
+
+
+push @meta_str, "nidex_miss_hafi_noex\t$idex_nofi\n";
+
+
+my $snpex = $n_snps_nofi - $n_snps_pofi;
+
+
+
+
+
+
+
+
+
+
+unless ($noassoc) {
+push @meta_str, "nsnpex_miss\t$snpex_fifi\n";
+push @meta_str, "nsnpex_hwe-co\t$snpex_sefi_hwe\n";
+push @meta_str, "nsnpex_hwe-ca\t$snpex_sefi_hwe_ca\n";
+push @meta_str, "nsnpex_midi\t$snpex_sefi_midi\n";
+push @meta_str, "nsnpex_mono\t$snpex_sefi_pna\n";
+push @meta_str, "nsnpex_prefilter\t$snpex_nofi\n";
+push @meta_str, "nsnpex_prekno\t$n_prekno\n";
+push @meta_str, "nsnpex_prekno_autosomes\t$n_prekno_autos\n";
+push @meta_str, "nsnpin_prekno\t$n_prekno_in\n";
+
+}
+else {
+push @meta_str, "nsnpex_miss\t$snpex_fifi\n";
+push @meta_str, "nsnpex_hwe-co\t$snpex_sefi_hwe\n";
+push @meta_str, "nsnpex_hwe-ca\tnan\n";
+push @meta_str, "nsnpex_midi\tnan\n";
+push @meta_str, "nsnpex_mono\t$snpex_sefi_pna\n";
+push @meta_str, "nsnpex_prefilter\t$snpex_nofi\n";
+push @meta_str, "nsnpex_prekno\tnan\n";
+push @meta_str, "nsnpex_prekno_autosomes\tnan\n";
+push @meta_str, "nsnpin_prekno\tnan\n";
+}
+
+my $lambda_pofi = 1;
+
+if (1) {
+    
+    unless ($noassoc) {
+	die unless open LA , "< combined_set_alt.txt.qq.la";
+#die "$!: $pofiprefix".".qq.la" unless open LA , "< $pofiprefix".".qq.la";
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	$lambda_pofi = $cells[0];
+	my $lambda1000_pofi = $cells[1];
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $nobs_pofi = $cells[1];
+	close LA;
+
+
+
+	die "$!:" unless open LA , "< $nofiprefix.assoc.qq.la";
+#die "$!: $nofiprefix".".qq.la" unless open LA , "< $nofiprefix".".qq.la";
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $lambda_nofi = $cells[0];
+	my $lambda1000_nofi = $cells[1];
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $nobs_nofi = $cells[1];
+	close LA;
+
+
+	die "$!:" unless open LA , "< $fifiprefix.assoc.qq.la";
+#die "$!: $fifiprefix".".qq.la" unless open LA , "< $nofiprefix".".qq.la";
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $lambda_fifi = $cells[0];
+	my $lambda1000_fifi = $cells[1];
+	my $temp_str = <LA>;
+	my @cells = &split_line ($temp_str);
+	my $nobs_fifi = $cells[1];
+	close LA;
+
+
+	push @meta_str, "lambda_preqc\t$lambda_nofi\n";
+	push @meta_str, "lambda_fifi\t$lambda_fifi\n";
+	push @meta_str, "lambda_postqc\t$lambda_pofi\n";
+
+	push @meta_str, "la1000_preqc:\t$lambda1000_nofi\n";
+	push @meta_str, "la1000_fifi:\t$lambda1000_fifi\n";
+	push @meta_str, "la1000_postqc:\t$lambda1000_pofi\n";
+
+	push @meta_str, "nobs_preqc_maf02:\t$nobs_nofi\n";
+	push @meta_str, "nobs_fifi_maf02:\t$nobs_fifi\n";
+	push @meta_str, "nobs_postqc_maf02:\t$nobs_pofi\n";
+
+
+	die "$!:" unless open P , "< $fifiprefix.imiss.tmp.pcaco";
+	$temp_str = <P>;
+	chomp($temp_str);
+	my $pcaco_fifi = $temp_str;
+	close P;
+
+	die "$!:" unless open P , "< $nofiprefix.imiss.tmp.pcaco";
+	$temp_str = <P>;
+	chomp($temp_str);
+	my $pcaco_nofi = $temp_str;
+	close P;
+
+	die "$!:" unless open P , "< $pofiprefix.imiss.tmp.pcaco";
+	$temp_str = <P>;
+	chomp($temp_str);
+	my $pcaco_pofi = $temp_str;
+	close P;
+
+
+
+	push @meta_str, "p_imiss_caco_preqc\t$pcaco_nofi\n";
+	push @meta_str, "p_imiss_caco_fifi\t$pcaco_fifi\n";
+	push @meta_str, "p_imiss_caco_postqc\t$pcaco_pofi\n";
+   }
+else {
+
+	push @meta_str, "lambda_preqc\tnan\n";
+	push @meta_str, "lambda_fifi\tnan\n";
+	push @meta_str, "lambda_postqc\tnan\n";
+
+	push @meta_str, "la1000_preqc:\tnan\n";
+	push @meta_str, "la1000_fifi:\tnan\n";
+	push @meta_str, "la1000_postqc:\tnan\n";
+
+	push @meta_str, "nobs_preqc_maf02:\tnan\n";
+	push @meta_str, "nobs_fifi_maf02:\tnan\n";
+	push @meta_str, "nobs_postqc_maf02:\tnan\n";
+
+	push @meta_str, "p_imiss_caco_preqc\tnan\n";
+	push @meta_str, "p_imiss_caco_fifi\tnan\n";
+	push @meta_str, "p_imiss_caco_postqc\tnan\n";
+
+
+}
+}
+
+my $ngenotypes = ($cc_num_pofi{2} + $cc_num_pofi{1}) * $n_snps_pofi;
+push @meta_str, "ngenotypes_postqc\t$ngenotypes\n";
+
+
+
+
+&a2file("$pofiprefix.meta", @meta_str);
+
+&mysystem ("meta2flags --meta $pofiprefix.meta\n");
+
+
+my $flags_txt ;
+my $flags_table ;
+die $! unless open FLAGS, "< $pofiprefix.meta.flags_summary";
+
+while (my $line = <FLAGS>){
+    if ($line =~ /^[0-9]*\)/) {
+	my @cells = @{&split_line_ref(\$line)};
+	# 	print "table : $line";
+	my $table_row = $cells[0];
+	$table_row .= " & ".$cells[1];
+	$table_row .= " & ".$cells[2];
+	$table_row .= " & ".$cells[3];
+	$table_row .= " & ".$cells[4];
+	$table_row .= " & ".$cells[5];
+	if ($cells[6] eq "green" ) {
+	    $table_row .= " & ".'\colorbox{green}{'.$cells[6].'}';
+	}
+	elsif ($cells[6] eq "red" ) {
+	    $table_row .= " & ".'\colorbox{red}{'.$cells[6].'}';
+	}
+	elsif ($cells[6] eq "yellow" ) {
+	    $table_row .= " & ".'\colorbox{orange}{'.$cells[6].'}';
+	}
+	elsif ($cells[6] eq "blue" ) {
+	    $table_row .= " & ".'\colorbox{cyan}{'.$cells[6].'}';
+	}
+	else {
+	    $table_row .= " & ".$cells[6];
+	}
+	
+	$table_row .= "\\\\\n";
+	$table_row =~ s/_/-/g;
+	$flags_table .= $table_row;
+
+#	print "table : $table_row\n";
+	# Cases,Controls,Missing & 294,573,0 & 294,573,0 & 0,0,0\\
+    }
+    else {
+	chomp ($line);
+	unless ($line =~ /^single/ || $line =~ /Flagname/ || $line eq "" ){
+#	    unless ($line =~ /^single/ || $line =~ /Flagname/ || $line =~ /-------/ || $line eq "" ){
+	    $line =~ s/_/-/g;
+
+	    $flags_txt .= $line.'\\\\'."\n";
+	}
+    }
+	
+}
+close FLAGS;
+
+#exit;
+#print $flags_txt."\n";
+
+
+### name of output files
+
+my $long_prefix= "qc2_".$prefix;
+my $long_prefix= $outprefix;
+
+
+&mysystem ("cp $pofiprefix.meta.flags_summary ../$long_prefix.flags_summary");
+
+
+
+
+
+
 #################################################################
 #################################################################
 ##            produce latex-pdf      ############################
@@ -3870,8 +4141,7 @@ close IN;
 #################################################################
 
 #my $long_prefix= "qc2report_".$prefix."_".$mind."_".$geno."_".$midi_th;
-my $long_prefix= "qc2_".$prefix;
-my $long_prefix= $outprefix;
+
 
     print  "-> create TEX-File (look fo success)\n" if ($debug);
 if ($tex_sum){
@@ -3901,7 +4171,7 @@ if ($tex_sum){
 \usepackage[landscape]{geometry}
 \usepackage{fancyhdr}
 \pagestyle{fancy}
-
+\usepackage[dvipsnames]{xcolor}
 \fancyhead{}
 \fancyhead[CO,CE]{PREFIXFORTEX}
 
@@ -3921,6 +4191,7 @@ if ($tex_sum){
 \\\\ This script is still
 under construction, so please be patient with formatting problems. If you have some ideas, questions, requests, feel free to write me. \\\\
 \\\\Stephan Ripke, MGH, Boston; sripke (at) broadinstitute org
+
 }
 \end{abstract}
 \tableofcontents
@@ -3940,6 +4211,27 @@ under construction, so please be patient with formatting problems. If you have s
 %\hline
 %\end{tabular}
 %\end{center}
+
+
+
+%%%%%%%%%%%%% FLAGS
+
+
+\newpage
+\section{Flags}
+%\thispagestyle{plain}
+.
+\begin{center}
+\begin{tabular}{l|l|r|r|r|r|r}
+\textbf{Nr.} & \textbf{Flagname} & \textbf{value} & \textbf{yellow-th} & \textbf{red-th} & \textbf{flag} & \textbf{color}\\\\
+\hline
+FLAGSTABLE
+\end{tabular}
+\end{center}
+FLAGSTXT
+
+
+
 
 \newpage
 
@@ -4278,6 +4570,30 @@ sub repwifile(){
     $latex_templ=~ s/$repstr/$newstr/;
 }
 
+    
+sub repwifile_newline(){
+
+
+    my ($repstr, $file, $verb)=@_;
+    die "$file: ".$! unless open FILE, "< $file";
+    my $newstr;
+    my $header=<FILE> if $verb == 2;
+    while (<FILE>){
+	my $tempstr = $_;
+	$tempstr =~ s/</\\verb+<+/g if ($verb==1);
+	$tempstr =~ s/>/\\verb+>+/g if ($verb==1);
+	$tempstr =~ s/%/\\verb+%+/g if ($verb==1);
+	$tempstr =~ s/$/\\\\/ if ($verb==2);
+	$tempstr =~ s/\t/\&/g if ($verb==2);
+	$tempstr =~ s/_/-/g;
+	chomp ($tempstr); ## this here is the difference
+	$newstr .= '\\\\'.$tempstr.'\\\\'."\n";  ## this here is the difference
+    }
+    close FILE;
+    $latex_templ=~ s/$repstr/$newstr/;
+}
+
+    
 my $mend_txt = "";
 
 if ($tdt) {
@@ -4327,8 +4643,11 @@ if ($tdt) {
 
 &repwifile("FAMCOUNT",$prefix.".famcount",1) if ($tdt);
 #&repwifile("MEINSKUOSTR",$outprefix."_asso_info.txt",0);
-&repwifile("GENERALINFO",$outprefix."_nofi_info.txt",1); 
-&repwifile("FIFINFO",$outprefix."_fifi_info.txt",1);
+    &repwifile("GENERALINFO",$outprefix."_nofi_info.txt",1);
+
+#    &repwifile_newline("FLAGSTXT","$pofiprefix.meta.flags_summary",1); 
+
+    &repwifile("FIFINFO",$outprefix."_fifi_info.txt",1);
 #&repwifile("SEFINFO",$outprefix."_sefi_info.txt",1);
 #&repwifile("CHINFO",$prefix.".bim.chinfo",2);
 
@@ -4348,6 +4667,8 @@ if ($tdt) {
     $substr=~ s/NSUBSNPEXCL/$n_subsnp_excl/;
     
     $latex_templ=~ s/SUBGROUPHEADER/$substr/;
+    $latex_templ=~ s/FLAGSTABLE/$flags_table/;
+    $latex_templ=~ s/FLAGSTXT/$flags_txt/;
     
     &a2file ("$reportprefix.tex",$latex_templ);
     
@@ -4380,191 +4701,21 @@ print "name of report:\nsd $long_prefix.pdf\n" if ($debug);
 }
 
 
-my @meta_str = ();
-push @meta_str, "study\t$prefix\n";
-push @meta_str, "platform\t$platform\n";
-
-push @meta_str, "miss-th\t$mind\n";
-push @meta_str, "fhet-th\t$Fhet_th\n";
-#push @meta_str, "imend-th\t$imend_th\n";
-
-push @meta_str, "lmiss-th\t$geno\n";
-push @meta_str, "midi-th\t$midi_th\n";
-push @meta_str, "hwe-th-co\t$hwe_th\n";
-unless ($noassoc) {
-    push @meta_str, "hwe-th-ca\t$hwe_th_ca\n";
-}
-else {
-    push @meta_str, "hwe-th-ca\tnan\n";
-}
-push @meta_str, "withpna\t$withpna\n";
-
-#push @meta_str, "smend-th\t$mend_th\n";
 
 
 
 
-push @meta_str, "ncases_preqc\t".$cc_num{2}."\n";
-push @meta_str, "ncases_postqc\t$cc_num_pofi{2}\n";
-push @meta_str, "ncontrols_preqc\t".$cc_num{1}."\n";
-push @meta_str, "ncontrols_postqc\t$cc_num_pofi{1}\n";
-push @meta_str, "nnopt_preqc\t".$cc_num{-9}."\n";
-push @meta_str, "nnopt_postqc\t$cc_num_pofi{-9}\n";
 
-
-push @meta_str, "nsnps_preqc\t$n_snps_nofi\n";
-push @meta_str, "nsnps_postqc\t$n_snps_pofi\n";
-
-push @meta_str, "nidex_miss\t$idex_fifi\n";
-push @meta_str, "nidex_miss_cases\t$idex_fifi_ca\n";
-push @meta_str, "nidex_miss_controls\t$idex_fifi_co\n";
-push @meta_str, "nidex_fhet\t$idex_fifi_fhet\n";
-push @meta_str, "nidex_fhet_cases\t$idex_fifi_fhet_ca\n";
-push @meta_str, "nidex_fhet_controls\t$idex_fifi_fhet_co\n";
-
-push @meta_str, "nidex_sexcheck_ex\t$chex_idfi\n";
-push @meta_str, "nidex_sexcheck_warni\t$chex_idfi_warni\n";
-push @meta_str, "nidex_sexcheck_undefined_snp\t$chex_idfi_warni_s\n";
-push @meta_str, "nidex_sexcheck_undefined_ped\t$chex_idfi_warni_p\n";
-
-
-push @meta_str, "nidex_miss_hafi_noex\t$idex_nofi\n";
-
-
-my $snpex = $n_snps_nofi - $n_snps_pofi;
-
-
-unless ($noassoc) {
-push @meta_str, "nsnpex_miss\t$snpex_fifi\n";
-push @meta_str, "nsnpex_hwe-co\t$snpex_sefi_hwe\n";
-push @meta_str, "nsnpex_hwe-ca\t$snpex_sefi_hwe_ca\n";
-push @meta_str, "nsnpex_midi\t$snpex_sefi_midi\n";
-push @meta_str, "nsnpex_mono\t$snpex_sefi_pna\n";
-push @meta_str, "nsnpex_prefilter\t$snpex_nofi\n";
-push @meta_str, "nsnpex_prekno\t$n_prekno\n";
-push @meta_str, "nsnpex_prekno_autosomes\t$n_prekno_autos\n";
-push @meta_str, "nsnpin_prekno\t$n_prekno_in\n";
-
-}
-else {
-push @meta_str, "nsnpex_miss\t$snpex_fifi\n";
-push @meta_str, "nsnpex_hwe-co\t$snpex_sefi_hwe\n";
-push @meta_str, "nsnpex_hwe-ca\tnan\n";
-push @meta_str, "nsnpex_midi\tnan\n";
-push @meta_str, "nsnpex_mono\t$snpex_sefi_pna\n";
-push @meta_str, "nsnpex_prefilter\t$snpex_nofi\n";
-push @meta_str, "nsnpex_prekno\tnan\n";
-push @meta_str, "nsnpex_prekno_autosomes\tnan\n";
-push @meta_str, "nsnpin_prekno\tnan\n";
-}
-
-
-if (1) {
-    
-    unless ($noassoc) {
-	die unless open LA , "< combined_set_alt.txt.qq.la";
-#die "$!: $pofiprefix".".qq.la" unless open LA , "< $pofiprefix".".qq.la";
-	my $temp_str = <LA>;
-	my @cells = &split_line ($temp_str);
-	my $lambda_pofi = $cells[0];
-	my $lambda1000_pofi = $cells[1];
-	my $temp_str = <LA>;
-	my @cells = &split_line ($temp_str);
-	my $nobs_pofi = $cells[1];
-	close LA;
-
-
-
-	die "$!:" unless open LA , "< $nofiprefix.assoc.qq.la";
-#die "$!: $nofiprefix".".qq.la" unless open LA , "< $nofiprefix".".qq.la";
-	my $temp_str = <LA>;
-	my @cells = &split_line ($temp_str);
-	my $lambda_nofi = $cells[0];
-	my $lambda1000_nofi = $cells[1];
-	my $temp_str = <LA>;
-	my @cells = &split_line ($temp_str);
-	my $nobs_nofi = $cells[1];
-	close LA;
-
-
-	die "$!:" unless open LA , "< $fifiprefix.assoc.qq.la";
-#die "$!: $fifiprefix".".qq.la" unless open LA , "< $nofiprefix".".qq.la";
-	my $temp_str = <LA>;
-	my @cells = &split_line ($temp_str);
-	my $lambda_fifi = $cells[0];
-	my $lambda1000_fifi = $cells[1];
-	my $temp_str = <LA>;
-	my @cells = &split_line ($temp_str);
-	my $nobs_fifi = $cells[1];
-	close LA;
-
-
-	push @meta_str, "lambda_preqc\t$lambda_nofi\n";
-	push @meta_str, "lambda_fifi\t$lambda_fifi\n";
-	push @meta_str, "lambda_postqc\t$lambda_pofi\n";
-
-	push @meta_str, "la1000_preqc:\t$lambda1000_nofi\n";
-	push @meta_str, "la1000_fifi:\t$lambda1000_fifi\n";
-	push @meta_str, "la1000_postqc:\t$lambda1000_pofi\n";
-
-	push @meta_str, "nobs_preqc_maf02:\t$nobs_nofi\n";
-	push @meta_str, "nobs_fifi_maf02:\t$nobs_fifi\n";
-	push @meta_str, "nobs_postqc_maf02:\t$nobs_pofi\n";
-
-
-	die "$!:" unless open P , "< $fifiprefix.imiss.tmp.pcaco";
-	$temp_str = <P>;
-	chomp($temp_str);
-	my $pcaco_fifi = $temp_str;
-	close P;
-
-	die "$!:" unless open P , "< $nofiprefix.imiss.tmp.pcaco";
-	$temp_str = <P>;
-	chomp($temp_str);
-	my $pcaco_nofi = $temp_str;
-	close P;
-
-	die "$!:" unless open P , "< $pofiprefix.imiss.tmp.pcaco";
-	$temp_str = <P>;
-	chomp($temp_str);
-	my $pcaco_pofi = $temp_str;
-	close P;
-
-
-
-	push @meta_str, "p_imiss_caco_preqc\t$pcaco_nofi\n";
-	push @meta_str, "p_imiss_caco_fifi\t$pcaco_fifi\n";
-	push @meta_str, "p_imiss_caco_postqc\t$pcaco_pofi\n";
-   }
-else {
-
-	push @meta_str, "lambda_preqc\tnan\n";
-	push @meta_str, "lambda_fifi\tnan\n";
-	push @meta_str, "lambda_postqc\tnan\n";
-
-	push @meta_str, "la1000_preqc:\tnan\n";
-	push @meta_str, "la1000_fifi:\tnan\n";
-	push @meta_str, "la1000_postqc:\tnan\n";
-
-	push @meta_str, "nobs_preqc_maf02:\tnan\n";
-	push @meta_str, "nobs_fifi_maf02:\tnan\n";
-	push @meta_str, "nobs_postqc_maf02:\tnan\n";
-
-	push @meta_str, "p_imiss_caco_preqc\tnan\n";
-	push @meta_str, "p_imiss_caco_fifi\tnan\n";
-	push @meta_str, "p_imiss_caco_postqc\tnan\n";
-
-
-}
-}
-
-my $ngenotypes = ($cc_num_pofi{2} + $cc_num_pofi{1}) * $n_snps_pofi;
-push @meta_str, "ngenotypes_postqc\t$ngenotypes\n";
+########################################################################################################################################
+########################################################################################################################################
 
 
 
 
-&a2file("$pofiprefix.meta", @meta_str);
+
+
+
+
 
 
 

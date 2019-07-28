@@ -423,7 +423,7 @@ else {
 	my $R_rido = '
 
 ###########
-#PGC_GPRSincORse.R
+#PGC_GPRS_incORse.R
 #Genomic Profile Risk Score analysis
 #Considering covariates
 #Hong Lee & Naomi Wray December 2013 updated January 2014

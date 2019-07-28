@@ -211,6 +211,7 @@ if ($hwe_th == 0 || $hwe_th_ca == 0) {
 my @test_scripts;
 my $plague_script = "plague_2";        ### my.pipeline_tar
 my $qc_script = "rep_qc2_14";          ### my.pipeline_tar
+my $meta2flags_script = "meta2flags";          ### my.pipeline_tar
 my $tager_script = "id_tager_2";       ### my.pipeline_tar
 my $link_script = "my.linksub";        ### my.pipeline_tar
 my $excel_script = "txt2xls";          ### my.pipeline_tar
@@ -225,6 +226,7 @@ my $mystart_script = "my.start_job";   ### my.pipeline_tar
 
 push @test_scripts,  $plague_script;
 push @test_scripts,  $qc_script;
+push @test_scripts,  $meta2flags_script;
 push @test_scripts,  $tager_script;
 push @test_scripts,  $link_script;
 push @test_scripts,  $excel_script;
@@ -849,7 +851,7 @@ unless (-e $namefile) {
 else {
     die "$!:$namefile" unless open NF, "< $namefile";   
     while (<NF>) {
-	next if ($_ =~ /^###/);
+	next if ($_ =~ /^#/);
 	next if ($_ =~ /^STUDYNAME/);
 	my @cells = &split_line($_);
 	my $qccycle = 1;
