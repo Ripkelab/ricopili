@@ -18,7 +18,6 @@ use File::Path;
 
 my $rloc = &trans("rloc");
 my $sloc = &trans("sloc");
-my $rpac = &trans("rpac");
 #my $r3loc = &trans("r3loc");
 
 
@@ -430,11 +429,6 @@ else {
 #Hong Lee & Naomi Wray December 2013 updated January 2014
 ###########
 ###functions
-
-
-LIBRARY
-
-
 h2l_R2 <- function(k, r2, p) {
   # K baseline disease risk
   # r2 from a linear regression model attributable to genomic profile risk score
@@ -512,7 +506,10 @@ h2l_CS <-  function(k,cs,p) {
 
 
 #main program
-
+library(rms)
+library(pROC)
+#library(MBESS) ## only neede in some testing environment.
+library(MASS)
 
 ### light edits of s.ripke
 
@@ -684,6 +681,22 @@ N10=round(N/10)
 
 
 
+##N101=N10+1
+##rio1=rio[(1:N10),]
+##rio10=rio[(N-N10+1):(N),]
+##rio10v1=rbind(rio1,rio10)
+##rio10v1$d10=0
+##N10v1=length(rio10v1$d10)
+##rio10v1$d10[(N10+1):N10v1]=1
+### !! tstF = glm(PHENO1 ~ D10COV , data = rio10v1,family = binomial(logit)) # logit model
+########< tstF = glm(PHENO1 ~ d10  + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C9 + C15 + C18 , data = rio10v1,family = binomial(logit)) # logit model
+### !! tstR = glm(PHENO1 ~ COVSTR1 , data = rio10v1,family = binomial(logit)) # logit model
+#######< tstR = glm(PHENO1 ~ C1 + C2 + C3 + C4 + C5 + C6 + C7 + C9 + C15 + C18 , data = rio10v1,family = binomial(logit)) # logit model
+
+
+##tst0 = glm(PHENO1 ~ 1 , data = rio10v1,family = binomial(logit)) # logit model
+##tstchk = glm(PHENO1 ~ d10 , data = rio10v1,family = binomial(logit)) # logit model
+
 
  dumv=matrix(0,length(oNSCORE),9) #dummy varaible
  for (zi in 1:9) {
@@ -707,6 +720,8 @@ ORDchkL=exp(tstchk$coefficients[2]-1.96*summary(tstchk)$coefficients[2,2])
 ORDchkH=exp(tstchk$coefficients[2]+1.96*summary(tstchk)$coefficients[2,2])
 
 
+#O=data.frame(FILE,Pd[j],file,N,P,NKv,r2_diff,pval,h2l_r2,h2l_r2n,h2l_auc,h2l_cs,h2l_r2n_wrong,h2l_auc_wrong,aucvS,aucvF,aucvR,aucv,auc_wrong,ORD,ORDL,ORDH,ORDchk,ORDchkL,ORDchkH)
+#write.table(O,"INTEMPL.chk.out.txt",row.names=F,col.names=F,sep=",",append=T)
 
 #output
 #name = name of cohort
@@ -754,12 +769,27 @@ nsp2 = length(sp2)
 d1 <- density(sp1)
 d2 <- density(sp2)
 
+#sp1n = ri$NSCORE[ri$PHENO==1]
+#sp2n = ri$NSCORE[ri$PHENO==2]
+
+#d1n <- density(sp1n)
+#d2n <- density(sp2n)
+
+
+#print (d1)
+#print (d2)
+
 par(mfcol=c(2,1))
 minx = min(sp1,sp2)
 maxx = max(sp1,sp2)
 
 
+#minxn = min(sp1n,sp2n)
+#maxxn = max(sp1n,sp2n)
 
+
+#print (minx)
+#print (maxx)
 
 if (maxx > minx) {
 br=seq(minx,maxx,length.out=31)
@@ -778,9 +808,15 @@ par(new=T)
 plot(d2,col="red",xlim=c(minx,maxx), ylim=c(0,maxy),xlab="",main="")
 
 
+#plot(d1n,xlim=c(minxn,maxxn), main = paste (nsp1,"controls and", nsp2,"cases at p <", Pd[j]))
+#par(new=T)
+#plot(d2n,col="red",xlim=c(minxn,maxxn),xlab="",main="")
 
 
 
+
+#"name" "Pd" "N" "Propcase" "NKr2" "pval" "PopRisk" "h2l_r2n" "se_h2l_r2" "AUC" "OR10decile" "ORL95" "ORH95"
+#"PGC_SCZ49.sh2_mds10_poly_nomgs2_mgs2" "0.00000005" 5120 0.515234375 0.0262591054481514 9.85086885717681e-24 0.01 0.0110338841031824 0.0021442267191595 0.581168950178969 3.03227366098336 2.33434192167739 3.938876078825
 
 }
 }
@@ -795,28 +831,6 @@ dev.off()
 
 
 ';
-
-### LIBRARY
-
-my $library_txt = '
-library(Hmisc)
-library(plyr)
-library(rms)
-library(pROC)
-#library(MBESS) ## only neede in some testing environment.
-library(MASS)
-    ';
-
-
-if ($rpac ne "NA") {
-    my $rpac_txt = ',lib.loc="'.$rpac.'"';
-    $library_txt =~ s/\)/$rpac_txt)/g;
-    $R_rido =~ s/LIBRARY/$library_txt/g ;
-}
-
-
-
-
 
 
 ### create covariate variables:
@@ -945,5 +959,7 @@ if ($tarball) {
 
 
 exit;
+
+
 
 
