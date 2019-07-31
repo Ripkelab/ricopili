@@ -185,6 +185,7 @@ my @created = mkpath(   ## $created ?
     );
 
 
+print "workdir: $workdir\n" if ($debug);
 
 chdir ($workdir);
 
@@ -522,7 +523,8 @@ while (1){
 
 
     last if ( $cells[$pcol-1] > $last_th);
-    next if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0);
+    next if ($cells[$pcol-1] eq "NA" );
+#    next if ($cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0);
     $smallest_p = $cells[$pcol-1] if ($smallest_p_count == 10);
     $smallest_p_count++ ;
 
@@ -1055,7 +1057,7 @@ my $systemGWA="$r_sys < $outdir/R_GWAplot.in_tmp --save --no-restore > $outdir/R
 
 &mysystem ("tar -czf $pdfout.tar.gz $outdir/R_GWAplot.in_tmp $outdir/ticks.txt_tmp $outdir/Best_processed.txt_tmp");
 &mysystem ("cp $pdfout.tar.gz $rootdir");
-&mysystem ("rm -rf  $workdir");
+&mysystem ("rm -rf  $workdir") unless ($debug);
 
 print "$pdfout\n\n" if ($debug);
 
