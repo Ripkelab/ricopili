@@ -768,12 +768,12 @@ if ($mds_name){
 	$mdsin{"$cells[0]\t$cells[1]"} = 1;
 	my $covstr = "";
 	foreach my $cc (@mcols) {
-	    print "$cc\n" if ($debug);
+#	    print "$cc\n" if ($debug);
 	    $covstr .= " ".$cells[$cc+2];
 	}
 	$mdsvals{"$cells[0]\t$cells[1]"} = $covstr;
-	print "$covstr\n" if ($debug);
-	sleep (4) if ($debug);
+#	print "$covstr\n" if ($debug);
+#	sleep (4) if ($debug);
     }
     close FILE;
 }

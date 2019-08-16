@@ -1769,198 +1769,204 @@ if ($polyto_file ne "") {
 #sleep(10);
 
 unless ($sep_pca) {
-unless ($result_name){
-    
-    if ($mds_name ne "NOMDS") {
-	die $!." <$mds_name>" unless open MDSI, "< $mds_name";
-	while (my $line = <MDSI>){
-	    my @cells = &split_line($line);
-	    $mds_ids {"$cells[0]\t$cells[1]"} = 1;
-	}
-	close MDSI;
-
-
-
-	foreach my $bf (@bimfli_files) {
-	    my $bfile = $bf;
-	    $bfile =~ s/.bim$//;
-	    my $famfile_loc = "$bfile.fam";
-
-	    my $bfile_root = $bfile;
-	    $bfile_root =~ s/.hg19.ch.fl$//;
-#	    print "bfile: $bfile\n";
-#	    print "bfile_old: $bfile_old\n";
-
-	    my $found = 0;
-
-#	    print "$bfile\n";
-#	    sleep(1);
-
-	    if (exists $trioset_bimfli{$bf}){
-		push @bimfli_files_tmp, $bf;
-		print "$bf as trio, so not checked for IDs\n" if ($debug);
-		next;
-	    }
-
-#	    exit;
-#	    my $famloc = "$impute_dir/$famfile_loc";
-	    my $famloc = $famfile_loc;
-	    $famloc =~ s/hg19.ch.fl.fam$/fam/;
-	    $famloc =~ s/ch.fl.fam$/fam/;
-	    
-
-	    
-	    die $!." <$famloc>" unless open IN, "< $famloc";
-	    while (my $line = <IN>){
+    unless ($result_name){
+	
+	if ($mds_name ne "NOMDS") {
+	    die $!." <$mds_name>" unless open MDSI, "< $mds_name";
+	    while (my $line = <MDSI>){
 		my @cells = &split_line($line);
-		if (exists $mds_ids{"$cells[0]\t$cells[1]"}) {
+		$mds_ids {"$cells[0]\t$cells[1]"} = 1;
+	    }
+	    close MDSI;
+
+
+
+	    foreach my $bf (@bimfli_files) {
+		my $bfile = $bf;
+		$bfile =~ s/.bim$//;
+		my $famfile_loc = "$bfile.fam";
+
+		my $bfile_root = $bfile;
+		$bfile_root =~ s/.hg19.ch.fl$//;
+		#	    print "bfile: $bfile\n";
+		#	    print "bfile_old: $bfile_old\n";
+
+		my $found = 0;
+
+		#	    print "$bfile\n";
+		#	    sleep(1);
+
+		if (exists $trioset_bimfli{$bf}){
 		    push @bimfli_files_tmp, $bf;
-		    $found = 1;
-		    last;
+		    print "$bf as trio, so not checked for IDs\n" if ($debug);
+		    next;
+		}
+
+		#	    exit;
+		#	    my $famloc = "$impute_dir/$famfile_loc";
+		my $famloc = $famfile_loc;
+		$famloc =~ s/hg19.ch.fl.fam$/fam/;
+		$famloc =~ s/ch.fl.fam$/fam/;
+		
+
+		
+		die $!." <$famloc>" unless open IN, "< $famloc";
+		while (my $line = <IN>){
+		    my @cells = &split_line($line);
+		    if (exists $mds_ids{"$cells[0]\t$cells[1]"}) {
+			push @bimfli_files_tmp, $bf;
+			$found = 1;
+			last;
+		    }
+		}
+		close IN;
+		if ($found == 0) {
+		    print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n" ;
 		}
 	    }
-	    close IN;
-	    if ($found == 0) {
-		print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n" ;
-	    }
+	    
+	    @bimfli_files = @bimfli_files_tmp;
+	    @bimfli_files_tmp = ();
 	}
-	
-	@bimfli_files = @bimfli_files_tmp;
-	@bimfli_files_tmp = ();
-    }
 
-    if ($pheno_file ne "NOPHENO") {
-	die $!." <$pheno_file>" unless open MDSI, "< $pheno_file";
-	while (my $line = <MDSI>){
-	    my @cells = &split_line($line);
-	    my $c0 = $cells[0];
-	    $c0 =~ s/.*\*// if ($strip_pt);
-	    my $c1 = $cells[1];
-#	    print "triio_debug\n";
-#	    exit;
-#	    if ($trio){
-
-#	    }
-	    $pheno_ids {"$c0\t$c1"} = 1;
-
-	    ### this here is strange trio-naming
-	    $c1 =~ s/.ca$//;
-	    $pheno_ids {"$c0\t$c1"} = 1;
-	}
-	close MDSI;
-
-
-	foreach my $bf (@bimfli_files) {
-	    my $bfile = $bf;
-	    $bfile =~ s/.bim$//;
-	    my $famfile_loc = "$bfile.fam";
-	    my $found = 0;
-
-	    if (exists $trioset_bimfli{$bf}){
-		push @bimfli_files_tmp, $bf;
-		print "$bf as trio, so not checked for IDs\n";
-		next;
-	    }
-
-	    my $bfile_root = $bfile;
-	    $bfile_root =~ s/.hg19.ch.fl$//;
-
-
-#	    my $famloc = "$impute_dir/$famfile_loc";
-	    my $famloc = $famfile_loc;
-	    $famloc =~ s/hg19.ch.fl.fam$/fam/;
-	    $famloc =~ s/ch.fl.fam$/fam/;
-
-
-	    die $!." <$famloc>" unless open IN, "< $famloc";
-	    while (my $line = <IN>){
+	if ($pheno_file ne "NOPHENO") {
+	    die $!." <$pheno_file>" unless open MDSI, "< $pheno_file";
+	    while (my $line = <MDSI>){
 		my @cells = &split_line($line);
 		my $c0 = $cells[0];
 		$c0 =~ s/.*\*// if ($strip_pt);
-		if (exists $pheno_ids{"$c0\t$cells[1]"}) {
-		    push @bimfli_files_tmp, $bf;
-		    $found = 1;
-		    last;
+		my $c1 = $cells[1];
+		
+		if (@cells < 3) {
+		    print "Error: ($0,$1) has no phenotype defined in ($pheno_file)\n";
+		    print "There might be even more\n, please make sure, $pheno_file contains only three column entries\n, if you want to drop an individual, please drop the full row\n";
 		}
 
+		#	    print "triio_debug\n";
+		#	    exit;
+		#	    if ($trio){
+
+		#	    }
+		$pheno_ids {"$c0\t$c1"} = 1;
+
+		### this here is strange trio-naming
+		$c1 =~ s/.ca$//;
+		$pheno_ids {"$c0\t$c1"} = 1;
 	    }
-	    close IN;
-	    if ($found == 0) {
-		print "this fam-file without any IDs in analysis (--pheno): ".$bf."\n";
+	    close MDSI;
+
+
+	    foreach my $bf (@bimfli_files) {
+		my $bfile = $bf;
+		$bfile =~ s/.bim$//;
+		my $famfile_loc = "$bfile.fam";
+		my $found = 0;
+
+		if (exists $trioset_bimfli{$bf}){
+		    push @bimfli_files_tmp, $bf;
+		    print "$bf as trio, so not checked for IDs\n";
+		    next;
+		}
+
+		my $bfile_root = $bfile;
+		$bfile_root =~ s/.hg19.ch.fl$//;
+
+
+		#	    my $famloc = "$impute_dir/$famfile_loc";
+		my $famloc = $famfile_loc;
+		$famloc =~ s/hg19.ch.fl.fam$/fam/;
+		$famloc =~ s/ch.fl.fam$/fam/;
+
+
+		die $!." <$famloc>" unless open IN, "< $famloc";
+		while (my $line = <IN>){
+		    my @cells = &split_line($line);
+		    my $c0 = $cells[0];
+		    $c0 =~ s/.*\*// if ($strip_pt);
+		    if (exists $pheno_ids{"$c0\t$cells[1]"}) {
+			push @bimfli_files_tmp, $bf;
+			$found = 1;
+			last;
+		    }
+
+		}
+		close IN;
+		if ($found == 0) {
+		    print "this fam-file without any IDs in analysis (--pheno): ".$bf."\n";
+		}
 	    }
+	    
+	    @bimfli_files = @bimfli_files_tmp;
+	    @bimfli_files_tmp = ();
 	}
-	
-	@bimfli_files = @bimfli_files_tmp;
-	@bimfli_files_tmp = ();
-    }
 
 
-    if ($idin_name) {
-	die $!." <$idin_name>" unless open IDIN, "< $idin_name";
-	while (my $line = <IDIN>){
-	    my @cells = &split_line($line);
-	    my $c0 = $cells[0];
-	    $c0 =~ s/.*\*// if ($strip_pt);
-	    my $c1 = $cells[1];
-#	    print "triio_debug\n";
-#	    exit;
-#	    if ($trio){
-
-#	    }
-	    $idin_ids {"$c0\t$c1"} = 1;
-
-	    ### this here is strange trio-naming
-	    $c1 =~ s/.ca$//;
-	    $idin_ids {"$c0\t$c1"} = 1;
-	}
-	close IDIN;
-
-
-	foreach my $bf (@bimfli_files) {
-	    my $bfile = $bf;
-	    $bfile =~ s/.bim$//;
-	    my $famfile_loc = "$bfile.fam";
-	    my $found = 0;
-
-	    if (exists $trioset_bimfli{$bf}){
-		push @bimfli_files_tmp, $bf;
-		print "$bf as trio, so not checked for IDs\n";
-		next;
-	    }
-
-	    my $bfile_root = $bfile;
-	    $bfile_root =~ s/.hg19.ch.fl$//;
-
-
-#	    my $famloc = "$impute_dir/$famfile_loc";
-	    my $famloc = $famfile_loc;
-	    $famloc =~ s/hg19.ch.fl.fam$/fam/;
-	    $famloc =~ s/ch.fl.fam$/fam/;
-
-
-	    die $!." <$famloc>" unless open IN, "< $famloc";
-	    while (my $line = <IN>){
+	if ($idin_name) {
+	    die $!." <$idin_name>" unless open IDIN, "< $idin_name";
+	    while (my $line = <IDIN>){
 		my @cells = &split_line($line);
 		my $c0 = $cells[0];
 		$c0 =~ s/.*\*// if ($strip_pt);
-		if (exists $idin_ids{"$c0\t$cells[1]"}) {
+		my $c1 = $cells[1];
+		#	    print "triio_debug\n";
+		#	    exit;
+		#	    if ($trio){
+
+		#	    }
+		$idin_ids {"$c0\t$c1"} = 1;
+
+		### this here is strange trio-naming
+		$c1 =~ s/.ca$//;
+		$idin_ids {"$c0\t$c1"} = 1;
+	    }
+	    close IDIN;
+
+
+	    foreach my $bf (@bimfli_files) {
+		my $bfile = $bf;
+		$bfile =~ s/.bim$//;
+		my $famfile_loc = "$bfile.fam";
+		my $found = 0;
+
+		if (exists $trioset_bimfli{$bf}){
 		    push @bimfli_files_tmp, $bf;
-		    $found = 1;
-		    last;
+		    print "$bf as trio, so not checked for IDs\n";
+		    next;
 		}
 
-	    }
-	    close IN;
-	    if ($found == 0) {
-		print "this fam-file without any IDs in analysis (--idin): ".$bf."\n";
-	    }
-	}
-	
-	@bimfli_files = @bimfli_files_tmp;
-	@bimfli_files_tmp = ();
-    }
+		my $bfile_root = $bfile;
+		$bfile_root =~ s/.hg19.ch.fl$//;
 
-}
+
+		#	    my $famloc = "$impute_dir/$famfile_loc";
+		my $famloc = $famfile_loc;
+		$famloc =~ s/hg19.ch.fl.fam$/fam/;
+		$famloc =~ s/ch.fl.fam$/fam/;
+
+
+		die $!." <$famloc>" unless open IN, "< $famloc";
+		while (my $line = <IN>){
+		    my @cells = &split_line($line);
+		    my $c0 = $cells[0];
+		    $c0 =~ s/.*\*// if ($strip_pt);
+		    if (exists $idin_ids{"$c0\t$cells[1]"}) {
+			push @bimfli_files_tmp, $bf;
+			$found = 1;
+			last;
+		    }
+
+		}
+		close IN;
+		if ($found == 0) {
+		    print "this fam-file without any IDs in analysis (--idin): ".$bf."\n";
+		}
+	    }
+	    
+	    @bimfli_files = @bimfli_files_tmp;
+	    @bimfli_files_tmp = ();
+	}
+
+    }
 }
 #exit;
 

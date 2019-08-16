@@ -34,6 +34,8 @@ my $outname = "test";
 my $job_bn_th = 1000;
 my $sepa = 1;
 my $serial = 0;
+my $debug = 0;
+
 
 
 if ($bcmd eq "SERIAL") {
@@ -63,7 +65,7 @@ GetOptions(
     "serial"=> \my $serial_sw,
     "sepa=i"=> \$sepa,
     "noldsc"=> \my $noldsc,
-    
+    "debug"=> \my $debug,
     );
 
 
@@ -81,6 +83,8 @@ version: $version
         --sepa INT      use INT number of parallel jobs during serial
 
         --noldsc          do not do ldscore (if problems there)
+
+        --debug        extended output
 
  created by Stephan Ripke 2018 at Charite, Berlin, Germany
  in the frame of the PGC
@@ -390,6 +394,7 @@ sub send_jobarray {
     }
     else { 
 	my $sys_loc = "$blueprint_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --name $sjaname.$outname $multi_txt";
+	print "$sys_loc\n" if ($debug);
 	&mysystem ($sys_loc);
     }
 
@@ -411,6 +416,7 @@ sub send_jobarray {
     }
     else {
 	my $sys_re = "$blueprint_script --njob $job_bn_th -b \"$command_line\" --wa 1 --di -j --fwt $wt_file --na _te_$outname";
+	print "$sys_re\n" if ($debug);
 	&mysystem ($sys_re);
     }
 
