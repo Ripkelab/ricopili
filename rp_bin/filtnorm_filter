@@ -24,7 +24,7 @@ use Compress::Zlib ;
 
 ##### help message
 my $usage = "
-Usage : $progname 
+Usage : $progname
 
 version: $version
 
@@ -43,7 +43,7 @@ version: $version
 
 
 use Getopt::Long;
-GetOptions( 
+GetOptions(
 
     "help"=> \my $help,
     "filtnorm=s"=> \my $filtnorm_file,
@@ -120,11 +120,11 @@ my $filtnorm_out_tmp = $filtnorm_file.".reform.tmp.gz";
 unless (-e $filtnorm_info) {
     my $igz = gzopen("$filtnorm_file", "rb")  or die "Cannot open file $filtnorm_file: $gzerrno\n" ;
     my $ogz = gzopen("$filtnorm_info_tmp", "wb")  or die "Cannot open file $filtnorm_info_tmp: $gzerrno\n" ;
-    
-    
+
+
     print "reading info out of $filtnorm_file into $filtnorm_info\n" if ($debug);
     my $icc = 0;
-    
+
     $ogz->gzwrite("CHROM POS ID REF ALT QUAL FILTER INFO FORMAT\n");
     while ($igz->gzreadline(my $line)){
 	chomp($line);
@@ -135,19 +135,19 @@ unless (-e $filtnorm_info) {
 #	    }
 #	    if ($cells[0] eq "Y") {
 #		$cells[0] = "24";
-#	    }	    
+#	    }
 	    my $out_str = $cells[0];
 	    foreach my $cc (1..8) {
 		$out_str .= " ".$cells[$cc];
 	    }
 	    $ogz->gzwrite("$out_str\n");
 	}
-	
+
 	$icc++;
-	print "$icc lines read\n" if ($icc % 10000 == 0) if ($debug);
+	print "$icc lines read\n" if ($debug);
 	#    last if ($icc ==10000);
     }
-    
+
     $igz->gzclose();
     $ogz->gzclose();
     &mysystem ("mv $filtnorm_info_tmp $filtnorm_info");
@@ -195,17 +195,17 @@ while ($igz->gzreadline(my $line)){
     }
     if (length($cells[$a1_col]) > 1) {
 	$indel = 1;
-    }    
-    
+    }
+
 
     if ($indel) {
-	
+
 	if (exists $pos_hash_arr{$pos_loc}) {
 	    $multipos{$pos_loc}++;
 	}
 	push(@{$pos_hash_arr{$pos_loc}}, $row_cc);
     }
-    
+
     my @icells = split ";",$cells[$info_col];
     my $ac_loc = $icells[0];
     $ac_loc =~ s/AC=//;
@@ -247,7 +247,7 @@ foreach my $pos_loc (keys %multipos) {
 	$ac_max = $ac_loc if ($ac_loc > $ac_max);
     }
     $ac_max_hash{$pos_loc} = $ac_max
-	
+
 }
 
 #exit;
@@ -266,13 +266,13 @@ foreach my $pos_loc (keys %multipos) {
 	my @icells = split " ",$row;
 	my $ac_loc = $icells[4];
 
-#	print $row_arr[$row_cc];	
+#	print $row_arr[$row_cc];
 	if ($ac_loc eq $ac_max_hash{$pos_loc} && $max_defined == 0) {
 #	    print " xxxx";
 	    $max_defined = 1;
 	}
 	else {
-	    $out_hash{$row_cc} = 1;	    
+	    $out_hash{$row_cc} = 1;
 #	    print " ----";
 	}
 #	print " $row_cc\n";
@@ -292,18 +292,18 @@ unless (-e $filtnorm_out) {
     my $igz = gzopen("$filtnorm_file", "rb")  or die "Cannot open file $filtnorm_file: $gzerrno\n" ;
     my $ogz = gzopen("$filtnorm_out_tmp", "wb")  or die "Cannot open file $filtnorm_out_tmp: $gzerrno\n" ;
     my $oxgz = gzopen("$filtnorm_ex", "wb")  or die "Cannot open file $filtnorm_ex: $gzerrno\n" ;
-    
-    
+
+
     print "filter $filtnorm_file into $filtnorm_out\n";
     my $icc = 0;
-    
+
 #    $ogz->gzwrite("CHROM POS ID REF ALT QUAL FILTER INFO FORMAT\n");
 
 
     while ($igz->gzreadline(my $line)){
 
 	chomp($line);
-	
+
 	unless ($line =~ /^#/) {
 
 	    unless (exists $out_hash{$icc}) {
@@ -318,15 +318,15 @@ unless (-e $filtnorm_out) {
 #		}
 #		if ($cells[0] eq "Y") {
 #		    $cells[0] = "24";
-#		}	 
-		
+#		}
+
 		my $out_str = $cells[0];
 		foreach my $cc (1..8) {
 		    $out_str .= " ".$cells[$cc];
 		}
 		$oxgz->gzwrite("$out_str\n");
 	    }
-	    
+
 	    $icc++;
 	}
 	else {
@@ -334,11 +334,11 @@ unless (-e $filtnorm_out) {
 	}
 
 
-	
+
 #       	print "$icc lines read\n" if ($icc % 10000 == 0);
 #	last if ($icc ==10000);
     }
-    
+
     $igz->gzclose();
     $ogz->gzclose();
     $oxgz->gzclose();
