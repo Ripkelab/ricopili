@@ -1,11 +1,11 @@
 #!/usr/bin/env perl
 use strict;
-  
+
 
 ########################################
 #
-#  version 24: 
-#  
+#  version 24:
+#
 #  chunk results and then meta-chunk
 #  area_plot_speed
 #  new manhattan plot
@@ -145,9 +145,9 @@ my $info_th = "0.1";
 
 
 #print "hmm\n";
-#exit; 
+#exit;
 
-## permutation 
+## permutation
 ## awk '{print $1,$2,int(2*rand())+1}' ....mds_cov > .....mds_cov.perm1
 ##
 
@@ -226,9 +226,9 @@ version: $rp_version
  --idin STRING     ID inclusion list (before imputation, while ripping)
 
  --sep_pca         create and use a separate PCA for each cohort (will get better control over popstrat)
- --sep_idin STRING use a different IDset than the separate 
+ --sep_idin STRING use a different IDset than the separate
 
- --mds STRING      mds-file (with studyindicator, (if necessary), 
+ --mds STRING      mds-file (with studyindicator, (if necessary),
                        NOMDS if no pcaer wished and analysis without covariates
  --coco STRING     comma separated PCA numbers
 
@@ -255,10 +255,10 @@ version: $rp_version
                      0 - allelic (default)
                      1 - dominant for first allele
                      2 - recessive for first allele
-                     3 - heterocygote 
+                     3 - heterocygote
 
 
-#  --nomega           do a meta and work from there, 
+#  --nomega           do a meta and work from there,
 #                         must do with real big datasets
 #  --nocon            do without conditional
 #  --nocovar          analysis without covariates
@@ -317,7 +317,7 @@ version: $rp_version
   --popname STRING    population for clumping, right now: eur, eas, sas, amr, afr
 
   --regplot STRING    additional regplot file
-  
+
 ###  --cond              conditional analysis on areator output
 
   --males          only use males, famfile needs to be right
@@ -331,7 +331,7 @@ version: $rp_version
 
 
   --serial          no sending jobs to queue all in one run
-                           -> usually only used for testing 
+                           -> usually only used for testing
   --sepa INT        use INT number of parallel jobs during serial
 
   --sleep INT         sleep for INT seconds, try this if you think there is a race condition
@@ -355,12 +355,12 @@ version: $rp_version
   ************
 
  created by Stephan Ripke 2009 at MGH, Boston, MA
- 
+
 ";
 
 
 use Getopt::Long;
-GetOptions( 
+GetOptions(
 
     "s2gr=i"=> \ $s2gr,
     "chr=i"=> \ $chr,
@@ -493,7 +493,7 @@ my $blueprint_script = "blueprint";            ### my.pipeline_tar
 my $clumpnavi2_script = "clump_nav3";          ### my.pipeline_tar
 my $shrinkpdf_script = "shrinkpdf";            ### my.pipeline_tar
 my $comp1mhc_script = "comp1mhc2";             ### my.pipeline_tar
-#my $comp1mhc1_script = "comp1mhc";    
+#my $comp1mhc1_script = "comp1mhc";
 my $comp1mhcreg_script = "comp1mhc_reg";       ### my.pipeline_tar
 my $pdfjoin_script = "pdfjoin";                ### my.pipeline_tar
 my $pdfnup_script = "pdfnup";                  ### my.pipeline_tar
@@ -557,7 +557,7 @@ my @miss_scripts;
 #my $err_scr = 0;
 foreach my $scr_name (@test_scripts) {
     my $scr_path = '';
-    
+
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$scr_name" && -x _ ) {
 	    print "$scr_name\tfound in $path\n" if ($debug);
@@ -569,7 +569,7 @@ foreach my $scr_name (@test_scripts) {
 	push @miss_scripts, "cp /home/unix/sripke/bin/$scr_name ./\n";
 	print "!!Error!! : No $scr_name command available\n" ;
     }
- 
+
 }
 
 #exit;
@@ -602,7 +602,7 @@ my $noti = 1;
 my $err_scr = 0;
 {
     my $scr_path = '';
-    
+
     for my $path ( split /:/, $ENV{PATH} ) {
 	if ( -f "$path/$mutt_script" && -x _ ) {
 	    print "$mutt_script\tfound in $path\n" if ($debug);
@@ -627,10 +627,10 @@ my $err_scr = 0;
 	    print "!!Warning!! : No $mutt_script command available, no email notifications\n";
 	    $noti = 0;
 
-	    
+
 	}
     }
- 
+
 }
 die if $err_scr == 1;
 
@@ -915,18 +915,18 @@ sub send_jobarray {
 	$fini_message .= "##### rp_pipeline_postimp finished successfully:\n";
 	$fini_message .= "##### $sjainfotxt\n";
 	$fini_message .= "##### have a look at the distributions subdir for output files\n";
-	$fini_message .= "##### have a look at the wiki page for more details\n"; 
+	$fini_message .= "##### have a look at the wiki page for more details\n";
 	$fini_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	$fini_message .= "##################################################################\n";
 	print "$fini_message\n";
 
-	
+
 	die $! unless open SUC, "> success_file";
 	print SUC $fini_message."\n";
 	close SUC;
 
 	if ($noti == 1) {
-	    
+
 	    my $sys_email = 'cat success_file | '.$mutt_script.' -s RP_postimp_finished '.$email;
 	    print "$sys_email\n";
 	    &mysystem ($sys_email) ;
@@ -947,18 +947,18 @@ sub send_jobarray {
 	$fini_message .= "##### rp_pipeline_postimp paused\n";
 	$fini_message .= "##### $sjainfotxt\n";
 	$fini_message .= "##### please read and follow instructions above then restart\n";
-	$fini_message .= "##### have a look at the wiki page for more details\n"; 
+	$fini_message .= "##### have a look at the wiki page for more details\n";
 	$fini_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	$fini_message .= "##################################################################\n";
 	print "$fini_message\n";
 
-	
+
 	die $! unless open SUC, "> success_file";
 	print SUC $fini_message."\n";
 	close SUC;
 
 	if ($noti == 1) {
-	    
+
 	    my $sys_email = 'cat success_file | '.$mutt_script.' -s RP_postimp_paused '.$email;
 	    print "$sys_email\n";
 	    &mysystem ($sys_email) ;
@@ -971,7 +971,7 @@ sub send_jobarray {
 	exit;
 
     }
-    
+
 
 
 
@@ -1029,7 +1029,7 @@ sub send_jobarray {
 	    $err_message .= "##### postimp pipeline stopped\n";
 	    $err_message .= "##### $sjainfotxt\n";
 	    $err_message .= "##### if reason does not appear obvious\n";
-	    $err_message .= "##### have a look at the wiki page\n"; 
+	    $err_message .= "##### have a look at the wiki page\n";
 	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
 	    $err_message .= "##### or contact the developers\n";
 	    $err_message .= "##### version: $rp_version\n";
@@ -1056,7 +1056,7 @@ sub send_jobarray {
     }
 
 
-    
+
     #################################
     ## starting the job array
     ##################################
@@ -1086,13 +1086,13 @@ sub send_jobarray {
 		@job_sepa_arr = ();
 	    }
 	    $jc++;
-	    
+
 	}
 
 	if (@job_sepa_arr > 0) {
 	    $jc--;
 	    push @job_sepa_arr, "wait";
-	    
+
 	    my $sepa_file = "$sjaname.sepa.$jc";
 	    &a2filenew ($sepa_file,@job_sepa_arr);
 	    print "sepa_file: ".$sepa_file."\n" if ($debug);
@@ -1100,9 +1100,9 @@ sub send_jobarray {
 	    &mysystem("./$sepa_file");
 	}
 
-		
+
     }
-    else { 
+    else {
 	my $sys_loc = "$blueprint_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";
 	&mysystem ($sys_loc);
     }
@@ -1110,15 +1110,15 @@ sub send_jobarray {
 
 
 
-    
+
     $command_line =~ s/--force1//;
 
 
 
     my $wt_file = "$sjadir/j.$jobfile.id";
     chdir "$rootdir" or die "something strange";
-    
-    
+
+
 
     if ($serial) {
 	my $sys_re = "$command_line";
@@ -1365,7 +1365,7 @@ unless (-e "datasets_info") {
 	my $dasudir_loc_qc1 = "$dasudir"."qc1_$bitemp";
 	$dasudir_loc_qc1 .= ".hg19.ch.fl";
 #	print "start: $dasudir_loc_qc1  \n";
-	
+
 	unless (-e $dasudir_loc_qc1) {
 	    my $tmpdir = $dasudir_loc_qc1;
 
@@ -1456,7 +1456,7 @@ if ($trioset_file){
 	$trioset{$cells[0].".ch.fl"} = 1;
 	$trioset{$cells[0].".hg19.ch.fl"} = 1;
 
-	
+
 #	$cells[0] .= ".hg19.ch.fl";
 #	$trioset{$cells[0]} = 1;
 
@@ -1509,42 +1509,42 @@ unless ($sep_pca) {
 		unless (-e $mds_name_sub) {
 		    die $!." <$mds_name>" unless open MDSI, "< $mds_name";
 		    die $! unless open MDSO, "> $mds_name_sub";
-		    
+
 		    my @mds_arr = split ',' ,$mds_cols;
 		    #print "@mds_arr\n";
 		    my $line = <MDSI>;
 		    my @cells = &split_line($line);
-		    
+
 		    foreach (2..$#cells){
 			push @mds_arr, ($_-2) if ($cells[$_] =~ /^st/);
 			push @mds_arr, ($_-2) if ($cells[$_] =~ /SCORE/);
 		    }
 		    print MDSO "$cells[0]";
 		    print MDSO "\t$cells[1]";
-		    
 
-		    
+
+
 		    foreach (@mds_arr){
 			my $cn = $_+2;
 			print MDSO "\t$cells[$cn]";
 		    }
 		    print MDSO "\n";
-		    
+
 		    while (my $line = <MDSI>){
 			my @cells = &split_line($line);
-			
+
 			print MDSO "$cells[0]";
 			print MDSO "\t$cells[1]";
-			
+
 			foreach (@mds_arr){
 			    my $cn = $_+2;
 			    print MDSO "\t$cells[$cn]";
 			}
-			
+
 			print MDSO "\n";
 		    }
-		    
-		    
+
+
 		    close MDSI;
 		    close MDSO;
 		}
@@ -1573,37 +1573,37 @@ unless ($sep_pca) {
 	    unless (-e $mds_name_sub_mds) {
 		die $!." <$mds_name>" unless open MDSI, "< $mds_name";
 		die $! unless open MDSO, "> $mds_name_sub_mds";
-		
+
 		my @mds_arr = split ',' ,$mds_cols;
 		#print "@mds_arr\n";
 		my $line = <MDSI>;
 		my @cells = &split_line($line);
-		
+
 		print MDSO "$cells[0]";
 		print MDSO "\t$cells[1]";
-		
+
 		foreach (@mds_arr){
 		    die "wrong mds-number" if ($_ < 1);
 		    my $cn = $_+2;
 		    print MDSO "\t$cells[$cn]";
 		}
 		print MDSO "\n";
-		
+
 		while (my $line = <MDSI>){
 		    my @cells = &split_line($line);
-		    
+
 		    print MDSO "$cells[0]";
 		    print MDSO "\t$cells[1]";
-		    
+
 		    foreach (@mds_arr){
 			my $cn = $_+2;
 			print MDSO "\t$cells[$cn]";
 		    }
-		    
+
 		    print MDSO "\n";
 		}
-		
-		
+
+
 		close MDSI;
 		close MDSO;
 	    }
@@ -1693,7 +1693,7 @@ if ($danscore_file ne "") {
 			    {verbose => 0, mode => 0750},
 	);
 }
-    
+
 my @created = mkpath(   ## $created ?
 			$distdir,
 			{verbose => 0, mode => 0750},
@@ -1770,7 +1770,7 @@ if ($polyto_file ne "") {
 
 unless ($sep_pca) {
 unless ($result_name){
-    
+
     if ($mds_name ne "NOMDS") {
 	die $!." <$mds_name>" unless open MDSI, "< $mds_name";
 	while (my $line = <MDSI>){
@@ -1807,9 +1807,9 @@ unless ($result_name){
 	    my $famloc = $famfile_loc;
 	    $famloc =~ s/hg19.ch.fl.fam$/fam/;
 	    $famloc =~ s/ch.fl.fam$/fam/;
-	    
 
-	    
+
+
 	    die $!." <$famloc>" unless open IN, "< $famloc";
 	    while (my $line = <IN>){
 		my @cells = &split_line($line);
@@ -1824,7 +1824,7 @@ unless ($result_name){
 		print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n" ;
 	    }
 	}
-	
+
 	@bimfli_files = @bimfli_files_tmp;
 	@bimfli_files_tmp = ();
     }
@@ -1889,7 +1889,7 @@ unless ($result_name){
 		print "this fam-file without any IDs in analysis (--pheno): ".$bf."\n";
 	    }
 	}
-	
+
 	@bimfli_files = @bimfli_files_tmp;
 	@bimfli_files_tmp = ();
     }
@@ -1955,7 +1955,7 @@ unless ($result_name){
 		print "this fam-file without any IDs in analysis (--idin): ".$bf."\n";
 	    }
 	}
-	
+
 	@bimfli_files = @bimfli_files_tmp;
 	@bimfli_files_tmp = ();
     }
@@ -2005,9 +2005,9 @@ my $n_cdg = keys %cdg_dis;
 #my @daner_dicoll;
 if ($n_cdg > 1) {
     foreach my $cx (keys %cdg_dis) {
-	print "dis: $cx\n" if ($debug); 
+	print "dis: $cx\n" if ($debug);
 	my $dadimetadir = $dametadir."_$cx";
-	
+
 	my @created = mkpath(   ## $created ?
 				$dadimetadir,
 				{verbose => 0, mode => 0750},
@@ -2046,7 +2046,7 @@ unless ($sep_pca) {
 	    &mysystem ("cp $rootdir/$mds_name .");
 	    $co_str = "--mds $mds_name --coco  $mds_cols";
 	}
-	
+
 	if ($pheno_file ne "NOPHENO") {
 	    &mysystem ("cp $rootdir/$pheno_file .") ;
 	    $pheno_str = "--pheno $pheno_file";
@@ -2092,15 +2092,15 @@ unless ($sep_pca) {
 		}
 
 
-		
+
 		my @id_arr = ();
 		my @pt_arr = ();
-		
+
 		die $!." <$mds_name>" unless open MDSI, "< $mds_name";
 		my $header = <MDSI>;
 		while (my $line = <MDSI>){
 		    my @cells = &split_line($line);
-		    
+
 		    push @id_arr, "$cells[0]\t$cells[1]";
 		    my $pt_loc = -9;
 		    if ($cells[0] =~ /^cas_/) {
@@ -2110,12 +2110,12 @@ unless ($sep_pca) {
 			$pt_loc = 1;
 		    }
 		    push @pt_arr, $pt_loc;
-		    
+
 		}
-		close MDSI;    
+		close MDSI;
 		srand ($siperm);
 		&fisher_yates_shuffle (\@pt_arr);
-		
+
 		die $!." <$pheno_file>" unless open PO, "> $pheno_file";
 		foreach my $cloc (0..$#id_arr){
 		    print PO $id_arr[$cloc]."\t".$pt_arr[$cloc]."\n";
@@ -2125,8 +2125,8 @@ unless ($sep_pca) {
 
 	    $pheno_str = "--pheno $pheno_file";
 	}
-	
-	
+
+
 	if ($idex_name) {
 	    &mysystem ("cp $rootdir/$idex_name .") ;
 	    $idex_str = "--idex $idex_name";
@@ -2147,10 +2147,10 @@ unless ($sep_pca) {
 		print "Error: $addcov_name does not contain header FID IID PT....\n";
 		exit;
 	    }
-	    
+
 	    $addcov_str = "--addcov $addcov_name";
 	}
-	
+
     }
 }
 
@@ -2207,22 +2207,22 @@ if ($sep_idin_str) {
 
 if ($sep_pca) {
 
-    
+
     my $mdscov_file = "$outname.covfiles";
     unless (-e $mdscov_file) {
 	my $pcaer_count = 0;
-	
+
 	my @sep_pca_str_single;
 	my @mdsfile_txt;
 	my $sep_pca_str_comb = "pcaer --preferfam --prefercase --out $outname";
-	
-	
+
+
 	unless (-e "$rootdir/daner_$outname.done") {
 	    unless ($result_name){
-		
+
 		#### stuff that is done on full datasets
 		foreach (@bimfli_files) {
-		    
+
 		    my $bfile = $_;
 
 		    my $bfile_bgs = "$bfile.bgs";
@@ -2257,7 +2257,7 @@ if ($sep_pca) {
 			}
 
 			my $pca_str = "1,2,3,4";
-			
+
 			die $!." <$bfile.bgs.menv.mds.overworked.p_assoc.txt>" unless open IN, "< $bfile.bgs.menv.mds.overworked.p_assoc.txt";
 			my $npca = 0;
 			while (my $line = <IN>){
@@ -2271,10 +2271,10 @@ if ($sep_pca) {
 
 			push @mdsfile_txt, "$bfile $bfile.bgs.menv.trans.mds $pca_str";
 		    }
-		    $sep_pca_str_comb .= " $bfile.bgs";		
+		    $sep_pca_str_comb .= " $bfile.bgs";
 
 		}
-		
+
 	    }
 
 	    unless (-e "$seppcadir/$sep_idin") {
@@ -2291,7 +2291,7 @@ if ($sep_pca) {
 		    print "debug2\n" if ($debug);
 		}
 	    }
-	}		
+	}
 
 	if ($pcaer_count > 0) {
 	    my $start_file = "start_pcaer.sh";
@@ -2305,11 +2305,11 @@ if ($sep_pca) {
 	    close FILE1;
 
 	    &mysystem ("chmod u+x $seppcadir/$start_file");
-	    
-	    
+
+
 	    print "\n###########################################################################\n" if ($debug);
 	    print "separate PCAs requested, please start these commands from the command line:\n\n" if ($debug);
-	    
+
 	    print "\tcd $seppcadir\n" if ($debug);
 	    print "\t./$start_file\n\n" if ($debug);
 	    print "wait till all pcaer-jobs (_pc_*) ran through and restart postimp-pipeline\n" if ($debug);
@@ -2318,14 +2318,14 @@ if ($sep_pca) {
 	    #############################################################
 	    ## SUCCESSSS
 	    #############################################################
-	    
+
 	    $sjadir = $rootdir;
 	    $sjaname = "paused";
 	    push @sjaarray, "tmp";
 	    $sjatime = 2;
 	    $sjamem = 1000;
-	    
-	    
+
+
 	    &send_jobarray;
 
 	}
@@ -2340,13 +2340,13 @@ if ($sep_pca) {
 		print FILE1 "$_\n";
 	    }
 	    close FILE1;
-	    
+
 	}
     }
     else {
 	print "$mdscov_file exists, now going to next step\n" if ($debug);
     }
-    
+
     die $!." <$mdscov_file>" unless open IN, "< $mdscov_file";
     while (my $line = <IN>){
 	my @cells = &split_line($line);
@@ -2369,8 +2369,8 @@ if ($sep_pca) {
     close MDSI;
 
 
-    
-    
+
+
     foreach my $bf (@bimfli_files) {
 	my $bfile = $bf;
 	$bfile =~ s/.bim$//;
@@ -2382,7 +2382,7 @@ if ($sep_pca) {
 
 	my $found = 0;
 
-	
+
 	die $!." <$rootdir/$famloc>" unless open IN, "< $rootdir/$famloc";
 	while (my $line = <IN>){
 	    my @cells = &split_line($line);
@@ -2396,19 +2396,19 @@ if ($sep_pca) {
 	close IN;
 	if ($found == 0) {
 	    print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n" if ($debug);
-	    
-	}	
-	
+
+	}
+
 #	if (exists $sep_covfile{$bfile}){
 #
-#	    print "$bfile\n";	    
+#	    print "$bfile\n";
 #	}
     }
     @bimfli_files = @bimfli_files_tmp2;
 #    print "nbfile: ".@bimfli_files."\n";
 
 
-    
+
 }
 
 
@@ -2433,12 +2433,12 @@ if ($sep_pca) {
 
 unless (-e "$rootdir/daner_$outname.done") {
     unless ($result_name){
-	
+
 
 	## walk through chunks
 	foreach my $refind (@refind_arr) {
-	    
-	    
+
+
 	    my @dasifiles = ();
 
 #	print @bimfli_files."\n";
@@ -2447,19 +2447,19 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 	    foreach (@bimfli_files) {
 
-		
+
 		my $bfile = $_;
 
 		my $co_str_loc = $co_str;
 		$co_str_loc = "" if (exists $trioset_bimfli{$bfile});
-		
+
 
 
 		$bfile =~ s/.bim$//;
 		my $danerdir_loc = "$danerdir/da_$bfile";
 
 		my $hg19_remove = 0;
-		
+
 		my $dasudir_loc = "$dasudir"."_$bfile";
 		my $dasudir_loc_qc1 = "$dasudir"."qc1_$bfile";
 
@@ -2476,7 +2476,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 		    }
 		}
 
-#		print "$dasudir_loc\n";	
+#		print "$dasudir_loc\n";
 #		print "$dasudir_loc_qc1\n";
 #		sleep(3);
 #	    my $dasudir_loc_qc1_hg19 = "$dasudir"."qc1_$bfile";
@@ -2495,10 +2495,10 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 		    if (-e $dasudir_loc_qc1) {
 			$dasudir_loc = "$dasudir_loc_qc1/qc1";
-		    }	
+		    }
 
-#		print "$dasudir_loc\n";	
-#		print "$dasudir_loc_qc1/qc1\n";	
+#		print "$dasudir_loc\n";
+#		print "$dasudir_loc_qc1/qc1\n";
 
 		    my $empty_file = "$bfile.$refind.empty";
 		    if (exists $empty_files{$empty_file}) {
@@ -2554,13 +2554,13 @@ unless (-e "$rootdir/daner_$outname.done") {
 				}
 				else {
 				    push @danerdir_arr, $sys_loc ;
-				    
+
 				    ## NEW !!!!!!
 #			if (@danerdir_arr > 5000) {
 #			    last;
 #			}
-				    
-				    
+
+
 				}
 			    }
 			    else {
@@ -2574,7 +2574,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 			    }
 
 			}
-			
+
 		    }
 		}
 
@@ -2582,13 +2582,13 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 
 		if ($danscore_neg == 0) {
-#		    print "score bfile: $_, $refind\n";		
+#		    print "score bfile: $_, $refind\n";
 		    if ($danscore_file ne "") {
-			
+
 			my $danscoredir_loc = "$danscoredir/dsc_$bfile";
-			
+
 			if ($bgscore) {
-			    
+
 			    my $bfile_bg = "$bfile.bgn";
 			    my $bg_bed = "$bgdir/$bfile_bg.bed";
 
@@ -2596,26 +2596,26 @@ unless (-e "$rootdir/daner_$outname.done") {
 			    unless (-e $bg_bed) {
 				print "Warning: best_guess dataset not existing: $bg_bed\n" if ($debug);
 				$bfile_bg =~ s/.ch.fl.bgn$/.bgn/;
-				
+
 				$bg_bed = "$bgdir/$bfile_bg.bed";
 				unless (-e $bg_bed) {
 				    print "Error: best_guess dataset not existing: $bg_bed\n";
 				    exit;
 				}
-				
+
 			    }
 			    my $workname = "score.$bfile_bg";
-			    
-			    unless (exists $bg_in{$bfile_bg}) {			    
+
+			    unless (exists $bg_in{$bfile_bg}) {
 				unless (-e "$danscoredir_loc/R.$workname.hl_nw.Rin"){
 
 
 				    my $sys_loc = "$daner_script --score $danscore_file --range $range_file --nosi --indir $bgdir $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danscoredir_loc --bfile $bfile_bg nouse";
-				    
+
 				    push @danscore_arr, $sys_loc;
 				    print "$sys_loc\n" if ($debug);
 				    print "$danscoredir_loc/R.$workname.hl_nw.Rin\n" if ($debug);
-				    
+
 				    $bg_in{$bfile_bg} = 1;
 				}
 			    }
@@ -2625,23 +2625,23 @@ unless (-e "$rootdir/daner_$outname.done") {
 			    if ($hg19_remove) {
 				$ident =~ s/.hg19.ch.fl/.ch.fl/;
 			    }
-			    
-			    
+
+
 			    ### getting danscore_jobs
 			    unless (-e "$danscoredir_loc/dan_$ident.profile.log"){
-				
+
 				my $take = 1;
 				if ($trioset_file){
 				    unless (exists $trioset{$bfile}) {
 					$take = 0;
 				    }
 				}
-				
+
 				if ($take == 1) {
 				    my $mapfile = "$dasudir_loc/dos_$ident.out.dosage.map";
 				    if (-e $mapfile) {
 					push @danscore_arr, "$daner_script --score $danscore_file --range $range_file --nosi --indir $dasudir_loc $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danscoredir_loc $ident";
-					
+
 				    }
 				    else {
 					print "$mapfile not existing, maybe empty\n";
@@ -2656,19 +2656,19 @@ unless (-e "$rootdir/daner_$outname.done") {
 	    if ($bgscore) {
 		last;
 	    }
-	    
-	    
+
+
 	    ### META-disease
 	    my @dadimeta_arr = ();
 	    if ($n_cdg > 1) {
 		foreach my $cx (keys %cdg_dis) {
-		    
+
 #	my @dasidifiles = grep {/\/dan_qc2report_$cx/} @dasifiles;
 		    my @dasidifiles = ();
-		    
+
 		    my @tmp_arr = @{$dadimeta_bimfli_files {$cx}};
-		    
-		    
+
+
 		    foreach my $dsf (@dasifiles){
 			my $dsf_short = $dsf;
 			$dsf_short =~ s!.*/dan_!!;
@@ -2683,7 +2683,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 			my $dameta_out = "$dadimetadir/dan_$refind.assoc.dosage.meta.ngt";
 			unless (-e "$dameta_out.metadaner.gz") {
 			    my $sys = "$metaber_script --info_th $info_th $no_neff_filter_txt $xdf_txt --out $dameta_out @dasidifiles";
-			    push @daner_dimeta_arr, $sys; 
+			    push @daner_dimeta_arr, $sys;
 			}
 			push @ {$dadimeta_files {$cx}}, "$dameta_out.metadaner.gz";
 			push @dadimeta_arr, "$dameta_out.metadaner.gz";
@@ -2698,8 +2698,8 @@ unless (-e "$rootdir/daner_$outname.done") {
 		unless (-e "$dameta_out.metadaner.gz") {
 		    my @dasifiles_loc = @dasifiles;
 		    @dasifiles_loc = @dadimeta_arr if ($n_cdg > 1);
-		    
-		    
+
+
 		    push @daner_meta_arr, "$metaber_script --info_th $info_th $no_neff_filter_txt $xdf_txt --out $dameta_out @dasifiles_loc";
 		    #	    print "metaber5 $xdf_txt --out $dameta_out @dasifiles_loc\n";
 		    #	    exit;
@@ -2707,11 +2707,11 @@ unless (-e "$rootdir/daner_$outname.done") {
 		else {
 		    $daner_fini_meta_count++;
 		}
-		
+
 		my $dameta_out_short = "dan_$refind.assoc.dosage.meta.ngt";
 		push @dameta_files, "$dameta_out_short.metadaner.gz";
 	    }
-	    
+
 #	exit;
 	    last if ($test);
 	}
@@ -2735,7 +2735,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 
 if (@danscore_arr > 0) {
-    
+
     $sjadir = $danerjobdir;
     $sjaname = "danscore";
     $sjatime = 1;
@@ -2745,7 +2745,7 @@ if (@danscore_arr > 0) {
 	$sjamem = 4000;
     }
     @sjaarray = @danscore_arr;
-    
+
     &send_jobarray;
 }
 
@@ -2775,7 +2775,7 @@ if  ($bgscore) {
 		print "Error: pdf not existing: $pdf_tmp\n";
 		exit;
 	    }
-	    
+
 	}
 
 	&mysystem ("cp $danscoredir_loc/$bfile_long.pdf $distdir");
@@ -2783,7 +2783,7 @@ if  ($bgscore) {
 	&mysystem ("cp $danscoredir_loc/$bfile_long.tar.gz $distdir");
 	&mysystem ("cp $danscoredir_loc/$bfile_short.fam.pt.ex $distdir");
 	&mysystem ("cp $danscoredir_loc/R.$bfile_long.hl_nw.Rin $distdir");
-	
+
 
     }
 #    print "debug\n";
@@ -2794,14 +2794,14 @@ if  ($bgscore) {
     #############################################################
     ## SUCCESSSS
     #############################################################
-    
+
     $sjadir = $rootdir;
     $sjaname = "finished";
     push @sjaarray, "tmp";
     $sjatime = 2;
     $sjamem = 1000;
-    
-    
+
+
     &send_jobarray;
 
 
@@ -2831,7 +2831,7 @@ if ($danscore_file ne "") {
 	&mysystem ("cp $rootdir/$mds_name_sub_mds . ");
     }
     $walltime = 1;
-    my $nreffiles = @refind_arr; 
+    my $nreffiles = @refind_arr;
     my $trio_sw = "";
     $trio_sw = "--trio" if ($trioset_file);
     my $sys = "$danscore_result_script --nref $nreffiles --out $outname --mds $mds_name_sub_mds $trio_sw";
@@ -2852,7 +2852,7 @@ if ($danscore_file ne "") {
 	$sjatime = 2;
 	$sjamem = 5000;
 	@sjaarray = @dsc_arr;
-	
+
 	&send_jobarray;
 
 
@@ -2871,7 +2871,7 @@ if ($danscore_file ne "") {
 
 
 
-	
+
 	print "copy successfull\n" if ($debug);
     }
     print "count SNPs\n" if ($debug) ;
@@ -2909,14 +2909,14 @@ if ($danscore_file ne "") {
 	&mysystem ("rm score.map.tmp") if (-e "score.map.tmp");
 	foreach (@bimfli_files) {
 	    my $bfile = $_;
-	    
-	    
+
+
 	    my $dasudir_loc = "$dasudir"."_$bfile";
 	    my $dasudir_loc_qc1 = "$dasudir"."qc1_$bfile";
 	    if (-e $dasudir_loc_qc1) {
 		$dasudir_loc = "$dasudir_loc_qc1/qc1";
 	    }
-	    
+
 	    foreach my $refind (@refind_arr) {
 		my $ident = "$bfile.$refind";
 		my $mapfile = "$dasudir_loc/dos_$ident.out.dosage.map";
@@ -2925,7 +2925,7 @@ if ($danscore_file ne "") {
 
 	}
 	&mysystem ("mv score.map.tmp score.map");
-	
+
     }
 
     my $sysloc = "sort -k1,1 score.map | uniq > score.map.sorted";
@@ -2944,7 +2944,7 @@ if ($danscore_file ne "") {
     my @pth = qw /0.00000005 0.000001 0.0001 0.001 0.01 0.05 0.1 0.2 0.5 1.0/;
 
 #    print "read sorted\n";
-	    
+
     die $!." <$danscore_file.sorted.inref.sorted>" unless open MS, "< $danscore_file.sorted.inref.sorted";
 #    my $header = <MS>;
     while (my $line = <MS>){
@@ -2984,17 +2984,17 @@ if ($danscore_file ne "") {
     #############################################################
     ## SUCCESSSS
     #############################################################
-    
+
     $sjadir = $rootdir;
     $sjaname = "finished";
     push @sjaarray, "tmp";
     $sjatime = 2;
     $sjamem = 1000;
-    
-    
+
+
     &send_jobarray;
 
-    
+
     exit;
 }
 }
@@ -3003,39 +3003,39 @@ if ($danscore_file ne "") {
 #exit;
 
 if (@danerdir_arr > 0) {
-    
+
     $sjadir = $danerjobdir;
     $sjaname = "daner";
     $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @danerdir_arr;
-    
+
     &send_jobarray;
 }
 
 #exit;
 if (@danerdir_arr_long > 0) {
-    
+
     $sjadir = $danerjobdir;
     $sjaname = "danerlong";
     $sjatime = 2;
     $sjaweek = 1;
     $sjamem = 16000;
     @sjaarray = @danerdir_arr_long;
-    
+
     &send_jobarray;
 }
 
 
 
 if (@daner_dimeta_arr > 0) {
-    
+
     $sjadir = $danerjobdir;
     $sjaname = "dadimeta";
     $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @daner_dimeta_arr;
-    
+
     &send_jobarray;
 }
 
@@ -3043,13 +3043,13 @@ if (@daner_dimeta_arr > 0) {
 
 
 if (@daner_meta_arr > 0) {
-    
+
     $sjadir = $danerjobdir;
     $sjaname = "dameta";
     $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @daner_meta_arr;
-    
+
     &send_jobarray;
 }
 
@@ -3173,7 +3173,7 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 
 	my %refc;
 	my $rf_count_max = 0;
-	
+
 	foreach my $rf (@result_files) {
 	    $rf =~ s/.gz$//;
 	    my $outdir = "$resdandir/".$rf;
@@ -3237,8 +3237,8 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 			print "Error: $outdir/$rf.count\nhas too many entries,\nplease check other count files, maybe restart from scratch\n";
 			print "----------------------------------------------\n";
 			exit;
-		    }	    
-		
+		    }
+
 		}
 	    }
 	}
@@ -3288,13 +3288,13 @@ else {
 #}
 
 if (@chunker_arr > 0) {
-    
+
     $sjadir = $resdandir;
     $sjaname = "chunk";
     $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @chunker_arr;
-    
+
     &send_jobarray;
 }
 
@@ -3308,13 +3308,13 @@ if (@chunker_arr > 0) {
 #}
 
 if (@result_meta_arr > 0) {
-    
+
     $sjadir = $reportdir;
     $sjaname = "resmet";
     $sjatime = 2;
     $sjamem = 1000;
     @sjaarray = @result_meta_arr;
-    
+
     &send_jobarray;
 }
 
@@ -3386,8 +3386,8 @@ foreach my $cd (@daner_chunkdirs) {
 #    print "check daner_summing\n";
 
 chdir ($danerdir);
-    
-    
+
+
 #print "dameta_files: @dameta_files\n";
 ##### META
 my @zehn = grep {/chr10_10/} @dameta_files;
@@ -3395,7 +3395,7 @@ if (@zehn == 0 ) {
     @zehn = @dameta_files;
 }
 unless (-e "$reportdir/$daner_meta") {
-    unless ($cox) {   
+    unless ($cox) {
 	print "concatenate meta-results\n" if ($debug);
 	if (@dameta_files == 0){
 	    print "****\nError: no dameta files in list\n";
@@ -3424,18 +3424,18 @@ unless (-e "$reportdir/$daner_meta") {
 #	&mysystem ($sys6);
 
 #	chdir ($danerdir);
-	
+
 	########################################
 	########   here the single chromosomes
 	#########################################
-	
-	
+
+
     }
 }
 
 
 
-    
+
 ##### MEGA
 unless ($nomega) {
     my @zehn = grep {/chr10_10/} @daner_files;
@@ -3446,8 +3446,8 @@ unless ($nomega) {
 	die "error, since missing: $zehn[0]" unless (-e $zehn[0]);
 	print "concatenate $zehn[0]\n" if ($debug);
 #    &mysystem ("rm $zehn[0]");
-	
-	
+
+
 	&mysystem ("gunzip -c $zehn[0] | head -1 | gzip -c > $reportdir/$daner_all");
 	&mysystem ("gunzip -c @daner_files | grep -v SNP | gzip -c >> $reportdir/$daner_all");
     }
@@ -3457,38 +3457,38 @@ unless ($nomega) {
 ### META-disease
 if ($n_cdg > 1) {
     foreach my $cx (keys %cdg_dis) {
-	unless ($cox) {  
+	unless ($cox) {
 	    die "something wrong with disease" unless exists $dadimeta_files{$cx};
 	    my @dadimeta_files_loc = @ { $dadimeta_files{$cx} } ;
-	    
+
 	    my @zehn = grep {/chr10_10/} @dadimeta_files_loc;
 	    if (@zehn == 0 ) {
 		@zehn = @dadimeta_files_loc;
 	    }
 	    unless (-e "$reportdir/$daner_meta_pf.$cx.gz") {
 		print "concatenate $zehn[0]\n";
-		
+
 		### have to work on metadisease!!!!
 		print "debug, work on metadisease\n";
 		exit;
 		my $sys_loc = "$damecat_script $danerdir $reportdir/$daner_meta_pf.$cx.gz @dadimeta_files_loc";
 		push @dametacat_arr, $sys_loc;
-		
+
 	    }
-	    
+
 	    push @daner_cdg_coll, "$daner_meta_pf.$cx.gz";
 	}
-	
+
     }
 }
 
 #exit;
-    
-    
+
+
 #    foreach (@bimfli_files) {
 #	print "bifli: $_\n";
 #    }
-    
+
 ## single studies
 unless ($result_name){
     foreach (@bimfli_files) {
@@ -3498,10 +3498,10 @@ unless ($result_name){
 	    my $danerdir_loc = "$danerdir/da_$bfile";
 	    chdir ($danerdir_loc) or die "no danerdir_loc";
 	    my $daner_bim = "daner_$bfile.gz";
-	    
+
 	    push @daner_collect, $daner_bim;
 	    push @daner_collect_si, $daner_bim;
-	    
+
 	    unless (-e "$reportdir/$daner_bim") {
 		opendir(DIR, ".") || die "can't opendir .: $!";
 		my @dalofiles = grep {/dan_.*assoc.dosage.ngt.gz$/} readdir(DIR);
@@ -3509,19 +3509,19 @@ unless ($result_name){
 		my @zehn = grep {/chr10_10/} @dalofiles;
 		if (@zehn == 0 ) {
 		    @zehn = @dalofiles;
-		}	  
+		}
 		print "$zehn[0]\n" if ($debug);
 		my $sys_loc = "$damecat_script $danerdir_loc $reportdir/$daner_bim @dalofiles";
 		push @dametacat_arr, $sys_loc;
 
 	    }
-	    
-	    
+
+
 	    ########################################
 	    ########   here the single chromosomes
 	    #########################################
-	    
-	    
+
+
 	}
     }
 }
@@ -3539,13 +3539,13 @@ chdir ($danerdir);
 
 
 if (@dametacat_arr > 0) {
-    
+
     $sjadir = $danerjobdir;
     $sjaname = "damecat";
     $sjatime = 1;
     $sjamem = 1000;
     @sjaarray = @dametacat_arr;
-    
+
     &send_jobarray;
 }
 
@@ -3563,7 +3563,7 @@ if ($nomega) {
 
 unless ($nohet_sw) {
 unless (-e "$reportdir/$daner_all_het") {
-    unless ($cox) {   
+    unless ($cox) {
 	print "create het_p_result\n" if ($debug);
 	my $sys_loc = "$danerhet2p_script $reportdir/$daner_all $reportdir/$daner_all_het";
 	push @daner_het2p_arr, $sys_loc;
@@ -3571,15 +3571,15 @@ unless (-e "$reportdir/$daner_all_het") {
     }
 }
 }
-    
+
 if (@daner_het2p_arr > 0) {
-    
+
     $sjadir = $danerjobdir;
     $sjaname = "daner_het2p";
     $sjatime = 1;
     $sjamem = 1000;
     @sjaarray = @daner_het2p_arr;
-    
+
     &send_jobarray;
 }
 
@@ -3617,8 +3617,8 @@ if ($polyfrom_file ne "") {
 
 	&mysystem("echo $sys | $blueprint_script --njob $job_bn_th -b \"prefix\" -j --na clump_$outname");
 
-	
-	
+
+
 	my $now = localtime time;
 	my $message = $info_txt."\tclump\t$now";
 
@@ -3659,13 +3659,13 @@ unless (-e "placeholder.pdf"){
 
 if (0) {
     my $scameta_out = "$daner_meta.pdf";
-    
+
     unless (-e $daner_meta){
 	&mysystem ("$blueprint_script --njob $job_bn_th -b \"~/plink/plink --out $daner_meta_pf --meta-analysis @daner_collect_si; gzip -f $daner_meta_pf.meta\" --wa 1 -j --di --na dameta_$outname; \n");
 	&reinvo_b ("dameta","$reportdir/blueprint_joblist_file-dameta_$outname");
     }
 }
-    
+
 ###################################
 ### META Disease Groups
 ###################################
@@ -3680,7 +3680,7 @@ if (0) {
 	    my @starr = split '_' ,$_;
 	    $cdg_dis{$starr[2]} = 1;
 	}
-	my @cdg_arr = ();    
+	my @cdg_arr = ();
 	foreach my $cx (keys %cdg_dis) {
 	    my @daner_collect_si_cx = grep {/^daner_qc2report_$cx/} @daner_collect_si;
 
@@ -3736,12 +3736,12 @@ if (0) {
 #	    print OUT "\t$cells[11]";
 		print OUT "\t-";
 		print OUT "\t$cells[8]";
-		print OUT "\t$cells[12]";  
+		print OUT "\t$cells[12]";
 		print OUT "\t$cells[6]";
 		print OUT "\t-";
 		print OUT "\n";
 	    }
-	    
+
 	    close IN;
 	    close OUT;
 	    &mysystem ("gzip $daner_meta_nogz");
@@ -3770,10 +3770,10 @@ if (0){
 
 	    unless (-e $daner_pf_cx_gz){
 		&mysystem ("gunzip $daner_meta_pf_cx_gz");
-		
+
 		die $!." <$daner_meta_pf_cx>" unless open IN, "< $daner_meta_pf_cx";
 		die $! unless open OUT, "> $daner_pf_cx";
-		
+
 		while (my $line = <IN>){
 		    my @cells = &split_line($line);
 		    print OUT "$cells[0]";
@@ -3788,18 +3788,18 @@ if (0){
 #		print OUT "\t$cells[11]";
 		    print OUT "\t-";
 		    print OUT "\t$cells[8]";
-		    print OUT "\t$cells[12]";  
+		    print OUT "\t$cells[12]";
 		    print OUT "\t$cells[6]";
 		    print OUT "\t-";
 		    print OUT "\n";
 		}
-		
+
 		close IN;
 		close OUT;
 
 		&mysystem ("gzip $daner_meta_pf_cx");
 		&mysystem ("gzip $daner_pf_cx");
-		
+
 	    }
 	}
     }
@@ -3902,13 +3902,13 @@ foreach my $dc_loc (@daner_allcoll) {
 
 
 if (@lth_arr > 0) {
-    
+
     $sjadir = $reportdir;
     $sjaname = "lth";
     $sjatime = 1;
     $sjamem = 1000;
     @sjaarray = @lth_arr;
-    
+
     &send_jobarray;
 }
 
@@ -3961,7 +3961,7 @@ unless (-e $prekno_file) {
 }
 
 unless (-e $prekno_file) {
-    
+
     print "Error: cannot find gwas catalog file\n";
     exit;
 }
@@ -4000,13 +4000,13 @@ foreach my $dc_loc (@daner_allcoll) {
 
 
 if (@areat_arr > 0) {
-    
+
     $sjadir = $reportdir;
     $sjaname = "areator";
     $sjatime = 1;
     $sjamem = 3000;
     @sjaarray = @areat_arr;
-    
+
     &send_jobarray;
 }
 
@@ -4089,7 +4089,7 @@ while (my $line = <FILE>){
     my @cells = &split_line($line);
     my $pv_loc = shift(@cells);
     my $a_outname = $cells[3];
-    
+
     if ($pv_loc eq "0") {
 	push @areap_files, "placeholder.pdf";
     }
@@ -4109,13 +4109,13 @@ close FILE;
 
 
 if (@areap_arr > 0) {
-    
+
     $sjadir = $reportdir;
     $sjaname = "areaplot";
     $sjatime = 1;
     $sjamem = 1000;
     @sjaarray = @areap_arr;
-    
+
     &send_jobarray;
 }
 
@@ -4143,16 +4143,16 @@ if ($regplot_file) {
 	}
     }
     close FILE;
-    
-    
+
+
     if (@regplot_arr > 0) {
-	
+
 	$sjadir = $reportdir;
 	$sjaname = "regplot";
 	$sjatime = 1;
 	$sjamem = 1000;
 	@sjaarray = @regplot_arr;
-	
+
 	&send_jobarray;
     }
 }
@@ -4229,13 +4229,13 @@ close FILE;
 #exit;
 
 if (@forestp_arr > 0) {
-    
+
     $sjadir = $reportdir;
     $sjaname = "forestplot";
     $sjatime = 1;
     $sjamem = 1000;
     @sjaarray = @forestp_arr;
-    
+
     &send_jobarray;
 }
 
@@ -4259,9 +4259,9 @@ if ($regplot_file) {
 	&mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile $regplot_collection @regplot_files");
 	&mysystem ("gzip $regplot_collection");
 	&mysystem ("cp $regplot_collection.gz $distdir");
-	
+
     }
- 
+
 
 }
 
@@ -4275,7 +4275,7 @@ if (@forestp_files > 0) {
 	&mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile $forest_plot_collection @forestp_files");
 #	&mysystem ("gzip $forest_plot_collection");
 	&mysystem ("cp $forest_plot_collection $distdir");
-	
+
     }
 }
 #sleep(10);
@@ -4287,7 +4287,7 @@ if (@forestphet_files > 0) {
 	&mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile $forest_plot_collection_het @forestphet_files");
 	&mysystem ("gzip $forest_plot_collection_het");
 	&mysystem ("cp $forest_plot_collection_het.gz $distdir");
-	
+
     }
 }
 
@@ -4399,8 +4399,8 @@ foreach my $dc_loc (@daner_allcoll) {
 	&mysystem ("touch manhattan.$dc_loc.nog2.pdf.empty");
 	print "empty: manhattan.$dc_loc.nog.pdf.empty\n" if ($debug);
     }
-    
-    
+
+
     unless (-e "manhattan.$dc_loc.nog.pdf") {
 	my $sys4 = "$manhattanplot2_script --maxy 32  $p_gene_txt_nog --title Manhattan-Plot --sig-gwa --cols 2,11,1,3 -areator $m1mhcfile --out $dc_loc.nog $infile";
 	unless (-e "manhattan.$dc_loc.nog.pdf.empty") {
@@ -4417,7 +4417,7 @@ foreach my $dc_loc (@daner_allcoll) {
     }
 
 #	}
-    
+
 
 
 
@@ -4457,30 +4457,30 @@ if (0) {
     foreach (@bimfli_files) {
 	my $bfile = $_;
 	$bfile =~ s/.bim$//;
-	
+
 	my $daner_bim = "daner_$bfile.gz";
-	
+
 #    push @sgwa_files, "s.$outname.$bfile"."_gwa.pdf";
 	push @sqq_files, "s.$outname.$bfile"."-qq.pdf";
-	
+
 	my $title_loc = $bfile;
 	$title_loc =~ s/qc2report//;
-	
+
 	push @qq_arr, "$qqplot_script --ac 100 --title QQ-plot-$title_loc.ac --cacohead -p 11 --out s.$outname.$bfile --ceiling 12 $daner_bim" unless (-e "s.$outname.$bfile"."-qq.pdf");
 #    push @gwa_arr, "gwa_plot --cols 2,11,1,3 --sig-gwa --title s.$outname.$bfile $daner_bim" unless (-e "s.$outname.$bfile"."_gwa.pdf");
-	
+
     }
 }
 
 
 if (@gwa_arr > 0) {
-    
+
     $sjadir = $reportdir;
     $sjaname = "manhplot";
     $sjatime = 1;
     $sjamem = 1000;
     @sjaarray = @gwa_arr;
-    
+
     &send_jobarray;
 }
 
@@ -4527,13 +4527,13 @@ unless (-e "$distdir/$areator_all_het.xls"){
 
 
 if (@qq_arr > 0) {
-    
+
     $sjadir = $reportdir;
     $sjaname = "qqplot";
     $sjatime = 1;
     $sjamem = 3000;
     @sjaarray = @qq_arr;
-    
+
     &send_jobarray;
 }
 
@@ -4585,12 +4585,12 @@ if ($gwclump) {
     if ($serial) {
 	$sys_tmp  = "$clumpnavi2_script --noindel --pfile $daner_all --hq_f .05 --hq_i .9 --out $daner_all --clu_p1 1.0 --clu_p2 1.0 --clu_window 500 --clu_r2 0.1 --refdir $areat_refdir --serial --sepa $sepa";
     }
-    
+
     my $bsys = $sys_tmp;
-    
-    
+
+
     unless (-e "$daner_all.clumped.xmhc.gz") {
-	
+
 	unless ($noclumper) {
 	    if (1) {
 
@@ -4601,7 +4601,7 @@ if ($gwclump) {
 		    my $sys_re = "$blueprint_script -b \"$bsys\" --wa 2 --di -j  --na _cl_$daner_all";
 		    &mysystem ($sys_re);
 		}
-		
+
 #		&mysystem ($bsys);
 	    }
 	    else {
@@ -4613,27 +4613,28 @@ if ($gwclump) {
 		}
 
 		if ($noti == 1) {
-		    
+
 		    &mysystem ('cat '.$areator_all.'.summary | '.$mutt_script.' -s Daner_results_ready_'.$outname.'  '.$email) ;
 
 		}
-		
+
 		&mysystem ("$sb_script manhattan.nog.$outname.pdf") ;
 		&mysystem ("$sb_script $areator_all.xls") ;
-		
+
 		#	    &mysystem ("send_dropbox manhattan.nog.$outname.pdf") ;
 		#	    &mysystem ("send_dropbox $areator_all.xls") ;
-		
+
 	    }
 	}
     }
-	
+
 }
 
 print "debug4\n" if ($debug);
 
 my $numbers_file = "basic.$outname.num.xls";
 unless (-e "$distdir/$numbers_file") {
+    chdir "$reportdir";
     my $sys = "$numbers_script basic.$outname $daner_all @daner_single";
 
 #    print "####################################### DEBUG ###############\n";
@@ -4663,18 +4664,18 @@ if ($onlymeta) {
 	unless (-e "$distdir/$daner_all") {
 	    &mysystem ("ln -sf $reportdir/$daner_meta $distdir/$daner_all");
 	}
-	
 
-	
+
+
 	unless (-e "replic/README") {
 	    &mysystem ("mkdir replic") unless (-e "replic");
 	    chdir ("replic");
-	    
+
 	    &mysystem ("$linksub_script $distdir/$areator_all") ;
 	    &mysystem ("$linksub_script $distdir/$daner_all.p3.gz") ;
-	    
+
 	    my $repl_txt = "$replicator_script --dan --areator $areator_all --gwas $daner_all.p3.gz --format 7 --refdir $areat_refdir --index --trust --rep REPFILE --nca XXX --nco XXX";
-	    
+
 	    &mysystem ("echo $repl_txt > README") ;
 	}
     }
@@ -4704,30 +4705,30 @@ my $ldsc_tar = "$daner_all.ldsc.tar.gz";
 
 unless ($noldsc) {
     my @ldsc_arr = ();
-    
-    
+
+
     my $ldsc_fini = "$daner_all.ldsc.fini";
     push @ldsc_arr, "$ldsc_script $daner_all" unless (-e $ldsc_fini);
-    
-    
+
+
     if (@ldsc_arr > 0) {
-	
+
 	$sjadir = $reportdir;
 	$sjaname = "ldsc";
 	$sjatime = 1;
 	$sjamem = 4000;
 	@sjaarray = @ldsc_arr;
-	
+
 	&send_jobarray;
     }
-    
-    
+
+
     unless (-e "$distdir/ldsc.$daner_all.tar.gz") {
-	
-	
+
+
 	&mysystem ("cp $daner_all.ldsc.sumstats.gz $distdir/$daner_all.ldsc.sumstats.gz");
 	&mysystem ("cp ldsc.$daner_all.tar.gz $distdir/ldsc.$daner_all.tar.gz");
-	
+
     }
 }
 
@@ -4818,25 +4819,25 @@ if (0) {
     foreach (@bimfli_files) {
 	my $bfile = $_;
 	$bfile =~ s/.bim$//;
-	
+
 	my $daner_bim = "daner_$bfile.gz";
-	
-	
+
+
 	my $laout = "s.$outname.$bfile"."_ngt";
 	my $laout_pdf = "$laout"."_lama-page1.pdf";
 	push @lahu_pdf_arr, $laout_pdf;
 	push @lahu_arr, "$lahunt_script -pcol 11 --best $best_lahunt --c1 12,1 --out $laout $daner_bim" unless (-e $laout_pdf);
-	
+
 	$laout = "s.$outname.$bfile"."_info";
 	$laout_pdf = "$laout"."_lama-page1.pdf";
 	push @lahu_pdf_arr, $laout_pdf;
 	push @lahu_arr, "$lahunt_script -pcol 11 --best $best_lahunt --c1 8,10 --out $laout $daner_bim" unless (-e $laout_pdf);
-	
+
 	$laout = "s.$outname.$bfile"."_frqa";
 	$laout_pdf = "$laout"."_lama-page1.pdf";
 	push @lahu_pdf_arr, $laout_pdf;
 	push @lahu_arr, "$lahunt_script -pcol 11 --best $best_lahunt --c1 6,10,f --out $laout $daner_bim" unless (-e $laout_pdf);
-	
+
 	$laout = "s.$outname.$bfile"."_frqu";
 	$laout_pdf = "$laout"."_lama-page1.pdf";
 	push @lahu_pdf_arr, $laout_pdf;
@@ -4848,7 +4849,7 @@ if (0) {
 #if (1) {
  #   if (@lahu_arr > 0) {
 #	&a2filenew ("lahu_job_list", @lahu_arr);
-	
+
 #	my $lc = @lahu_arr;
 #	my $jmem_loc = $jmem * 2;
 #	&mysystem ("cat lahu_job_list | blueprint --njob $job_bn_th -b \"prefix\" --mem $jmem_sm --wa 2 -j --i 8,2 --na lahu_$outname");
@@ -4864,31 +4865,31 @@ if (0) {
 
 unless ($nolahunt){
     if (@lahu_arr > 0) {
-	
+
 	$sjadir = $reportdir;
 	$sjaname = "lahu";
 	$sjatime = 1;
 	$sjamem = 2000;
 	@sjaarray = @lahu_arr;
-	
+
 	&send_jobarray;
     }
-    
+
 
 
 
     if (1) {
 	unless (-e "$distdir/report.qc.$outname.pdf.gz") {
-	    
+
 	    #### lahunts
 	    &mysystem ("$pdfjoin_script --quiet --rotateoversize false --outfile lahunt.$outname.pdf @lahu_pdf_arr");
 	    #    &mysystem ("pdfjoin --outfile lahunt.$outname.pdf @lahu_pdf_arr $scameta_out");
 	    &mysystem ("$pdfnup_script --quiet --nup 2x2 lahunt.$outname.pdf");
-	    
+
 	    &mysystem ("gzip -f lahunt.$outname-nup.pdf");
 	    &mysystem ("mv lahunt.$outname-nup.pdf.gz report.qc.$outname.pdf.gz");
 	    &mysystem ("cp report.qc.$outname.pdf.gz $distdir");
-	
+
 	}
     }
 }
@@ -4910,7 +4911,7 @@ push @sjaarray, "tmp";
 $sjatime = 2;
 $sjamem = 1000;
 
-    
+
 &send_jobarray;
 
 
@@ -5054,7 +5055,7 @@ unless (-e "$areator_all.summary") {
 }
 
 if ($noti == 1) {
-    
+
     &mysystem ('cat '.$areator_all.'.summary | '.$mutt_script.' -s Daner_results_ready_'.$outname.' '.$email) ;
 
 }
@@ -5118,7 +5119,7 @@ push @sjaarray, "tmp";
 $sjatime = 2;
 $sjamem = 1000;
 
-    
+
 &send_jobarray;
 
 
