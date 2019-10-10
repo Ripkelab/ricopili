@@ -68,7 +68,7 @@ version: $version
   --ploc STRING    location (absolute path) of plink, if other than in the path
   --help           print this message and exit
   --outdir STRING  outdir
-  --indir STRING   indir, where the data is 
+  --indir STRING   indir, where the data is
   --mds STRING     mds-file
   --idex STRING     idex-file
   --idin STRING     idin-file
@@ -107,12 +107,12 @@ version: $version
 
  batch_identifier: files matching this should all have no double id-entries
 
- expects a running plink and beagle version somewhere in the path, 
+ expects a running plink and beagle version somewhere in the path,
  otherwise specify a location with --ploc or --beoc (e.g. /home/user/plink/plink)
  beagle at least in version 3.1
 
  created by Stephan Ripke 2008 at MGH, Boston, MA
- 
+
 ";
 
 my $range_file = "NORANGEFILE";
@@ -120,7 +120,7 @@ my $sout = "";
 
 #### evaluate options
 use Getopt::Long;
-GetOptions( 
+GetOptions(
     "help"=> \my $help,
     "ploc=s"=> \$p2loc,
     "outdir=s"=> \$outdir,
@@ -314,16 +314,16 @@ if ($bfile) {
 
 
 }
-else { 
+else {
     unless ($dosf_file) {
 	#    &mysystem("cp $indir/*$bind.* .") unless (-e $famfile);
-	
+
 	&mysystem("cp $indir/$dosfile .") unless (-e $dosfile);
 	&mysystem("cp $indir/$mapfile .") unless (-e $mapfile);
 	&mysystem("cp $indir/$famfile .") unless (-e $famfile);
 	&mysystem("cp $indir/$ngtfile .") unless (-e $ngtfile);
-	
-	
+
+
     }
     else {
 	&mysystem("cp $rootdir/$dosf_file .") unless (-e $dosf_file);
@@ -379,18 +379,18 @@ my $score_w_file = "score.w.file";
 my $counts = 0;
 if ($danscore_file) {
 
-    unless (-e $danscore_nogz) { 
+    unless (-e $danscore_nogz) {
 	&mysystem("cp $rootdir/$danscore_file .") ;
 	if ($danscore_file =~ /gz$/) {
-	    &mysystem("zcat $danscore_file > $danscore_nogz"); 
+	    &mysystem("zcat $danscore_file > $danscore_nogz");
 	}
     }
-#    &mysystem("cp $rootdir/$danscore_file .") unless (-e $danscore_file); 
+#    &mysystem("cp $rootdir/$danscore_file .") unless (-e $danscore_file);
     &mysystem("cp $rootdir/$range_file .") unless (-e $range_file);
- 
+
 
     ####  write score and weight file.
-   
+
     unless (-e $score_p_file) {
 	my $beta = 0;
 	print "read map\n" if ($debug);
@@ -470,13 +470,13 @@ if ($danscore_file) {
 		print PFILE $snpname;
 		print PFILE "\t".$pv;
 		print PFILE "\n";
-		
+
 		print WFILE $snpname;
 		print WFILE "\t".$a1;
 		print WFILE "\t".log($or);
 		print WFILE "\n";
 	    }
-	    
+
 	}
 
 	close IFILE;
@@ -486,7 +486,7 @@ if ($danscore_file) {
     if ($counts ==0) {
 	print "no SNPs for polyscore left for this chunk\n" if ($debug);
 	&mysystem("echo chunk empty > $outdir/dan_$workname.profile.log");
-	
+
 	exit;
     }
 
@@ -524,40 +524,40 @@ if ($mds_name){
 
 
     if ($addcov_name ){
-	
+
 	die "$addcov_name:".$! unless open IFILE, "< $addcov_name";
 	my $head = <IFILE>;
-	
+
 	my @cells = &split_line($head);
 	my $id = $cells[0]."\t".$cells[1] ;
-	
+
 	foreach (2..$#cells) {
 	    $coco_str .= ",".$cells[$_];
 	    $addcov{$id} .= "\t".$cells[$_];
 	}
-	
+
 	while (my $line = <IFILE>){
 	    my @cells = &split_line($line);
 	    my $id = $cells[0]."\t".$cells[1] ;
 	    foreach (2..$#cells) {
 		$addcov{$id} .= "\t".$cells[$_];
 	    }
-	    
+
 	    #	print $id.$addcov{$id}."\n";
 	}
 	close IFILE;
-	
-	
-	
+
+
+
 	die "$mds_name:".$! unless open IFILE, "< $mds_name";
 	die "$mds_name.addcov:".$! unless open OFILE, "> $mds_name.addcov";
 	die "$mds_name.addcov.ex:".$! unless open EFILE, "> $mds_name.addcov.ex";
-	
+
 	while (my $line = <IFILE>){
 	    chomp($line);
 	    my @cells = &split_line($line);
 	    my $id = $cells[0]."\t".$cells[1] ;
-	    
+
 	    if (exists $addcov{$id}) {
 		print OFILE $line.$addcov{$id}."\n";
 	    }
@@ -568,7 +568,7 @@ if ($mds_name){
 	close IFILE;
 	close OFILE;
 	close EFILE;
-	
+
     }
 }
 
@@ -582,7 +582,7 @@ if ($mds_name){
 
 if ($mds_name){
 
- 
+
 
     foreach (@mcols) {
 	$coco_str .= ",C$_";
@@ -631,18 +631,18 @@ else {
 	###########################################################
 	### work here
 	####################################################
-	
+
 	die "$addcov_name:".$! unless open IFILE, "< $addcov_name";
 	my $head = <IFILE>;
-	
+
 	my @cells = &split_line($head);
 	my $id = $cells[0]."\t".$cells[1] ;
-	
+
 	foreach (2..$#cells) {
 	    $coco_str .= ",".$cells[$_];
 	}
-	
-	
+
+
 	$coco_str =~ s/^,//;
 	$cov_str = "--covar $addcov_name --covar-name $coco_str";
 
@@ -684,7 +684,7 @@ my %females_hash = ();
 my $keep_file = "keep_file.sex.idin";
 
 if ($males){
-    
+
     die "$famfile:".$! unless open IFILE, "< $famfile";
     die "$idin_name:".$! unless open OFILE, ">> $keep_file";
     while (my $line = <IFILE>){
@@ -700,7 +700,7 @@ if ($males){
 
 
 if ($females){
-    
+
     die "$famfile:".$! unless open IFILE, "< $famfile";
     die "$idin_name:".$! unless open OFILE, ">> $keep_file";
     while (my $line = <IFILE>){
@@ -719,7 +719,7 @@ if ($females){
 
 
 if ($idin_name){
-    
+
     die "$idin_name:".$! unless open IFILE, "< $idin_name";
     die "$idin_name:".$! unless open OFILE, ">> $keep_file";
     while (my $line = <IFILE>){
@@ -736,7 +736,7 @@ if ($idin_name){
 
 
 if ($idex_name){
-    
+
     die "$idex_name:".$! unless open IFILE, "< $idex_name";
     while (my $line = <IFILE>){
 	my @cells = &split_line($line);
@@ -768,12 +768,12 @@ if ($mds_name){
 	$mdsin{"$cells[0]\t$cells[1]"} = 1;
 	my $covstr = "";
 	foreach my $cc (@mcols) {
-	    print "$cc\n" if ($debug);
+	    #print "$cc\n" if ($debug);
 	    $covstr .= " ".$cells[$cc+2];
 	}
 	$mdsvals{"$cells[0]\t$cells[1]"} = $covstr;
 	print "$covstr\n" if ($debug);
-	sleep (4) if ($debug);
+	#sleep (4) if ($debug);
     }
     close FILE;
 }
@@ -787,24 +787,24 @@ if ($mds_name){
 my %ngt=();
 unless ($danscore_file) {
     unless (-e $ngtfile) {
-	
+
 	die "$workname.assoc.dosage.ngt:".$! unless open OFILE, "> dan_$workname.assoc.dosage.ngt";
 	print OFILE " CHR         SNP          BP  A1  A2   FRQ_A_000   FRQ_U_000    INFO      OR      SE       P   ngt\n";
 	close OFILE;
-	
+
 	&mysystem("gzip -f dan_$workname.assoc.dosage.ngt");
 	&mysystem("cp dan_$workname.assoc.dosage.ngt.gz $outdir");
-	
+
 #	if ($danscore_file) {
 #	    &mysystem("touch $outdir/dan_$workname.profile.log");
 #	}
-	
+
 	chdir ($outdir);
 	&mysystem("rm -fr $workdir");
 
 	print "no ngt file\n";
 	exit;
-	
+
     }
 
 
@@ -850,7 +850,7 @@ while (my $line = <IFILE>){
 	    print EFILE "$cells[0]\t$cells[1]\n";
 
 
-	    
+
 	    delete ($alphe{"$cells[0]\t$cells[1]"});
 	    next;
 	}
@@ -858,10 +858,10 @@ while (my $line = <IFILE>){
 #	next unless (exists $mdsin{"$cells[0]\t$cells[1]"});
     }
 
-    my $del = 0; 
-    
+    my $del = 0;
+
     if ($pheno){
-	
+
 	my $c0 = $cells[0];
 #	    print "hier: ".$c0."\t".$cells[1]."\t".$alphe{$c0."\t".$cells[1]}."\n";
 	if ($star == 0) {
@@ -869,7 +869,7 @@ while (my $line = <IFILE>){
 	}
 	if (exists $alphe{$c0."\t".$cells[1]}){
 #	    print $c0."\t".$cells[1]."\n";
-	    $cells [5] = $alphe{$c0."\t".$cells[1]} 
+	    $cells [5] = $alphe{$c0."\t".$cells[1]}
 	}
 	else {
 	    $cells [5] = -9;
@@ -881,15 +881,15 @@ while (my $line = <IFILE>){
 #	}
     }
 
- #   print "new: $cells[0]";    
- #   print " $cells[1]";    
- #   print " $cells[2]";    
- #   print " $cells[3]";    
- #   print " $cells[4]";    
- #   print " $cells[5]\n";    
+ #   print "new: $cells[0]";
+ #   print " $cells[1]";
+ #   print " $cells[2]";
+ #   print " $cells[3]";
+ #   print " $cells[4]";
+ #   print " $cells[5]\n";
  #   sleep(1);
 
-    
+
     print OFILE "$cells[0]";
     print OFILE "\t$cells[1]";
     print OFILE "\t$cells[2]";
@@ -897,8 +897,8 @@ while (my $line = <IFILE>){
     print OFILE "\t$cells[4]";
     print OFILE "\t$cells[5]";
     print OFILE "\n";
-    
-    
+
+
     next if (exists $idex{$cells[0]."\t".$cells[1]});
     if ($idin_name) {
 	next unless (exists $idin{$cells[0]."\t".$cells[1]});
@@ -915,7 +915,7 @@ while (my $line = <IFILE>){
 #    print "phenotype: $cells[5]\n";
     $ncaco{$cells[5]} ++;
     $Nall++ if ($del == 0);
-    
+
 }
 close IFILE;
 close OFILE;
@@ -937,7 +937,7 @@ if ($ncaco{1} + $ncaco{2} < 5) {
 
 #print "debug sleep\n";
 #sleep(10);
-    
+
 
 #die "$mds_name.ex: ".$! unless open FILE, "> $mds_name.ex";
 #foreach (keys %mdsin){
@@ -963,21 +963,21 @@ if ($ncaco{1} + $ncaco{2} < 5) {
 
 
 #    exit;
-    
 
-    
+
+
 ###########################################
 ### here actual logistic regression
 ############################################
 my $idex_str = "";
 if ($idex_name) {
     $idex_str = "--remove $idex_name";
-}    
+}
 
 my $idin_str = "";
 if ($idin_name || $males || $females) {
     $idin_str = "--keep $keep_file";
-}    
+}
 
 
 
@@ -1040,14 +1040,14 @@ if ($danscore_file) {
 	my @loggrep_arr = &split_line($loggrep);
 	$wc_soll = $loggrep_arr[0];
     }
-    
+
     $wc_soll = $wc_soll * 1;
     if ($wc_soll < 1) {
 	print "Error: less than 1 ID left\n";
 	exit;
     }
 
-	
+
     foreach(@profilefiles) {
 	my $wc_str = `wc -l $_`;
 	my @wc_arr = &split_line($wc_str);
@@ -1076,16 +1076,16 @@ if ($danscore_file) {
 	    if (-e $inname_loc) {
 		die "$inname_loc:".$! unless open IFILE, "< $inname_loc";
 		die "$outname_loc:".$! unless open PFILE, "> $outname_loc";
-		
+
 		my $line = <IFILE>;
-		
+
 		print PFILE "FID\tIID\tCOUNT\tPHENO\tSCORE";
 		print PFILE "\t".$mdsvals{"FID\tIID"};
 		print PFILE "\n";
-		
+
 		while ($line = <IFILE>){
 		    my @cells = &split_line($line);
-		    
+
 		    print PFILE "$cells[0]";
 		    print PFILE "\t$cells[1]";
 		    print PFILE "\t$cells[3]";
@@ -1093,10 +1093,10 @@ if ($danscore_file) {
 		    print PFILE "\t$cells[5]";
 		    print PFILE "\t".$mdsvals{"$cells[0]\t$cells[1]"};
 		    print PFILE "\n";
-		    
+
 		    $count_bin[$nn] += $cells[3];
 		    $n_bin[$nn]++;
-		    
+
 		}
 		close IFILE;
 		close PFILE;
@@ -1116,13 +1116,13 @@ if ($danscore_file) {
 	    $trio_txt = "--trio";
 	}
 	my $sys = "danscore_result_3 --out $workname --tarball $workname.tar.gz $trio_txt";
-	&mysystem($sys);	
+	&mysystem($sys);
 
 
-	## add first column to output file 
+	## add first column to output file
 	die "$workname.poly.out.txt:".$! unless open IFILE, "< $workname.poly.out.txt";
 	die "$workname.poly.out.txt.combined:".$! unless open PFILE, "> $workname.poly.out.txt.combined";
-	
+
 	my $line = <IFILE>;
 	print PFILE "NBIN\t$line";
 	my $nn=1;
@@ -1139,22 +1139,22 @@ if ($danscore_file) {
 	close PFILE;
 
 
-	
+
 	&mysystem("cp $workname.tar.gz $outdir/");
 	&mysystem("cp $workname.pdf $outdir/");
 	&mysystem("cp $workname.poly.out.txt.combined $outdir/");
 	&mysystem("cp R.$workname.hl_nw.Rin $outdir/");
-	
+
     }
- 
-    else {   
+
+    else {
 	&mysystem("cp $workname.S* $outdir/");
 	&mysystem("mv $workname.log $outdir/dan_$workname.profile.log");
     }
-    
+
     &mysystem("mv $famfile.pt.ex $outdir") unless (-e "$outdir/$famfile.pt.ex");
 
-    
+
     chdir ($outdir);
 
 
@@ -1168,13 +1168,13 @@ if ($danscore_file) {
 #exit;
 
 
-    
+
 ###########################################
 ### here permutation
 ############################################
 
 
-foreach my $iperm (1..$permut) {    
+foreach my $iperm (1..$permut) {
 
     unless (-e "$outdir/perm_$workname.perm$iperm"){
 
@@ -1190,16 +1190,16 @@ foreach my $iperm (1..$permut) {
 	    print PFILE "\t$cells[4]";
 	    print PFILE "\t$cells[5]";
 	    print PFILE "\n";
-	    
+
 	}
 	close IFILE;
 	close PFILE;
-	
+
 	my $sys = "$p2loc/plink --silent --memory 2000 --dosage $dosfile format=2 --fam $famfile.pt.perm --allow-no-sex --out $workname.perm --map $mapfile $cov_str";
 	print "$sys\n" if ($debug);
-	
+
 	&mysystem($sys);
-	
+
 	die "$workname.perm.assoc.dosage:".$! unless open IFILE, "< $workname.perm.assoc.dosage";
 	die "perm_$workname.perm$iperm:".$! unless open OFILE, "> perm_$workname.perm$iperm";
 	my $head = <IFILE>;
@@ -1210,34 +1210,34 @@ foreach my $iperm (1..$permut) {
 	}
 	close IFILE;
 	close OFILE;
-	
+
 	&mysystem("cp perm_$workname.perm$iperm $outdir") ;
 	&mysystem("rm $workname.perm.assoc.dosage") ;
-	
-	
+
+
 	unless (-e "$outdir/permfam.perm$iperm") {
-	    
+
 	    die "$famfile.pt.perm:".$! unless open IFILE, "< $famfile.pt.perm";
 	    die "permfam.perm$iperm:".$! unless open PFILE, "> permfam.perm$iperm";
 	    while (my $line = <IFILE>){
 		my @cells = &split_line($line);
-		
+
 		print PFILE "$cells[0]";
 		print PFILE "\t$cells[1]";
 		print PFILE "\t$cells[5]";
 		print PFILE "\n";
-		
+
 	    }
 	    close IFILE;
 	    close PFILE;
-	    
+
 	    &mysystem("cp permfam.perm$iperm $outdir") ;
-	    
+
 	}
     }
- 
+
 #    exit;
-   
+
 }
 
 
@@ -1251,8 +1251,8 @@ foreach my $iperm (1..$permut) {
 #  add NGT information
 #################################################
 
- 
-unless ($danscore_file) {   
+
+unless ($danscore_file) {
     die "$workname.assoc.dosage:".$! unless open IFILE, "< $workname.assoc.dosage";
     die "$workname.assoc.dosage.ngt:".$! unless open OFILE, "> dan_$workname.assoc.dosage.ngt";
     my $head = <IFILE>;
@@ -1281,7 +1281,7 @@ unless ($danscore_file) {
 
     &mysystem("mv $famfile.pt.ex $outdir") unless (-e "$outdir/$famfile.pt.ex");
     &mysystem("mv $workname.log $outdir/dan_$workname.assoc.log");
-    
+
     chdir ($outdir);
     &mysystem("mv dan_$workname.assoc.dosage.ngt.gz.tmp dan_$workname.assoc.dosage.ngt.gz");
     &mysystem("rm $outdir/dan_$workname.assoc.dosage.plink_started");

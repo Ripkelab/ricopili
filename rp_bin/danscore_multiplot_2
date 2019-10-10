@@ -6,7 +6,7 @@ use strict;
 # read config file
 #############################
 
-my $conf_file = $ENV{HOME}."/ricopili.conf";
+my $conf_file = $ENV{RPHOME}."/ricopili.conf";
 my %conf = ();
 
 die $!."($conf_file)" unless open FILE, "< $conf_file";
@@ -72,7 +72,7 @@ version: $version
 
 #### evaluate options
 use Getopt::Long;
-GetOptions(     
+GetOptions(
   "help" => \my $help,
     "minusone" => \my $minusone,
     "out=s" => \my $out,
@@ -199,7 +199,7 @@ foreach (@p_th) {
 ##### go through all files
 my $fico = 0; ## this is just a counter
 
-## here the columns 
+## here the columns
 my $or_col = 11;
 my $coeff_col = 16;
 my $orl_col = 12;
@@ -462,7 +462,7 @@ mtext("R - squared", side=2, line=-1, cex.lab=1,las=2, padj =-18)
    coldiff = coldiff * 1.5;
   }
 
-#  if (XAXIS) { 
+#  if (XAXIS) {
 #   text(x = colMeans(rip)-coldiff, y= 0.00, offset = 1.5, pos = 1, xpd =T , line = 1, labels = colnames(plotmatrix_r2), cex= cex.loc,srt=45) ### this here is new
 #  }
 
@@ -477,7 +477,7 @@ mtext("R - squared", side=2, line=-1, cex.lab=1,las=2, padj =-18)
 # ripx_nocov = rip [11:22]
 my.cex = .7
 if (FICO * NPTH > 100) {
-  my.cex =.3 
+  my.cex =.3
 }
 
 print (FICO)
@@ -508,7 +508,7 @@ print (FICO)
 #  print (ripx)
 
 #if (PUBL) {
-    text(x=ripx,y=poly_r2[,cc],sig,srt=75,cex=my.cex,adj =c(-.2,0)) 
+    text(x=ripx,y=poly_r2[,cc],sig,srt=75,cex=my.cex,adj =c(-.2,0))
 #}
 
 
@@ -544,7 +544,7 @@ if (PUBL) {
 #######################################################################
 ## here the plot for one p-value threshold
 
-xl = as.numeric(poly_nca["PTHRESH",]); 
+xl = as.numeric(poly_nca["PTHRESH",]);
 yl = as.numeric(poly_r2_b["PTHRESH",]);
 ylh1 = as.numeric(poly_h2l1["PTHRESH",]);
 ylh2 = as.numeric(poly_h2l2["PTHRESH",]);
@@ -553,33 +553,33 @@ print (yl);
 print (poly_nca);
 print (poly_r2_b);
 ### r2
-plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = PTHRESH"); 
+plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = PTHRESH");
 text(xl,yl,labels= colnames(poly_r2_b),cex=0.4,pos=3)
 
 
 ### 2nd value
-xl = as.numeric(poly_nca["P2THRESH",]); 
+xl = as.numeric(poly_nca["P2THRESH",]);
 yl = as.numeric(poly_r2_b["P2THRESH",]);
 ylh1 = as.numeric(poly_h2l1["P2THRESH",]);
 ylh2 = as.numeric(poly_h2l2["P2THRESH",]);
-plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = P2THRESH"); 
+plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = P2THRESH");
 text(xl,yl,labels= colnames(poly_r2_b),cex=0.4,pos=3)
 
 ### 3nd value
-xl = as.numeric(poly_nca["P3THRESH",]); 
+xl = as.numeric(poly_nca["P3THRESH",]);
 yl = as.numeric(poly_r2_b["P3THRESH",]);
 ylh1 = as.numeric(poly_h2l1["P3THRESH",]);
 ylh2 = as.numeric(poly_h2l2["P3THRESH",]);
-plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = P3THRESH"); 
+plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = P3THRESH");
 text(xl,yl,labels= colnames(poly_r2_b),cex=0.4,pos=3)
 
 
 ### 4th value
-xl = as.numeric(poly_nca["P4THRESH",]); 
+xl = as.numeric(poly_nca["P4THRESH",]);
 yl = as.numeric(poly_r2_b["P4THRESH",]);
 ylh1 = as.numeric(poly_h2l1["P4THRESH",]);
 ylh2 = as.numeric(poly_h2l2["P4THRESH",]);
-plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = P4THRESH"); 
+plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = P4THRESH");
 text(xl,yl,labels= colnames(poly_r2_b),cex=0.4,pos=3)
 
 
@@ -589,15 +589,15 @@ cih = ylh1 + 2* ylh2
 cil = ylh1 - 2* ylh2
 maxyl = max(cih)
 minyl = min(cil)
-#plot(xl,ylh1,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. H2L on p = PTHRESH"); 
+#plot(xl,ylh1,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. H2L on p = PTHRESH");
 
 #text(xl,ylh1,labels= colnames(poly_r2_b),cex=0.4,pos=3)
 
 ll = length(ylh1)
 
-plot(1:ll,type = "b",ylh1,cex=.6,col="red",xlab="index",ylab="H2L", main = "H2L on p = PTHRESH",ylim =c(minyl,maxyl)); 
-points(1:ll,type = "b",cih,cex=.6,col="black"); 
-points(1:ll,type = "b",cil,cex=.6,col="black"); 
+plot(1:ll,type = "b",ylh1,cex=.6,col="red",xlab="index",ylab="H2L", main = "H2L on p = PTHRESH",ylim =c(minyl,maxyl));
+points(1:ll,type = "b",cih,cex=.6,col="black");
+points(1:ll,type = "b",cil,cex=.6,col="black");
 
 
 
@@ -614,7 +614,7 @@ points(1:ll,type = "b",cil,cex=.6,col="black");
  for (ii in 2:FICO) {
    outname = colnames(plotmatrix)[ii-1]
    print (outname)
-   pdf (paste(outname,"_OUTNAME",sep=""),8.7,6)  
+   pdf (paste(outname,"_OUTNAME",sep=""),8.7,6)
    pm_loc = plotmatrix [,ii-1]
    rip_loc <- barplot(pm_loc,beside=T,legend=F,col=mycol, main = "polygene R2 + P", ylim=c(minp,maxp*1.2),cex.names = .5, axisnames= F,las = 1)
    dev.off();
@@ -672,8 +672,8 @@ else {
 }
 $R_templ =~ s/OUTNAME/$out.pdf/g;
 #$R_templ =~ s/XLAB/$xlab[$ccol]/g;
-    
-    
+
+
 &a2file ("$out.R_poly.in", $R_templ);
 &mysystem("$r_sys < $out.R_poly.in --vanilla ");
 #&mysystem("source /broad/software/scripts/useuse; use R-2.14; R< R_poly.in --vanilla ");
