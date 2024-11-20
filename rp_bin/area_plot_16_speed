@@ -496,7 +496,6 @@ chdir ($workdir) or die;
 my $pfile=$ARGV[0];
 
 #print "cp $rootdir/$pfile .\n";
-#print "$workdir\n";
 #print &Cwd::cwd()."\n" ;
 
 #exit;
@@ -551,7 +550,7 @@ $genestr =~ tr/a-z/A-Z/;
 if ($areastr eq "0,0,0" || $areastr eq "NOAREA") {
 
     unless ($genestr eq "NOGENE") {
-	my @refgene_files = `ls $refdir/refGene*`;
+	my @refgene_files = `ls -t $refdir/refGene*`;
 	if (@refgene_files > 0) {
 	    $gene_list_0610 = $refgene_files[0];
 	}
