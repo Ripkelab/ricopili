@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
 
+
 use strict;
 use warnings;
 
@@ -59,6 +60,10 @@ GetOptions(
     "fam=s"=> \my $famfile,
     "mac_th=i"=> \$mac_th,
     "debug"=> \my $debug,
+    "no_fasta"=> \my $no_fasta,
+    "build_hg38"=> \my $build_hg38,
+
+
     );
 
 
@@ -77,6 +82,7 @@ version: $version
         --fam STRING        defines the nuber of haplotypes, only used with --chrx
 
         --debug             extended output
+        --no_fasta          no alignment with fasta file
 
 
 
@@ -107,6 +113,9 @@ if ($chrX) {
 
 
 my $fasta_file = "$bcrloc/human_g1k_v37.fasta";
+if ($build_hg38) {
+    $fasta_file = "$bcrloc/Homo_sapiens_assembly38.fasta";
+}
 
 unless (-e $fasta_file){
     print "Error: $fasta_file not existing\n";
@@ -126,8 +135,15 @@ if ($bcloc =~ / /) {
 
 if (1) {
 #unless ($chr23) {
-    my $sys = "$bcloc"."bcftools norm -m-both -f $fasta_file $vcffile | $bcftools2 filter -i \' MAC>".$mac_th.$chrX_filter." \'| gzip -c > $vcffile.filtnorm.gz";
+    my $sys = "$bcloc"."bcftools norm -m-both -N -f $fasta_file $vcffile | $bcftools2 filter -i \' MAC>".$mac_th.$chrX_filter." \'| gzip -c > $vcffile.filtnorm.gz";
+    if ($no_fasta) {
+	$sys = "$bcftools2 filter -i \' MAC>".$mac_th.$chrX_filter." \' $vcffile| gzip -c > $vcffile.filtnorm.gz";
+    }
     print "$sys\n"  if ($debug);
+    die $! unless open CMDFILE, "> $vcffile.filtnorm.gz.cmd";
+    print CMDFILE $sys."\n";
+    close CMDFILE;
+    
     my $sc =system ($sys);
     if ($sc != 0){
 	print "Error systemcode: $sc\n";

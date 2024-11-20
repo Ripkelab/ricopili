@@ -90,13 +90,30 @@ my $ffile = $ARGV[0];
 
 my $in_name = $ffile;
 my $out_name = $ffile.".shape";
+my $out_name5 = $ffile.".shape5";
+my $out_name5f = $ffile.".shape5.fam";
 
 die $!."($in_name)" unless open IFILE, "< $in_name";
 die $!."($out_name)" unless open OFILE, "> $out_name";
+die $!."($out_name5)" unless open OFILE2, "> $out_name5";
+die $!."($out_name5f)" unless open OFILE3, "> $out_name5f";
 
 while (my $line = <IFILE>){
     my @cells = @{&split_line_ref(\$line)};
     my $fid = $cells[0];
+
+    if ($cells[2] ne "0" || $cells[3] ne "0") {
+	## SHAPE5
+	my $sh5_str = "$fid"."____"."$cells[1]"."\t"."$fid"."____"."$cells[2]"."\t"."$fid"."____"."$cells[3]";
+	print OFILE2 "$sh5_str\n";
+
+	##shape5.fam
+	my $sh5_str = "$fid"."_pca"."\t".$cells[1]."\t0\t0"."\t".$cells[4]."\t2\n";
+	$sh5_str   .= "$fid"."_pco"."\t".$cells[1]."\t0\t0"."\t".$cells[4]."\t1\n";
+	print OFILE3 "$sh5_str";
+	
+    }
+
     $fid =~ s/.*\*//;
     $cells[1] = "$fid...$cells[1]";
     if ($cells[2] ne "0") {
@@ -111,6 +128,8 @@ while (my $line = <IFILE>){
 
 close IFILE;
 close OFILE;
+close OFILE2;
+close OFILE3;
 
 
 

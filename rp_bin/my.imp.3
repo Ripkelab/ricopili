@@ -18,6 +18,7 @@ use Ricopili::Utils qw(trans);
 my $i2loc = &trans("i2loc");
 my $i4loc = &trans("i4loc");
 my $m3loc = &trans("minimac3loc");
+my $m4loc = &trans("minimac4loc");
 
 
 my $buff = 1000;
@@ -39,6 +40,7 @@ Usage : my.imp.3 --out OUTNAME --in INNAME --ref REFFILE --gema GEMAFILE --multi
  --imp4            use impute4 instead of impute2
 
  --minimac         perform the imputation using Minimac3
+ --mm4             perform the imputation using Minimac4
  --multi INT       use multithreading in minimac3
  --chr             chromosome number; required for Minimac3
 
@@ -67,28 +69,37 @@ GetOptions(
     "chrX=s"=> \my $chrx,
     "imp4"=> \my $imp4,
     "minimac"=> \my $minimac,
+    "mm4"=> \my $mm4,
     "chrind=s"=> \$chr,
     "debug"=> \my $debug,
+    "help"=> \my $help,
 
     );
 
 
 
 
-if (0) {
-if ($outname eq "" || $inname eq ""  || (!$minimac && $gemafile eq "") || $reffile eq "" || $refstart eq ""|| $refend eq ""  || ($minimac)){
+#if (0) {
+#    if ($outname eq "" || $inname eq ""  || (!$minimac && $gemafile eq "") || $reffile eq "" || $refstart eq ""|| $refend eq ""  || ($minimac)){
+if ($help){	
     print "$usage\n";
-    print "$outname\n";
-    print "$inname\n";
-    print "$gemafile\n";
-    print "$reffile\n";
-    print "$refstart\n";
-    print "$refend\n";
-    print "$minimac\n";
-    print "$chr\n";
-    print "und?\n";
-    die;
-}
+    print "outname: $outname\n";
+    print "inname: $inname\n";
+    print "gemafile: $gemafile\n";
+    print "chr: $chr\n";
+    print "reffile: $reffile\n";
+    print "refstart: $refstart\n";
+    print "refend: $refend\n";
+    if ($minimac){
+	print "minmac is on\n";
+    }
+    else {
+	print "minmac is on\n";
+    }
+
+
+    exit;
+
 }
 
 if ($minimac and $reffile !~ /m3vcf/) {
@@ -182,6 +193,21 @@ elsif ($imp4) {
     $sys_loc = "$i4loc/$imp4_bin -o_gz -seed 1234567 $xtxt -m $gemafile -h $reffile.hap.gz -l $reffile.legend.gz -g $inname -int $start_loc $end_loc -Ne 20000 -buffer $buff -o $outname $allow_str -no_maf_align -snp_blocks > $outname.log";
 #    $sys_loc .= "; gunzip -c $reffile.legend.gz > $outname.map";
 
+    
+}
+elsif ($mm4) {
+    my $refstart_b = $refstart*1.0e06;
+    my $refend_b = $refend*1.0e06;
+    my $buff_b = $buff*1000;
+    
+## apparently outdated    my $subset_txt = "--chr $chr --start $refstart_b --end $refend_b --overlap $buff_b";
+    my $subset_txt = "--region $chr:$refstart_b-$refend_b --overlap $buff_b";
+    $sys_loc = "$m4loc/minimac4 $subset_txt  $reffile $inname -o $outname.dose.vcf.gz -f GT,DS,GP 2> $outname.log";
+#    print "$sys_loc\n";
+#    exit;
+#    $sys_loc .= "; gunzip -c $reffile.legend.gz > $outname.map";
+
+#    /psych/ripke/share/gio/Ricopili_Dependencies_sr_1118b/Minimac4/minimac4-4.1.2-Linux-x86_64/bin/minimac4 /psych/ripke/imputation_references/hla_imputation/HLA-1KG_allancestry_jul23e_b/HLA_1KG_mm.chr6.impute.msav xmsaf.ref.phased.bcf -o xmsaf.ref.phased.imp.bcf -f GP
     
 }
 

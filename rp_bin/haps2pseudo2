@@ -1,6 +1,33 @@
 #!/usr/bin/env perl
 use strict;
+use warnings;
 
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+use Compress::Zlib ;
+
+
+#############################
+# read config file
+#############################
+
+my $bcloc = &trans("bcloc");
+my $rloc = &trans("rloc");
+my $r_sys = "$rloc";
+$r_sys =~ s/_SPACE_/ /g;
+
+
+system("$r_sys RHOME > /dev/null");
+my $status = ($? >> 8);
+if ($status != 0) {
+    print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
+    exit;
+}
 
 
 ###########################################################################################################
@@ -40,6 +67,8 @@ version: $version
   --chrX           chrX is phased without relatedness so needs extra attention
   --out            outname (haps/sample)
 
+  --shapeit5       take phases from bcf, run with shapeit5 and --pedigree
+                    then it is : $progname [options] bcf shape5	 
 
  converts haps/sample (out of shapeit family phasing) into pseudo-case/control
 
@@ -54,6 +83,7 @@ use Getopt::Long;
 GetOptions( 
     "help"=> \my $help,
     "chrX"=> \my $chrx,
+    "shapeit5"=> \my $shapeit5,
     "out=s"=> \$outname,
     );
 
@@ -85,6 +115,81 @@ sub split_line_ref {
 }
 
 
+#################################################################
+# R script for shapeit5 (written by georgia panagiotaropoulou)
+###############################################################
+
+my $R_templ = '
+## #!/usr/bin/env Rscript
+
+## written by georgia panagiotaropoulou
+
+args = commandArgs(trailingOnly=TRUE)
+vcf.file <- "VCFFILE.rest" # old args[1] #VCF/BCF basename (without the ".vcf" extension)
+trio.file <- "TRIOFILE" # args[2]
+
+vcf <- read.table(vcf.file, stringsAsFactors=F, comment.char = "", , h=T, check.names=F)
+#names(vcf)[1] <- "CHROM"
+
+trio <- read.table(trio.file, stringsAsFactors=F)
+names(trio) <- c("ID","FATHER","MOTHER")
+
+vcf.out <- vcf[,1:9]
+
+for (i in seq(1,dim(trio)[1])) { ## Do for all trios
+ #icas   <- gsub("\\\\-",".", gsub("\\\\*",".",trio[i,1]))
+ #icas.f <- gsub("\\\\-",".", gsub("\\\\*",".",trio[i,2]))
+ #icas.m <- gsub("\\\\-",".", gsub("\\\\*",".",trio[i,3]))
+
+ icas   <- trio[i,1] #Offspring
+ icas.f <- trio[i,2] #Father
+ icas.m <- trio[i,3] #Mother
+
+ cohort.name <- strsplit(strsplit(icas, split="____")[[1]][1], split="\\\\*")[[1]][1]
+ fid <- strsplit(strsplit(icas, split="____")[[1]][1], split="\\\\*")[[1]][2]
+ iid <- strsplit(icas, split="____")[[1]][2]
+
+ ## Extract family (trio) genotypes
+ ivcf <- vcf[,c(icas,icas.f,icas.m)]
+
+ ## Create pseudocontrol genotypes
+ igeno.f <- apply(ivcf, 1, function(x) as.numeric(strsplit(x[2],split="\\\\|")[[1]][1]) + as.numeric(strsplit(x[2],split="\\\\|")[[1]][2]) - as.numeric(strsplit(x[1],split="\\\\|")[[1]][1]))
+ igeno.m <- apply(ivcf, 1, function(x) as.numeric(strsplit(x[3],split="\\\\|")[[1]][1]) + as.numeric(strsplit(x[3],split="\\\\|")[[1]][2]) - as.numeric(strsplit(x[1],split="\\\\|")[[1]][2]))
+
+ ## Format output
+ igeno.con <- as.data.frame(paste0(as.character(igeno.f),"|",as.character(igeno.m)))
+ igeno.cas <- as.data.frame(ivcf[,1])
+
+ icas.name <- paste0(cohort.name,"*",fid,"_pca","____",iid)
+ icon.name <- paste0(cohort.name,"*",fid,"_pco","____",iid)
+ colnames(igeno.cas) <- icas.name
+ colnames(igeno.con) <- icon.name
+
+ vcf.out <- cbind(vcf.out, igeno.cas, igeno.con)
+
+}
+
+## Write output
+#system(paste0("head -8 ", vcf.file, ".vcf > ", vcf.file, ".caco.vcf"), intern=T)
+write.table(vcf.out, file=paste0(vcf.file,".pseudo.tmp"), quote=F, row.names=F, sep="\t")
+#system(paste0("cat ", vcf.file, ".caco.tmp >> ", vcf.file, ".caco.vcf"), intern=T)
+#system(paste0("rm ", vcf.file,".caco.tmp"), intern=T)
+';
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    &error ($!) unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
 
 #################################################
 #  BEGIN
@@ -96,6 +201,77 @@ my $hfile = $ARGV[0];
 my $sfile = $ARGV[1];
 
 my $outhaps = $outname.".haps";
+
+my $sc = 0;
+
+if ($shapeit5) {
+
+
+    ### make vcf
+    my $bcftools_cmd = $bcloc . "/bcftools";
+    my $sys_loc_bcftools = "$bcftools_cmd view $hfile.bcf > $hfile.vcf";
+    $sc = system ($sys_loc_bcftools);
+
+    if ($sc != 0 ) {
+	print "Error with: $sys_loc_bcftools\n";
+	exit;
+    }
+
+    ## separate VCF
+    my $sys_loc_sep_header = "grep ^## $hfile.vcf > $hfile.vcf.header; grep -v ^## $hfile.vcf > $hfile.vcf.rest";
+    $sc = system ($sys_loc_sep_header);
+
+    if ($sc != 0 ) {
+	print "Error with: $sys_loc_sep_header\n";
+	exit;
+    }
+
+
+    ## make pseudocontrols
+    $R_templ =~ s/VCFFILE/$hfile.vcf/;
+    $R_templ =~ s/TRIOFILE/$sfile/;
+
+    &a2file ( "$hfile.R.pseudo.in" , $R_templ);
+    my $system_R="$r_sys < $hfile.R.pseudo.in --vanilla > /dev/null 2>&1 \n";
+    $sc = system ($system_R);
+
+    if ($sc != 0 ) {
+	print "Error with: $system_R\n";
+	exit;
+    }
+
+    
+    ## merge header
+    my $sys_loc_add_header = "cat $hfile.vcf.header $hfile.vcf.rest.pseudo.tmp > $hfile.pseudo.vcf";
+    $sc = system ($sys_loc_add_header);
+    if ($sc != 0 ) {
+	print "Error with: $sys_loc_add_header\n";
+	exit;
+    }
+
+    ## make bcf
+    my $bcftools_cmd2 = $bcloc . "/bcftools";
+    my $sys_loc_bcftools2 = "$bcftools_cmd  convert -O b -o $hfile.pseudo.bcf $hfile.pseudo.vcf; $bcftools_cmd index $hfile.pseudo.bcf";
+#    my $sys_loc_bcftools2 = "$bcftools_cmd  view -Ou $hfile.pseudo.vcf > $hfile.pseudo.bcf; $bcftools_cmd index $hfile.pseudo.bcf";
+    
+
+#    	print "now: $sys_loc_bcftools2\n";
+#	exit;
+    
+    $sc = system ($sys_loc_bcftools2);
+
+    if ($sc != 0 ) {
+	print "Error with: $sys_loc_bcftools2\n";
+	exit;
+    }
+
+    &mysystem ("touch $outhaps.fini");	    
+
+    exit;
+}
+
+
+
 my $outsample = $outname.".sample";
 my $outsampleimp4 = $outname.".sample.i4";
 my $outfam = $outname.".fam";
@@ -124,7 +300,7 @@ print "$outfam\n";
 
 die $!."($sfile)" unless open IFILE, "< $sfile";
 my $line = <IFILE>;
-my $line = <IFILE>;
+$line = <IFILE>;
 
 
 my $tc =0;
@@ -198,7 +374,7 @@ foreach my $cl (@out_arr) {
 
 
 #    print OFILE " 0\n";
-    my $id = $cl."_pco";
+    $id = $cl."_pco";
 
     print OFILE $id;
     print OFILE " ".$id;
@@ -254,7 +430,7 @@ print "diff\n";
 
 die $!."($outhaps)" unless open OFILE, "> $outhaps";
 die $!."($hfile)" unless open IFILE, "< $hfile";
-my $sc = 0;
+$sc = 0;
 my $pt = 0;
 
 #foreach my $line (@inlines){

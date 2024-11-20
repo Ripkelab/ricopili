@@ -17,7 +17,7 @@ srand(0);
 ###########################################################################################
 
 #print "********************************\nremember refGene annotaion\n";
-#print "********************************\n";
+#print "********************************\n"q;
 #sleep(1);
 
 
@@ -139,7 +139,10 @@ my $gmchr_template = "genetic_map_chrXXX_combined_b37.chr.txt";
 my $gmchr_template_23 = "genetic_map_chrXXX_combined_b37.chr.txt.23";
 
 my $vcf_site = "";
-my $gm_site = "http://mathgen.stats.ox.ac.uk/impute/ALL_1000G_phase1integrated_feb2012_impute/";
+my $gm_site_hg19 = "http://mathgen.stats.ox.ac.uk/impute/ALL_1000G_phase1integrated_feb2012_impute/";
+my $gm_site_hg38 = "https://personal.broadinstitute.org/sawasthi/share_links/g63dfjcuEExoHdxs6ldTCbqvHEU7JK_README";
+my $gm_site = "";
+
 
 my $walltime = 4;
 
@@ -173,11 +176,18 @@ my $chunksnps = 30000; ## min number of SNPs in each chunk
 use Getopt::Long;
 GetOptions( 
     "out_templ=s"=> \$out_templ,
+    "gm_templ=s"=> \$gm_template,
     "chunksnps=i"=> \$chunksnps,
     "sample_root=s"=> \$sample_root,
     "outname=s"=> \my $outname,
     "bn_job=i"=> \$job_bn_th,
     "force1"=> \my $force1,
+    "no_fasta"=> \my $no_fasta,
+    "build_hg38"=> \my $build_hg38,
+    "build_hg19"=> \my $build_hg19,
+    "gm_site"=> \$gm_site,
+    "no_mm4sh5"=> \my $nomm4sh5,
+    #    "mm4sh5"=> \my $mm4sh5,
     "vcf_templ=s"=> \$vcf_templ,
     "vcf_site=s"=> \$vcf_site,
     "mach_templ=s"=> \$mach_templ,
@@ -209,6 +219,16 @@ if ($serial_sw) {
 }
 
 
+if ($gm_site eq ""){
+    if ($build_hg19) {
+	$gm_site =  $gm_site_hg19;
+    }
+    if ($build_hg38) {
+	$gm_site =  $gm_site_hg38;
+    }
+}
+    
+
 ############################################################
 ## testing binaries
 ##############################################################
@@ -227,6 +247,7 @@ my $prepvcf_script_imp2 = "my.prepvcf_imp2";          ### my.pipeline_tar
 my $prepmm_script_bgz = "prepare_ref_mm_bgz";         ### my.pipeline_tar
 my $prepmm_script_tabix = "prepare_ref_mm_tabix";     ### my.pipeline_tar
 my $prepmm_script_m3vcf = "prepare_ref_mm_m3vcf";     ### my.pipeline_tar
+my $prepmm_script_m4 = "prepare_ref_mm4";     ### my.pipeline_tar
 my $vcf2bcf_script = "vcf2bcf";                       ### my.pipeline_tar
 my $filtnorm_translate_script = "filtnorm_translate_changes";                 ### my.pipeline_tar
 my $filtnorm_filter_script = "filtnorm_filter";                 ### my.pipeline_tar
@@ -382,8 +403,19 @@ version: $rp_version
 
         --subname STRING  subchr_postfix
 
-        --mhc STRING      take phased MHC reference: 
+        --mhc STRING      take phased MHC reference (cannot be used with minimac, but wtih impute2 or impute4): 
                              T1DGC_REF.bgl.phased T1DGC_REF.markers   -> --mhc T1DGC_REF
+                             refdir_navi --mhc T1DGC_REF.hg19 --outname T1DGC_REF.hg19.2022 --sample_root hrs_annotated_3PCsvmNORD_short.txt --out_templ T1DGC_REF.hg19.2022.chrXXX
+
+
+        --no_fasta        skip the fasta alignment, that's necessary for special references
+                                   and minimac
+
+
+
+         --no_mm4sh5        do NOT make a reference for minimac4 and shapeit5 (don't do the minimac3 reference)
+
+
 
         --mhead INT       discard INT header rows, defailt: $mhc_head
 
@@ -403,13 +435,29 @@ version: $rp_version
 
 
         --walltimeplus INT  increase walltime by INT hours (important for bigger reference files), 
-                                 prep_minimac_m3vcf gets ten times this amount since minimac is now single threaded 
+                                 prep_minimac_m3vcf gets ten times this amount since minimac is now single threaded
 
 
+       --gm_templ STRING   use a different template for genetic maps (empty fini-files need to exist)
+            default: $gm_template
+
+
+       --gm_site STRING    site where to find the genetic map file
+           default_hg19: $gm_site_hg19
+           default_hg38: $gm_site_hg38
+
+	   
+
+
+       --build_hg19        this needs to be switched on if you make a hg19 reference!
+       --build_hg38        this needs to be switched on if you make a hg38 reference!
+
+       (one of the two above is mandatory)
 
  --out_templ is mandatory
  --outname is mandatory
- --sample_root is mandatory
+ --sample_root is mandatory and needs these column-headers: population (or pop), super_pop, gender, IID (or sample),
+        gender can be 1/2 or female/male
 
 
 
@@ -457,6 +505,14 @@ unless ($out_templ =~ /chrXXX/) {
 unless ($outname) {
     print "please provide --outname\n";
     exit;
+}
+
+
+unless ($build_hg38) {
+    unless ($build_hg19) {
+	print "Error: you have to decide hg19 or hg38\n";
+	print "see --help\n";
+    }
 }
 
 
@@ -823,6 +879,7 @@ my @job_btools1 = ();
 my @job_prepmm_bgz = ();
 my @job_prepmm_tabix = ();
 my @job_prepmm_m3vcf = ();
+my @job_prepmm4 = ();
 my @job_vcf2bcf = ();
 my @job_filtnormtra = ();
 my @job_filtnormfil = ();
@@ -881,11 +938,17 @@ if (@refgene_files == 0) {
     print "********************************\n";
 #    print "cd $subchr_dir\n";
 
-    print "wget -nv http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz\n";
+    if ($build_hg19) {
+	print "wget -nv ttp://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz\n";
+    }
+    if ($build_hg38) {
+	print "wget -nv http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/refGene.txt.gz\n";
+    }
+    
     print "zcat refGene.txt.gz > refGene.txt\n";
     print "$preprefgene_script refGene.txt\n";
     print "mv refGene.txt.gz sich.refGene.txt.gz\n";
-#    print "rm refGene_1114.txt\n";
+    print "rm refGene.txt\n";
 #    print "cd $rootdir\n";
     print "********************************\n";
 
@@ -905,6 +968,14 @@ if (@refgene_files == 0) {
 	print "downloading most recent file...\n";
 #	chdir $subchr_dir;
 	my $sys = "wget -nv http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz ";
+	if ($build_hg38) {
+	    $sys = "wget -nv http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/refGene.txt.gz ";
+	}
+	print "*******************************************\n";
+	print "$sys\n";
+	print "downloading...\n";
+	print "*******************************************\n";
+	
 	&mysystem ($sys);
 	
 	print "unzip...\n" if ($debug);
@@ -974,12 +1045,13 @@ chomp($refgene_file);
 
 
 #my @refgene_files = `ls $subchr_dir/refGene*`;
-unless (-e "gwascatalog.$date.rp.txt") {
+my $gwascatfile_with_date = "gwascatalog.$date.rp.txt";
+unless (-e $gwascatfile_with_date) {
 #my @cat_files = `ls gwascatalog.$date.rp.txt`;
 #if (@cat_files == 0) {
     
     print "********************************\n";
-    print "no gwascatalog.txt file found\n";
+    print "no gwascatalog.txt file ($gwascatfile_with_date) found\n";
     print "********************************\n";
     print "please create one yourself\n";
     print "********************************\n";
@@ -989,7 +1061,12 @@ unless (-e "gwascatalog.$date.rp.txt") {
     print 'tr " " "_" < full > gwascatalog.txt.ow'."\n";
     print 'cat gwascatalog.txt.ow | cut -f2,8,12,13,21,22,28 > gwascatalog.txt.ow.short'."\n";
     print 'awk \'$7<5.0e-08{if (length($2)> 25 ) {$2 = substr($2,1,15)"..."}; print $6,$3,$4,$4,$7,$2"("$1")"}\' gwascatalog.txt.ow.short | awk \'NF > 5\' > gwascatalog.txt.ow.short.ow'."\n";
-    print 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short.ow > '."gwascatalog.$date.rp.txt\n";
+
+   
+    my $awk_tmp = 'tr "()" "__" < gwascatalog.txt.ow.short.ow | sed -e \'s/_\([0-9]*\)_$/(\1)/\' | tr -d "[]" > gwascatalog.txt.ow.short.ow.fix_brackets';
+    print "$awk_tmp\n";
+
+    print 'sort -k2,2n -k3,3n -k5,5g gwascatalog.txt.ow.short.ow.fix_brackets > '."gwascatalog.$date.rp.txt\n";
 ## IMPROVE HERE
 ##    sed 's/(/ /' gwascatalog.Aug_2017.rp.txt | sort -k1,1 -k6,6  -k5,5g | awk '{key=$1" "$6; if (key in u) {} else {$6=$6"("$7;$7="";print; u[key]=1}}' > gwascatalog.Oct_2017.rp.txt
 ##
@@ -998,6 +1075,9 @@ unless (-e "gwascatalog.$date.rp.txt") {
  #   print ''."\n";
     print "********************************\n";
 
+
+#    print "2023: there seems to be unfinished brackets\n";
+#    print "fix with (its automatically when run by the pipeline:\n";
 
     print "You can do that yourself or let this pipeline do it.\n";
     print "Or do you want to have that done right now by the pipeline (y/n)?\n";
@@ -1038,8 +1118,11 @@ unless (-e "gwascatalog.$date.rp.txt") {
 		    if (length ($cells[7]) > 25) {
 			$cells[7] = substr($cells[7],0,15);
 			$cells[7] .= "...";
+			$cells[7] =~ tr/()[]/____/;
 		    }
 
+
+		    
 #		    if ($cells[11] eq "X") {
 #			$cells[11] = 23;
 #		    }
@@ -1183,15 +1266,32 @@ unless (-e "$sample_root") {
 ################################################
 
 
+unless ($mhc){
+    unless (-e "reference_templ") {
+	print "create file reference_templ\n";
+	die $! unless open RT, "> reference_templ";
+	print RT "vcf_site      $vcf_site\n";
+	print RT "vcf_template  $vcf_templ\n";
+	print RT "out_template  $out_templ\n";
+	print RT "gm_template  $gm_template\n";
+	unless ($nomm4sh5){
+	    print RT "mm4  ON\n";
+	}
+	if ($build_hg38){
+	    print RT "build  hg38\n";
+	}
+	if ($build_hg19){
+	    print RT "build  hg19\n";
+	}
+	
+	close RT;
+    }
+}
+else {
+    if (-e "reference_templ") {
+	sys ("rm reference_templ");
+    }
 
-unless (-e "reference_templ") {
-    print "create file reference_templ\n";
-    die $! unless open RT, "> reference_templ";
-    print RT "vcf_site      $vcf_site\n";
-    print RT "vcf_template  $vcf_templ\n";
-    print RT "out_template  $out_templ\n";
-
-    close RT;
 }
 
     
@@ -1257,12 +1357,16 @@ print "reading existing populations\n"  if ($debug);
 die $!."($sample_ca)" unless open IN, "< $sample_ca";
 while (my $line = <IN>){
     my @cells = @{&split_line_ref(\$line)};
-    push @pop_fams, $cells[0];
+    if ($cells[0] ne "") {
+	push @pop_fams, $cells[0];
+	print "take this continent into account: $cells[0]\n"  if ($debug);
+    }
 }
 close IN;
 
 
 ## create famfiles, etc.
+unless ($mhc){
 unless (-e $sample_fini) {
 
 
@@ -1325,13 +1429,21 @@ unless (-e $sample_fini) {
 	}
 	if (@chr22_samples < 1) {
 	    print "Error: no *chr22*samples files\n";
+	    
 	    print "checkout chrX samples\n";
 	    @chr22_samples = `ls *chrX*samples`;
 	    if (@chr22_samples != 1) {
 		print "Error: no *chrX*samples files either\n";
 		exit;
 	    }
+	    
+	    print "This is only needed for sex-info\n";
+	    print "Fix: one file called *chr22*samples\n";
+	    print "four columns with ID in the first column\n";
+	    print "   and sex in the last column (2 female, 1 male)\n";
+	    print "   (only these two columns are used)\n";
 
+	    
 	}
 	
 
@@ -1451,7 +1563,7 @@ unless (-e $sample_fini) {
     &mysystem ("touch $sample_fini"); 
 #    print "debug: ".@famlines."\n";
 }
-
+}
 #print "debug\n";
 #exit;
 
@@ -1763,7 +1875,16 @@ foreach my $chrint ($chr_start..$chr_end){
 	    if ($chr == "X") {
 		$chrX_filter = "--chrX --fam $sample_root.fam";
 	    }
-	    push @job_btools1, "$prepvcf_script_filtnorm $chrX_filter --vcf $vcf_name_loc --mac_th $mac_th";
+	    my $nofasta_filter = "";
+	    if ($no_fasta) {
+		$nofasta_filter = "--no_fasta";
+	    }
+
+	    my $build_txt = "";
+	    if ($build_hg38) {
+		$build_txt = "--build_hg38";
+	    }
+	    push @job_btools1, "$prepvcf_script_filtnorm $build_txt $nofasta_filter $chrX_filter --vcf $vcf_name_loc --mac_th $mac_th";
 	    #		print "$prepvcf_script_filtnorm $chr23_filter --vcf $vcf_name_loc --mac_th $mac_th\n";
 	    #		exit;
 	}
@@ -1824,8 +1945,10 @@ foreach my $chrint ($chr_start..$chr_end){
     }
 
     else {
-	print "right now only starting from vcffiles\n";
-	exit;
+	unless ($mhc){
+	    print "right now only starting from vcffiles\n";
+	    exit;
+	}
     }
 
     if (0) {
@@ -1988,7 +2111,7 @@ foreach my $chrint ($chr_start..$chr_end){
     my $vcf_name_loc_filtnorm_prep_bgz_fini = $filtnorm_trans_file.".bgz.fini";
 
     unless (-e $vcf_name_loc_filtnorm_prep_bgz_fini) {
-	my $sys = "$prepmm_script_bgz $filtnorm_trans_file";
+	my $sys = "$prepmm_script_bgz $filtnorm_trans_file";  # prepare_ref_mm_bgz
 	push @job_prepmm_bgz, $sys;
     }
 
@@ -2003,16 +2126,6 @@ foreach my $chrint ($chr_start..$chr_end){
 	push @job_prepmm_tabix, $sys;
     }
 
-    ###############################################################
-
-    my $filtnorm_trans_file = $changes_file;
-    $filtnorm_trans_file =~ s/legend.gz.rf.gz.changes.gz/vcf.gz/;
-    my $vcf_name_loc_filtnorm_prep_m3vcf_fini = $filtnorm_trans_file.".m3vcf.fini";
-
-    unless (-e $vcf_name_loc_filtnorm_prep_m3vcf_fini) {
-	my $sys = "$prepmm_script_m3vcf $filtnorm_trans_file";
-	push @job_prepmm_m3vcf, $sys;
-    }
 
 
     ###############################################################
@@ -2030,6 +2143,32 @@ foreach my $chrint ($chr_start..$chr_end){
 	push @job_vcf2bcf, $sys;
 #	print "$sys\n";
     }
+
+    
+    ###############################################################
+
+
+    if (0) {
+	my $vcf_name_loc_filtnorm_prep_m3vcf_fini = $filtnorm_trans_file.".m3vcf.fini";
+	unless (-e $vcf_name_loc_filtnorm_prep_m3vcf_fini) {
+	    my $sys = "$prepmm_script_m3vcf $filtnorm_trans_file";
+	    push @job_prepmm_m3vcf, $sys;
+	}
+    }
+
+    
+    my $bcf_name_loc_fini = $bcf_name_loc.".msav.fini";
+    unless (-e $bcf_name_loc_fini) {
+	my $sys = "$prepmm_script_m4 $bcf_name_loc";
+#	print "$sys\n";
+	#	exit;
+	unless ($nomm4sh5){
+	    push @job_prepmm4, $sys;
+	}
+    }
+
+
+
 #    print "debug: $bcf_name_loc_fini\n";
 #    exit;
 
@@ -2181,6 +2320,7 @@ if ($exit == 1) {
 
 
 
+unless ($mhc){
 if (@job_vcf_dl > 0 ) {
 
     #	print "starting gunzip/copy jobs\n";
@@ -2195,6 +2335,7 @@ if (@job_vcf_dl > 0 ) {
 
 
 }
+
 
 #    if (@job_gm_dl > 0 ) {
 
@@ -2384,21 +2525,6 @@ if (@job_prepmm_tabix > 0 ) {
     &send_jobarray;
 }
 
-if (@job_prepmm_m3vcf > 0 ) {
-    
-    
-    $sjadir = $rootdir;
-    $sjaname = "prep_minimac_m3vcf";
-    $sjatime = 2 + $walltimeplus * 10;
-#    $sjamulti = $ncpus_multi;
-    $sjamem = 24000;  ## each core, so mem request for the node is multi that
-    @sjaarray = @job_prepmm_m3vcf;
-    
-    &send_jobarray;
-}
-
-
-#exit;
 
 if (@job_vcf2bcf > 0 ) {
     
@@ -2414,6 +2540,37 @@ if (@job_vcf2bcf > 0 ) {
     
     
 }
+
+if (0) {
+if (@job_prepmm_m3vcf > 0 ) {
+    
+    
+    $sjadir = $rootdir;
+    $sjaname = "prep_minimac_m3vcf";
+    $sjatime = 2 + $walltimeplus * 10;
+#    $sjamulti = $ncpus_multi;
+    $sjamem = 24000;  ## each core, so mem request for the node is multi that
+    @sjaarray = @job_prepmm_m3vcf;
+    
+    &send_jobarray;
+}
+}
+
+if (@job_prepmm4 > 0 ) {
+    
+    
+    $sjadir = $rootdir;
+    $sjaname = "prep_minimac4";
+    $sjatime = 2 + $walltimeplus * 10;
+#    $sjamulti = $ncpus_multi;
+    $sjamem = 24000;  ## each core, so mem request for the node is multi that
+    @sjaarray = @job_prepmm4;
+    
+    &send_jobarray;
+}
+
+#exit;
+
 
 
 if (@job_chunk > 0 ) {
@@ -2649,6 +2806,18 @@ foreach my $pf_loc (@pop_fams) {
 	print RT "vcf_site      $vcf_site\n";
 	print RT "vcf_template  $vcf_templ\n";
 	print RT "out_template  $out_templ\n";
+	print RT "gm_template  $gm_template\n";
+	unless ($nomm4sh5){
+	    print RT "mm4  ON\n";
+	}
+	if ($build_hg38){
+	    print RT "build  hg38\n";
+	}
+	if ($build_hg19){
+	    print RT "build  hg19\n";
+	}
+	
+
 	print RT "bfile_template  $out_templ.impute.plink.$pf_loc\n";
 	close RT;
     }
@@ -2774,7 +2943,7 @@ foreach my $pf_loc (@pop_fams) {
 
 
 
-    
+
 
 #############################################################
 ## SUCCESSSS
@@ -2789,7 +2958,7 @@ $sjamem = 1000;
     
 &send_jobarray;
 
-
+}
 
 
 
@@ -2860,11 +3029,17 @@ if ($q16) {
 	&mysystem ("wc -l *.info_pos > $suminfo_n.tmp");
 	&mysystem ("mv $suminfo_n.tmp $suminfo_n");
     }
+    else{
+	print "existing: $suminfo_n\n";
+    }
     
     unless (-e "$suminfo_r"){
 	&mysystem ("ls $q16_phased > $suminfo_r.tmp");
 	&mysystem ("mv $suminfo_r.tmp $suminfo_r");
 	
+    }
+    else{
+	print "existing: $suminfo_r\n";
     }
 
     my $gema_file = "genetic_map_chr6_combined_b37.txt"; 
@@ -2888,16 +3063,31 @@ if ($q16) {
 
 ###################################################################
 #### MHC
+
+
+#starting files:
+#HRC_1000G_REF.merged.chr6.hg19.25mb-40mb.inT1DGC.bgl.phased
+#HRC_1000G_REF.merged.chr6.hg19.25mb-40mb.inT1DGC.bgl.phased.markers
+#HRC_1000G_REF.merged.chr6.hg19.25mb-40mb.inT1DGC.bgl.phased.fam
+#hrs_annotated_3PCsvmNORD_short.txt
+#genetic_map_chr6_combined_b37.txt
+#refGene.txt.Sep_2022.HLA_8only_C4.out
+#cp refGene.txt.Sep_2022.HLA_8only_C4.out refGene.txt.Mar_2023.HLA_8only_C4.out  # the former needs to disappear again
+
+#refdir_navi --mhc HRC_1000G_REF.merged.chr6.hg19.25mb-40mb.inT1DGC --out_temp HRC_1000G_HLA.merged.chr6.hg19.25mb-40mb.inT1DGC.CHRXXX --outname HRC_1000G_REF_hg19.EUR.HLA --sample_root hrs_annotated_3PCsvmNORD_short.txt --debug
+
 ###################################################################
 if ($mhc) {
     print "out: $out_templ\n";
     print "postfix: $imp_phased_postfix\n";
     print "mhc: $mhc\n";
-    my $mhc_phased = "$mhc.chr6_025_035.bgl.phased";
+
+    my $mhc_phased = "$mhc.chr6_020_040.bgl.phased";
     unless (-e "$mhc_phased.markers") {
 	print "reformat phased file\n";
 	my $phain = "$mhc.bgl.phased";
 	my $phaout = $mhc_phased;
+	print "rewrite phased file into $phaout\n";
 
 	die $!."($phain)" unless open IN, "< $phain";
 	die $!."($phaout)" unless open OUT, "> $phaout";
@@ -2912,28 +3102,55 @@ if ($mhc) {
 	close IN;
 	close OUT;
 
-	&mysystem ("cp $mhc.markers $mhc_phased.markers.tmp");
+	&mysystem ("cp $mhc.bgl.phased.markers $mhc_phased.markers.tmp");
 	&mysystem ("mv $mhc_phased.markers.tmp $mhc_phased.markers");
     }
 
     my $mhc_imp2 = "$mhc_phased.hap.gz";
     unless (-e $mhc_imp2) {
+	print "rewrite beagle file into impute file with input $mhc_phased\n";
 	&mysystem ("beagle2impute $mhc_phased");
     }
 
+#    print "mhc_phased: $mhc_phased\n";
+#    print "mhc: $mhc\n";
+#    exit;
+## create plink binary for LD
 
-    my $mhc_bim = "$mhc_phased.bim";
-    unless (-e $mhc_bim) {
-	print "Error: $beagle2plink_script needs famfile\n";
-	exit;
-	&mysystem ("$beagle2plink_script $mhc_phased");
+
+    my $mhc_bed = "$mhc_phased.bed";
+    unless (-e $mhc_bed){
+	print "creating plink binary for LD\n";
+	print "$beagle2plink_script --fam $mhc.bgl.phased.fam $mhc_phased\n";
+	&mysystem ("$beagle2plink_script --fam $mhc.bgl.phased.fam $mhc_phased");
     }
+    else {
+	print "$mhc_bed is existing\n";
+    }
+
+#    exit;
+
+
+
+
 
     my $mhc_info = "$mhc_phased.info_pos";
     unless (-e $mhc_info) {
 	print "refinfo mhc\n";
-	&mysystem ("refinfo --bgl $mhc_phased --annot $mhc_bim --bim");
+	&mysystem ("refinfo --bgl $mhc_phased --annot $mhc_phased.bim --bim");
     }
+    else{
+	print "existing: $mhc_info\n";
+    }
+
+
+    unless (-e "sumfrq.EUR") {
+	&mysystem ("cp $mhc_phased.info_pos sumfrq.EUR");
+    }
+    else{
+	print "existing: sumfrq.EUR\n";
+    }
+
 
 
     my $suminfo = "infosum_pos";
@@ -2952,19 +3169,66 @@ if ($mhc) {
 	&mysystem ("wc -l *.info_pos > $suminfo_n.tmp");
 	&mysystem ("mv $suminfo_n.tmp $suminfo_n");
     }
+    else{
+	print "existing: $suminfo_n\n";
+    }
+
+
     
     unless (-e "$suminfo_r"){
 	&mysystem ("ls $mhc_phased > $suminfo_r.tmp");
 	&mysystem ("mv $suminfo_r.tmp $suminfo_r");
 	
     }
-
-    my $gema_file = "genetic_map_chr6_combined_b37.txt"; 
-
-    unless (-e $gema_file) {
-	&mysystem ("ln -s /fg/debakker_scratch/ripke/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/$gema_file .");
+    else{
+	print "existing: $suminfo_r\n";
     }
 
+
+
+    ###################################
+    # download genetic map file.
+    ####################################
+    
+    my $gm_name = "genetic_map_chr6_combined_b37.txt";
+
+
+    $answer_gm = "";
+    unless (-e $gm_name) {
+
+	print "---------------------------------\n";
+	print "$gm_name not existing\n";
+		#		    if (-e $vcf_name_loc) {
+
+	print "gm-file ($gm_name) not found, should I try to download this (y/n)?\n";
+
+	if ($answer_gm eq "") {
+	    $answer_gm = lc <>;
+	    chomp $answer_gm;
+	}
+		
+	
+	my $sys = "wget --no-check-certificate $gm_site/$gm_name ";
+
+	print "executing: $sys\n";
+	&mysystem ($sys);
+    }
+    
+#    if ($debug){
+#	print "debug-exit\n";
+#	exit;
+ #   }
+
+
+
+    
+#    print "gema_file: $gema_file\n";
+#    print "directory:\n";
+#    &mysystem ("pwd > pwd");
+#    unless (-e $gema_file) {#
+#	&mysystem ("cp /fg/debakker_scratch/ripke/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/$gema_file .");
+#    }
+#
 
 #    unless (-e "sumfrq.eur.sorted"){
 #	&mysystem ("cp $suminfo_s sumfrq.eur.sorted.tmp");
@@ -2973,8 +3237,22 @@ if ($mhc) {
  #   }
 
 
-    &reinvo_b ("everything-is-fine","everythingdone");
-    exit;
+    #############################################################
+    ## SUCCESSSS
+    #############################################################
+    
+    $sjadir = $rootdir;
+    $sjaname = "finished";
+    push @sjaarray, "tmp";
+    $sjatime = 1;
+    $sjamem = 1000;
+    
+    
+    &send_jobarray;
+
+
+#    print ("reference is ready\n");
+#    exit;
 }
 
 

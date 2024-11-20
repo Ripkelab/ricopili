@@ -1607,11 +1607,6 @@ if ($rformat == 0) {
 	    $error = 1;
 	}
 
-	if ($error == 1) {
-	    print "format file does not contain all columns\n";
-	    exit;
-	}
-
 	print "SNP\t$snp_col\n";
 	print "P\t$p_col\n";
 	print "A1\t$a1_col\n";
@@ -1622,6 +1617,13 @@ if ($rformat == 0) {
 	print "CHR\t$chr_col\n";	
 	print "INFO\t$info_col\n";
 	print "SE\t$se_col\n";
+
+
+	if ($error == 1) {
+	    print "format file does not contain all columns\n";
+	    exit;
+	}
+
 
     }
 
@@ -2756,6 +2758,17 @@ unless ($index) {
 	if ($bfile eq "") {
 	    $bfile = `ls $refdir/ref.$lchr.bim`;
 	}
+	if ($bfile eq "") {
+	    if ($lchr ==23){
+		$bfile = `ls $refdir/\*.chrX.\*bim`;
+	    }
+	}
+	if ($bfile eq "") {
+	    if ($lchr ==23){
+		$bfile = `ls $refdir/\*.chrx.\*bim`;
+	    }
+	}
+	
 	$bfile =~ s/.bim$//;
 	chomp($bfile);
 #	print "bfile: $bfile\n";

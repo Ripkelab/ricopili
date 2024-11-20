@@ -41,7 +41,7 @@ my $sloc = &trans("sloc");
 ####################################################
 
 
-my $pth =4;
+my $pth =1.0e-04;;
 my $r2th =.2;
 my $window_size =3000;
 
@@ -113,7 +113,7 @@ version: $version
   --cond STRING    name of file describing conditional analysis (directory and comand)
   --1KG            1KG positions
   --pth INT        threshold, default $pth
-  --p2th INT        second threshold, only if specifically wished, no log transformation
+  --p2th INT        second threshold, be careful about this one
   --nohead         no header
 
   --phase2        take HM Phase 2
@@ -187,7 +187,7 @@ GetOptions(
     "best=s"=> \my $bestfile,
     "mhc1"=> \my $mhc1,
     "out=s"=> \$out_name,
-    "pth=i"=> \$pth,
+    "pth=f"=> \$pth,
     "p2th=f"=> \my $p2th_val,
     "window=i"=> \$window_size,
     "cond=s"=> \my $cond_name,
@@ -212,19 +212,32 @@ GetOptions(
 
 
 die "$usage" if ($help);
+
 $out_name = $bestfile if ($out_name eq "areator_out");
 die "$usage" unless ($bestfile);
-my $pth = 10**(-$pth);
+#my $pth = 10**(-$pth);
 my $pth2 = 10*$pth;
-$pth2 = 0.01 if ($pth2 > .01);
+if ($pth > 0.01) {
+    $pth=0.01;
+    $pth2=1;
+}
+if ($pth2 > 1){
+    $pth2 = 1 ;
+}
+
 if ($pth > .01) {
-    print "use clumper for high p-thresholds\n" if ($debug);
+    print "be careful with high pvalues, this script is not very efficient in clumping\n" if ($debug);
 }
 
 if ($p2th_val){
+    print "be careful with manually setting p2th\n" if ($debug);
     $pth2 = $p2th_val;
-
 }
+
+print "pth: $pth\n" if ($debug);
+print "pth2: $pth2\n" if ($debug);
+
+#exit;
 #print "pth2: $pth2\n";
 #sleep(10);
 
@@ -475,7 +488,7 @@ else {
 
 my $gene_list_0610_plink = "$hapmap_ref_root/debakker/0610/refGene_0610.txt";
 
-my @refgene_files = `ls $refdir/refGene*`;
+my @refgene_files = `ls -t $refdir/refGene*`;
 if (@refgene_files > 0) {
     $gene_list_0610_plink = $refgene_files[0];
     chomp ($gene_list_0610_plink);
@@ -583,7 +596,7 @@ while ($ns == 0) {
 #    print "atcu rows r\n";
 	
 #	next if ($cells[$pcol-1] > .05 || $cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0);
-	next if ($cells[$pcol-1] > $pth2 || $cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0);
+	next if ($cells[$pcol-1] > $pth || $cells[$pcol-1] eq "NA" || $cells[$pcol-1] == 0);
 	
 	if ($onechr) {
 	    next if ($cells[$chrcol-1] != $onechr);
@@ -654,16 +667,20 @@ while ($ns == 0) {
     $begz -> gzclose();
     close SF;
     close BB;
+    print "number of SNPs with above thresholds: $ns\n" if ($debug);
     if ($ns == 0) {
 	$pth = $pth * 10;
 	$pth2 = $pth2 * 10;
-	$pth2 = 0.01 if ($pth2 > .01);
-	print "new p-th: $pth\n" if ($debug);
-	print "Implies p-values are outside range of  0-1; check data format – are all required data columns provided\n" if ($debug);
-	die if ($pth > 1);
+	print " -> new thresholds: p-th: $pth; p2-th: $pth2\n" if ($debug);
+
+	if ($pth > 1){
+	    print "something is wrong with the pvalues in the danerfile, please check (also --debug)!!!\n";
+	    die;
+	}
     }
 }
-
+#print "final thresholds: p-th: $pth; p2-th: $pth2\n" if ($debug);
+#exit;
 
 
 
@@ -706,8 +723,8 @@ my %bestsnps = ();
 #######################################
 #### genes in clumps
 
-my %gene_hash = ();
-my %range_hash = ();
+#my %gene_hash = ();
+#my %range_hash = ();
 
 print  "reference gene_list: $gene_list_0610_plink\n" if ($debug);
 unless (-e "refGene.loc") {
@@ -818,6 +835,7 @@ if ($pliclu) {
 
 
 		if ($bfile_sc eq "") {
+		    print "Warning: file <$bfile_sc.bed> not existing\n" if ($debug);
 		    my $chr_part = "$chr"."_";
 		    $bfile_sc = `ls $refdir/my*chr$chr_part*bed`;
 		}
@@ -825,6 +843,7 @@ if ($pliclu) {
 #		print $bfile_sc."\n";
 		
 		if ($bfile_sc eq "") {
+		    print "Warning: file <$bfile_sc.bed> not existing\n" if ($debug);
 		    my $chr_part = "$chr"."_";
 		    $bfile_sc = `ls $refdir/*chr$chr_part*plink.bed`;
 		}
@@ -839,6 +858,7 @@ if ($pliclu) {
 #		print $bfile_sc."\n";
 		
 		if ($bfile_sc eq "") {
+		    print "Warning: file <$bfile_sc.bed> not existing\n" if ($debug);
 		    my $chr_part = "window.$chr.";
 		    $bfile_sc = `ls $refdir/*$chr_part*bed`;
 		}
@@ -859,7 +879,7 @@ if ($pliclu) {
 		print "using $bfile_sc\n" if ($debug);
 	    }
 	    else {
-		print "Error: no reference found\n";
+		print "Error: file <$bfile_sc.bed> not existing\n" if ($debug);
 		exit;
 	    }
 
@@ -1320,7 +1340,7 @@ if ($pliclu) {
 	&mysystem ("txt2xls --pcol 3 --cogr 4,12,13,16 --txt $out_name.clump.areator.sorted.1mhc --xls $out_name.clump.areator.sorted.1mhc.xls");
     }
     &mysystem ("rm -r $workdir");
-    print "enough is enough\n" if ($debug);
+    print "script ran successfully!\n" if ($debug);
     exit;
 }
 

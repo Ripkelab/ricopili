@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 
+
 #############################
 # load utility functions
 #############################
@@ -29,24 +30,34 @@ my $xlim="0";
 my $out="outname";
 
 
+
 ##### help message
 my $usage = "
 Usage : $progname [options] [p-file] 
 
 version: $version
 
-  --pcol INT    column containing pvals (starts with 1), default = $pcol
-  --breaks INT   max width, default $breaks
+  --pcol INT         column containing pvals (starts with 1), default = $pcol
+  --breaks INT       max width, default $breaks
+  --fullsteps        set breaks so that every value gets its own column (values only with whole integers)
+ 
+  --thresh           plot two vertical lines in addition to 4 SEs. format: VAL,VAL
 
-  --thresh     plot two vertical lines in addition to 4 SEs. format: VAL,VAL
+  --help             print this message and exit
 
-  --help        print this message and exit
+# (always on)  --var              print mean, variance, sd
 
-  --var         print mean, variance, sd
+  --out STRING       for outfile
+  --title STRING     on plot (default: filename)
+  --color STRING     for histogram (default red)
+                       (see here: http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf)
+  --xlimright INT    right margin 
 
-  --out STRING  for outfile
+  --novert           no vertical lines (with SEs and thresholds
 
-  --debug       more output
+  --debug            more output
+
+
 
 
   ############ for standalone users #####################
@@ -68,13 +79,18 @@ use Getopt::Long;
 GetOptions( 
     "pcol=i"=> \$pcol,
     "breaks=i"=> \$breaks,
+    "fullsteps"=> \my $full_steps,
     "help"=> \my $help,
     "var"=> \my $var_sw,
     "thresh=s"=> \$thresh,
-    "xlim=s"=> \$xlim,
+#    "xlim=s"=> \$xlim,
     "out=s"=> \$out,
     "rloc=s"=> \$rloc,
     "debug"=> \my $debug,
+    "color=s"=> \my $histcol,
+    "title=s"=> \my $histit,
+    "novert"=> \my $novert,
+    "xlimright=i"=> \my $xlimright_sw,
     
     );
 
@@ -89,7 +105,7 @@ if ($debug) {
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME > /dev/null");
+system("$r_sys RHOME $r_silent");
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
@@ -152,7 +168,10 @@ sub mysystem(){
 
 
 my $file = $ARGV[0];
+
+
 die "file not existing" unless (-e $file);
+
 
 
 my $lc = 0;
@@ -160,6 +179,7 @@ my $mind;
 my $maxd;
 die "$file: ".$! unless open FILE, "< $file";
 die "$file.hisplo: ".$! unless open HP, "> $file.hisplo";
+
 while (my $line = <FILE>){
     my @cells = @{&split_line_ref(\$line)};
     my $this=$cells[$pcol-1];
@@ -171,6 +191,9 @@ while (my $line = <FILE>){
 	$maxd = $this unless ($maxd);
 	$maxd = $this if ($this > $maxd);
     }
+
+
+    
 #    if ($x_sw == 1) {
 #	if ($this < $x1 || $this > $x2) {
 #	    next;
@@ -204,13 +227,24 @@ round(se,4) -> se_pr
 
 breaks_n = BREAKS
 
+
 min (dat[,1],na.rm=T) -> mind
 max (dat[,1],na.rm=T) -> maxd
 
 range = maxd-mind
 range_plot = XLIM2 - XLIM1
 
-breaks_n = breaks_n * (range / range_plot);
+if (range_plot == 0) {
+  breaks_n = 10
+} else {
+  breaks_n = breaks_n * (range / range_plot);
+}
+
+
+#print (breaks_n)
+#print (range)
+#print (range_plot)
+
 
 #print (mind)
 #print (maxd)
@@ -221,13 +255,63 @@ if (breaks_n < 10) {
   breaks_n = 10
 }
 
-hist(dat[,1], main="TITLE", xlab=colnames(dat)[1], cex.sub =.6, ylab ="counts", col = "red", breaks = breaks_n,
- sub = paste ("mean =",mean_pr,", median =",median,", var =",variance_pr,", se =",se_pr),xlim = c(XLIM1,XLIM2) )
+#mindat_breaks = min(dat[,1]) - 0.5
+#maxdat_breaks = max(dat[,1]) + 0.5
+
+
+mindat_breaks = min(dat[,1]) 
+maxdat_breaks = max(dat[,1]) 
+
+
+xlim_left = XLIM1
+if (mindat_breaks < xlim_left) {
+  xlim_left = mindat_breaks
+}
+
+hist(dat[,1], main="TITLE", xlab=colnames(dat)[1], cex.sub =.6, ylab ="counts", col = "HISTCOL", breaks = BRKSTXT,
+ sub = paste ("mean =",mean_pr,", median =",median,", var =",variance_pr,", se =",se_pr),xlim = c(xlim_left,XLIM2) )
+
+
+
+if (XLIMRIGHT > 0) {
+
+dat[dat[,1]>=XLIMRIGHT,1] = XLIMRIGHT
+
+
+#mindat_breaks = min(dat[,1]) - 0.5
+#maxdat_breaks = max(dat[,1]) + 0.5
+
+
+mindat_breaks = min(dat[,1]) 
+maxdat_breaks = max(dat[,1]) 
+
+
+min (dat[,1],na.rm=T) -> mind
+max (dat[,1],na.rm=T) -> maxd
+
+
+
+xlim_left = XLIM1
+if (mindat_breaks < xlim_left) {
+  xlim_left = mindat_breaks
+}
+
+range = maxd-mind
+range_plot = XLIMRIGHT - xlim_left
+
+breaks_n = 100 * (range / range_plot);
+
+
+
+hist(dat[,1], main="TITLE_cut_at_XLIMRIGHT", xlab=colnames(dat)[1], cex.sub =.6, ylab ="counts", col = "HISTCOL", breaks = breaks_n,
+# xlim = c(xlim_left,maxdat_breaks) )
+ xlim = c(xlim_left,XLIMRIGHT) )
+}
 
 
 #abline (v=5000)
 
-#if (SE_ON == 1) {
+if (SE_ON == 1) {
 abline (v=mean-se,col="grey80")
 abline (v=mean-2*se,col="grey60")
 abline (v=mean-3*se,col="grey40")
@@ -238,7 +322,7 @@ abline (v=mean+3*se,col="grey40")
 abline (v=mean+4*se,col="grey20")
 abline (v=THRESH1,col="red")
 abline (v=THRESH2,col="red")
-#}
+}
 
 
 
@@ -257,6 +341,18 @@ if ($x_sw == 1) {
 }
 
 ## rework template
+
+my $title = $file;
+$title = $histit if ($histit);
+my $histcolor = "red";
+$histcolor = $histcol if ($histcol);
+
+my $vert_sw = 1;
+$vert_sw = 0 if ($novert);
+
+my $xlimright = 0;
+$xlimright = $xlimright_sw if ($xlimright_sw);
+
 my $R_hist_in = $R_hist_templ;
 $R_hist_in=~ s/OUTNAME/$out/g;
 $R_hist_in=~ s/INNAME/$file.hisplo/g;
@@ -265,12 +361,27 @@ $R_hist_in=~ s/THRESH2/$t2/g;
 $R_hist_in=~ s/XLIM1/$mind/g;
 $R_hist_in=~ s/XLIM2/$maxd/g;
 $R_hist_in=~ s/BREAKS/$breaks/g;
-$R_hist_in=~ s/TITLE/$file/g;
+$R_hist_in=~ s/TITLE/$title/g;
+$R_hist_in=~ s/HISTCOL/$histcolor/g;
+$R_hist_in=~ s/SE_ON/$vert_sw/g;
+$R_hist_in=~ s/XLIMRIGHT/$xlimright/g;
+
+my $fullstep_txt = "mindat_breaks:maxdat_breaks";
+if ($full_steps) {
+    $R_hist_in=~ s/BRKSTXT/$fullstep_txt/g;
+}
+else {
+    $R_hist_in=~ s/BRKSTXT/breaks_n/g;
+}
+
+
+
+
 
 
 &a2file ("$file.hisplo.Rin", $R_hist_in);
 
-my $system="$r_sys --vanilla < $file.hisplo.Rin $r_silent";
+my $system="$r_sys --vanilla < $file.hisplo.Rin $r_silent ";
 #my $system="source /broad/software/scripts/useuse; use R-2.14; R --vanilla < $file.hisplo.Rin";
 &mysystem($system);
 

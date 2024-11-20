@@ -47,6 +47,8 @@ version: $version
   --refstart INT       Mb of start
   --refend INT         Mb of end
 
+#  --mm4               slight change for mm4 format
+
   --gp4                genotype probability in forth place (instead of 3rd), HRC format
                          also changes the behavior about filerenaminng 
                           (doesnot need dose.vcf.gz and introduces .out.)
@@ -76,6 +78,7 @@ GetOptions(
     "refend=s"=> \my $refend,
     "chr=s"=> \my $chr,
     "gp4"=> \my $gp4,
+##    "mm4"=> \my $mm4,
     "outname=s"=> \my $outname,
     "debug"=> \my $debug,
     #    "buff=i"=> \ $buff,
@@ -189,7 +192,7 @@ my $outmap = $outdos.".map";
 my $outfam = $outdos.".fam";
 
 if ($vcf_file eq $outdos || $vcf_file eq $outvcf ) {
-    print "Error: inputfile equals outputfile\n";
+    print "Error: inputfile equals outputfile\t$vcf_file\t$outdos\t$outvcf\n";
     print "vcf_file: $vcf_file\n";
     print "outdos: $outdos\n";
     print "outvcf: $outvcf\n";
@@ -333,6 +336,25 @@ while ($igz->gzreadline(my $line)){
 	$outd_str .= " ".$cells[3];
 	$outd_str .= " ".$cells[4];
 
+
+	my @gcells = split ":",$cells[8];
+
+	my $gp_cell = -1;
+	my $gp_count = 0;
+	foreach (@gcells){
+	    if ($_ eq "GP") {
+		$gp_cell = $gp_count;
+	    }
+	    $gp_count++;
+	}
+	if ($gp_cell == -1){
+	    print "no GP in format found\n";
+	    exit;
+	}
+#	print "GP at $gp_cell\n";
+#	exit;
+
+
 	
 	foreach my $cc (9..$#cells) {
 	    my @gcells = split ":",$cells[$cc];
@@ -341,7 +363,7 @@ while ($igz->gzreadline(my $line)){
 		$gp = $gcells[3];
 	    }
 	    else {
-		$gp = $gcells[2];
+		$gp = $gcells[$gp_cell];
 	    }
 #	    my ($gt,$ds,$gp) = split ":",$cells[$cc];
 	    my ($gp1,$gp2,$gp3) = split ",",$gp;

@@ -204,7 +204,13 @@ while ($igz->gzreadline(my $line)){
 	}
     }
 
+    if ($cells[0] =~ /ID=chr/) {
+	$cells[0] =~ s/chr// ;
+	print "removed ID=chr into ID= in $cells[0]\n";
+	next;
+    }
     my $out_str = @cells[0];
+    
     foreach my $cc (1..$#cells) {
 	$out_str .= "\t".$cells[$cc];
     }

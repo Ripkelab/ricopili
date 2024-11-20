@@ -2,6 +2,8 @@
 use strict;
 
 
+
+
 ##########################################################################################
 #
 #         counts independent regions of areator file
@@ -11,8 +13,20 @@ use strict;
 #  comp1mhc_reg --repl --pth 5.0e-08 --r6 --out test --kbwin 500 remeta7_repl_PGC_SCZ52_0513a.icenoice.0513a.rep.txt
 #  /psych/genetics_data/ripke/scz/1KG/freeze_0413b_ref_aug12/shapeit2/incl_trio/incl_asian_0513a/distribution/PGC_SCZ52_0513a/replic/test2
 #
+
+# 2021:
+#  /psych/ripke/vasa/schizophrenia/transancestry/bigdeli/0418b_bigdeli_oldDecode-wholegenome_repl/0418b_bigdeli_decode_replc cat README
+#  comp1mhc_reg --refdir /psych/ripke/imputation_references/HRC_EGAZ00001239289_2016a/chr1_22c/ --repl --pth 5.0e-08  --out test remeta10_repl_0418b_gpc_lat_afr.decode_nonicelandic_0521j.SCZOLD_FINAL_WHEAD_noindex_trust.repout.rep.txt
+#
+
+# /psych/ripke/vasa/schizophrenia/transancestry/bigdeli/0418b_bigdeli_oldDecode-wholegenome_repl/0418b_bigdeli_decode_repld comp1mhc_reg --refdir /psych/ripke/imputation_references/HRC_EGAZ00001239289_2016a/chr1_22c/ --repl --pth 5.0e-08  --out test remeta10_repl_0418b_gpc_lat_afr.decode_nonicelandic_0521k.SCZOLD_FINAL_WHEAD_noindex_trust.repout.rep.txt
+#
+
 #
 #
+#  count the non-overlapping regions if a window size is set
+#   comp1mhc_reg  --nogene --ldkbwin 50 --ovcl daner_PGC_SCZ_w3_90_0418b.gz.p4.clump.areator.sorted.1mhc
+
 ##########################################################################################
 
 #use lib '/home/unix/sripke/perl_modules//Win32-OLE-0.1709/lib';
@@ -49,13 +63,17 @@ my $genes_col = 21;
 
 my $pth = 5.0e-08;
 my $r2th = .4;
-my $kbwin = 0; ## window in kb for defining a region 
+my $kbwin = -100; ## window in kb for defining a region, overwrites ld window
+my $ldkbwin = 50; ## window in kb to be added to the left and right margin
 my $r6 = 0;
+my $refdir;
+
 
 use Getopt::Long;
 GetOptions( 
 #   "txt=s"=> \$txt_name,
-   "help"=> \my $help,
+    "help"=> \my $help,
+    "refdir=s"=> \$refdir,
    "meta"=> \my $meta,
    "m2eta"=> \my $meta2,
     "repl"=> \my $repl,
@@ -64,10 +82,16 @@ GetOptions(
    "ldcol=i"=> \$ldcol,
    "pth=f"=> \$pth,
    "r2th=f"=> \$r2th,
-   "kbwin=i"=> \$kbwin,
+    "kbwin=i"=> \$kbwin,
+    "ldkbwin=i"=> \$ldkbwin,
    "out=s"=> \$out_name,
     "r6"=> \my $r6,
     "debug"=> \my $debug,
+    "nogene"=> \my $nogene,
+    "ovcl"=> \my $ovcl,
+
+
+#    "refgene_file=s"=> \$refgene_file,
 
  );
 
@@ -77,7 +101,7 @@ if ($help){
 
       options:
 
-	--help          print this message and exit
+        --help          print this message and exit
 #        --txt STRING    name of txt-file, white space delimited
         --out STRING    name of out file, white space delimited
 
@@ -86,7 +110,28 @@ if ($help){
 
         --pth FLOAT     pval threshhold
         --r2th FLOAT    rth threshhold
-        --kbwin INT     window in kb (overwrites r2)
+        --kbwin INT     window in kb (overwrites r2, e.g. overwrites left and right column)
+
+        --ldkbwin INT     window in kb to added to the LD region (does not overwrite left and right).
+                          default is 50kb
+
+##        --refdir STRING containg a genefile with this format:
+                           filename: refGene*
+
+
+
+chr2    -       227596032       227663506       2       227596032,227659704,    227600966,227663506,    IRS1
+
+          (only column 1, 3, 4, 8 are used)
+
+#       --refgene_file STRING   directly the genefile (overwrites refdir)
+
+        --nogene        do not take any gene info
+
+        --ovcl          check if overlapping or close e.g. within the window
+
+#then this format is used (no exome information)
+#chr2   227596032       227663506    IRS1
 
         --meta          do the same with meta-file (different columns)
         --meta2          do the same with meta-file (different columns)
@@ -137,8 +182,8 @@ if ($repl) {
     $rightcol = 30; # ld friend column
 
     if ($r6) {
-	$leftcol = 31; # ld friend column
-	$rightcol = 32; # ld friend column
+        $leftcol = 31; # ld friend column
+        $rightcol = 32; # ld friend column
 
     }
 
@@ -170,8 +215,8 @@ if ($repdisc) {
     $rightcol = 30; # ld friend column
 
     if ($r6) {
-	$leftcol = 31; # ld friend column
-	$rightcol = 32; # ld friend column
+        $leftcol = 31; # ld friend column
+        $rightcol = 32; # ld friend column
 
     }
 
@@ -222,7 +267,78 @@ sub split_line_ref {
 
 
 
+######################################
+##  other reGene file if found in directory
+######################################
 
+my $refgene = "/Users/stephanripke/tmp/refGene_0413.txt.out";
+
+
+
+my @refgene_files;
+## creating hash (per chromosome)
+my @gene_name_arr = ();
+my @gene_star_arr = ();
+my @gene_stop_arr = ();
+
+unless ($nogene) {
+    @refgene_files = `ls -t $refdir/refGene*` if (-d $refdir);
+    #print "number of files at $refdir: ".@refgene_files."\n";
+    if (@refgene_files > 0) {
+	$refgene = $refgene_files[0];
+	chomp ($refgene);
+    }
+    
+    
+    die "no gene file: $refgene" unless (-e $refgene);
+    
+    
+    
+    
+    #####################################
+    ## reading the gene file
+    
+    
+    ### clean the gene file a bit
+    print  "rewrite reference gene_list: $refgene\n" if ($debug);
+    unless (-e "refGene.loc") {
+	print "create local gene list\n" if ($debug);
+	die $! unless open GI, "< $refgene";
+	die $! unless open GO, "> refGene.loc.tmp";
+	while (my $line = <GI>){
+	    my @cells = @{&split_line_ref(\$line)};
+	    $cells[0] =~ s/chr//;
+	    $cells[0] =~ s/_random//;
+	    
+	    print GO "$cells[0]";
+	    print GO " $cells[2]";
+	    print GO " $cells[3]";
+	    print GO " $cells[7]\n";
+	    
+	}
+	close GI;
+	close GO;
+	&mysystem("mv refGene.loc.tmp refGene.loc");
+    }
+    
+    
+    
+    print  "sort refGene: $refgene\n" if ($debug);
+    &mysystem("sort -k1,1n -k2,2n refGene.loc > refGene.loc.sorted.tmp");
+    &mysystem("mv refGene.loc.sorted.tmp  refGene.loc.sorted");
+    
+    
+    print "create gene arrays per chromosome\n" if ($debug);
+    die $! unless open GI, "< refGene.loc.sorted";
+    while (my $line = <GI>){
+	my @cells = @{&split_line_ref(\$line)};
+	my $chr_loc = $cells[0] * 1;
+	push @{ $gene_name_arr[$chr_loc] }, $cells[3];
+	push @{ $gene_star_arr[$chr_loc] }, $cells[1];
+	push @{ $gene_stop_arr[$chr_loc] }, $cells[2];
+    }
+    close GI;
+}
 
 
 #####################################
@@ -230,8 +346,7 @@ sub split_line_ref {
 #####################################
 
 
-
-
+print "merge clumps\n" if ($debug);
 #################################################
 ## go through infile
 ##########################################
@@ -315,15 +430,20 @@ die $!."($txt_name_sorted)" unless open IN, "< $txt_name_sorted";
 die $!."($txt_name_sorted.reg.tmp)" unless open OUT, "> $txt_name_sorted.regplot.tmp";
 die $! unless open POU, "> $txt_name_sorted.purregplot.tmp";
 die $! unless open REGDET, "> $txt_name_sorted.regions.tmp";
+die $! unless open NG, "> $txt_name_sorted.regions.ngenes";
 die $!."($txt_name_sorted.forplot)" unless open FOR, "> $txt_name_sorted.forplot";
 
-print REGDET "top-index top-chr top-pos top-alleles top-freq top-info top-P top-OR top-SE merge-LEFT merge-RIGHT indices genes\n";
+
+print REGDET "Chromosome top-index top-pos top-alleles top-freq top-info top-P top-OR top-SE merge-LEFT merge-RIGHT indices N-genes genes genes_all count_pieces\n";
+print NG "N-genes\n";
 
 #print REGDET $index_hash{$topold_index}." $topold_index $old_chr  $old_posloc $old_allloc $old_frquloc $old_infoloc $old_pvloc $topi_or_loc $topi_se_loc $old_left $old_right $old_index_n\n";
 
 my $line = <IN>;
 my $pv_loc;
-my %genes_out;
+#my %genes_out;
+
+my $count_ovcl=1;
 
 while (my $line = <IN>){
     my @cells = @{&split_line_ref(\$line)};
@@ -332,7 +452,7 @@ while (my $line = <IN>){
     $pv_loc *= 1;
 
 
-    print "$pv_loc\n" if ($debug);
+#    print "$pv_loc\n" if ($debug);
 #    next if ($cells[$pvcol] eq "NA");
 
 #    next if ($cells[$pvcol]*1 = 0);
@@ -343,7 +463,7 @@ while (my $line = <IN>){
 
 
     if ($pv_loc > $pth) {
-	print "no\n" if ($debug);
+#	print "no\n" if ($debug);
 	next;
     }
 #    next if ($cells[$pvcol] > 1.0e-06);
@@ -365,10 +485,10 @@ while (my $line = <IN>){
 
 #    my $left_loc = 1 * $cells[$leftcol] ;
 #    my $right_loc = 1 * $cells[$rightcol] ;
-    my $left_loc = 1 * $cells[$leftcol] - 50000;
-    my $right_loc = 1 * $cells[$rightcol] + 50000;
+    my $left_loc = 1 * $cells[$leftcol] - $ldkbwin*1000;
+    my $right_loc = 1 * $cells[$rightcol] + $ldkbwin*1000;
 
-    if ($bwin != 0) {
+    if ($bwin != -100000) {
 	$left_loc = $pos_loc - $bwin;
 	$right_loc = $pos_loc + $bwin;
     }
@@ -376,7 +496,8 @@ while (my $line = <IN>){
 
 
 
-#    if ($snp_loc eq "rs9607782" || $snp_loc eq "rs6002655" || $snp_loc eq "rs12691307") {
+    #    if ($snp_loc eq "rs9607782" || $snp_loc eq "rs6002655" || $snp_loc eq "rs12691307") {
+    if (0) {
     if ($debug) {
 	print "$snp_loc";
 	print "\t$chr_loc";
@@ -389,19 +510,32 @@ while (my $line = <IN>){
 	
 #	sleep(1);
     }
-
+    }
 
     
 
     my $overlap = 0;
-#    if ($chr_loc != $old_chr || $left_loc > $old_right) {
     if ($chr_loc == $old_chr && $left_loc < $old_right) {
 	$overlap = 1;
     }
 
+    
 
 
     if ($overlap == 1){
+
+	my $ovcl_sw = 0;
+#	print "left: $left_loc\n";
+#	print "old_right: $old_right\n";
+	my $old_right_shifted = $old_right - 2*$ldkbwin*1000;
+#	print "diff: $old_right_shifted";
+#	print "\n";
+#	sleep(1);
+	
+	if ($left_loc < $old_right_shifted ) {
+	    $ovcl_sw = 1;
+	}
+
 #	if ($snp_loc eq "rs6839635") {
 #	    print "$chr_loc\t$old_chr\t$left_loc\t$old_right\n";
 #	}
@@ -416,6 +550,14 @@ while (my $line = <IN>){
 	    }
 	    else {
 		$old_index .= ",".$snp_loc;
+		unless ($ovcl_sw) {
+#		    $old_index .= "*";
+		    $count_ovcl++;
+#		    print "hit!";
+#		    exit;
+		}
+
+		
 		$old_index_n .= ",".$snp_loc."(".$index_hash{$snp_loc}.")" ;
 	    }
 	}
@@ -423,17 +565,14 @@ while (my $line = <IN>){
 	    $old_right = $right_loc;
 	}
 
-	my @genes=  split /,/, $genes_loc;
-	foreach my $gene (@genes) {
-	    my $dist = $gene;
-	    $dist =~ s/.*\(//;
-	    $dist =~ s/\)//;
-	    $gene =~ s/\(.*\)//;
-	    $genes_out{$gene} = 1;
-#	    if ($snp_loc eq "rs6839635") {
-#		print "$gene\t$dist\n";
-#	    }
-	}
+#	my @genes=  split /,/, $genes_loc;
+#	foreach my $gene (@genes) {
+#	    my $dist = $gene;
+#	    $dist =~ s/.*\(//;
+#	    $dist =~ s/\)//;
+#	    $gene =~ s/\(.*\)//;
+#	    $genes_out{$gene} = 1;
+#	}
 
 #	print "$genes_loc\n";
 
@@ -469,21 +608,64 @@ while (my $line = <IN>){
 		my $pos_out = sprintf "%d",$old_left/1000000;
 
 		print OUT "$old_pvloc --title $out_name.$cc.chr$old_chr --out $out_name.$cc.chr$old_chr.$pos_out"."mb --snp $old_index --area $old_chr,$old_left,$old_right\n";
-		print POU "$old_pvloc $topold_index $old_chr $old_left $old_right $old_index\n";
+		print POU "$old_pvloc $topold_index $old_chr $old_left $old_right $old_index $count_ovcl\n";
+#		print "debug: $old_index\n";
+
+
+		my $gene_str = "";
+		my $Ngenes = 0;
+
+		unless ($nogene) {
+
+		    my @name_arr_loc = @{ $gene_name_arr[$old_chr] };
+		    my @star_arr_loc = @{ $gene_star_arr[$old_chr] };
+		    my @stop_arr_loc = @{ $gene_stop_arr[$old_chr] };
+		    
+		    my $left_m = $old_left;
+		    my $right_m = $old_right ;
+		    my %gene_hash= ();
+
+
+		    foreach my $ac (0..$#name_arr_loc) {
+			my $gene_left = $star_arr_loc[$ac];
+			my $gene_right = $stop_arr_loc[$ac];
+			my $name_loc = $name_arr_loc[$ac];
+			
+			if ($gene_left < $right_m ) {
+			    if ($gene_right > $left_m ) {
+				unless (exists $gene_hash{$name_loc}) {
+				    $gene_str .= $name_loc.",";
+				    $Ngenes++;
+				    $gene_hash{$name_loc} = 1;
+				}
+				
+			    }
+			}
+		    }  ## end gene array
+		}
+
+		$gene_str =~ s/,$//;
+#		$gene_str = $Ngenes.":".$gene_str;
+		$gene_str = "-" if ($gene_str eq "");
+
 		my $genes_out_str;
-		if (keys %genes_out > 5) {
+		if ($Ngenes > 5) {
 		    $genes_out_str = "5+";
 		}
 		else {
-		    foreach my $gene (keys %genes_out){
-			$genes_out_str .= ",$gene";
-		    }
-		    $genes_out_str =~ s/^,//;
+		    $genes_out_str = $gene_str;
 		}
-#		print REGDET $index_hash{$topold_index}." $topold_index $old_chr $old_posloc $old_allloc $old_frquloc $old_infoloc $old_pvloc $old_orloc $old_seloc $old_left $old_right $old_index_n $genes_out_str\n";
-		print REGDET "$topold_index $old_chr $old_posloc $old_allloc $old_frquloc $old_infoloc $old_pvloc $old_orloc $old_seloc $old_left $old_right $old_index $genes_out_str\n";
-		%genes_out = ();
+
+		
+		#		print REGDET $index_hash{$topold_index}." $topold_index $old_chr $old_posloc $old_allloc $old_frquloc $old_infoloc $old_pvloc $old_orloc $old_seloc $old_left $old_right $old_index_n $genes_out_str\n";
+
+
+
+		
+		print REGDET "$old_chr $topold_index $old_posloc $old_allloc $old_frquloc $old_infoloc $old_pvloc $old_orloc $old_seloc $old_left $old_right $old_index $Ngenes $genes_out_str $gene_str $count_ovcl\n";
+		print NG "$Ngenes\n";
 		$cc++;
+		$count_ovcl=1;
 
 	    }
 	}
@@ -510,17 +692,14 @@ while (my $line = <IN>){
 	    $old_infoloc = $topi_info_loc;
 
 
-	    my @genes=  split /,/, $genes_loc;
-	    foreach my $gene (@genes) {
-		my $dist = $gene;
-		$dist =~ s/.*\(//;
-		$dist =~ s/\)//;
-		$gene =~ s/\(.*\)//;
-		$genes_out{$gene} = 1;
-#		if ($snp_loc eq "rs6839635") {
-#		    print "$gene\t$dist\n";
-#		}
-	    }
+#	    my @genes=  split /,/, $genes_loc;
+#	    foreach my $gene (@genes) {
+#		my $dist = $gene;
+#		$dist =~ s/.*\(//;
+#		$dist =~ s/\)//;
+#		$gene =~ s/\(.*\)//;
+#		$genes_out{$gene} = 1;
+#	    }
 	    
 	}
 
@@ -544,18 +723,68 @@ close IN;
 if ($old_pvloc <= $pth) { 
     my $pos_out = sprintf "%d",$old_left/1000000;
     print OUT "$old_pvloc --title $out_name.$cc.chr$old_chr --out $out_name.$cc.chr$old_chr.$pos_out"."mb --snp $old_index --area $old_chr,$old_left,$old_right\n";
-    print POU "$old_pvloc $topold_index $old_chr $old_left $old_right $old_index\n";
+    print POU "$old_pvloc $topold_index $old_chr $old_left $old_right $old_index $count_ovcl\n";
     my $genes_out_str;
-    if (keys %genes_out > 5) {
+#    if (keys %genes_out > 5) {
+#	$genes_out_str = "5+";
+ #   }
+  #  else {
+
+    # }
+
+    my $gene_str = "";
+    my $Ngenes = 0;
+    unless ($nogene) {
+
+	
+	my @name_arr_loc = @{ $gene_name_arr[$old_chr] };
+	my @star_arr_loc = @{ $gene_star_arr[$old_chr] };
+	my @stop_arr_loc = @{ $gene_stop_arr[$old_chr] };
+	
+	my $left_m = $old_left;
+	my $right_m = $old_right ;
+	my %gene_hash= ();
+
+	foreach my $ac (0..$#name_arr_loc) {
+	    my $gene_left = $star_arr_loc[$ac];
+	    my $gene_right = $stop_arr_loc[$ac];
+	    my $name_loc = $name_arr_loc[$ac];
+	    
+	    if ($gene_left < $right_m ) {
+		if ($gene_right > $left_m ) {
+		    unless (exists $gene_hash{$name_loc}) {
+			$gene_str .= $name_loc.",";
+			$Ngenes++;
+			$gene_hash{$name_loc} = 1;
+		    }
+		    
+		}
+	    }
+	}  ## end gene array
+    }
+    
+    $gene_str =~ s/,$//;
+#    $gene_str = $Ngenes.":".$gene_str;
+    $gene_str = "-" if ($gene_str eq "");
+
+    my $genes_out_str;
+    if ($Ngenes > 5) {
 	$genes_out_str = "5+";
     }
     else {
-	foreach my $gene (keys %genes_out){
-	    $genes_out_str .= ",$gene";
-	}
-	$genes_out_str =~ s/^,//;
+	$genes_out_str = $gene_str;
     }
-    print REGDET "$topold_index $old_chr $old_posloc $old_allloc $old_frquloc $old_infoloc $old_pvloc $old_orloc $old_seloc $old_left $old_right $old_index $genes_out_str\n";
+
+    
+    #		print REGDET $index_hash{$topold_index}." $topold_index $old_chr $old_posloc $old_allloc $old_frquloc $old_infoloc $old_pvloc $old_orloc $old_seloc $old_left $old_right $old_index_n $genes_out_str\n";
+
+
+
+    
+    print REGDET "$old_chr $topold_index $old_posloc $old_allloc $old_frquloc $old_infoloc $old_pvloc $old_orloc $old_seloc $old_left $old_right $old_index $Ngenes $genes_out_str $gene_str $count_ovcl\n";
+    print NG "$Ngenes\n";
+    
+
     $cc++;
 }
 
@@ -572,10 +801,17 @@ close FOR;
 &mysystem ("sort -k1,1g $txt_name_sorted.purregplot.tmp > $txt_name_sorted.purregplot");
 &mysystem ("sort -k7,7g $txt_name_sorted.regions.tmp > $txt_name_sorted.regions");
 &mysystem ("sort -k6,6 $txt_name_sorted.forplot > $txt_name_sorted.sorted.forplot");
-#&mysystem ("mv $txt_name_sorted.regplot.tmp $txt_name_sorted.regplot");
+&mysystem ("txt2xls --cogr 1,9,11,12 --txt $txt_name_sorted.regions");
 
-#print "old: $old_index, $old_left, $old_right\n";
+
+#&mysystem ("plothist2 --xlimright 30 --novert --color grey --title Distrubution_of_ngenes_per_region  --fullsteps --out $txt_name_sorted.regions --pcol 13 $txt_name_sorted.regions");
+
+
+
+
 print "$cc regions\n" if ($debug);
+print "$txt_name_sorted.regions.xls\n" if ($debug);
+print "$txt_name_sorted.regions.pdf\n" if ($debug);
 exit;
 
 

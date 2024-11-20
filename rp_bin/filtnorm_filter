@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 
+
 my $version = "1.1.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
@@ -12,6 +13,7 @@ $progname =~ s!^.*/!!;
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
+
 
 use lib $ENV{rp_perlpackages};
 use Compress::Zlib ;
@@ -144,7 +146,9 @@ unless (-e $filtnorm_info) {
 	}
 	
 	$icc++;
-	print "$icc lines read\n" if ($icc % 10000 == 0) if ($debug);
+	if ($debug) {
+	    print "$icc lines read\n" if ($icc % 10000 == 0);
+	}
 	#    last if ($icc ==10000);
     }
     
@@ -189,6 +193,10 @@ while ($igz->gzreadline(my $line)){
     if (length($cells[$a2_col]) > 1) {
 	if (length($cells[$a1_col]) > 1) {
 	    print "Error: a1 and a2 should not both be longer than 1 char ($cells[$snp_col], $cells[$a1_col], $cells[$a2_col])\n";
+	    print "Error: a1: $cells[$a1_col]\n";
+	    print "Error: length_a1: ".length($cells[$a1_col])."\n";
+	    print "Error: a2: $cells[$a2_col])\n";
+	    print "Error: length_a2: ".length($cells[$a2_col])."\n";
 	    exit;
 	}
 	$indel = 1;

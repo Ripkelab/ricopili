@@ -62,6 +62,7 @@ my $version = "1.0.0";
 my $progname = $0;
 $progname =~ s!^.*/!!;
 
+my $target_txt = "hg19";
 
 
 my $usage = "
@@ -76,6 +77,8 @@ version: $version
   --markers INT      markers-file from beagle file, needs chromosome INT
 
   --reverse          lift from hg19 to hg18
+
+  --target_txt       target_txt (e.g. hg38)
 
   --lilofile STRING  lift_chain file from ucsc, e.g. hg18ToHg19.over.chain.gz
 
@@ -100,6 +103,7 @@ GetOptions(
 
     "help"=> \my $help,
     "lilofile=s"=> \$lilofile,
+    "target_txt=s"=> \$target_txt,
     "posfile"=> \my $posfile,
     "ibdrep"=> \my $ibdrep,
     "reverse"=> \my $reverse,
@@ -128,7 +132,7 @@ my $bfile = $bim_file;
 print "Warning, no bim_file no create please\n" unless ($bfile =~ /.bim$/);
 $bfile =~ s/.bim$//;
 
-my $bfile_out = $bfile.".hg19";
+my $bfile_out = $bfile.".".$target_txt;
 
 
 my @cmd_collect;
@@ -211,7 +215,7 @@ if ($ibdrep){
 
 
 ######### write update map
-    my $bim_hg19=$bim_file.".hg19";
+    my $bim_hg19=$bim_file."/".$target_txt;
 
     my %new_pos;
     my %new_chr;
@@ -274,7 +278,7 @@ if ($posfile){
     &mysystem("$liloc/liftOver $bim_2lift $lilofile $bim_lifted $bim_unmapped");
 
 ######### write update map
-    my $bim_hg19=$bim_file.".hg19";
+    my $bim_hg19=$bim_file.".".$target_txt;
 
     die $!." <$bim_lifted>" unless open LIF, "< $bim_lifted";
     die $!." <$bim_hg19>" unless open UP, "> $bim_hg19";
@@ -320,7 +324,7 @@ if ($markers){
 #    print "debug\n";
 #    exit;
 ######### write update map
-    my $bim_hg19=$bim_file.".hg19";
+    my $bim_hg19=$bim_file.".".$target_txt;
     my %new_pos;
 
     die $!." <$bim_lifted>" unless open LIF, "< $bim_lifted";

@@ -227,7 +227,7 @@ $bin_locs{"impute2"} = "https://mathgen.stats.ox.ac.uk/impute/impute_v2.3.2_x86_
 # eigenstrat
 ################################
 $bin_names{"eigenstrat"} = "bin/smartpca";
-$bin_locs{"eigenstrat"} = "https://data.broadinstitute.org/alkesgroup/EIGENSOFT/EIG-6.1.4.tar.gz";
+$bin_locs{"eigenstrat"} = "https://data.broadinstitute.org/alkesgroup/EIGENSOFT/EIG-6.1.4.tar.gz (outdated)";
 
 
 ############

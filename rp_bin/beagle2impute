@@ -104,7 +104,7 @@ while (my $line = <IN>) {
     my $mline = <MA>;
     my @mcells = @{&split_line_ref(\$mline)};
     
-    die "bgl and marker-file with inconsistency at $cells[1]" if ($cells[1] ne $mcells[0]);
+    die "bgl ($bgl_file) and marker-file ($marker_file) with inconsistency at $cells[1]" if ($cells[1] ne $mcells[0]);
     
 
     print LE "@mcells\n";

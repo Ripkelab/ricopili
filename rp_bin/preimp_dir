@@ -829,7 +829,7 @@ my @name_arr;
 ##############################
 unless (-e $namefile) {
     die $! unless open FILE, "> $namefile";
-    print FILE "###STUDYNAME: 5 alphanumeric characters, recommeded city or study abbreviation and wave, e.g. lond1, cloz2\n";
+    print FILE "###STUDYNAME: 5 alphanumeric characters, we recommend to reflect city or study abbreviation and wave-number, e.g. lond1 (for London), cloz2 (for Clozapine)\n";
     print FILE "###              please negotiate with PIs about this name\n";
     print FILE "###BFILE:     bed-filename root, e.g. if you dataset is called YOURDATA.bed, then please use YOURDATA in this column\n";
     print FILE "###QCCYCLE:   numeric indicating the rounds of quality controls you have already performed\n";

@@ -19,6 +19,10 @@ use Compress::Zlib ;
 
 my $shloc = &trans("shloc");
 my $sh3loc = &trans("sh3loc");
+my $sh5loc = &trans("sh5loc");
+my $gmloc = &trans("gmloc");
+my $bcloc = &trans("bcloc");
+my $bcloc_plugins = &trans("bcloc_plugins");
 my $p2loc = &trans("p2loc");
 my $ealoc = "";
 
@@ -39,6 +43,9 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --spliha INT      for splitter
  --eagle           use eagle instead of shapeit
  --shapeit3        use shapeit3 (in combination with impute4)
+ --shapeit5        use shapeit5 (in combination with Minimac4)
+ --trio STRING     additional 3 column file containing the childs information (see shapeit5 documentation)
+
  --eaglvcf         use eagle with VCF output (suitable for Minimac3)
  --noref           do not use reference when using eaglevcf (saving important SNPs)
 
@@ -80,7 +87,9 @@ GetOptions(
     "eagle"=> \my $eagle_sw,
     "eaglvcf"=> \my $eagle_vcf,
     "shapeit3"=> \my $shapeit3,
-    "ref:s"=>\my $ref,
+    "shapeit5"=> \my $shapeit5,
+    "trio=s"=> \my $triofamfile,
+    "ref=s"=>\my $ref,
     "nospli"=> \my $nospli,
     "sfile=s"=> \ $sfile,
     "refind=s"=> \ $refind,
@@ -178,7 +187,7 @@ if (-e "$outname.fini") {
 my $sys = "";
 my $sc = 0;
 my $chrx_sw = 0;
-
+my $chrind;
 if ($refind) {
     my @tcells = split /_/, $refind;
 
@@ -191,7 +200,7 @@ if ($refind) {
     my $kb_start = ($tcells[1])*1000 - $buffer;
     my $kb_end = ($tcells[2])*1000 + $buffer;
     
-    my $chrind = $tcells[0];
+    $chrind = $tcells[0];
     $chrind =~ s/chr//;    
 
     $sys = "$p2loc/plink --silent --memory 2000 --bfile $inname --out $outname --make-bed --chr $chrind --from-kb $kb_start --to-kb $kb_end $mendel_clean";
@@ -302,6 +311,9 @@ if ($shapeit3) {
     
 }
 
+#print "hier?\n";
+#print "$eagle_vcf\n";
+#print "$\n";
 
 
 if ($eagle_vcf) {
@@ -390,11 +402,119 @@ if ($eagle_vcf) {
 
 
 }
+
+
+elsif ($shapeit5) {
+    # Convert plink bfile to a vcf file, then run shapeit5 to obtain a phased vcf file.
+    # The resulting phased vcf can then be used with Minimac4.
+    
+
+    ### this here is the same as for eagle_vcf 
+#    my $opt_txt = "--vcf $outname.unphased0.vcf.gz";
+#    unless ($noref) {
+#	unless ($ref) {
+#	    die "$0: Please specify the reference file (e.g. --ref=my/ref.vcf.gz)\n";
+#	}
+#	$opt_txt = "--vcfRef $ref --vcfTarget $outname.unphased0.vcf.gz  --allowRefAltSwap";
+#    }
+    
+#    my $sys_loc_plink = "$p2loc/plink --silent --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out $outname.unphased0";
+    my $sys_loc_plink = "$p2loc/plink --silent --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf bgz --out $outname.unphased0";
+    print BC "$sys_loc_plink\n";
+    print "starting: $sys_loc_plink\n"  if ($debug);
+    $sc += system ($sys_loc_plink) ;
+
+    ####
+
+    ## export BCFTOOLS_PLUGINS=$bcftools_plugins
+    my $bcftools_cmd = $bcloc . "/bcftools";
+    
+    my $sys_loc_bcftools = "export BCFTOOLS_PLUGINS=$bcloc_plugins; $bcftools_cmd +fill-tags -Ob $outname.unphased0.vcf.gz > $outname.unphased0.bcf.bgz; $bcftools_cmd index  $outname.unphased0.bcf.bgz";
+    print BC "$sys_loc_bcftools\n";
+    print "starting: $sys_loc_bcftools\n"  if ($debug);
+#    exit;
+
+    $sc += system ($sys_loc_bcftools) ;
+
+
+    # /psych/ripke/share/gio/Ricopili_Dependencies_sr_1118b/shapeit5/phase_common_static --seed 123454 -I xmsaf.bcf.bgz --region 6 --map chr6.b38.gmap.gz  --output xmsaf.ref.phased.bcf --reference /psych/ripke/imputation_references/hla_imputation/HLA-1KG_allancestry_jul23e_b/HLA_1KG_mm.chr6.impute.bcf.bgz
+
+    my $trioflag = "";
+    if ($triofamfile ne ""){
+	$trioflag = "--pedigree $triofamfile";
+    }
+    my $reftxt = " --reference $ref";
+    if ($noref) {
+	$reftxt = "";
+    }
+    my $sys_loc_sh5 = "$sh5loc/phase_common_static -I $outname.unphased0.bcf.bgz $trioflag  --region $chrind --map $gmloc/chr$chrind.b38.gmap.gz  --output $outname.ref.phased.bcf $reftxt > $outname.ref.phased.bcf.log";
+# ref    /psych/ripke/imputation_references/hla_imputation/HLA-1KG_allancestry_jul23e_b/HLA_1KG_mm.chr6.impute.bcf.bgz
+    print BC "$sys_loc_sh5\n";
+    
+    print "starting: $sys_loc_sh5\n"  if ($debug);
+#    exit;
+    $sc += system ($sys_loc_sh5) ;
+
+
+    ## not yet solved for chr23
+    if (0) {
+	if ($chrx_sw == 1) {
+	    print "on chrX I use a differenct genetic map file\n"  if ($debug);
+	    $gemafile .= ".23";
+	}
+
+
+
+	
+	if ($chrx_sw == 1) {
+	    unless  ($chr23male) {
+		$sc += system ("mv $outname.vcf.gz $outname.vcf.23.gz") ;
+	    }
+	    else {
+		$sc += system ("mv $outname.unphased0.vcf.gz $outname.vcf.23.gz") ;
+	    }
+	    my $igz = gzopen("$outname.vcf.23.gz", "rb")  or die "Cannot open file $outname.vcf.23.gz: $gzerrno\n" ;
+	    my $ogz = gzopen("$outname.vcf.gz", "wb")  or die "Cannot open file $outname.vcf.gz: $gzerrno\n" ;
+
+	    while ($igz->gzreadline(my $line)){
+		chomp($line);
+		my @cells = @{&split_line_ref(\$line)};
+		if ($cells[0] eq "23") {
+		    $cells[0] = "X";
+		    $ogz->gzwrite(join("\t",@cells)."\n");
+		}
+		else {
+		    $ogz->gzwrite("$line\n");
+		}
+
+	    }
+	    $igz->gzclose();
+	    $ogz->gzclose();
+	    $sc += system ("rm $outname.vcf.23.gz") ;
+	}
+    }
+    
+#    $sys_loc = qq{
+#      { $p2loc/plink --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out "$outname.unphased0" &&
+#        $tabix -f "$outname.unphased0.vcf.gz" &&
+#        $ealoc/$eagle_bin $opt_txt --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt 
+#      } > $outname.log 2> $outname.loge
+#    };
+    
+    #}
+    #    else {
+    #	my $sys_loc = "$ealoc/$eagle_bin $ref_txt --bed $outname.bed --bim $outname.bim --fam $famfile --geneticMapFile=$gemafile --outPrefix=$outname $multi_txt";
+    #   }
+
+
+
+}
+
+### here everything else
 else {
     print "$sys_loc\n"  if ($debug);
     $sc = system ($sys_loc) ;
 }
-
 
 
 
@@ -425,6 +545,8 @@ if (0) {
 	exit;
     }
 }
+
+
 
 
 if ($sc == 0 ) {

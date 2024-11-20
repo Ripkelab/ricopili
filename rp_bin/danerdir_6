@@ -103,6 +103,9 @@ version: $version
 
   --bfile          input is binary plink file (e.g. whole genome best guess)
 
+
+  --nonadd [dom/rec/het]  calculate a nonadditiv model
+
   --debug          extended output
 
  batch_identifier: files matching this should all have no double id-entries
@@ -148,6 +151,7 @@ GetOptions(
     "bfile=s"=> \my $bfile,
     "sout=s"=> \$sout,
     "range=s"=> \$range_file,
+    "nonadd=s"=> \my $nonadd,
     "debug"=> \my $debug,
     );
 
@@ -990,6 +994,101 @@ my $caco_txt = "case-control-freqs";
 #if ($quant_pt == 1) {
 #    $caco_txt = "";
 #}
+
+
+## here the test
+##  sripke@uger-c003.broadinstitute.org:/psych/ripke/scz/wave3/scz_phase3_imputation/batch123/HRC/danerjobdir_PGC_SCZ_w3_70_0118.ceu.caco danerdir_6  --nosi --indir /psych/ripke/scz/wave3/scz_phase3_imputation/batch123/HRC/dasuqc1_scz_braz2_eur_sr-qc.hg19.ch.fl/qc1   --idin PGC_SCZ_w3_70_0118.ceu.caco.menv.mds_cov  --mds scz_braz2_eur_sr-qc.hg19.ch.fl.bgs.menv.trans.mds --coco 1,2,3,4,18 --outdir ~/tmp_2 --nonadd rec scz_braz2_eur_sr-qc.hg19.ch.fl.chr1_000_023
+
+
+if ($nonadd) {
+
+    print "$workdir\n";
+    my $dosfile_nogz = $dosfile;
+    $dosfile_nogz =~ s/.gz$//;
+    if ($dosfile eq $dosfile_nogz) {
+	print "Error: something is wrong with the dosfile ($dosfile)\n";
+	exit;
+    }
+    
+    &mysystem("gunzip -c $dosfile > $dosfile_nogz");
+    my $dosfile_nonadd = $dosfile_nogz.".".$nonadd;
+    die ":".$! unless open IFILE, "< $dosfile_nogz";
+    die ":".$! unless open OFILE, "> $dosfile_nonadd";
+    my $header = <IFILE>;
+    print OFILE $header;
+    while (my $line = <IFILE>){
+	my @cells = &split_line($line);
+	print OFILE "$cells[0] ";
+	print OFILE "$cells[1] ";
+	print OFILE "$cells[2] ";
+	for (my $cc=3; $cc<=$#cells; $cc=$cc+2) {
+	    my $p1 = $cells[$cc];
+	    my $p2 = $cells[$cc+1];
+	    my $p3 = 1 - $p1 - $p2;
+
+	    ### re-distribute genotype probabilities to P1 and P3
+	    my $d1;
+	    my $d3;
+	    if ($nonadd eq "rec"){
+		$d1 = $p1;
+		$d3 = $p2 + $p3;
+	    }
+	    elsif ($nonadd eq "dom"){
+		$d1 = $p1 + $p2;
+		$d3 = $p3;
+	    }
+	    elsif ($nonadd eq "het"){
+		$d1 = $p2;
+		$d3 = $p1 + $p3;
+	    }
+	    else {
+		print "Error: nonadd model ($nonadd) not known\n";
+		exit
+	    }
+
+	    ### quick hack to redistribute back to P1,P2,P3
+
+#	    print "p1: $p1\n";
+#	    print "p2: $p2\n";
+#	    print "p3: $p3\n";
+#	    print "p1_new: $p1_new\n";
+#	    print "p2_new: $p2_new\n";
+#	    print "p3_new: $p3_new\n";
+
+	    my $p1_new = $d1/2;
+	    my $p2_new = $d1;
+	    my $p3_new = $d3-$d1/2;
+#	    print OFILE "$p1_new ";
+#	    print OFILE "$p2_new ";
+
+	    print OFILE "$d1 ";
+	    print OFILE "0 ";
+
+
+	    
+#	    exit;
+	    
+	}
+	print OFILE "\n";	    
+#	exit;
+	
+	
+    }
+    close IFILE;
+    close OFILE;
+
+    &mysystem("gzip $dosfile_nonadd");
+    $dosfile = $dosfile_nonadd.".gz";
+    
+#    print "$dosfile_nogz\n";
+#    exit;
+    
+}
+
+
+
+
+
 
 unless ($danscore_file) {
     $sys = "$p2loc/plink --silent --memory 2000 --dosage $dosfile format=2  $caco_txt --fam $famfile.pt --allow-no-sex --out $workname --map $mapfile $cov_str $idex_str $idin_str";

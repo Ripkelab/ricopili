@@ -75,13 +75,30 @@ close FILE;
 
 
 
+#print "rloc: $rloc\n";
+
+#exit;
 my $r_sys = "$rloc";
 $r_sys =~ s/_SPACE_/ /g;
 
-system("$r_sys RHOME > /dev/null");
+print "this is the current command: $r_sys RHOME\n";
+
+
+# my $evalstr = 'eval "$(/opt/conda/bin/conda shell.bash hook)"';   ### maybe necessary for charite
+#my $systemcall_temp = "$evalstr; $r_sys RHOME > /dev/null";
+
+#print "this is the extended command: $systemcall_temp\n";
+
+#system($systemcall_temp);
+
+
+system("$r_sys RHOME ");
+#exit;
+
 my $status = ($? >> 8);
 if ($status != 0) {
     print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
+    print "this is the current command: $r_sys RHOME\n";
     exit;
 }
 

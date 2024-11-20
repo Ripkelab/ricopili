@@ -48,6 +48,7 @@ GetOptions(
     "hcol=i"=> \$h_col,
     "diff=s"=> \my $diffc,
     "spec"=> \my $spec,
+    "oldformat"=> \my $oldformat,
     "nsnps=i"=> \$nsnps,
    "help!"=> \my $help,
    "bfile=s"=> \my $bfile,
@@ -72,6 +73,12 @@ if ($help || @ARGV < 1){
         --spec          special switch (for publication)
 
         --debug         no new directory, no big sorting and extracting
+
+
+        --oldformat     take case and control in FIDs instead of cas and con
+        --nolegends     take out the legends
+
+
 
  created by Stephan Ripke 2008 at MGH, Boston, MA
  in the frame of the PGC
@@ -161,6 +168,21 @@ use Cwd;
 
 my $mds_file=@ARGV[0];
 
+
+if ($oldformat) { ## super clumpsy, but too lazy now
+    die $! unless open IN, "< $mds_file";
+    die $! unless open OUT, "> $mds_file.newformat";
+    while (my $line = <IN>) {
+	$line =~ s/^case_/cas_/;
+	$line =~ s/^control_/con_/;
+	
+	print OUT $line;
+    }
+    close IN;
+    close OUT;
+    $mds_file = "$mds_file.newformat";
+    #&mysystem("rm -rf $subdir_mds");
+}
 
 
 my $pdf_name="$mds_file";
@@ -252,6 +274,9 @@ if ($diffc){
 }
 #exit;
 
+
+
+
 my %n_st = (); ## number per dataset
 
 die $! unless open IN, "< $mds_file";
@@ -263,6 +288,8 @@ while (my $line = <IN>) {
     $cells[0] =~ s/_/ /;
     $cells[0] =~ s/\*/ /;
     my @cells = &split_line($cells[0]);
+
+
 #    print $cells[1]."\n";
     unless ($famfile) {
 	$n_st {$cells[1]} ++;
@@ -271,7 +298,7 @@ while (my $line = <IN>) {
 	$n_st {$mds_file} ++;
     }
 }
-#close IN;
+close IN;
 #exit;
 $n_st{"pop_euro_eur_SEQ"} = 90000000000;
 $n_st{"pop_tsi_eur_SEQ"} = 89000000000;
@@ -515,7 +542,7 @@ close L2;
 
 my $R_templ = '
 
-read.table ("MDSFILE",header=T)->pca
+read.table ("MDSFILE",stringsAsFactors=T,header=T)->pca ## new for R.4.X
 read.table ("LEGENDFILE1",header=F,sep ="\t")->le1
 read.table ("LEGENDFILE2",header=F,sep ="\t")->le2
 
@@ -542,7 +569,7 @@ myraincolors <- rep(c("orange","lightpink1","purple","grey","red","dodgerblue","
 
 
 if (dim(le2)[1]<4) {
-myraincolors <- c("red","blue","green");
+myraincolors <- c("blue","red","green");
 }
 
 
@@ -800,7 +827,7 @@ pdf("PDFNAME2D",7.8,6)
   if (length (pca_u) > 1) {
    for (x in 2 :length(pca_u)){
     for (y in 1 :(x-1)){
-     ddplot(pca_u[x],pca_u[y])
+     ddplot(pca_u[y],pca_u[x])
     }
    }
   }
@@ -818,10 +845,12 @@ pdf("PDFNAME2sD",7.8,6)
 
  ddplot(1,2)
  ddplot(1,3)
+ ddplot(1,4)
  ddplot(2,3)
  ddplot(2,4)
  ddplot(3,4)
  ddplot(5,6)
+
 
 dev.off()
 
@@ -949,18 +978,21 @@ ddplot_sgrey <- function (st,c1=1,c2=2){
   seqc1 = seq(minc1,maxc1, by = 0.01)
   seqc2 = seq(minc2,maxc2, by = 0.01)
 
+Lab.palette <- colorRampPalette(c("white", "blue"), space = "Lab")
 
-  smoothScatter (pca[,c1+header_col], pca[,c2+header_col],nrpoints=0,
-#      colramp = Lab.palette, 
+  smoothScatter (pca_tarco[,c1+header_col], pca_tarco[,c2+header_col],nrpoints=0,
+      colramp = Lab.palette, 
       xlim =c(minc1,maxc1+(maxc1-minc1)*.2), ylim = c(minc2, maxc2), 
-      main = paste (main_txt, ", Cases", sep = ""), ylab = ylab_txt, xlab = xlab_txt, 
+#      main = paste (main_txt, ", Cases", sep = ""), 
+      main = "Cases", 
+      ylab = ylab_txt, xlab = xlab_txt, 
       cex.axis = .6, cex.lab =.8)
   abline (v=seqc1, col="lightgray");
   abline (h=seqc2, col="lightgray");
 
 
 #  points (pca_bak[,c1+header_col], pca_bak [,c2+header_col],col="grey50", cex=.4,  pch = 19)
-  points (pca_tarca[,c1+header_col], pca_tarca [,c2+header_col],col="red", cex=.3,  pch = 19)
+  points (pca_tarca[,c1+header_col], pca_tarca [,c2+header_col],col="red", cex=.2,  pch = 19)
 
   if (length(unique(pca_tar[,"CC"])) == 2) {
     p_pca1 = signif (summary(glm( CC ~ pca_tar[,"C1"] , data=pca_tar, family="binomial"))$coeff[2,4], 3)
@@ -972,10 +1004,16 @@ ddplot_sgrey <- function (st,c1=1,c2=2){
 
 
 
+if (0) {
+
   lep1 = paste ("p_PCA1 = ",p_pca1,sep="")
   lep2 = paste ("p_PCA2 = ",p_pca2,sep="")
 
   legend ("right",legend=c(lep1,lep2), cex=.6)
+}
+
+
+
 
 
 
@@ -983,10 +1021,17 @@ ddplot_sgrey <- function (st,c1=1,c2=2){
 #        type= "n", main = main_txt, ylab = ylab_txt, xlab = xlab_txt,
 #        cex.axis = .6, cex.lab =.8)
 
-  smoothScatter (pca[,c1+header_col], pca[,c2+header_col],nrpoints=0,
+Lab.palette <- colorRampPalette(c("white", "red"), space = "Lab")
+
+
+  smoothScatter (pca_tarca[,c1+header_col], pca_tarca[,c2+header_col],nrpoints=0,
 #      colramp = Lab.palette, 
+colramp = Lab.palette,
+
       xlim =c(minc1,maxc1+(maxc1-minc1)*.2), ylim = c(minc2, maxc2), 
-      main = paste (main_txt, ", Controls", sep = ""), ylab = ylab_txt, xlab = xlab_txt, 
+#      main = paste (main_txt, ", Controls", sep = ""), 
+      main = "Controls", 
+      ylab = ylab_txt, xlab = xlab_txt, 
       cex.axis = .6, cex.lab =.8)
 
 
@@ -994,14 +1039,16 @@ ddplot_sgrey <- function (st,c1=1,c2=2){
   abline (h=seqc2, col="lightgray");
 
 #  points (pca_bak[,c1+header_col], pca_bak [,c2+header_col],col="grey50", cex=.4,  pch = 19)
-  points (pca_tarno[,c1+header_col], pca_tarno [,c2+header_col],col="green", cex=.3,  pch = 19)
-  points (pca_tarco[,c1+header_col], pca_tarco [,c2+header_col],col="blue", cex=.3,  pch = 19)
+  points (pca_tarco[,c1+header_col], pca_tarco [,c2+header_col],col="blue", cex=.2,  pch = 19)
+  points (pca_tarno[,c1+header_col], pca_tarno [,c2+header_col],col="blue", cex=.2,  pch = 19)
 
 
+if (0) {
   leca = paste ("cases (n= ",dim(pca_tarca)[1],")",sep="")
   leco = paste ("controls (n= ",dim(pca_tarco)[1],")",sep="")
 
   legend ("right",legend=c(leca,leco), fill=c("red","blue"), cex=.6)
+}
 
 
 }
@@ -1012,9 +1059,11 @@ ddplot_sgrey <- function (st,c1=1,c2=2){
 ## here plot single studies
 ##############################
 
-pdf("PDFSINGLE",7.8,6)
-par(mfrow=c(2,2))
+pdf("PDFSINGLE",6,9)
 
+#if (1) {
+   par(mfrow=c(2,1))
+#}
 
   for (st in unique (pca[,"ST"])) {
      ddplot_sgrey(st,1,2)
@@ -1071,6 +1120,7 @@ close IN;
 
 
 
+print "here: $mds_ow_file.p_assoc\n" if ($debug);
 
 die $! unless open IN, "< $mds_ow_file.p_assoc";
 die $! unless open OUT, "> $mds_ow_file.p_assoc.txt";

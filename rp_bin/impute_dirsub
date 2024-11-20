@@ -136,6 +136,7 @@ my $chunkind = 10;
 my $fth_th = 0.15;
 
 
+
 use Sys::Hostname;
 my $host = hostname;
 
@@ -249,6 +250,7 @@ my $freq_th = 0.005;
 my $bg_th = 0.8;
 
 my $sjamem_incr = 0;
+my $sjatime_incr = 0;
 
 my $multithread1 = 4;
 my $multithread2 = 8;
@@ -256,7 +258,10 @@ my $multithread_v2 = 0;
 if ($qloc eq "qsub_b"){
     $multithread1 = 1;
 }
-my $impwallinc=0;
+my $imp_time_incr=0;
+my $preph_time_incr=0;
+my $imp_mem_incr=0;
+my $preph_mem_incr=0;
 my $sepa = 1;
 
 #exit;
@@ -305,9 +310,10 @@ minimac3 is now default imputation algorithm (its no flag any more), here eagle 
  --impute4         use impute4/shapeit3 for prephasing / imputation 
                        (right now done with shapeit2, since trios do not work with shapeit3)
 
- --noref           use minimac3 and eagle but no reference during prephasing 
+ --noref           no reference during prephasing 
                       (some SNPs are not well matched with eagle but are with minimac)
 
+ --vcf_no_bcf      take the vcf.gz instead of bcf.gz during phasing with eagle
 
 
 #### for trio datasets
@@ -328,10 +334,16 @@ minimac3 is now default imputation algorithm (its no flag any more), here eagle 
 
   --popname STRING    important for freq-checks, either 
                            eur (default), 
-                           asn (asian), 
+                           asn (asian),
+                           eas (east asian), 
                            amr (america), 
                            afr (africa), 
                            asw (african american)
+
+                        ## you need to check if these exist in the reference
+
+
+
 
   --sfh FLOAT         secure frequency around 50% (default: $sec_freq)
                                 for checkflip (compare to reference),
@@ -364,9 +376,28 @@ minimac3 is now default imputation algorithm (its no flag any more), here eagle 
 
   --refiex FILE       file containing refinds to exclude
 
-  --sjamem_incr INT   increase all memore requests by INT Mb in steps of 1000 (1000 is 1Gb)
-                           definitely necessary when not imputing with minimac3, since chunks are much bigger now
-                           --sjamem_incr 4000 for 4GB
+
+
+
+  --preph_mem_incr INT   increase memory requests by INT Mb in steps of 1000 (1000 is 1Gb)
+                           just for prephasing jobs
+
+  --imp_mem_incr INT     increase memory requests by INT Mb in steps of 1000 (1000 is 1Gb)
+                           just for imputation jobs
+                           probably necessary when not imputing with minimac3
+
+  --preph_time_incr INT  add INT hour to walltime of prephasing jobs (also on top of minilong)
+  --imp_time_incr INT    add INT hour to walltime of imputation jobs (also on top of minilong)	
+
+
+
+  --sjamem_incr INT   increase all memory requests by INT Mb in steps of 1000 (1000 is 1Gb)
+                           --sjamem_incr 4000 for 4GB (defaults vary by step)
+
+  --sjatime_incr INT   increase all walltime requests by INT hours
+                           --sjatime_incr 12 for 12 hours on top of default (2)
+
+
 
   --noclean           do not clean up intermediate files at the very end
 
@@ -391,7 +422,7 @@ minimac3 is now default imputation algorithm (its no flag any more), here eagle 
 
   --phlong            use long jobs for phasing (instead of multithreading)
 
-  --impwallinc INT    add INT hour to walltime of imputation jobs (also on top of minilong)
+
 
   --reference_info    write out file refiex_templ to be used with --refiex
                         cave: different for different values of --chunk
@@ -526,12 +557,18 @@ my $phase_txt = "
 
 
 my $mm3_sw = 1;
+my $mm4_sw = 0;
+#my $hg38_sw = 0;
+my $build_txt = "hg19";
+my $buigue_flag = "--lift19";
+
+
 
 
 use Getopt::Long;
 GetOptions( 
 
-
+    "sjatime_incr=i"=> \$sjatime_incr,
     "sjamem_incr=i"=> \$sjamem_incr,
     "info_th=f"=> \$info_th,
     "freq_th=f"=> \$freq_th,
@@ -540,13 +577,14 @@ GetOptions(
 
     "help"=> \my $help,
     "serial"=> \my $serial_sw,
+
     "sepa=i"=> \$sepa,
 
     "sleep=i"=> \my $sleep_sw,
 
     "buffer=i"=> \$buffer,
 
-
+    "vcf_no_bcf"=> \my $vcf_no_bcf,
 
     "outname=s"=> \my $outname,
     "deploy"=> \my $deploy,
@@ -572,7 +610,14 @@ GetOptions(
     "chunk=s"=> \$chunkind,
     "multi=i"=> \$multithread_v2,
     "minilong"=> \my $minilong,
-    "impwallinc=i"=> \$impwallinc,
+    
+    "imp_time_incr=i"=> \$imp_time_incr,
+    "preph_time_incr=i"=> \$preph_time_incr,
+    "imp_mem_incr=i"=> \$imp_mem_incr,
+    "preph_mem_incr=i"=> \$preph_mem_incr,
+
+
+    
     "phlong"=> \my $phaselong,
     "reference_info"=> \my $reference_info_file,
     "chr23male"=> \my $chr23male,
@@ -1133,6 +1178,7 @@ sub send_jobarray {
 
     ### with array
     $sjamem = $sjamem + $sjamem_incr;
+    $sjatime = $sjatime + $sjatime_incr;
 
 
 
@@ -1412,6 +1458,9 @@ unless (-e $pcaer_dir){
 my $suminfo_s_v2 = "";
 my $suminfo_s_v2_sw = 0;
 
+my $gm_template = "genetic_map_chrXXX_combined_b37.txt";
+
+
 my %ref_hash;
 if (-e "$refdir/reference_templ") {
     print "new format (reference_template) found.\n" if ($debug);
@@ -1419,17 +1468,40 @@ if (-e "$refdir/reference_templ") {
     while (my $line = <IN>) {
 	my @cells = &split_line($line);
 	$ref_hash{$cells[0]} = $cells[1];
-#	print "$cells[0]\t";
-#	print "$cells[1]\n";
+#	print "<$cells[0]>\t";
+#	print "<$cells[1]>\n";
 	
     }
     unless (exists $ref_hash{"out_template"}) {
 	print "Error: no entry out_template in (reference_template)\n";
 	exit;
     }
+
+    if (exists $ref_hash{"gm_template"}) {
+	print "replacing gm_template\n";
+	$gm_template = $ref_hash{"gm_template"};
+    }
+    
+    if ($ref_hash{"mm4"} eq "ON") {
+	print "seems to be a Minimac4 reference\n";
+	$mm4_sw = 1;
+	$mm3_sw = 0;
+#	exit;
+    }
+    
+    if ($ref_hash{"build"} eq "hg38") {
+	print "seems to be a build hg38\n";
+	sleep(2);
+#	$hg38_sw = 1;
+	$build_txt = "hg38";
+	$buigue_flag = "--lift38";
+#	exit;
+    }    
+    
     $suminfo_s_v2_sw = 1;
     $suminfo_s_v2 = $ref_hash{"out_template"};
 }
+#print "exit after template checking: $refdir/reference_templ\n";
 #exit;
 
 
@@ -1588,12 +1660,12 @@ my @bim_files = grep {/bim$/} @files;
 #print "@bim_files\n";
 
 foreach (@bim_files) {
-    if ($_ =~ /.hg19.ch.fl.bim$/){
+    if ($_ =~ /.$build_txt.ch.fl.bim$/){
 	print "wrong filename, will rename:\n";
 	my $obfile = $_;
 	$obfile =~ s/.bim$//;
 	my $nbfile = $obfile;
-	$nbfile =~ s/.hg19.ch.fl/.bf/;
+	$nbfile =~ s/.$build_txt.ch.fl/.bf/;
 	print "mv $obfile.bed/bim/fam $nbfile.bed/bim/fam\n";
 	&mysystem ("mv $obfile.fam $nbfile.fam");
 	&mysystem ("mv $obfile.bed $nbfile.bed");
@@ -1614,18 +1686,23 @@ my @bimfli_files = grep {/.ch.fl.bim$/} @pi_files;
 my @bimdep_files = grep {/dep.fini$/} @pi_files;
 my @bimpos_files = grep {/.ch.bim$/} @pi_files;
 my @bimref_files = grep {/.bim.ref/} @pi_files;
-my @bimhg19_files = grep {/.hg19.bim$/} @pi_files;
+my @bimhg19_files = grep {/.$build_txt.bim$/} @pi_files;
 my @fini_files = grep {/.fini$/} @pi_files;
+
+
 if (-e "$rootdir/puting_done") {
 #if (@bimfli_files == 0) {
     foreach (@bim_files) {
 	my $bitemp = $_;
 	$bitemp =~ s/.bim$//;
-	$bitemp .= ".hg19.ch.fl.bim";
+	$bitemp .= ".$build_txt.ch.fl.bim";
 	push @bimfli_files,$bitemp;
     }
 }
 
+#print "N_bimfli: ".@bimfli_files."\n" if ($debug);
+
+ 
 #print @bimfli_files."\n";
 print "@bimhg19_files\n" if ($debug);
 #print "debug\n";
@@ -1676,6 +1753,7 @@ $iname = $bim_files[0] if ($iname eq "");
 $iname =~ s/.bim$//;
 $iname =~ s/qc2report_//;
 
+
 #####################################
 # prepare pi_subdir
 #####################################
@@ -1705,13 +1783,15 @@ if ($trioset_file){
 	my @cells = &split_line($line);
 	$cells[0] =~ s/.bim$//;
 	$cells[0] =~ s/.fam$//;
-	$cells[0] .= ".hg19.ch.fl";
+	$cells[0] .= ".$build_txt.ch.fl";
 	$trioset{$cells[0]} = 1;
 	print "$cells[0] is triodata\n";
     }
     close IN;
 }
 #exit;
+
+
 
 foreach my $bifi (@bimfli_files) {
     $bifi =~ s/.bim$//;
@@ -1794,8 +1874,11 @@ if ($suminfo_s_v2_sw == 0) {
 	push @refchr_arr, $chrind;
 	push @refstart_arr, $mega_start;
 	push @refend_arr, $mega_end;
-	
-	my $gema_file = "$refdir/genetic_map_chr$chrind"."_combined_b37.txt";
+
+
+	$gm_template =~ s/XXX/$chrind/;
+#	my $gema_file = "$refdir/genetic_map_chr$chrind"."_combined_b37.txt";
+	my $gema_file = "$refdir/$gm_template";
 	push @gema_arr, $gema_file;
 	
 	
@@ -1813,6 +1896,14 @@ if ($suminfo_s_v2_sw == 0) {
 }
 
 
+
+#cat reference_templ
+#vcf_site
+#vcf_template  1kGP_high_coverage_Illumina.chrXXX.filtered.SNV_INDEL_SV_phased_panel.annot.vcf.gz
+#out_template  1KG_high_coverage_20130606_g1k_3202.chrXXX
+#mm4  ON
+
+    
 
 #############################################
 ### write out files for postimp
@@ -1975,7 +2066,7 @@ unless (-e "$rootdir/buigue_done") {
 #	    print "he: $fini\n";
 #	    exit;
 	    unless (exists $fini_array{$fini}) {
-		push @buigue_arr, "$buigue_script --lift19 $bfile.bim" ;#
+		push @buigue_arr, "$buigue_script $buigue_flag $bfile.bim" ;#
 	    }
 	    else {
 		$buigue_fini++;
@@ -2018,7 +2109,7 @@ if ($suminfo_s_v2_sw == 1) {
 	    my $bimfile = $_;
 	    my $bfile = $bimfile;
 	    $bfile =~ s/.bim$//;
-	    my $accfli ="$bfile".".hg19.bim";
+	    my $accfli ="$bfile".".$build_txt.bim";
 	    my $bimref_done ="$accfli".".ref.sum.done";
 	    unless (exists $bimref_array{$bimref_done}) {
 
@@ -2095,7 +2186,7 @@ if ($suminfo_s_v2_sw == 1) {
 	    my $bimfile = $_;
 	    my $bfile = $bimfile;
 	    $bfile =~ s/.bim$//;
-	    my $accfli ="$bfile".".hg19.bim";
+	    my $accfli ="$bfile".".$build_txt.bim";
 
 	    my $bimref_done ="$accfli".".ref.sum.done";
 	    #		print "looking for $bimref_done\n";
@@ -2151,14 +2242,14 @@ unless (-e "$rootdir/posing_done") {
     foreach (@bim_files) {
 	my $bfile = $_;
 	$bfile =~ s/.bim$//;
-	my $locref = $bfile.".hg19.bim.ref.sum";
-	my $accfli ="$bfile".".hg19.ch.bim";
+	my $locref = $bfile.".$build_txt.bim.ref.sum";
+	my $accfli ="$bfile".".$build_txt.ch.bim";
 
 	if (-e $locref) {
 #	    print "locref $locref is existing! safes some time\n";
 	    unless (exists $bimpos_array{$accfli}) {
-		push @chepos_arr, "$checkpos_script --dbcol 1,2,3,4,5 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim" ;#
-#		print "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim\n" ;#
+		push @chepos_arr, "$checkpos_script --dbcol 1,2,3,4,5 --dbsnp $rootdir/$impute_dir/$locref $bfile.$build_txt.bim" ;#
+#		print "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.$build_txt.bim\n" ;#
 
 	    }
 	    else {
@@ -2168,7 +2259,7 @@ unless (-e "$rootdir/posing_done") {
 	else {
 	    print "locref $locref is not existing! would be better if it did\n" if ($debug);
 	    unless (exists $bimpos_array{$accfli}) {
-		push @chepos_arr, "$checkpos_script --dbcol 1,8,9,3,5 --dbsnp $refdir/$suminfo_s $bfile.hg19.bim" ;#
+		push @chepos_arr, "$checkpos_script --dbcol 1,8,9,3,5 --dbsnp $refdir/$suminfo_s $bfile.$build_txt.bim" ;#
 	    }
 	    else {
 		$chepos_fini++;
@@ -2213,17 +2304,17 @@ unless (-e "$rootdir/flipping_done") {
     foreach (@bim_files) {
 	my $bfile = $_;
 	$bfile =~ s/.bim$//;
-	my $accfli ="$bfile".".hg19.ch.fl.bim";
-	my $locref = $bfile.".hg19.bim.ref.sum";
+	my $accfli ="$bfile".".$build_txt.ch.fl.bim";
+	my $locref = $bfile.".$build_txt.bim.ref.sum";
 
 	if (-e $locref) {
 	    #		print "locref $locref is existing! safes some time\n";
 	    unless (exists $bimfli_array{$accfli}) {
-		my $systmp = "$checkflip_script --dbcol 0,3,4,5 --fth $fth_th --sfh $sec_freq --info $rootdir/$impute_dir/$locref $bfile.hg19.ch.bim" ;
+		my $systmp = "$checkflip_script --dbcol 0,3,4,5 --fth $fth_th --sfh $sec_freq --info $rootdir/$impute_dir/$locref $bfile.$build_txt.ch.bim" ;
 		push @chefli_arr, $systmp ;
 		#		    print "$systmp\n";
 		#		    exit;
-		#		    push @chepos_arr, "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.hg19.bim" ;#
+		#		    push @chepos_arr, "$checkpos_script --dbcol 1,2,3 --dbsnp $rootdir/$impute_dir/$locref $bfile.$build_txt.bim" ;#
 		
 	    }
 	    else {
@@ -2233,8 +2324,8 @@ unless (-e "$rootdir/flipping_done") {
 	else {
 	    print "locref $locref is not existing! would be better if it did\n" if ($debug);
 	    unless (exists $bimfli_array{$accfli}) {
-		print "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim\n" if ($debug);
-		push @chefli_arr, "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.hg19.ch.bim" ;
+		print "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.$build_txt.ch.bim\n" if ($debug);
+		push @chefli_arr, "$checkflip_script --fth $fth_th --sfh $sec_freq --info $refdir/$suminfo_s $bfile.$build_txt.ch.bim" ;
 	    }
 	    else {
 		$chefli_fini++;
@@ -2319,14 +2410,14 @@ unless (-e "$rootdir/puting_done") {
 
 	### include sex check for chrX
 	if ($phas == 923 || $phas == 9123 || $phas == 91231) {
-	    if (-e "$bprefix.hg19.ch.fl.fam") {
-		unless (-e "$bprefix.hg19.ch.fl.sexcheck") {
-		    my $sx = "$ploc/plink --silent --memory 2000  --bfile $bprefix.hg19.ch.fl --check-sex --out $bprefix.hg19.ch.fl";
+	    if (-e "$bprefix.$build_txt.ch.fl.fam") {
+		unless (-e "$bprefix.$build_txt.ch.fl.sexcheck") {
+		    my $sx = "$ploc/plink --silent --memory 2000  --bfile $bprefix.$build_txt.ch.fl --check-sex --out $bprefix.$build_txt.ch.fl";
 		    &mysystem ($sx);
 		}
 		
 		
-		die $! unless open SI, "< $bprefix.hg19.ch.fl.sexcheck";
+		die $! unless open SI, "< $bprefix.$build_txt.ch.fl.sexcheck";
 		while (my $line = <SI>){
 		    my @cells = &split_line($line);
 		    if ($cells[5] < .5) {
@@ -2340,11 +2431,13 @@ unless (-e "$rootdir/puting_done") {
 	    }
 	}
 	
-	if (-e "$bprefix.hg19.ch.fl.fam"){ 
-	    unless (-e "$bprefix.hg19.ch.fl.fam.idnum") {
+	if (-e "$bprefix.$build_txt.ch.fl.fam"){ 
+	    unless (-e "$bprefix.$build_txt.ch.fl.fam.idnum") {
 		die $! unless open FI, "< $bprefix.fam";
-		die $! unless open FO, "> $bprefix.hg19.ch.fl.fam.idnum.tmp";
-		die $! unless open FT, "> $bprefix.hg19.ch.fl.fam.transl";
+		die $! unless open FO, "> $bprefix.$build_txt.ch.fl.fam.idnum.tmp";
+		die $! unless open FT, "> $bprefix.$build_txt.ch.fl.fam.transl";
+		die $! unless open FM, "> $bprefix.$build_txt.ch.fl.fam.mm4";
+
 		my $cc = 1;
 		while (my $line = <FI>){
 		    my @cells = &split_line($line);
@@ -2353,20 +2446,40 @@ unless (-e "$rootdir/puting_done") {
 		    print FO " 0"; 
 		    print FO " 0"; 
 
+		    if ($cells[0] =~ "___"){
+			print "do not use three underscores in FID: $cells[0] $cells[1]\n";
+			exit;
+		    }
+		    if ($cells[1] =~ "___"){
+			print "do not use three underscores in IID: $cells[0] $cells[1]\n";
+			exit;
+		    }
+		    
+		 
+		    print FM "$cells[0]";
+		    print FM " ___$cells[1]";
+		    print FM " 0";
+		    print FM " 0";
+		    
 #		    print FO " $cells[2]"; 
 #		    print FO " $cells[3]"; 
 		    if (exists $sex_hash{"$cells[0]\t$cells[1]"}){
-			print FO " ".$sex_hash{"$cells[0]\t$cells[1]"}; 
+			print FO " ".$sex_hash{"$cells[0]\t$cells[1]"};
+			print FM " ".$sex_hash{"$cells[0]\t$cells[1]"};
 		    }
 		    else {
-			print FO " $cells[4]"; 
+			print FO " $cells[4]";
+			print FM " $cells[4]"; 
 			if ($phas == 923 || $phas == 9123 || $phas == 91231) {
 			    print "Error: no sex-check on X-chr?\n";
 			    die;
 			}
 		    }
 		    
+
 		    print FO " $cells[5]\n";
+		    print FM " $cells[5]\n";
+		    
 		    print FT "$cc"; 
 		    print FT " $cells[0]";
 		    print FT " $cells[1]\n";
@@ -2376,10 +2489,10 @@ unless (-e "$rootdir/puting_done") {
 		close FO;
 		close FT;
 		my $nloc = $cc -1;
-		die $! unless open FN, "> $bprefix.hg19.ch.fl.fam.n";
+		die $! unless open FN, "> $bprefix.$build_txt.ch.fl.fam.n";
 		print FN $nloc."\n";
 		close FN;
-		&mysystem ("mv $bprefix.hg19.ch.fl.fam.idnum.tmp $bprefix.hg19.ch.fl.fam.idnum");
+		&mysystem ("mv $bprefix.$build_txt.ch.fl.fam.idnum.tmp $bprefix.$build_txt.ch.fl.fam.idnum");
 	    }
 	}
     }
@@ -2502,6 +2615,8 @@ if ($suminfo_s_v2_sw == 1) {
 
 	my $refind_loc = "chr$cells[0]"."_".$cells[1]."_".$cells[2];
 
+	my $chrind = $cells[0];
+	
 	if (exists $refiex{$refind_loc}){
 	    print "exclude chunk $refind_loc\n" if ($debug);
 	    next;
@@ -2512,7 +2627,10 @@ if ($suminfo_s_v2_sw == 1) {
 	push  @refstart_arr_v2, $cells[1];
 	push  @refend_arr_v2, $cells[2];
 	push  @refchr_arr_v2, $cells[0];
-	my $gema_file = "$refdir/genetic_map_chr$cells[0]"."_combined_b37.txt";
+	
+	$gm_template =~ s/XXX/$chrind/;
+	my $gema_file = "$refdir/$gm_template";
+#	my $gema_file = "$refdir/genetic_map_chr$cells[0]"."_combined_b37.txt";
 	#	    print $gema_file."\n";
 	push @gema_arr_v2, $gema_file;
 	
@@ -2695,6 +2813,8 @@ if (-e "$rootdir/prephase_done" || $deploy) {
     $prephase_done = 1;
 }
 
+
+
 my $spliha_n_2= $spliha_n * 2;
 
 
@@ -2710,9 +2830,21 @@ my $chr23male_txt = "";
 $chr23male_txt = "--chr23male" if ($chr23male);
 
 
+
+
 if ($prephase_done == 0) {
-    ### loop for datasets
+#    print "halt: @bimfli_files\n";
+#    exit;
+
+### loop for datasets
     foreach (@bimfli_files) {
+
+
+
+
+
+
+	
 	my $bprefix = $_;
 	$bprefix =~ s/.bim$//;
 
@@ -2784,17 +2916,27 @@ if ($prephase_done == 0) {
 
 	my $mendel_sw = "";
 	my $famfile = "$bprefix.fam.idnum";
+	my $triofamflag = "";
+
 	if ($trio_sw ==1) {
 	    $mendel_sw = "--mendel";
 	    $famfile = "$bprefix.fam.shape";
+	    if ($mm4_sw) {
+		$triofamflag = "--trio $bprefix.fam.shape5";
+	    }
+#	    print "as trio: $bprefix\n";
+#	    exit;
 	}
-
+	if ($mm4_sw) {
+	    $famfile = "$bprefix.fam.mm4";
+	}
 
 	print "start refdirloop....\n" if ($debug);
 	#### loop for reference chunks
 	foreach my $ccc (0..$#refind_arr) {
 
 
+	    
 
 	    my $refind = $refind_arr[$ccc];
 	    my $chrind = $refchr_arr[$ccc];
@@ -2803,7 +2945,10 @@ if ($prephase_done == 0) {
 
 
 #	    my $bgz_file = $bgz_arr[$ccc];
-	    my $bgz_file = "$refdir/$suminfo_s_v2.impute.bcf.bgz"; 
+	    my $bgz_file = "$refdir/$suminfo_s_v2.impute.bcf.bgz";
+	    if ($vcf_no_bcf) {
+		$bgz_file = "$refdir/$suminfo_s_v2.impute.vcf.bgz";
+	    }
 	    $bgz_file =~ s/XXX/$chrind/;
 #	    push @bgz_arr, $bgz_file;
 	    print $bgz_file."\n" if ($debug);
@@ -2911,6 +3056,28 @@ if ($prephase_done == 0) {
 
 
 		    }
+		    
+		    if ($mm4_sw) { 
+
+#			unless ($trio_sw == 1){
+			$backbone .= " --shapeit5";
+			$backbone .= " $triofamflag";
+			    $backbone .= " --ref $bgz_file";
+			    
+			    if ($noref) {
+				$backbone .= " --noref";
+			    }
+#			    if ($trio_sw) {
+#				$backbone .= " --noref";
+#			    }
+			    
+#			}
+
+
+		    }
+
+
+		    
 
 #		    elsif ($imp4_sw) {
 #			$backbone .= " --shapeit3";
@@ -2932,7 +3099,8 @@ if ($prephase_done == 0) {
 
 ### multi_sw is outdated, not used right now...
 #		    if ($multi_sw == 0) {
-			push @preph_arr, $backbone;
+		    push @preph_arr, $backbone;
+#		    print "prephase command: $backbone\n";
 #		    }
 
 
@@ -2986,14 +3154,16 @@ if ($prephase_done == 0) {
     
     
     
-    #    print "debug\n";
-    #    exit;
+    #print "debug\n";
+    #exit;
     
     ###################################
     ### send prephase jobs
     ###################################
     
     if (@preph_arr > 0) {
+    
+
 	
 	$sjadir = $impute_dir;
 	$sjaname = "preph";
@@ -3010,6 +3180,9 @@ if ($prephase_done == 0) {
 	    $sjamem = 4000;
 	}
 	
+	$sjatime += $preph_time_incr;
+	$sjamem += $preph_mem_incr;
+	
 	@sjaarray = @preph_arr;
 	
 	&send_jobarray;
@@ -3018,9 +3191,6 @@ if ($prephase_done == 0) {
     
 
     
-    
-#    print "debug2\n";
-#    exit;
 
 
 
@@ -3242,8 +3412,14 @@ if ($pseudo_done == 0) {
 			$chrX_txt = "--chrX";
 		    }
 
+		    
+
 		    unless (exists $finifiles_hash{$pseudo_ch_out_fini} ) {
 			my $sys_loc = "$pseudo_script $chrX_txt --out $pseudo_ch_out $haps_file_loc $haps_file_loc_sample";
+			if ($mm4_sw) {
+			    $sys_loc = "$pseudo_script $chrX_txt --out $pseudo_ch_out --shapeit5 $haps_ch_out.ref.phased $bprefix.fam.shape5";
+			}
+			    
 #			print "$pseudo_ch_out_fini\n";
 #			print "$sys_loc\n";
 			push @pseudo_arr, $sys_loc;
@@ -3457,6 +3633,16 @@ if ($imp_done == 0) {
 			elsif ($imp4_sw) {
 			    $mm3_txt = "--imp4";
 			}
+			elsif ($mm4_sw) {
+			    $mm3_txt = "--mm4";
+			    $haps_file_loc =~ s/haps$/ref.phased.bcf/;
+			    $refchunk .= ".bcf.bgz.msav";
+			    $mm3_txt = "--mm4";
+			    $chr_txt = "--chrind $refchr";
+			    if ($trio_sw) {
+				$haps_file_loc = "$haps_ch_out.ref.phased.pseudo.bcf";
+			    }
+			}
 
 			if ($empty) {
 			    &mysystem ("touch $subdir_empty/$bprefix.$refind.empty");
@@ -3473,7 +3659,7 @@ if ($imp_done == 0) {
 #			    }
 
 
-#			    print "$sys_loc\n";
+#			    print "$sys_loc\n$mm4_sw\n$trio_sw\n";
 #			    exit;
 			    
 			    push @imp_arr, $sys_loc;
@@ -3484,35 +3670,44 @@ if ($imp_done == 0) {
 			$imp_fini++;
 			$n_imp_done++;
 		    }
-
+		    
 		    ####################################################
-		    #### rewrite stuff if imputed with minimac3
+		    #### rewrite stuff if imputed with minimac3 (works with MM4 as well)
 		    ###################################################
-		    if ($mm3_sw) {
-
-
-#			print "not found (vcf2dosout): $vcf2dos_fini\n";
+		    if ($mm3_sw || $mm4_sw) {
+			
+			
+			#			print "not found (vcf2dosout): $vcf2dos_fini\n";
 			
 			unless (exists $finifiles_hash{$vcf2dos_fini} ) {
-
 			    
 			    my $vcf_file = $pi_ch_out.".dose.vcf.gz";
-
+			    
 			    my $keep_txt = "";
 			    $keep_txt = "--keepvcf" if ($noclean);
-			    
-			    my $sys_loc = "$vcf2dos_script --legend $legend_file --vcf $vcf_file --refstart $refstart --refend $refend --chr $refchr";
-#			    print "$sys_loc\n";
-#			    exit;
+
+			    my $legend_txt = "";
+
+			    if ($mm3_sw){
+				$legend_txt = "--legend $legend_file";
+			    }
+
+			    my $sys_loc = "$vcf2dos_script $legend_txt --vcf $vcf_file --refstart $refstart --refend $refend --chr $refchr";
+
+				
+			    #			    print "$sys_loc\n";
+			    #			    exit;
 			    
 			    push @vcf2dos_arr, $sys_loc;
 			    
 			}
+			
 			else {
 			    $vcf2dos_fini++;
 			    $n_vcf2dos_done++;
 			}
-		    }	
+		    }
+		    
 		}
 		else {
 		    #		print "N:$splitn\n";
@@ -3579,8 +3774,8 @@ if ($imp_done == 0) {
 	    $sjamem = 4000;
 	}
 
-	$sjatime += $impwallinc;
-
+	$sjatime += $imp_time_incr;
+	$sjamem += $imp_mem_incr;
 #	if ($imp_fini > 0) {
 #	    $sjamem = 16000;
 #	    $sjatime = 4;
@@ -3601,7 +3796,8 @@ if ($imp_done == 0) {
     }
 
 
-
+#    print "debug\n";
+#    exit;
 
 ###################################
 ### send vcf2dos jobs (only for minimac3
@@ -3928,9 +4124,22 @@ if ($dos_done == 0) {
 
 	    my $plink_ch_out = "subbfile_$bprefix/plink.$bprefix.$refind";
 	    my $famname_loc = "$plink_ch_out.fam";
+	    my $bimname_loc = "$plink_ch_out.bim";	    
 
+	    unless (-e "$famname_loc") {
+		$plink_ch_out = "haps_$bprefix/plink.$bprefix.$refind";
+		$famname_loc = "$plink_ch_out.fam";
+		$bimname_loc = "$plink_ch_out.bim";	    
+		unless (-e "$famname_loc") {
+		    print "Warning: $famname_loc is not existing, might be only important with --impute2\n";
+		}		
+	    }
+
+
+	    
 	    my $prefix_loc = "";
 
+	    
 
 
 	    if (exists $indirempty_hash{$empty_ch_out} ) {
@@ -3953,27 +4162,37 @@ if ($dos_done == 0) {
 		    $plink_ch_out = $bprefix;
 
 
+#		    print "suminfo_s_v2_sw is on\n";
+#		    exit;
+		    
 		    $famname_loc = "$plink_ch_out.fam";
+		    $bimname_loc = "$plink_ch_out.bim";
 #		    $transfam_txt = "--transfam $famname_loc.transl";
 
-		    if ($trio_sw == 1){
-			$famname_loc = "haps_$bprefix/plink.$bprefix.$refind.haps.spli1.trio.fam";
-			$prefix_loc = "--prefix $trio_prefix --nodosfam";
 
-		    }
 		    
 #		    print "famname_loc: $famname_loc\n";
 #		    exit;
 			
 		    $puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp.gz";
 
-		    if ($mm3_sw || $deploy) {
+		    if ($mm3_sw || $deploy || $mm4_sw) {
 			$puter_out_arr = "$subdir_in/plink.$bprefix.$refind.imp.GP.gz";
 		    }
 		    
 		}
 		
-
+		if ($trio_sw == 1){
+		    $famname_loc = "haps_$bprefix/plink.$bprefix.$refind.haps.spli1.trio.fam";
+		    if ($mm4_sw){
+			$famname_loc = "$bprefix.fam.shape5.fam";
+		    }
+			
+		    
+		    $prefix_loc = "--prefix $trio_prefix --nodosfam";
+#		    print "trio is on\n";
+#		    print "$famname_loc\n";
+		}
 
 		   		    
 		unless (exists $finifiles_hash{$dos_ch_out_fini} ) {
@@ -3985,7 +4204,16 @@ if ($dos_done == 0) {
 #			$deploy_txt = "--deployfam";
 #		    }
 		    my $sys_loc = "";
-		    $sys_loc = "$dos_script $deploy_txt $prefix_loc --outname $dos_ch_out --outdir $dasudir_loc  --chr $refchr --fam $famname_loc --bim $plink_ch_out.bim $puter_out_arr";
+
+		    my $mm4_txt = "";
+		    if ($mm4_sw) { 
+			$mm4_txt = "--mm4";
+		    }
+		    
+		    $sys_loc = "$dos_script $mm4_txt $deploy_txt $prefix_loc --outname $dos_ch_out --outdir $dasudir_loc  --chr $refchr --fam $famname_loc --bim $bimname_loc $puter_out_arr";
+#		    print "$sys_loc\n";
+#		    print "exit\n";
+#		    exit;
 
 
 #		    print "$sys_loc\n";
@@ -4333,7 +4561,7 @@ if (@bimfli_files == 0) {
     if (@bim_files > 0) {
 	foreach (@bim_files) {
 	    $_ =~ s/.bim$//;
-	    push @bimfli_files, $_.".hg19.ch.fl";
+	    push @bimfli_files, $_.".$build_txt.ch.fl";
 	}
     }
 }

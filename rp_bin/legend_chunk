@@ -129,6 +129,8 @@ my $chrind = $legend_file;
 $chrind =~ s/.*(chr[0-9]*).*/\1/;
 $chrind =~ s/chr//;
 
+print "chrind: $chrind\n";
+#exit;
 if ($legend_file =~ /chrX/) {
     $chrind = "X";
 }
@@ -305,8 +307,10 @@ $scc_end++;
 my $scc_diff = sprintf "%03d", ($scc_end-$scc_start);
 
 
-if ($cs < $nsnps/5) {
+if ($cs < $nsnps/5 && @out >0) {
     print "appending small last chunk to the last one\n";
+#    print "length out:@out\n";
+#    print "length out:".@out."\n";
     my $out_str = pop @out;
     my @ocells = @{&split_line_ref(\$out_str)};
     $ocells[2] = $scc_end;

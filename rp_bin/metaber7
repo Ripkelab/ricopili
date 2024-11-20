@@ -192,7 +192,7 @@ while (-e $workdir) {
 }
 print "workdir: $workdir\n" if ($debug);
 
-sleep(4);
+#sleep(4);
 my @created_work = mkpath(   ## $created ?
 			"$workdir",
 			{verbose => 0, mode => 0750},
@@ -1156,10 +1156,12 @@ while (<META>){
 }
 close META;
 close DANER;
+
+exit if ($debug);
 &mysystem ("gzip -f $out_name.metadaner.tmp");
 &mysystem ("mv $out_name.metadaner.tmp.gz $out_name.metadaner.gz");
 &mysystem ("rm $out_name.meta1.tbl");
 
-print "cleaning up\n" if ($debug);
-&mysystem ("rm -rf $workdir");
+
+&mysystem ("rm -rf $workdir") if ($debug);
 

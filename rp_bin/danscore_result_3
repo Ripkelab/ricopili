@@ -270,12 +270,12 @@ foreach my $st (1..10) {
 				$cells[2] = 1;
 			    }
 			    else {
-				print "trio: invalid phenotype for $cells[0]\t$cells[1]\n";
+				print "for trio individual: invalid phenotype for $cells[0]\t$cells[1], in file $profile_loc\n";
 				next;
 			    }
 			}
 			else {
-			    print "not trio: invalid phenotype for $cells[0]\t$cells[1]\n";
+			    print "for non trio individual: invalid phenotype for $cells[0]\t$cells[1]\t$cells[2], in file $profile_loc\n";
 			    next;
 			}
 		    }
@@ -435,6 +435,8 @@ else {
 LIBRARY
 
 
+###### do not use this one, it seems outdated, maybe for quantitative phenotypes but untested
+###### we use h2l_R2N instead
 h2l_R2 <- function(k, r2, p) {
   # K baseline disease risk
   # r2 from a linear regression model attributable to genomic profile risk score
@@ -808,12 +810,22 @@ library(MASS)
     ';
 
 
-if ($rpac ne "NA") {
-    my $rpac_txt = ',lib.loc="'.$rpac.'"';
-    $library_txt =~ s/\)/$rpac_txt)/g;
-    $R_rido =~ s/LIBRARY/$library_txt/g ;
-}
 
+#
+#
+#    this must go in again
+#
+
+#if ($rpac ne "NA") {
+#    my $rpac_txt = ',lib.loc="'.$rpac.'"';
+#    $library_txt =~ s/\)/$rpac_txt)/g;
+#    $R_rido =~ s/LIBRARY/$library_txt/g ;
+#}
+#else {
+
+#}
+
+$R_rido =~ s/LIBRARY/$library_txt/g ;
 
 
 

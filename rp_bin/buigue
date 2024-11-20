@@ -29,16 +29,16 @@ use lib $ENV{rp_perlpackages};
 
 
 my @bu_files;
-push @bu_files, "$liloc/snp.txt.pos.scz49.gz";
-push @bu_files, "$liloc/snp125.txt.pos.scz49.gz";
-push @bu_files, "$liloc/snp130.txt.pos.scz49.gz";
-push @bu_files, "$liloc/snp138.txt.pos.scz49.gz";
+push @bu_files, "$liloc/snp.txt.pos.scz49.gz";   #hg16
+push @bu_files, "$liloc/snp125.txt.pos.scz49.gz"; #hg17
+push @bu_files, "$liloc/snp130.txt.pos.scz49.gz"; #hg18
+push @bu_files, "$liloc/snp138.txt.pos.scz49.gz"; #hg19
+push @bu_files, "$liloc/snp.hg38.txt.pos.scz49.gz"; #hg38
 
 my @li_files;
-push @li_files, "$liloc/hg16ToHg19.over.chain.gz";
-push @li_files, "$liloc/hg17ToHg19.over.chain.gz";
-push @li_files, "$liloc/hg18ToHg19.over.chain.gz";
-push @li_files, "$liloc/hg19ToHg19.over.chain.gz"; ## fake
+
+
+my $target_txt = "hg19";
 
 
 ##### help message
@@ -50,6 +50,8 @@ version: $version
   -help            print this message and exit
 
   --lift19         lift dataset to hg19
+  --lift38         lift dataset to hg38
+
   --noclean        do not remove temporary files
 
   --debug          extended ouput
@@ -71,11 +73,13 @@ GetOptions(
     "help"=> \my $help,
     "debug"=> \my $debug,
     "lift19"=> \my $lift19,
+    "lift38"=> \my $lift38,
     "noclean"=> \my $noclean,
     );
 
 
 die ("wrong: $ARGV\n$usage") if ($help || @ARGV != 1);
+
 
 
 
@@ -119,7 +123,7 @@ my %bpos=();
 use Compress::Zlib ;
 
 ## read bim-file
-print "read bim-file positons\n" if ($debug);
+print "read bim-file positions\n" if ($debug);
 die "$!:$bim_file" unless open BIM, "< $bim_file";   
 while (<BIM>) {
     my @cells = @{&split_line_ref(\$_)};
@@ -245,7 +249,12 @@ if ($max_ma == 0) {
 
 my $cmd_out = "no liftover necessary to get to hg19\n";
 if ($lift19){
-    if ($licount < 3) {
+    push @li_files, "$liloc/hg16ToHg19.over.chain.gz";
+    push @li_files, "$liloc/hg17ToHg19.over.chain.gz";
+    push @li_files, "$liloc/hg18ToHg19.over.chain.gz";
+    push @li_files, "$liloc/hg19ToHg19.over.chain.gz"; ## fake
+    push @li_files, "$liloc/hg38ToHg19.over.chain.gz"; 
+    if ($licount != 3) {
 	my $sys_str = "lift18219 --noex --lilofile $li_files[$licount] $bim_file";
 	#	print "$sys_str\n";
 	$cmd_out = $sys_str;
@@ -257,6 +266,29 @@ if ($lift19){
 	&mysystem("ln -s $bfile.fam $bfile.hg19.fam");
     }
 }
+if ($lift38){
+    $cmd_out = "no liftover necessary to get to hg38\n";
+    $target_txt = "hg38";
+    if ($licount < 4) {
+	push @li_files, "$liloc/hg16ToHg38.over.chain.gz";
+	push @li_files, "$liloc/hg17ToHg38.over.chain.gz";
+	push @li_files, "$liloc/hg18ToHg38.over.chain.gz";
+	push @li_files, "$liloc/hg19ToHg38.over.chain.gz";
+	push @li_files, "$liloc/hg38ToHg38.over.chain.gz"; ## fake
+	my $sys_str = "lift18219 --target_txt $target_txt --noex --lilofile $li_files[$licount] $bim_file";
+	#	print "$sys_str\n";
+	$cmd_out = $sys_str;
+	&mysystem($sys_str);
+    }
+    else {
+	&mysystem("ln -s $bfile.bed $bfile.hg38.bed");
+	&mysystem("ln -s $bfile.bim $bfile.hg38.bim");
+	&mysystem("ln -s $bfile.fam $bfile.hg38.fam");
+    }
+
+}
+
+
 
 die $!."($bim_file).buigue.liftover_script" unless open BU, "> $bim_file.buigue.liftover_script";
 print BU "$cmd_out\n";

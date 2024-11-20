@@ -55,12 +55,28 @@ Usage : $progname [options] Rdata_file1 Rdata_file3 .....
    --help            display this text and exit
    --grid INT        plot on a grid INT*INT    #### not used right now!!!!!
    --out STRING      outfile-prefix
-   --publ            fix for publication
-   --noxaxis         no lables on xaxis
+   --publ            fix for publication, also fewer p-value threshholds
+                        good if many cohorts.
+
+   --tres STRING    choose your own set of thresholds 
+                        use with care (e.g. thresholds should be present in input files)
+                        only works in combination with --publ
+                        thresholds need quotations, like this:
+                        --tres \"0.001 0.05 1.0\"
+  
+
+   --xcohorts     lable xaxis with cohortnames
+
+
+
    --fixrange=FLOAT  fix ranges on y-axis
 
    --minusone        columns minus one (if its not combined, but rather poly.out.txt)
 
+
+
+#### outdated
+   --noxaxis         no lables on xaxis
 
 version: $version
 
@@ -73,14 +89,19 @@ version: $version
 #### evaluate options
 use Getopt::Long;
 GetOptions(     
-  "help" => \my $help,
+    "help" => \my $help,
     "minusone" => \my $minusone,
     "out=s" => \my $out,
-  "grid=i" => \my $grid,
-  "publ" => \my $publ,
+    "tres=s" => \my $tres,
+    "grid=i" => \my $grid,
+    "publ" => \my $publ,
     "noxaxis" => \my $noxaxis,
+    "xcohorts" => \my $xcohorts,
     "fixrange=f" => \my $fixrange,
-);
+    );
+
+#print "tres: $tres\n";
+#sleep(10);
 
 
 die "$usage" if ($help);
@@ -154,7 +175,13 @@ if ($publ) {
     @p_th = qw /0.000001 0.0001 0.001 0.01 0.05 0.1 0.2 0.5 1.0/;
     @p_th = qw /0.0001 0.01 0.05 0.1 0.2 0.5 1.0/;
     @p_th = qw /0.0001 1.0/;
-
+    if ($tres) {
+	@p_th = split(' ', $tres);;
+#	print "@p_th\n";
+#	sleep(10);
+    }
+#    print "@p_th\n";
+#    exit;
 #    @p_th = qw /0.0001 0.001 0.01 0.05 0.1 0.2 0.5 1.0/;
 #    @p_th = qw /0.001 0.05 0.3/;
 }
@@ -210,7 +237,7 @@ my $ni_col = 3;
 my $nca_col = 14;
 my $h2l1_col = 8;
 my $h2l2_col = 9;
-my $auc_col = 9;
+my $auc_col = 10;
 
 
 if ($minusone) {
@@ -471,7 +498,9 @@ mtext("R - squared", side=2, line=-1, cex.lab=1,las=2, padj =-18)
 
 
 ### studynames in the plot or not (july 2018)
-# text(x = colMeans(rip), y= 0.00, offset = 1.5, pos = 1, xpd =T , line = 1, labels = colnames(plotmatrix_r2), cex= .9,srt=45)
+if (XCOHORT) { 
+ text(x = colMeans(rip), y= 0.00, offset = 1.5, pos = 1, xpd =T , line = 1, labels = colnames(plotmatrix_r2), cex= .9,srt=45)
+}
 
 # ripx = rip [1:10]
 # ripx_nocov = rip [11:22]
@@ -535,23 +564,28 @@ print (FICO)
 
    }
 
+#print (PUBL);
 if (PUBL) {
   legend("top",legend=poly_r2[,1], fill = mycol,ncol=length(poly_r2[,1]),cex =.6)
-}
+
 
 
 
 #######################################################################
 ## here the plot for one p-value threshold
 
+
 xl = as.numeric(poly_nca["PTHRESH",]); 
 yl = as.numeric(poly_r2_b["PTHRESH",]);
 ylh1 = as.numeric(poly_h2l1["PTHRESH",]);
 ylh2 = as.numeric(poly_h2l2["PTHRESH",]);
+#print ("yes");
+
 print (xl);
 print (yl);
-print (poly_nca);
-print (poly_r2_b);
+#print ("no");
+#print (poly_nca);
+#print (poly_r2_b);
 ### r2
 plot(xl,yl,cex=.6,col="red",xlab="Ncase",ylab="R2", main = "Ncase vs. R2 on p = PTHRESH"); 
 text(xl,yl,labels= colnames(poly_r2_b),cex=0.4,pos=3)
@@ -600,7 +634,7 @@ points(1:ll,type = "b",cih,cex=.6,col="black");
 points(1:ll,type = "b",cil,cex=.6,col="black"); 
 
 
-
+}
 
   dev.off()
 
@@ -661,6 +695,14 @@ if ($noxaxis){
 else {
     $R_templ =~ s/XAXIS/1/g;
 }
+
+if ($xcohorts){
+    $R_templ =~ s/XCOHORT/1/g;
+}
+else {
+    $R_templ =~ s/XCOHORT/0/g;
+}
+
 
 if ($publ) {
     $R_templ =~ s/TITLE//g;

@@ -143,6 +143,9 @@ my @ref_coll = ();
 
 my $info_th = "0.1";
 
+my $build_txt = "hg19";
+
+
 
 #print "hmm\n";
 #exit; 
@@ -226,6 +229,8 @@ version: $rp_version
  --idin STRING     ID inclusion list (before imputation, while ripping)
 
  --sep_pca         create and use a separate PCA for each cohort (will get better control over popstrat)
+                     see more details below
+
  --sep_idin STRING use a different IDset than the separate 
 
  --mds STRING      mds-file (with studyindicator, (if necessary), 
@@ -298,6 +303,7 @@ version: $rp_version
   --r2th FLOAT        areator r2-threshold, default $r2th
 
   --prekno STRING     pre-known SNPs in first column
+  --nocatalog         areaplots without catalog (without prekno)
   --mach              use miniMACH instead of Beagle
 
   --polyfrom STRING   ID-pt-file containing training set, creates then a danscore-file.
@@ -353,6 +359,35 @@ version: $rp_version
   ********
   uses puter and subchromosomes in reference
   ************
+
+
+############################################################
+### Instructions to run a \"--sep_pca\" postimp module when individual *mds files are already available:
+#######################################
+
+0) Create a \"danerjobdir_[OUT_NAME]\" and a \"pcaer_sep_sub\" subdirectories
+
+1) Link *trans.mds files into \"danerjobdir_[OUT_NAME]\" and \"pcaer_sep_sub\", E.G.:
+
+## while read ss; do ln -s /psych/ripke/scz/wave3/scz_phase3_imputation/batch123/HRC/pcaer_sep_sub/\${ss}_sr-qc.hg19.ch.fl.bgs.menv.trans.mds /stanley/ripke_storage/hla_imputation/CookHLA/impute_ricopili/mhc/1000G_REF/hg19/imp_HLA-1KG_ALL/mm4_oct23/pcaer_sep_sub/\${ss}_sr-qc_mhc.hg19.ch.fl.bgs.menv.trans.mds; done < study_list
+## while read ss; do ln -s /psych/ripke/scz/wave3/scz_phase3_imputation/batch123/HRC/pcaer_sep_sub/\${ss}_sr-qc.hg19.ch.fl.bgs.menv.trans.mds /stanley/ripke_storage/hla_imputation/CookHLA/impute_ricopili/mhc/1000G_REF/hg19/imp_HLA-1KG_ALL/mm4_oct23/danerjobdir_PGC_SCZ_w3_75_HLA-1KG_ALL_mm4_run1/\${ss}_sr-qc_mhc.hg19.ch.fl.bgs.menv.trans.mds; done < study_list
+
+with \"study_list\" file being:
+scz_bep1b_eur
+scz_braz2_eur
+scz_celso_eur
+etc...
+
+
+2) Link *overworked.p_assoc.txt files into \"danerjobdir_[OUT_NAME]\" and \"pcaer_sep_sub\":
+## while read ss; do ln -s /psych/ripke/scz/wave3/scz_phase3_imputation/batch123/HRC/pcaer_sep_sub/$\{ss}_sr-qc.hg19.ch.fl.bgs.menv.mds.overworked.p_assoc.txt /stanley/ripke_storage/hla_imputation/CookHLA/impute_ricopili/mhc/1000G_REF/hg19/imp_HLA-1KG_ALL/mm4_oct23/pcaer_sep_sub/\${ss}_sr-qc_mhc.hg19.ch.fl.bgs.menv.mds.overworked.p_assoc.txt; done < study_list
+## while read ss; do ln -s /psych/ripke/scz/wave3/scz_phase3_imputation/batch123/HRC/pcaer_sep_sub/\${ss}_sr-qc.hg19.ch.fl.bgs.menv.mds.overworked.p_assoc.txt /stanley/ripke_storage/hla_imputation/CookHLA/impute_ricopili/mhc/1000G_REF/hg19/imp_HLA-1KG_ALL/mm4_oct23/danerjobdir_PGC_SCZ_w3_75_HLA-1KG_ALL_mm4_run1//\${ss}_sr-qc_mhc.hg19.ch.fl.bgs.menv.mds.overworked.p_assoc.txt; done < study_lis
+
+3) Rename your \"*.covfiles\" file into \"[OUT_NAME].covfiles\" and put inside \"danerjobdir_[OUT_NAME]\".
+
+4) A *.menv.mds_cov.idin file is also needed inside the \"danerjobdir_[OUT_NAME]\" diretory to extract non-overlapping individuals. (used with the \"--idin\" flag)
+
+
 
  created by Stephan Ripke 2009 at MGH, Boston, MA
  
@@ -435,6 +470,7 @@ GetOptions(
     "gwclump"=> \my $gwclump,
     "info_th=s"=> \$info_th,
     "debug"=> \my $debug,
+    "nocatalog"=> \my $nocatalog,
 #    "cond"=> \my $cond,
 
 #    "chrX"=> \my $chrX,
@@ -444,6 +480,7 @@ GetOptions(
 if ($serial_sw) {
     $serial = 1;
 }
+
 
 
 
@@ -983,7 +1020,10 @@ sub send_jobarray {
     &a2filenew ($jobfile, @sjaarray);
 
 
+#    print "$sjadir\n";
 #    print "$jobfile\n";
+#    print "N:".@sjaarray."\n";
+    
 #    print "sleep\n";
 #    sleep(10);
 
@@ -1015,6 +1055,10 @@ sub send_jobarray {
     my $sjarow      = $sjainfotxt."\t$sjacontent\t$now";
 #    $message = $info_txt."\t$message\t$now";
 
+#    if ($debug) {
+#	print "exit before danerjob\n";
+#	exit;
+#    }
     &a2filenew_app("$sjainfofile",$sjarow);
 
     if ($old_cmd =~ /$sjarow_part/) {
@@ -1104,6 +1148,9 @@ sub send_jobarray {
     }
     else { 
 	my $sys_loc = "$blueprint_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $jobfile $multi_txt";
+#	print "$sys_loc\n";
+#	exit;	
+
 	&mysystem ($sys_loc);
     }
 
@@ -1250,6 +1297,15 @@ else {
 	}
     }
     close FAMI;
+    if ($refdir eq "/home/pgcdac/DWFV2CJb8Piv_0116_pgc_data/HRC_reference.r1-1/"){
+	print "Warning: - if you use this on SNELLIUS please stop (ctrl-C) and\n";
+	print "           change reference-directory (first row) in file reference_info\n";
+	print "           from /home/pgcdac/DWFV2CJb8Piv_0116_pgc_data/HRC_reference.r1-1/\n";
+	print "           to /gpfs/work5/0/pgcdac/imputation_references/HRC_reference.r1-1/\n";
+	print "         - if you use this on LISA just wait 5 sec\n";
+	sleep(5);
+    }
+	            
 }
 
 
@@ -1267,6 +1323,27 @@ unless (-d $refdir) {
     exit;
 }
 
+my %ref_hash;
+if (-e "$refdir/reference_templ") {
+    print "new format (reference_template) found.\n" if ($debug);
+    die unless open IN, "< $refdir/reference_templ";
+    while (my $line = <IN>) {
+	my @cells = &split_line($line);
+	$ref_hash{$cells[0]} = $cells[1];
+    }
+    if ($ref_hash{"build"} eq "hg38") {
+	print "seems to be a build hg38\n";
+#	sleep(2);
+#	$hg38_sw = 1;
+	$build_txt = "hg38";
+#	$buigue_flag = "--lift38";
+#	exit;
+    }    
+    
+#    $suminfo_s_v2_sw = 1;
+#    $suminfo_s_v2 = $ref_hash{"out_template"};
+}
+
 
 ##########################################
 ## with new population ancestry directory
@@ -1281,7 +1358,7 @@ if (-e "$refdir/pop_$popname") {
 
 
 
-    my @gwascat_files = `ls $refdir/gwascatalog.*.rp.txt`;
+    my @gwascat_files = `ls -t $refdir/gwascatalog.*.rp.txt`;
     if (@gwascat_files == 1) {
 	print "using as gwas catalog file: ".$gwascat_files[0]."\n" if ($debug);
 	$prekno_file = $gwascat_files[0];
@@ -1363,13 +1440,13 @@ unless (-e "datasets_info") {
 
 	print "bitemp: $bitemp\n" if ($debug);
 	my $dasudir_loc_qc1 = "$dasudir"."qc1_$bitemp";
-	$dasudir_loc_qc1 .= ".hg19.ch.fl";
+	$dasudir_loc_qc1 .= ".$build_txt.ch.fl";
 #	print "start: $dasudir_loc_qc1  \n";
 	
 	unless (-e $dasudir_loc_qc1) {
 	    my $tmpdir = $dasudir_loc_qc1;
 
-	    $tmpdir =~ s/.hg19.ch.fl/.ch.fl/;
+	    $tmpdir =~ s/.$build_txt.ch.fl/.ch.fl/;
 	    if (-e $tmpdir) {
 		print "found old format: $tmpdir\n" if ($debug);
 		$bitemp .= ".ch.fl";
@@ -1379,7 +1456,7 @@ unless (-e "datasets_info") {
 	    }
 	}
 	else {
-	    $bitemp .= ".hg19.ch.fl";
+	    $bitemp .= ".$build_txt.ch.fl";
 	}
 	print BF "$bitemp\n";
     }
@@ -1398,7 +1475,7 @@ die $! unless open BF, "< datasets_info";
 while (my $line = <BF>){
     chomp($line);
     push @bimfli_files, $line;
-    unless ($line =~ /.hg19.ch.fl$/) {
+    unless ($line =~ /.$build_txt.ch.fl$/) {
 	if ($line =~ /.ch.fl$/) {
 	    print "Warning: old datasets_info: $line\n" if ($debug);
 #	    exit;
@@ -1454,10 +1531,10 @@ if ($trioset_file){
 	$cells[0] =~ s/.fam$//;
 
 	$trioset{$cells[0].".ch.fl"} = 1;
-	$trioset{$cells[0].".hg19.ch.fl"} = 1;
+	$trioset{$cells[0].".$build_txt.ch.fl"} = 1;
 
 	
-#	$cells[0] .= ".hg19.ch.fl";
+#	$cells[0] .= ".$build_txt.ch.fl";
 #	$trioset{$cells[0]} = 1;
 
 
@@ -1787,7 +1864,7 @@ unless ($sep_pca) {
 		my $famfile_loc = "$bfile.fam";
 
 		my $bfile_root = $bfile;
-		$bfile_root =~ s/.hg19.ch.fl$//;
+		$bfile_root =~ s/.$build_txt.ch.fl$//;
 		#	    print "bfile: $bfile\n";
 		#	    print "bfile_old: $bfile_old\n";
 
@@ -1805,7 +1882,7 @@ unless ($sep_pca) {
 		#	    exit;
 		#	    my $famloc = "$impute_dir/$famfile_loc";
 		my $famloc = $famfile_loc;
-		$famloc =~ s/hg19.ch.fl.fam$/fam/;
+		$famloc =~ s/$build_txt.ch.fl.fam$/fam/;
 		$famloc =~ s/ch.fl.fam$/fam/;
 		
 
@@ -1869,12 +1946,12 @@ unless ($sep_pca) {
 		}
 
 		my $bfile_root = $bfile;
-		$bfile_root =~ s/.hg19.ch.fl$//;
+		$bfile_root =~ s/.$build_txt.ch.fl$//;
 
 
 		#	    my $famloc = "$impute_dir/$famfile_loc";
 		my $famloc = $famfile_loc;
-		$famloc =~ s/hg19.ch.fl.fam$/fam/;
+		$famloc =~ s/$build_txt.ch.fl.fam$/fam/;
 		$famloc =~ s/ch.fl.fam$/fam/;
 
 
@@ -1935,12 +2012,12 @@ unless ($sep_pca) {
 		}
 
 		my $bfile_root = $bfile;
-		$bfile_root =~ s/.hg19.ch.fl$//;
+		$bfile_root =~ s/.$build_txt.ch.fl$//;
 
 
 		#	    my $famloc = "$impute_dir/$famfile_loc";
 		my $famloc = $famfile_loc;
-		$famloc =~ s/hg19.ch.fl.fam$/fam/;
+		$famloc =~ s/$build_txt.ch.fl.fam$/fam/;
 		$famloc =~ s/ch.fl.fam$/fam/;
 
 
@@ -2215,6 +2292,7 @@ if ($sep_pca) {
 
     
     my $mdscov_file = "$outname.covfiles";
+    
     unless (-e $mdscov_file) {
 	my $pcaer_count = 0;
 	
@@ -2231,9 +2309,19 @@ if ($sep_pca) {
 		    
 		    my $bfile = $_;
 
+		    if (exists $trioset_bimfli{$bfile}){
+			print "pre sep_pca: $bfile as trio, so no sep_pca\n";
+			next;
+		    }
+
 		    my $bfile_bgs = "$bfile.bgs";
 		    my $bgs_bed_source = "$bgdir/$bfile_bgs";
 		    my $bgs_bed_target = "$seppcadir/$bfile_bgs";
+
+#		    print "bgs: $bfile_bgs\n" if ($debug);
+#		    print "bgs_source: $bgs_bed_source\n" if ($debug);
+#		    print "bgs_target: $bgs_bed_target\n" if ($debug);
+#		    exit;
 
 		    unless (-e "$bgs_bed_target.bed") {
 			print "linking $bgs_bed_source.bed to $seppcadir\n" if ($debug);
@@ -2250,6 +2338,8 @@ if ($sep_pca) {
 
 		    unless (-e "$seppcadir/$bfile.bgs.menv.trans.mds") {
 			push @sep_pca_str_single, "pcaer --prefercase --out $bfile.bgs $bfile.bgs";
+			print "missing (pcaer needs started): $seppcadir/$bfile.bgs.menv.trans.mds\n";
+			
 			$pcaer_count++;
 		    }
 		    else {
@@ -2284,10 +2374,11 @@ if ($sep_pca) {
 	    }
 
 	    unless (-e "$seppcadir/$sep_idin") {
-		print "###############################################################################################\n" if ($debug);
-		print "not existing, trying to create (if present please copy it there):\n$seppcadir/$sep_idin\n" if ($debug);
-		print "###############################################################################################\n" if ($debug);
+		print "###############################################################################################\n";
+		print "not existing, trying to create (if present please copy it there):\n$seppcadir/$sep_idin\n";
+		print "###############################################################################################\n";
 		push @sep_pca_str_single, "$sep_pca_str_comb";
+		print "missing (pcaer needs started): $seppcadir/$sep_idin\n";
 		$pcaer_count++;
 	    }
 	    else {
@@ -2313,12 +2404,12 @@ if ($sep_pca) {
 	    &mysystem ("chmod u+x $seppcadir/$start_file");
 	    
 	    
-	    print "\n###########################################################################\n" if ($debug);
-	    print "separate PCAs requested, please start these commands from the command line:\n\n" if ($debug);
+	    print "\n###########################################################################\n" ;
+	    print "separate PCAs requested, please start these commands from the command line:\n\n" ;
 	    
-	    print "\tcd $seppcadir\n" if ($debug);
-	    print "\t./$start_file\n\n" if ($debug);
-	    print "wait till all pcaer-jobs (_pc_*) ran through and restart postimp-pipeline\n" if ($debug);
+	    print "\tcd $seppcadir\n";
+	    print "\t./$start_file\n\n";
+	    print "wait till all pcaer-jobs (_pc_*) ran through and restart postimp-pipeline\n";
 
 
 	    #############################################################
@@ -2382,9 +2473,14 @@ if ($sep_pca) {
 	$bfile =~ s/.bim$//;
 	my $famfile_loc = "$bfile.fam";
 	my $famloc = $famfile_loc;
-	$famloc =~ s/hg19.ch.fl.fam$/fam/;
+	$famloc =~ s/$build_txt.ch.fl.fam$/fam/;
 	$famloc =~ s/ch.fl.fam$/fam/;
 
+	if (exists $trioset_bimfli{$bfile}){
+	    print "post sep_pca: $bfile as trio, so no sep_pca\n";
+	    push @bimfli_files_tmp2, $bfile;
+	    next;
+	}
 
 	my $found = 0;
 
@@ -2401,7 +2497,7 @@ if ($sep_pca) {
 	}
 	close IN;
 	if ($found == 0) {
-	    print "this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n" if ($debug);
+	    print "post_sep_pca this fam-file without any IDs in analysis (--mds): ".$bf."\t".$famloc."\n";
 	    
 	}	
 	
@@ -2458,6 +2554,11 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 		my $co_str_loc = $co_str;
 		$co_str_loc = "" if (exists $trioset_bimfli{$bfile});
+#		if (exists $trioset_bimfli{$bfile}) {#
+#		    print "found trio: $bfile\n";
+#		}
+#		print "found bfilekkjk: $bfile $co_str\n";
+		
 		
 
 
@@ -2471,7 +2572,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 
 		unless (-e $dasudir_loc_qc1) {
 		    my $tmpdir = $dasudir_loc_qc1;
-		    $tmpdir =~ s/.hg19.ch.fl/.ch.fl/;
+		    $tmpdir =~ s/.$build_txt.ch.fl/.ch.fl/;
 		    if (-e $tmpdir) {
 			if ($n_old_format < 100) {
 			    print "found old format: $tmpdir\n" if ($debug);
@@ -2540,6 +2641,11 @@ unless (-e "$rootdir/daner_$outname.done") {
 				my $sep_covfile_loc = $sep_covfile{$bfile};
 				my $sep_covstr_loc = $sep_covstr{$bfile};
 				$co_str_loc = "--mds $sep_covfile_loc --coco $sep_covstr_loc";
+				if (exists $trioset_bimfli{$bfile}) {#
+				    $co_str_loc = "";
+				    $idin_str = "";
+				}
+						    
 			    }
 
 			    my $sys_loc = "$daner_script $sex_str --nosi --indir $dasudir_loc $idex_str $addcov_str $idin_str $pheno_str $co_str_loc --outdir $danerdir_loc $bfile.$refind";
@@ -2629,7 +2735,7 @@ unless (-e "$rootdir/daner_$outname.done") {
 			else {
 			    my $ident = "$bfile.$refind";
 			    if ($hg19_remove) {
-				$ident =~ s/.hg19.ch.fl/.ch.fl/;
+				$ident =~ s/.$build_txt.ch.fl/.ch.fl/;
 			    }
 			    
 			    
@@ -3224,7 +3330,7 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 		close FILE;
 		if ($rf_count == 0) {
 		    print "----------------------------------------------\n";
-		    print "Error: $outdir/$rf.count\nhas no entries,\nplease remove $outdir\nand rerun pipeline\n";
+		    print "Error: $outdir/$rf.count\nhas no entries,\none likely possibility is a misformatted daner file (please compare with website and doublecheck the order of the columns)\nthen remove directory $outdir\nand rerun pipeline\n";
 		    print "----------------------------------------------\n";
 		    exit;
 		}
@@ -3234,7 +3340,7 @@ unless (-e "$rootdir/resmeta_$outname.done") {
 		else {
 		    if ($rf_count_max - $rf_count > 5) {
 			print "----------------------------------------------\n";
-			print "Error: $outdir/$rf.count\nhas not enough entries,\nplease remove $outdir\nand rerun pipeline, check other count files as well\n";
+			print "Error: $outdir/$rf.count\nhas not enough entries ($rf_count_max, $rf_count),\nplease remove $outdir\nand rerun pipeline, check other count files as well\n";
 			print "----------------------------------------------\n";
 			exit;
 		    }
@@ -3974,6 +4080,10 @@ unless (-e $prekno_file) {
 
 
 my $prekno_txt = "--prekno $prekno_file";
+
+if ($nocatalog) {
+    $prekno_txt = "--nocatalog";
+}
 #print "using as gwas catalog file: ".$prekno_file."\n";
 #print "option: ".$prekno_txt."\n";
 
@@ -3983,7 +4093,8 @@ my $prekno_txt = "--prekno $prekno_file";
 
 foreach my $dc_loc (@daner_allcoll) {
     my $infile = "$dc_loc.p3.gz";
-    my $pth_loc = 4;
+#    my $pth_loc = 0.0001;
+    my $pth_txt = "--pth 0.0001";
 #    print "out: $dc_loc.p3.gz\n";
     unless (-e "$dc_loc.p4.clump.areator.sorted.1mhc.xls") {
 	if (-e "$dc_loc.p4.gz.n") {
@@ -3992,11 +4103,16 @@ foreach my $dc_loc (@daner_allcoll) {
 	    chomp($nloc);
 	    if ($nloc == 0) {
 		$infile = "$dc_loc";
-		$pth_loc = 2;
+		$pth_txt = "";
+		print "!!!! Warning: no pvalues under 0.0001, taking all SNPs now!!!\n";
+		sleep (5);
+#		$pth_loc = 2;
 	    }
 	    close FILE;
 	}
-	push @areat_arr, "$areator_script $prekno_txt $Xchr_txt --r2th $r2th --plink --pth $pth_loc --best $infile --out $dc_loc.p4 --refdir $areat_refdir";
+
+
+	push @areat_arr, "$areator_script $prekno_txt $Xchr_txt --r2th $r2th --plink $pth_txt --best $infile --out $dc_loc.p4 --refdir $areat_refdir";
 #	print  "$areator_script $prekno_txt $Xchr_txt --r2th $r2th --plink --pth $pth_loc --best $infile --out $dc_loc.p4 --refdir $areat_refdir\n";
     }
 }
@@ -4059,6 +4175,7 @@ unless (-e $areator_regplot) {
     my @pth_arr = qw /5.0e-08 1.0e-06 1.0e-05 1.0e-04 1.0e-03 1.0e-02 1.0e-01/;
     foreach my $pth_loc (@pth_arr) {
 	my $sys_str = "$comp1mhcreg_script --out $areator_all --pth $pth_loc $areator_all";
+	my $sys_str = "$comp1mhcreg_script --out $areator_all --refdir $refdir --pth $pth_loc $areator_all";
 	print "$sys_str\n" if ($debug);
 	&mysystem ($sys_str);
 	$wc_loc = `wc -l $areator_regplot`;
@@ -4075,6 +4192,7 @@ unless (-e $areator_regplot) {
 else {
     $wc_loc = `wc -l $areator_regplot`;
 }
+#exit;
 
 if ($wc_loc < 1) {
     print "no SNP meets e-04....\n" if ($debug);
@@ -4101,6 +4219,7 @@ while (my $line = <FILE>){
     }
     else {
 	unless (-e "$a_outname.pdf"){
+
 	    my $sys = "$areaplot_script $prekno_txt --dandir $dametadir --refdir $refdir  --ngt-max -1 @cells --cols 2,11,1,3,-1,12 $daner_all" ;
 	    push @areap_arr, $sys;
 #	    print "$sys\n";

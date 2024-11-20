@@ -76,6 +76,11 @@ use File::Path;
 
 
 my $famname = $ARGV[0];
+if ($famname eq "") {
+    print "Error: no filename specified\n";
+    exit;
+}
+
 my $famname_out = $famname.".new";
 
 
@@ -127,7 +132,7 @@ sub mysystem (){
 #}
 
 
-die $! unless open FAMI, "< $famname";
+die "$famname not existing" unless open FAMI, "< $famname";
 die $! unless open FAMO, "> $famname_out";
 #my @cc_name = qw /nocc control case fam/;
 my @cc_name = qw /mis con cas fam/;

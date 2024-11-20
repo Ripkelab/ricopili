@@ -402,21 +402,22 @@ print OUT "./start_loo_weights.cmd\n";
 
 print OUT "\n\n";
 print OUT "please continue only after the last step has been successfully finished\n";
-print OUT "-----------------------------------------------------------------------\n";
+print OUT "##-----------------------------------------------------------------------\n";
 print OUT "\n\n";
-print OUT "then start $nst runs of scorings\n";
+print OUT "## then start $nst runs of scorings\n";
 print OUT "cd $root\n";
 print OUT "ln -s results_$identifier/distribution/*/*clumped*.gz .\n";
 
 print OUT "./start_loo_scores.cmd\n";
 
 print OUT "\n\n";
-print OUT "please continue only after the last step has been successfully finished\n";
-print OUT "-----------------------------------------------------------------------\n";
+print OUT "## please continue only after the last step has been successfully finished\n";
+print OUT "##-----------------------------------------------------------------------\n";
 print OUT "\n\n";
-print OUT "then start plotting the results\n";
+print OUT "## then start plotting the results (replacing OUTNAME)\n";
 print OUT "cd $root/distribution\n";
-print OUT "danscrore_multiplot COMBINEDSTR\n\n\n";
+print OUT "danscrore_multiplot --out OUTNAME */*combined\n\n\n";
+print OUT "\n\n\n";
 close OUT;
 
 

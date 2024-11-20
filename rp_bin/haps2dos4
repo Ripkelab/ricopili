@@ -40,6 +40,7 @@ version: $version
   --chr INT           chromosome
   --help              print this message and exit
 
+  --mm4               take mm4 pipeline format
 #  --deployfam         dosages come from deployed job with IDs=FID_IID
 
   --nodosfam          if there is not a separata dosagefamfile
@@ -70,6 +71,7 @@ GetOptions(
 #    "transfam=s"=> \my $transfamname,
     "bim=s"=> \my $bimname,
     "chr=s"=> \my $chr,
+    "mm4"=> \my $mm4_sw,
     "nodosfam"=> \my $nodosfam,
 
     );
@@ -155,12 +157,14 @@ my $haps_file_gz_map = "$haps_file1.combined.gz.map";
 
 unless (-e $haps_fam) {
     print "Warning: $haps_fam not existing\n" if ($debug);
+    $haps_fam = $famname;
 #    $haps_fam =~ s/.imp.gz.fam/.imp.GP.gz.fam/;
 #    unless (-e $haps_fam) {
 #	print "Error: $haps_fam not existing\n";
 #	exit;
 #    }
 }
+
 
 my $info_file = $haps_file1;
 $info_file =~ s/.gz$//;
@@ -179,15 +183,20 @@ $info_file .= "_info";
 
 
 
-print "merge files\n" if ($debug);
+
+
 &mytime();
 
 
 
 my @filehandles_gz;
 
+print "####### nf = $nf \n" if ($debug);
 
 if ($nf > 0) {
+
+
+    print "####### merge files (@haps_collection) into $haps_file_gz\n" if ($debug);
     
     foreach my $infile (@haps_collection) {
 	
@@ -195,7 +204,8 @@ if ($nf > 0) {
 	push(@filehandles_gz, $igz);
 	
     }
-    
+
+
     
     print "open $haps_file_gz\n" if ($debug);
     
@@ -245,6 +255,7 @@ else {
 }
 
 #exit;
+print "####### haps_file_gz = $haps_file_gz\n" if ($debug);
 
 
 
@@ -286,6 +297,7 @@ if ($prefix) {
     close OF;
     $famname_in = "$famname.pre";
     &mysystem ("cp $famname.pre $famout");
+#    print "hier1\n"; exit;   
 }
 #else {
 #    &mysystem ("cp $famname $famout");
@@ -322,7 +334,8 @@ unless ($nodosfam) {
 	    
 	}
 	close IF;
-	
+
+#	print "hier2\n"; exit;
 	die $!."($haps_fam)" unless open IF, "< $haps_fam";
 	die $!."($famout.ow)" unless open OF, "> $famout";
 	
@@ -350,14 +363,30 @@ unless ($nodosfam) {
     }
     else {
 	### this here is done is standard ricopili
+#	print "famname_in: $famname_in\n";
+#	print "hapsfam: $haps_fam\n";
+#	print "famout: $famout\n";
+#	exit;
 	die $!."($famname_in)" unless open IF, "< $famname_in";
-	
+
+	my %fam_hash;
+
 	while (my $line = <IF>){
 	    my @cells = @{&split_line_ref(\$line)};
 	    push @famarray,"@cells";
-	    
+	    my $mm4_id = $cells[0]."____".$cells[1];
+	    $fam_hash{$mm4_id} = "@cells";
+#	    print "strange: $mm4_id\n";
 	}
 	close IF;
+	#	print "hier3\n"; exit;
+#	unless (-e "$haps_fam") {#
+#	    print "Warning, not found: $haps_fam\n";
+#	    print "taking this instead: $famname_in\n";
+#	    $haps_fam
+	    
+#	    exit;
+#	}
 	
 	die $!."($haps_fam)" unless open IF, "< $haps_fam";
 	die $!."($famout.ow)" unless open OF, "> $famout";
@@ -368,15 +397,36 @@ unless ($nodosfam) {
 	    #    if ($cells[5] != 2 && $cells[5] != 1) {#
 	    #	$cells[5] = 1;
 	    #    }
-	    
-	    
-	    print OF $famarray [$cells[0]]."\n";
+
+	    if ($mm4_sw) {
+		if (exists $fam_hash{$cells[0]}){
+		    print OF $fam_hash{$cells[0]}."\n";
+		}
+		else {
+		    print "Error: $cells[0] from $haps_fam is not found in $famname_in\n";
+		    exit;
+		}
+
+	    }
+	    else {
+		if ($cells [0] =~ /\D/){ 
+		    #		print "$cells[0] has nondigits\n";
+		    print OF "@cells\n";
+		}
+		else {
+		    print OF $famarray [$cells[0]]."\n";
+		}
+	    }
 	}
 	close IF;
 	close OF;
+#	print "hier3\n"; exit;
+	
     }
 }
 else {
+
+#    print "hier4\n"; exit;
     die $!."($famout.ow)" unless open OF, "> $famout";
     die $!."($famname_in)" unless open IF, "< $famname_in";
 

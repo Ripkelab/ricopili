@@ -1202,6 +1202,10 @@ if ($job){
 	    
 	    my $parn_txt = "";  ## stays empty if not full node access is switched
 
+#	    print "are we here?\n";
+	    #	    exit;
+
+
 	    if ($batch_ncores_per_node ne "NA") {
 		#### first test if settings make sense
 		unless ($batch_ncores_per_node * 1 == $batch_ncores_per_node) {
@@ -1213,11 +1217,18 @@ if ($job){
 		    die;
 		}
 
+#		print "batch2: $batch_ncores_per_node\n";
+#		print "batch_mem_per_node: $batch_mem_per_node\n";
+
 		### set the number per node down if mem does not suffice
 		my $batch_ncores_per_node_max = sprintf "%d", $batch_mem_per_node / $mem_str;
 		if ($batch_ncores_per_node_max < $batch_ncores_per_node) {
+		    print "scaling down number of parallel jobs due to memory requirement:\n";
+		    print "from:$batch_ncores_per_node\n";
 		    $batch_ncores_per_node = $batch_ncores_per_node_max;
+		    print "to:$batch_ncores_per_node\n";
 		}
+
 		
 		## very complicated to get the number of nodes to request (ceiling of the job-N)
 		my $numnode = ($job_bn_th-0.000001)/$batch_ncores_per_node;
@@ -1228,6 +1239,7 @@ if ($job){
 		if ($numnode > 1000){
 		    $numnode = 1000;
 		}
+
 
 		## gets into the starting script
 		$parn_txt = "--parn $batch_ncores_per_node";
@@ -1278,6 +1290,8 @@ if ($job){
 	    }
 
 
+#	    print "parn: $parn_txt\n";
+#	    exit;
 
 
 	    
