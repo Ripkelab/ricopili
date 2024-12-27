@@ -3,9 +3,9 @@
 **Author**: Alice Braun [braun@broadinstitute.org](mailto:braun@broadinstitute.org)<br> 
 
 `Last update: 2024-12-19` <br>
-This short README is intended to quickly get you started on the SURFsnellius supercomputer using a central installation. <br>
+This short README is intended to quickly get you started on the SURFsnellius supercomputer. <br>
 A documentation for the Broad Institute HPC and a custom installation guide are underway. <br>
-For a more comprehensive documentation on how to run the individual modules please visit: [https://sites.google.com/a/broadinstitute.org/ricopili/](https://sites.google.com/a/broadinstitute.org/ricopili/)
+For a more comprehensive documentation on how to run the individual modules and interpret their output please visit: [https://sites.google.com/a/broadinstitute.org/ricopili/](https://sites.google.com/a/broadinstitute.org/ricopili/)
 
 ## Installation on SURFsnellius
 ### Download
@@ -173,17 +173,19 @@ Follow the instructions but do not replace the config file you have just copy-pa
 
 ## Bug fixes on SURFsnellius
 ***
-!!! warning
-    Currently, the libgsl.so.23 dependency for EIGENSOFT is not available on SURFsnellius. <br>
-    To fix eloc without conda try the following workaround trick: <br> 
-    `ln -s /usr/lib64/libgsl.so.25/ libgsl.so.23` <br>
-    `export LD_LIBRARY_PATH=/usr/lib64/`
-    <br>
-    <br>
-    Alternatively you can install EIGENSOFT through conda: <br>
-    `conda install bioconda::eigensoft`
-    and add the following to your ricopili.conf  
-    `eloc /home/$USER/.conda/envs/ricopili/bin/`
+> [!WARNING]  
+  >  Currently, the libgsl.so.23 dependency for EIGENSOFT is not available on SURFsnellius. <br>
+  >  you can install EIGENSOFT through conda/ mamba: <br>
+  >  `conda install bioconda::eigensoft`
+  >  and add the following to your ricopili.conf  
+  >  `eloc /home/$USER/.conda/envs/ricopili/bin/`
+
+> [!WARNING]  
+  >  Currently, LDSC is not available as a module on SURFsnellius. <br>
+  >  you can install LDSC through conda/ mamba: <br>
+  >  `conda install bioconda::ldsc`
+  >  and add the following to your ricopili.conf  
+  >  `ldsc_start /home/$USER/.conda/envs/ricopili/bin/`
 
 
 > [!WARNING]  
