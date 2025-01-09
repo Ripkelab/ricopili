@@ -101,7 +101,9 @@ if ($ldsc_sys =~ / $/ || $ldsc_sys =~ /;$/) {
 #sleep(10);
 
 
-my $sys = "$munge_cmd --sumstats $danerfile  --daner --out $danerfile.ldsc --merge-alleles $ldsc_ref/w_hm3.snplist";
+#my $sys = "$munge_cmd --sumstats $danerfile  --daner --out $danerfile.ldsc --merge-alleles $ldsc_ref/w_hm3.snplist";
+# changed chunksize to run smoothly on snellius (otherwise the module takes very long or gets stuck)
+my $sys = "$munge_cmd --sumstats $danerfile  --daner --out $danerfile.ldsc --merge-alleles $ldsc_ref/w_hm3.snplist --chunksize 500000";
 
 #exit;
 
