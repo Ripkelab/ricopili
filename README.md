@@ -191,7 +191,7 @@ Follow the instructions but do not replace the config file you have just copy-pa
 > [!WARNING]  
 > Currently, you need to manually load texlive and GCC in order for several modules to run (**e.g. pcaer**):
 > ```
->   module load 2024
+>   module load 2022
 >   module load texlive/20230313-GCC-11.3.0
 >   ``` 
 
@@ -296,9 +296,9 @@ path_to_Perlmodules  /psych/ripke/share/gio/Ricopili_Dependencies_sr_1018d/perl_
 path_to_scratchdir   /psych/genetics_data/ripke/sloc/
 starting_ldsc        source_SPACE_/broad/software/scripts/useuse;_SPACE_use_SPACE_.anaconda-2.1.0-no-mkl;_SPACE_python_SPACE_/psych/ripke/share/gio/Ricopili_Dependencies_sr_1018d/ldsc
 ldsc_reference       /psych/ripke/share/gio/Ricopili_Dependencies_sr_1018d/ldsc
-rp_user_initials      ab                             
-rp_user_email         braun@broadinstitute.org                           
-rp_logfiles           /home/unix/braun/                      
+rp_user_initials     <YOUR_INITIALS>
+rp_user_email        <YOUR_MAIL>
+rp_logfiles          <YOUR_HOME>                    
 ----------------------------------------
 ----------------------------------------
 ---- jobarray and queueing parameters: 
