@@ -1,6 +1,6 @@
 # Installing RICOPILI
 **Source documents**: [Ricopili @ Snellius](https://docs.google.com/document/d/1VL7j-gA7wW8VCvj3YmfRvR8Ny9651WE9EcbUYE1Xg7A/edit?tab=t.0#heading=h.i7fbl6xjsyub) | [RICOPILI custom installation](https://docs.google.com/document/d/14aa-oeT5hF541I8hHsDAL_42oyvlHRC5FWR7gir4xco/edit?tab=t.0#heading=h.clyzm24wfoeu) <br>
-**Author**: Alice Braun [braun@broadinstitute.org](mailto:braun@broadinstitute.org)<br> 
+**Authors**: Stephan Ripke [sripke@broadinstitute.org](mailto:sripke@broadinstitute.org) | Alice Braun [braun@broadinstitute.org](mailto:braun@broadinstitute.org)<br> 
 
 `Last update: 2025-01-14` <br>
 This short README is intended to quickly get you started on the SURFsnellius supercomputer. <br>
