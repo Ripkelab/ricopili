@@ -216,12 +216,14 @@ ish
 ## Download dependencies 
 If you'd like to install RICOPILI on a different cluster than the Broad Institute UGER HPC or the SURFsnellius supercomputer you're can download the depencies via the following tarball:
 ```bash
-wget https://personal.broadinstitute.org/sripke/share_links/JeklRDhPD6FKm8Gnda7JsUOsMan2P2_Ricopili_Dependencies.1118b.tar.gz/Ricopili_Dependencies.1118b.tar.gz
-wget https://personal.broadinstitute.org/sripke/share_links/JeklRDhPD6FKm8Gnda7JsUOsMan2P2_Ricopili_Dependencies.1118b.tar.gz/Ricopili_Dependencies.1118b.tar.gz.cksum.txt
+wget https://personal.broadinstitute.org/braun/sharing/Ricopili_Dependencies.1118b.tar.gz
+wget https://personal.broadinstitute.org/braun/sharing/Ricopili_Dependencies.1118b.md5.cksum
 # verify checksum
 md5sum Ricopili_Dependencies.1118b.tar.gz
 tar -xvzf Ricopili_Dependencies.1118b.tar.gz
 ```
+> [!WARNING]
+> The dependency tarball does not yet include MINIMAC4.
 
 On the Broad UGER cluster you may use the centrally installed dependencies on: <br>
 `/psych/ripke/share/gio/Ricopili_Dependencies_sr_1118b` <br>
@@ -323,4 +325,4 @@ batch_mem_per_node           NA
 
 > [!WARNING]  
   >  Currently, LDSC is not available as a module on Broad UGER. <br>
-  > You may need to run the pipeline (post_imp_navi, test_navi) with the flag --noldsc
+  > You may need to run the pipeline (post_imp_navi, test_navi) with the flag --noldsc or install LDSC manually via mamba/ conda
