@@ -60,13 +60,14 @@ foreach my $file (@ARGV) {
 
     print STDERR "$progname: transferring $file into $outfile" if ($debug);
     system("$bcftools view -Ob $file > $outfile") == 0
-#    system("zcat " . shell_quote($file) . " | " . shell_quote($bgzip) . " > " . shell_quote($file_bgz)) == 0
         or die "bgzipping failed; aborting\n";
 
     print STDERR "$progname: indexing $outfile" if ($debug);
     system("$tabix -f $outfile") == 0 or die "Indexing failed; aborting";
-#        system($tabix, "-f", $file_bgz) == 0 or die "Indexing failed; aborting";
 
+    print STDERR "$progname: refalleles from $outfile" if ($debug);
+    system("$bcftools query -f \'%CHROM\t%ID\t%POS\t%REF\t%ALT\n\' $outfile > $outfile.refalleles") == 0
+	or die "refalleles failed; aborting\n";
 
     system("touch",
 	   "$outfile.fini");

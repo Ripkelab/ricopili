@@ -1,0 +1,212 @@
+#!/usr/bin/perl
+use strict;
+
+
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("p2loc");
+
+###############################################
+
+
+my $version = "1.0.0";
+my $progname = $0;
+
+
+##### help message
+my $usage = "
+Usage : $progname [options] .bgl
+
+version: $version
+
+  --help     print this help message and exit
+  --fam FILE famfile with same order of IDs. (MANDATORY)
+
+ will create a tped an a tfam file
+
+ created by Stephan Ripke 2009 at MGH, Boston, MA
+ 
+";
+
+
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    "fam=s"=> \my $famfile,
+    );
+
+
+die $usage if $help;
+die $usage if (@ARGV != 1);
+die $usage unless ($famfile);
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+
+##########################################
+# begin
+##########################################
+
+my $bgl_file = $ARGV[0];
+my $ma_file = $ARGV[0].".markers";
+
+my $tped_file = $bgl_file.".tped";
+my $tfam_file = $famfile;
+#my $tfam_file = $bgl_file.".tfam";
+
+#print "$phased_file\n$ped_file\nmap_file\n";
+
+### guess chromosome out of filenamee
+my @cells = split '\.', $bgl_file;
+my $chr_guess = "";
+foreach (@cells) {
+    if ($_ =~ /chr/) {
+	my @cellsi = split '_', $_;
+	foreach (@cellsi) {
+	    if ($_ =~ /^chr/) {
+		$chr_guess = $_;
+		$chr_guess =~ s/chr//;
+	    }
+	}
+    }
+}
+
+if ($chr_guess<1 || $chr_guess > 25) {
+    print "error: guessed chromosome: $chr_guess\n";
+    exit;
+}
+#sleep(10);
+
+#####################################
+# create fam file
+####################################
+#print "create fam-file\n";
+
+#die $!." <$bgl_file>" unless open IN, "< $bgl_file";
+#my $header = <IN>;
+#my @cells = &split_line($header);
+#shift (@cells);
+#shift (@cells);
+#close IN;
+
+#my $nids  = @cells / 2;
+#die $! unless open OUT, "> $tfam_file";
+#my $cc = 1;
+#foreach (1..$nids){
+ #   print OUT "id$cc";
+ #   print OUT "\tid$cc";
+ #   print OUT "\t0";
+ #   print OUT "\t0";
+ #   print OUT "\t1";
+ #   print OUT "\t-9";
+ #   print OUT "\n";
+ #   $cc++;
+#}
+#close OUT;
+#exit;
+
+#####################################
+# read markers.
+####################################
+print "read marker info: $ma_file\n";
+my %kb;
+die $!." <$ma_file>" unless open POS, "< $ma_file";
+while (my $line = <POS>) {
+    my @cells = @{&split_line_ref(\$line)};
+
+    $kb{$cells[0]} = $cells[1];
+}
+close POS;
+
+
+#####################################
+# create tped
+####################################
+
+print "create tped\n";
+
+die $!." <$bgl_file>" unless open IN, "< $bgl_file";
+die $! unless open OUT, "> $tped_file.tmp";
+
+while (my $line = <IN>) {
+    my @cells = @{&split_line_ref(\$line)};
+
+    shift (@cells);
+    my $snp = shift (@cells);
+    unless (exists $kb{$snp}){
+	print "error: no markerinfo for $snp\n";
+	exit;
+    }
+
+    print OUT "$chr_guess";
+    print OUT "\t$snp";
+    print OUT "\t0";
+    print OUT "\t$kb{$snp}";
+
+    foreach (@cells){
+	print OUT "\t$_";
+    }
+    print OUT "\n";
+}
+close OUT;
+close IN;
+
+&mysystem ("mv $tped_file.tmp $tped_file");
+
+
+#####################################
+# create plink binary
+####################################
+
+
+print "$ploc/plink --tped $tped_file --tfam $tfam_file --make-bed --out $bgl_file\n";
+&mysystem ("$ploc/plink --tped $tped_file --tfam $tfam_file --make-bed --out $bgl_file");

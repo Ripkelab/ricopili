@@ -1,0 +1,171 @@
+#!/usr/bin/env perl
+
+
+##### there is a bit of special routines for three situations:
+## - R scripts
+## - python modules
+## - perl modules
+
+
+use strict;
+use warnings;
+
+#############################
+# load utility functions
+#############################
+
+use FindBin;
+use lib "$FindBin::Bin";
+use Ricopili::Utils qw(trans);
+
+#############################
+# read config file
+#############################
+
+my $binloc = &trans("ENTRY_1st_col"); ## e.g. i2loc
+my $bin = "BINARY"; ## name of binary of tool
+
+
+### special entry when using R
+my $rloc = &trans("rloc");
+
+
+#### variables to be set (maybe changed as flags)
+my $var1 = 1;
+
+
+
+###########################################
+##### help message
+my $usage = "
+Usage : my.imp.3 --out OUTNAME --in INNAME
+
+ --out STRING      name of output file
+ --in STRING      name of input file
+
+ --help            print this message and exit
+ --debug           extended output
+";
+
+my $outname = "";
+my $inname = "";
+
+use Getopt::Long;
+GetOptions( 
+
+    "out=s"=> \ $outname,
+    "in=s"=> \ $inname,
+
+    "debug"=> \my $debug,
+    "help"=> \my $help,
+
+    );
+
+
+## test if help text needs to be printed
+if ($outname eq "" || $inname eq ""  || $help){
+    print "$usage\n";
+    exit;
+}
+
+################################################
+
+## testing existence of infile
+unless (-e "$inname") {
+    print "Error: no $inname found\n";
+    exit;
+}
+
+
+
+#############################
+# BEGIN
+##############################
+
+
+
+
+### special entries for R
+#######################################################################
+#######################################################################
+
+
+
+
+## setting R to silent or not
+my $r_silent = "> /dev/null 2>&1";
+if ($debug) {
+    $r_silent = "";
+}
+
+
+## testing R on system
+my $r_sys = "$rloc";
+$r_sys =~ s/_SPACE_/ /g;
+system("$r_sys RHOME $r_silent");
+my $status = ($? >> 8);
+if ($status != 0) {
+    print "I could not start R, maybe you are using an old ricopili configuration?\ne.g. rloc does not need a path but a full starting command.\n";
+    exit;
+}
+
+
+## R script with placeholders
+my $R_hist_templ='
+read.table("INNAME", header=T)-> dat
+pdf("OUTNAME.pdf",7.8,6)
+hist(dat[,1], main="TITLE", )
+    ';
+
+## change placeholders within R-script
+$R_hist_in=~ s/INNAME/$inname/g;
+$R_hist_in=~ s/TITLE/$title/g;
+
+## safe script to file
+&a2file ("$outname.Rin", $R_in);
+
+## run R
+my $system="$r_sys --vanilla < $outname.Rin $r_silent ";
+
+#######################################################################
+#######################################################################
+
+
+
+
+
+# use this block for each "systemcall"
+#############################################################
+#############################################################
+
+{
+## this is the definition of the command (with flags)
+my $sys_loc = "$binloc/$bin --out $outname --in $inname > $outname.log";
+
+
+### print command to screen if debug is on
+print "$sys_loc\n" if ($debug);
+
+## record command for archive
+die $!."$outname.cmd" unless open BC, "> $outname.cmd";
+print BC "$sys_loc\n";
+close BC;
+
+
+## run the command
+my $sc = system ($sys_loc) ;
+
+
+## test if finished without error
+if ($sc == 0 ) { 
+    system ("touch $outname.fini");
+}
+else {
+    print "job finished with error\n" if ($debug);
+}
+
+}
+
+#############################################################
+#############################################################
+

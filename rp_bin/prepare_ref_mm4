@@ -11,11 +11,11 @@ my $progname = $0;
 $progname =~ s!^.*/!!;
 
 my $cpus = 1;
+my $debug = 0;
 
 GetOptions( 
     "help" => \my $help,
     "cpus=i" => \$cpus,
-    "debug"=> \my $debug,
     );
 
 
@@ -23,15 +23,16 @@ if ($help || @ARGV == 0){
     print STDERR <<EOF;
 SYNOPSIS
 
+    $progname --compress-reference reference.{sav,bcf,vcf.gz} > reference.msav
     $progname [--help] [--cpus=N] FILE.vcf.gz ...
 
 DESCRIPTION
 
-    Prepare genotype reference files for use with Eagle and Minimac3 pipeline.
+    Prepare genotype reference files for use with MINIMAC4 pipeline.
     Specifically, for each argument FILE.vcf.gz, the following files are created
     in the same directory:
     
-        * FILE.vcf.bgz -- a block-gzipped VCF file (see bgzip(1))
+        * FILE.msav -- a Minimac4 version of the VCF file
 
     The tool will also work with VCF files that end just with .gz, not .vcf.gz,
     although this is discouraged.
@@ -39,9 +40,6 @@ DESCRIPTION
     Note that the script processes the files sequentially, except the --cpu=N
     option that is passed to Minimac3. To achieve parallelism, split VCF files
     into chunks and distribute across multiple invocations of this script.
-
-    --debug             extended output
-    
 EOF
     exit 2;
 }
@@ -55,7 +53,6 @@ EOF
 use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
-
 
 foreach (@ARGV) {
     /.gz$/ and -f or die "Argument $_ is not a .gz file; aborting";
@@ -84,30 +81,19 @@ sub shell_quote($) {
     return $_;
 }
 
-my $bgzip = trans("bgziploc") . "/bgzip";
-#my $bcftools = trans("bcloc") . "/bcftools";
+my $minimac = trans("minimac4loc") . "/minimac4";
 
 foreach my $file (@ARGV) {
-    my $prefix = $file;
-    $prefix =~ s/(\.vcf)?\.gz$//;
-    my $file_bgz = $file;
-    $file_bgz =~ s/\.gz$/.bgz/;
-#    my $file_alleles = $file_bgz;
-#    $file_alleles .=  ".refalleles";
-    print STDERR "$progname: recompressing $file into $file_bgz"  if ($debug);
-    system("zcat " . shell_quote($file) . " | " . shell_quote($bgzip) . " > " . shell_quote($file_bgz)) == 0
-            or die "bgzipping failed; aborting\n";
+    my $file_msav = $file.".msav";
 
-    #    my $temp_cmd =     $bcftools .  ' query -f \'%CHROM\t%ID\t%POS\t%REF\t%ALT\n\' '  . $file_bgz . " > ". $file_alleles ;
-#    print "$temp_cmd\n";
+
+
+    print STDERR "$progname: processing $file with Minimac4 (into $file_msav)" if ($debug);
+    my $sys_cmd = "$minimac --compress-reference $file > $file_msav\n";
 #    exit;
-
-#    system( shell_quote($bcftools) .  shell_quote ('query -f \'%CHROM\t%ID\t%POS\t%REF\t%ALT\n\'')  . shell_quote($file_bgz) . " > ". shell_quote($file_alleles)) == 0
-#	or die "refallele failed; aborting\n";
-
-
     
+    system($sys_cmd) == 0 or die "Minimac4 processing of reference failed; aborting";
 
     system("touch",
-	   "$file.bgz.fini");
+	   "$file_msav.fini");
 }

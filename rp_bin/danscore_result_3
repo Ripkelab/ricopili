@@ -46,7 +46,7 @@ my $command_line = "$progname @ARGV";
 my $usage = "
 Usage : $progname [options] mds_file
 
-   --help            display this text and exi
+   --help            display this text and exit
    --mds STRING      mdsfile
    --out STRING      outfile-prefix
    --covall          take all covariates
@@ -447,7 +447,7 @@ h2l_R2 <- function(k, r2, p) {
   x= qnorm(1-K)
   z= dnorm(x)
   i=z/K
-  C= k*(1-k)*k*(1-k)/(z^2*p*(1-p))
+  C= k*(1-k)*k*(1-k)/(z^2*p*(1-p))g
   theta= i*((p-k)/(1-k))*(i*((p-k)/(1-k))-x)
   h2l_R2 = C*r2 / (1 + C*theta*r2)
 }

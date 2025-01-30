@@ -1,0 +1,2893 @@
+#!/usr/bin/perl
+use strict;
+
+srand(0);
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("p2loc");
+#my $p1loc = &trans("ploc");
+my $qloc = &trans("queue");
+my $hmloc = &trans("hmloc");
+my $email = &trans("email");
+my $loloc = &trans("loloc");
+
+#######################################
+## v12: with pops as reference
+
+## v16: including fastpca and eigen_v6
+#        also ocmpatibility with LISA
+
+##
+
+## v18: bug with double SNPs in bcomb
+##      ARGV into file
+##      bug with splitting into npa (needed to be done twice)
+## v19: serial
+
+my $txt_tmp ='
+Assessing common ancestry and stratification with genome-wide SNPs. 
+To assess relatedness between samples and population stratification, we used the chip-wide SNP data 
+passing stringent quality control . We removed SNPs 
+in the highly stratified the Major Histocompatability Complex (chr 6, 25-35 MB) and the 
+chromosome 8 inversion region (chr 8, 7-13 MB). We then pruned SNPs to insure that there 
+was little linkage disequilibrium between SNPs (r2<0.2). We used the resulting 17,413 SNPs to 
+assess recent common ancestry and population stratification with plink and eigenstrat.
+#######
+
+- SNPs, that are found on all datasets
+- MAF > 5%
+- HWE > 1.0e-03
+- MISS < 2%
+- no AT/GC
+- no MHC (6:25-35Mb)
+- no Chr.8 inversion (8:7-13Mb)
+
+LD prune:
+- LD - R2 < .2, 200SNPs window: plink --indep-pairwise 200 100 0.2
+     ( http://pngu.mgh.harvard.edu/~purcell/plink/summary.shtml#prune )
+- repeat LD pruning with resulting LD pruned dataset
+- if still over 100K SNPs (rare) prune randomly 
+
+- note: for big datasets it might be feasable to do the LD pruning with only a subset of 1000 individuals (for common SNPs you get a good estimate here)
+
+
+with the resulting SNP set you can do the following:
+
+
+-----------------------
+overlap / relatedness:
+----------------------
+- plink --file DATA --genome
+(http://pngu.mgh.harvard.edu/~purcell/plink/ibdibs.shtml)
+
+for big datasets this process is easy to parallize (example: http://pngu.mgh.harvard.edu/~purcell/plink/strat.shtml#cluster)
+
+
+-------------
+eigenstrat:
+-------------
+
+smartpca -p PARFILE
+
+
+example of PARFILE:
+genotypename:     DATA.bed
+snpname:          DATA.bim
+indivname:        DATA.pedind
+evecoutname:      DATA.evec
+evaloutname:      DATA.eval
+altnormstyle:    NO
+fastmode:       Y
+numoutevec:      20
+numoutlieriter:  0
+
+
+
+details:
+
+evec and eval are the outfiles.
+pedind very similar to fam-file (see README of eigentstrat)
+
+for very big datasets you might want to use a random subsets to create the PCA axes and project the remainder onto that grid. if necessay I will read out the details for doing so. not necessary for up to four thousand individuals.
+
+
+';
+
+#print "-------------------------------------------------------\n";
+#print "remove genetic distance from bim file.................\n";
+#print "-------------------------------------------------------\n";
+#sleep(2);
+
+
+###################################
+# variables
+####################################
+
+my $cc =0;
+my $rel_th =.2;
+my $ov_count_max =25;
+
+my $version = "2.7.2";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+my $command_line = "$progname @ARGV";
+
+my $rootdir = "";
+my $info_txt = "";
+my $homedir = $ENV{"HOME"};
+
+my $job_bn_th = 1000;
+
+#my $outname = "postimp_report";
+my $col_pt = 6;
+my $outname ="";
+my $help=undef;
+my $noc=undef;
+my $keepsub=-1;
+my $detsub="";
+
+my $ni_max = 400;
+
+my $keep_str = "";
+
+my $npcas = 20;
+
+my $fam_ind = 0;
+my $nso = 30000;
+
+my $nwind = 200;
+my $outliter = 0;
+
+my $walltime = 1;
+
+my $ld_subgr = 1000;   ## number of IDs to do ld-estimation on
+
+my $chunk_size = 200;   #### for chunks in epca creation -> should bring same results, only parallelization
+my $nref = 4000;  ## number IDs in reference PCA set (random subgroup)
+
+
+my $reffile = "NOFILE";
+
+
+
+use Getopt::Long;
+GetOptions( "out=s"=> \$outname,
+	    "help"=> \my $help,
+            "serial"=> \my $serial,
+            "sleep=i"=> \my $sleep_sw,
+
+	    "trio"=> \my $trio,
+#   "clean"=> \my $clean,
+	    "nog"=> \my $nogenome,
+	    "nomds"=> \my $nomds,
+	    "onlymds"=> \my $onlymds,
+	    "dedup12"=> \my $dedup12,
+	    "platform"=> \my $platform,
+	    "prefercase"=> \my $prefercase,
+	    "preferfam"=> \my $preferfam,
+	    "refpop=s"=> \my $refpop,
+	    "npcas=i"=> \$npcas,
+	    "ex_outl=i"=> \$outliter,
+	    "rel=f"=> \$rel_th,
+	    "nwind=i"=> \$nwind,
+	    "nso=i"=> \$nso,
+	    "nref=i"=> \$nref,
+	    "ldsubgr=i"=> \$ld_subgr,
+            "force1"=> \my $force1,
+	    "ref=s"=> \$reffile,
+	    "noproject"=> \my $noproject,
+    "dfile=s"=> \my $dfile,
+
+    );
+
+
+
+if ($sleep_sw) {
+  print "sleeping for $sleep_sw seconds (only use if suspect of race condition)\n";
+  sleep ($sleep_sw);
+}
+
+
+############################################################
+## testing binaries
+##############################################################
+my @test_scripts;
+
+
+my $pdflatex_script = "pdflatex";           ### my.pipeline_tar
+my $bcomb_script = "bcomb_5_p2";            ### my.pipeline_tar
+my $repov_script = "rep_overlap";           ### my.pipeline_tar
+my $pcapl_script = "pca_plot_5";            ### my.pipeline_tar
+my $eigen_script = "eigen_pca3";            ### my.pipeline_tar
+my $gwapl_script = "gwa_plot_3";            ### my.pipeline_tar
+my $qqpl_script = "qqplot_5";               ### my.pipeline_tar
+my $lahu_script = "lahunt_9";               ### my.pipeline_tar
+my $pdfjoin_script = "pdfjoin";             ### my.pipeline_tar
+my $pdfnup_script = "pdfnup";               ### my.pipeline_tar
+my $mds2cov_script = "mds2cov";             ### my.pipeline_tar
+my $transfuse_script = "transfuse_pca_3";   ### my.pipeline_tar
+my $mystart_script = "my.start_job";        ### my.pipeline_tar
+my $blue_script = "blueprint";         ### my.pipeline_tar
+
+my $mutt_script = "mutt";
+
+
+push @test_scripts, $pdflatex_script ;
+push @test_scripts, $bcomb_script ;
+push @test_scripts, $repov_script ;
+push @test_scripts, $pcapl_script ;
+push @test_scripts, $eigen_script ;
+push @test_scripts, $gwapl_script ;
+push @test_scripts, $qqpl_script ;
+push @test_scripts, $lahu_script ;
+push @test_scripts, $pdfjoin_script ;
+push @test_scripts, $pdfnup_script ;
+push @test_scripts, $mds2cov_script ;
+push @test_scripts, $transfuse_script ;
+push @test_scripts,  $mystart_script;
+push @test_scripts,  $blue_script;
+
+#push @test_scripts, $mutt_script ;
+
+
+#print ".......search for DEBUGG in script to clean up again....\n";
+#sleep(1);
+
+print ".......testing necessary binaries....\n";
+
+my $err_scr = 0;
+
+if (1) { ### DEBUGG
+die $! unless open FILE1, "> get_scripts_on_broad.txt";
+foreach my $scr_name (@test_scripts) {
+    my $scr_path = '';
+    
+    for my $path ( split /:/, $ENV{PATH} ) {
+	if ( -f "$path/$scr_name" && -x _ ) {
+	    print "$scr_name\tfound in $path\n";
+	    $scr_path = "$path/$scr_name";
+	    last;
+	}
+    }
+    unless ( $scr_path ) {
+	$err_scr = 1;
+	print FILE1 "cp /home/unix/sripke/bin/$scr_name ./\n";
+	print "!!Error!! : No $scr_name command available\n" ;
+    }
+ 
+}
+close FILE1;
+if ($err_scr == 1) {
+    print "-> have a look at get_scripts_on_broad.txt\n";
+    die ;
+}
+&mysystem ("rm get_scripts_on_broad.txt");
+}
+
+
+
+
+print ".......testing email program....\n";
+
+my $err_scr = 0;
+{
+    my $scr_path = '';
+    
+    for my $path ( split /:/, $ENV{PATH} ) {
+	if ( -f "$path/$mutt_script" && -x _ ) {
+	    print "$mutt_script\tfound in $path\n";
+	    $scr_path = "$path/$mutt_script";
+	    last;
+	}
+    }
+    unless ( $scr_path ) {
+
+	print "!!Warning!! : No $mutt_script command available, trying mail\n" ;
+
+	$mutt_script = "mail";
+	for my $path ( split /:/, $ENV{PATH} ) {
+	    if ( -f "$path/$mutt_script" && -x _ ) {
+		print "$mutt_script\tfound in $path\n";
+		$scr_path = "$path/$mutt_script";
+		last;
+	    }
+	}
+	unless ( $scr_path ) {
+	    $err_scr = 1;
+	    print "!!Error!! : No $mutt_script command available\n" ;
+	}
+    }
+ 
+}
+die if $err_scr == 1;
+
+
+print "....all necessary binaries found....\n";
+print "------------------------------------\n\n";
+
+
+#####################################
+# "testing environment variable rp_perlpackages
+####################################
+
+print "testing environment variable rp_perlpackages....\n";
+unless (exists $ENV{rp_perlpackages}) {
+    print "Error: no environment variable for perl-packages, please re-install ricopili and make sure to follow all instructions\n";
+    print "------------------------------------\n";
+    exit;
+}
+print "....all set....\n";
+print "------------------------------------\n";
+
+
+#push @scripts,"id_tager_3";
+
+
+
+
+
+
+
+#####################################
+# print array to file with newline
+####################################
+
+sub a2filenew {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+
+#####################################
+# send jobs to cluster and also send navi again
+#####################################
+
+my $sjadir = "";
+my $sjaweek = 0;
+my $sjaname = "";
+my $sjarow = "";
+my @sjaarray;
+my $sjamem = 0;
+my $sjatime = -1;
+my $sjamaxjobs = 30000;
+#my $sjainfofile = "$homedir/impute_dir_info";
+my $sjainfofile = "$loloc/pcaer_info";
+unless (-e $sjainfofile) {
+    print "log-file ($sjainfofile) is not existing\n";
+    print "please check loloc in ~/ricopili.conf\n";
+    exit;
+}
+my $sjainfotxt = "";
+my $sjamulti = 0;
+
+
+sub send_jobarray {
+
+    die "send_jobarray with undefined variables, dir" if ($sjadir eq "");
+    die "send_jobarray with undefined variables, name" if ($sjaname eq "");
+    die "send_jobarray with undefined variables, array" if (@sjaarray == 0);
+    die "send_jobarray with undefined variables, mem" if ($sjamem == 0);
+    die "send_jobarray with undefined variables, time" if ($sjatime < 0);
+    die "send_jobarray with undefined variables, info" if ($sjainfotxt eq "");
+
+
+    my $now = localtime time;
+    $now =~ s/ /_/g;
+
+
+
+    if ($sjaname eq "finished") {
+
+	my $fini_message ;
+	$fini_message .= "\n\n##################################################################\n";
+	$fini_message .= "##### CONGRATULATIONS: \n";
+	$fini_message .= "##### pcaer finished successfully:\n";
+	$fini_message .= "##### $sjainfotxt\n";
+	$fini_message .= "##### have a look at the wiki page\n"; 
+	$fini_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
+	$fini_message .= "##################################################################\n";
+	print "$fini_message\n";
+
+	
+	die $! unless open SUC, "> success_file";
+	print SUC $fini_message."\n";
+	close SUC;
+
+	&mysystem ('cat success_file | '.$mutt_script.' -s RP_pcaer_pipeline_finished '.$email) ;
+
+	my $sjarow      = $sjainfotxt."\t$sjaname\t$now";
+	&a2filenew_app("$sjainfofile",$sjarow);
+
+
+	exit;
+
+    }
+
+
+
+    chdir ($sjadir);
+    my $jobfile = "$sjaname.job_list";
+    while (-e $jobfile) {
+	$jobfile .= ".s";
+    }
+    &a2filenew ($jobfile, @sjaarray);
+
+#    $walltime = $sjatime;
+    my $nsja = @sjaarray;
+
+    my $nsja_loc = $nsja;
+    if ($nsja_loc > 30000) {
+	$nsja_loc = 30000;
+    }
+
+    my $multi_txt = "";
+    if ($sjamulti > 0) {
+	$multi_txt = "--multi $nsja_loc,$sjamulti";
+    }
+
+    ### with array
+
+
+
+    my $sja_week_str = "";
+    if ($sjaweek > 0) {
+	$sja_week_str = "--week 1";
+    }
+
+
+
+    if ($serial) {
+	print "starting step $sjaname with ".@sjaarray." jobs\n";
+	print "please be patient.\n";
+	my $jc = 1;
+	foreach (@sjaarray) {
+	    print "running job $jc...\n";
+	    &mysystem($_);
+	    $jc++;
+	    
+	}
+    }
+    else { 
+	my $sys_loc = "$blue_script $sja_week_str --noerr --njob $nsja_loc --array $jobfile --wa $sjatime --mem $sjamem --j --na $sjaname.$outname $multi_txt";
+	&mysystem ($sys_loc);
+    }
+
+
+
+    my $old_cmd = `tail -1 $sjainfofile | head -1`;
+
+
+    my $nsja_txt = sprintf "%06d",$nsja;
+
+    my $sjacontent = "$sjaname.".$nsja_txt;
+
+
+    my $sjarow_part = $sjainfotxt."\t$sjacontent";
+    my $sjarow      = $sjainfotxt."\t$sjacontent\t$now";
+#    $message = $info_txt."\t$message\t$now";
+
+
+    &a2filenew_app("$sjainfofile",$sjarow);
+
+
+
+    if ($old_cmd =~ /$sjarow_part/){
+	unless ($force1 ){
+	    my $err_message ;
+	    $err_message .= "##################################################################\n";
+	    $err_message .= "##### Error: \n";
+	    $err_message .= "##### step $sjaname has been done repeatedly without any progress\n";
+	    $err_message .= "##### pcaer pipeline stopped\n";
+	    $err_message .= "##### $sjainfotxt\n";
+	    $err_message .= "##### if reason does not appear obvious\n";
+	    $err_message .= "##### have a look at the wiki paged\n"; 
+	    $err_message .= "##### https://sites.google.com/a/broadinstitute.org/ricopili/\n";
+	    $err_message .= "##### or contact the developers\n";
+	    $err_message .= "##################################################################\n";
+	    print "$err_message\n";
+
+	    die $! unless open ERR, "> error_file";
+	    print ERR $err_message."\n";
+	    close ERR;
+
+
+	    &mysystem ('cat error_file | '.$mutt_script.' -s RP_pcaer_pipeline_error '.$email) ;
+
+	    unless ($serial) {
+		exit;
+	    }
+
+	}
+
+    }
+
+    $command_line =~ s/--force1//;
+
+
+
+
+    my $wt_file = "$sjadir/blueprint_joblist_file-$sjaname.$outname";
+    chdir "$rootdir" or die "something strange";
+    if ($qloc eq "bsub") {
+	$wt_file =~ s/.*blueprint_joblist_file-//;
+    }
+
+    if ($qloc eq "slurm") {
+	$wt_file = "$sjadir/$jobfile.script.id";
+    }
+
+    if ($qloc eq "qsub") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+
+    if ($qloc eq "qsub_c") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+    if ($qloc eq "qsub_b") {
+	$wt_file = "$sjadir/j.$sjaname.$outname.id";
+    }
+
+
+    
+    if ($serial) {
+	my $sys_re = "$command_line";
+	&mysystem ($sys_re);
+	exit;
+    }
+    else {
+	my $sys_re = "$blue_script --njob $job_bn_th -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na _pc_$outname";
+	&mysystem ($sys_re);
+    }
+
+
+
+
+    print "------------------------------------------------------------\n";
+    print "$nsja jobs successfully submitted\n";
+    print "please see tail of $sjainfofile for regular updates\n";
+    print "also check bjobs -w for running jobs\n";
+    print "possibly differnt command on different computer cluster: e.g. qstat -u USER\n";
+    print "you will be informed via email if errors or successes occur\n";
+    print "------------------------------------------------------------\n";
+
+
+
+
+    exit;
+
+
+}
+
+
+
+
+
+#********** here are all other HM-P3 samples for merging
+#
+ 
+#my $hm3_str =  'ln -fs $hmloc/pop/pop_hm3_eur.* ~/pgc-samples/pop/pop_hm3_YRI.* ~/pgc-samples/pop/pop_hm3_ASW.* ~/pgc-samples/pop/pop_hm3_CHB.* .';
+#my $hm3_ceu =  "$hmloc/pop/classic_three";
+my $hm3_ceu =  "$hmloc"."pop/big4";
+
+my @bimfiles = @ARGV;
+
+if ($dfile) {
+
+    die $! unless open DI, "< $dfile";
+    while (my $line = <DI>){
+	chomp($line);
+	push @bimfiles, $line;
+    }
+    close DI;
+}
+
+#print "@bimfiles\n";
+#exit;
+
+if ($help || $outname eq "" || @bimfiles == 0){
+    print "usage: $progname bim1 bim2
+
+version: $version
+
+      options:
+
+        --npcas         number of principal components to creatd, default = $npcas
+        --nog           no genome creation (assumes it to be there already), so also no pruning
+        --nwind         number of SNPs in window for pruning, default = $nwind
+        --hmeur         include CEU and use it as the reference
+        --trio          use only offsprings of trios...
+#        --hmpop         include HM populations (CEU, YRI, CHB, MEX)
+#        --clean         renoves all output files first
+        --rel FLOAT     threshhold for being a relative
+        --ex_outl INT      number of outlier iterations, default = $outliter
+        --out           outname
+        --help          print this message then quit
+        --platform      overlap ID exclusion based on platform (must be hardcoded)
+        --prefercase    overlap ID exclusion preferring case (only with cross-disease relatedness)
+        --preferfam     overlap ID exclusion preferring fam (only with cross-disease relatedness)
+
+        --nso  INT      max number of SNPs for overlap testing, default $nso
+        --nref INT      size of reference set, if dataset is bigger, PCA in subgroups
+                                default $nref
+
+        --noproject     do not project but create PCA on complete set 
+                              (can take very long for big datasets)
+                              (pca will go automoatically into week queue)
+
+        --ldsubgr INT   number of random subset, used for LD calculation for LD pruning
+
+        --nomds         quit after deduping, no MDS scoring
+        --dedup12       dedup first bfile against all others
+
+        --ref STRING    based on this reference-file
+
+        --dfile STRING  file containing datasetnames, one per line, replaces commmand line
+
+        --force1        do not exit if same fail, but do this only once        
+
+        --sleep INT     sleep for INT seconds, try this if you think there is a race condition
+                           (hints: stops a different steps, --serial works)
+                           try using 5 seconds first.
+
+        --serial          no sending jobs to queue all in one run
+                               -> usually only used for testing 
+
+   lisa: /home/gwas/pgc-samples/hapmap_ref/subchr/infosum_pos.sorted
+   broad: /psych/genetics_data/ripke/references_outdated/hapmap_ref/subchr/infosum_pos.sorted
+
+
+ --out is mandatory
+
+
+you can use this as reference
+ $hm3_ceu
+
+
+even better four 1KG populations:
+ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_4pop_mix_SEQ.bed/bim/fam .
+
+
+only euros:
+ln -s /psych/genetics_data/ripke/references_outdated/hapmap_ref/impute2_ref/1KG_Aug12/ALL_1000G_phase1integrated_v3_impute_macGT1/4pops/qc/pop_euro_eur_SEQ.det.* .
+
+
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+\n";
+    exit 2;
+}
+
+## det_sub array
+my @detarr = split ',', $detsub;
+
+$rel_th = .8 if ($trio);
+
+#print "\' \$10\'";
+#exit;
+
+
+if ($reffile ne "NOFILE") {
+    print "*********\n";
+    print "WARNING:\n";
+   print "--reffile problematic with frequencies of ms.300\n";
+    print "disabled right now\n";
+    exit;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+#####################################
+# grep analog
+####################################
+
+sub greppi {
+    my ($expr, $file)=@_;
+    my @lc=();
+    die $!."($file)" unless open FILE, "< $file";
+    while (<FILE>){
+#	chomp;
+	push @lc, $_ if ($_ =~ "$expr");
+    }
+    close FILE;
+    @lc;
+}
+
+
+#############################
+# test, if plink is present
+#############################
+
+
+unless (-e "$ploc/plink" ){
+    print "\n***** Error: couldn't find the following:\n";
+    print "please check --ploc or $conf_file\n";
+    exit;
+}
+
+
+
+
+
+#my $ploc= "~/plink/plink --noweb";
+#$ploc= "/home/gwas/plink/plink --noweb" if $lisa;
+
+
+
+#$lisamodule= "/home/gwas/plink/plink " if $lisa;   # with lapack
+
+#$homedir= "/home/ripke" unless $lisa;   # with lapack
+
+
+#unless ($lisa){
+#    unless ($broad) {
+#	print "local running\n" ;
+#	$ni_max = 5;
+#	$chunk_size =3;
+#	$rel_th= .33;
+#   }
+#}
+
+#####################################
+# print hash to file
+####################################
+
+sub h2file {
+    my ($file, %lines)=@_;
+#    my ($wk, $file, %lines)=@_;
+    die $! unless open FILE, "$file";
+    foreach (keys %lines){
+	print FILE "$_\t$lines{$_}\n";
+#	print FILE "$lines{$_}\n" if ($wk == 0);
+#	print FILE "$_$lines{$_}\n" if ($wk == 1);
+    }
+    close FILE;
+}
+
+
+
+
+
+#####################################
+# print hashkeys to file
+####################################
+
+sub hk2file {
+    my ($file, %lines)=@_;
+#    my ($wk, $file, %lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (keys %lines){
+	print FILE "$_\n";
+#	print FILE "$lines{$_}\n" if ($wk == 0);
+#	print FILE "$_$lines{$_}\n" if ($wk == 1);
+    }
+    close FILE;
+}
+
+
+####################################################
+#####   fisher yates shuffle
+###################################################
+
+sub fisher_yates_shuffle {
+    my $deck = shift;  # $deck is a reference to an array
+    my $i = @$deck;
+    while ($i--) {
+	my $j = int rand ($i+1);
+	@$deck[$i,$j] = @$deck[$j,$i];
+    }
+}
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+#####################################
+# subroutine to count lines of a file
+#####################################
+
+sub count_lines {
+    my ($file)=@_;
+    my $lc=0;
+    die "$file: ".$! unless open FILE, "< $file";
+    while (<FILE>){
+	$lc++;
+    }
+    close FILE;
+    $lc;
+}
+
+
+##########################################
+# split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+#####################################
+# append array to file with newline
+####################################
+
+sub a2filenew_app {
+    my ($file, @lines)=@_;
+    die "$!: $file" unless open FILE, ">> $file";
+    foreach (@lines){
+	print FILE "$_\n";
+    }
+    close FILE;
+}
+
+
+#####################################
+# subroutine to re-invoke this script
+#####################################
+
+sub reinvo {
+    my ($message, $wt_file)=@_;
+    my $now = localtime time;
+    print "$message\n";
+    $message = $info_txt."\t$message\t$now";
+    &a2filenew_app("$loloc/pcaer_info",$message);
+    exit if ($wt_file eq "everythingdone");
+    chdir "$rootdir" or die "something strange";
+    print "$rootdir\n";
+    &mysystem ("$blue_script -b \"$command_line\" --wa 1 --di --i 8,2 -j --fwt $wt_file --na pcaer5_$outname");
+    exit;
+
+}
+
+
+
+#####################################
+# subroutine to re-invoke this script
+#####################################
+
+sub reinvo_c {
+    my ($message, $wt_file)=@_;
+
+    my $success = 0;
+    $success =1 if ($message eq "everything-is-fine");
+
+    my $now = localtime time;
+    $now =~ s/ /_/g;
+
+    my $old_cmd = `tail -3 $loloc/pcaer_info | head -1`;
+
+
+    my $content = "$message";
+
+
+    my $message_part = $info_txt."\t$message";
+    $content = $info_txt."\t$message\t$now";
+
+    &a2filenew_app("$loloc/pcaer_info",$content);
+    die "3 times already" if ($old_cmd =~ /$message_part/);
+
+    if ($success == 1) {
+	print "\n";
+	print "#########################\n";
+	print "reached end of pipeline\n";
+	print "#########################\n";
+	print "\n";
+	exit;
+    }
+
+
+    chdir "$rootdir" or die "something strange";
+    if ($qloc eq "bsub") {
+	$wt_file =~ s/.*blueprint_joblist_file-//;;
+    }
+    &mysystem ("$blue_script -b \"$command_line\" --wa 2 --di -j --fwt $wt_file --na _pcaer_$outname");
+    exit;
+
+}
+
+
+#####################################
+# BEGIN
+#####################################
+
+
+
+use File::Copy;
+use File::Path;
+use Cwd;
+
+
+$rootdir = &Cwd::cwd();
+#$info_txt = "command:\t\"$command_line\"\tdir:\t$rootdir";
+$info_txt = "$rootdir\t$command_line";
+#print "$info_txt\n";
+
+$sjainfotxt = "$rootdir\t$command_line";
+
+#######################################################
+#######################################################
+## overlap - testing
+######################################################
+######################################################
+
+
+
+#####################################
+# merge sparse for overlap
+#####################################
+
+my $pcaer_dir = "$rootdir/pcaer_$outname";
+my @created = mkpath(
+    $pcaer_dir,
+    {verbose => 0, mode => 0750},
+    );
+
+chdir $pcaer_dir or die $!;
+
+my $bfile_mesp="$outname.mesp";
+my $ie_file = "";
+my $trio_ex_file = "$outname.trio.ex";
+if ($trio){
+    $ie_file = "--iefile $trio_ex_file";
+}
+
+my $error  = 0;
+foreach my $bfile (@bimfiles) {
+    $bfile =~ s/.bim$//;
+
+
+    #### check tag
+    die "$!: $rootdir/$bfile.fam" unless open IN, "< $rootdir/$bfile.fam";
+    my $line = <IN>;
+    my $taged = 1;
+    my @cells = &split_line($line);
+    unless ($cells[0] =~ /\*/) {
+	$taged = 0;
+    }
+    close IN;
+
+    if ($taged == 0) {
+	print "$bfile not taged\n";
+	print "id_tager --create --nn dis_name_eur_NA $bfile.fam\n";
+	$error = 1;
+    }
+#    else {
+#	print "$bfile taged\n";
+#    }
+#    exit;
+
+
+    unless (-e "$bfile.fam") {
+	&mysystem("ln -sf $rootdir/$bfile.bim .");
+	&mysystem("ln -sf $rootdir/$bfile.bed .");
+	&mysystem("ln -sf $rootdir/$bfile.fam .");
+    }
+}
+if ($error == 1) {
+    print "fix first\n";
+    exit;
+}
+#exit;
+
+
+if (0) {
+    unless (-e "$bfile_mesp.bim") {
+	
+	my @trio_arr;
+	
+	foreach my $bfile (@bimfiles) {
+	    $bfile =~ s/.bim$//;
+	    &mysystem("ln -sf $rootdir/$bfile.bim .");
+	    &mysystem("ln -sf $rootdir/$bfile.bed .");
+	    &mysystem("ln -sf $rootdir/$bfile.fam .");
+	    
+	    
+	    if ($trio){
+		next if ($bfile =~ /^pop/);
+		die $!."($bfile.fam)" unless open FAM, "< $bfile.fam";
+		while (my $line = <FAM>){
+		    my @cells = &split_line ($line);
+		    if ($cells[2] eq "0" && $cells[3] eq "0") {
+			push @trio_arr, $line;
+		    }
+		}
+		close FAM;
+	    }
+	}
+	
+	#### merge and restart
+	
+	if (@trio_arr > 0){
+	    &a2file($trio_ex_file, @trio_arr);
+	}
+	else {
+	    &a2file($trio_ex_file, "FID IID");
+	}
+	my $cmd_str = "$bcomb_script --flip --ref $reffile --autos $ie_file --out $outname.mesp --nsout $nso @bimfiles";
+
+
+
+	if (0) {
+	print "yes, job array\n";
+
+	$sjadir = $pcaer_dir;
+	$sjaname = "mesp";
+	$sjatime = 2;
+	$sjamem = 3000;
+	push @sjaarray, $cmd_str;
+
+	&send_jobarray;
+	}
+
+
+
+#	&mysystem ("blueprint -b \"$cmd_str\" --mem 3000 --di --wa 3 -j --na mesp_$outname");
+#	&reinvo_c ("merge_sparse","$pcaer_dir/blueprint_joblist_file-mesp_$outname");
+    }
+}
+
+#exit;
+
+
+#####################################
+# merge 300 individuals on all overlapping SNPs
+#####################################
+
+my $bfile_me300="$outname.me300";
+
+unless (-e "$bfile_me300.bim") {
+    my $cmd_str = "$bcomb_script --flip --ref $reffile --autos $ie_file --out $outname.me300 --nsout 1000000 --nidout $ld_subgr @bimfiles";
+    print "$cmd_str\n";
+
+
+
+    $sjadir = $pcaer_dir;
+    $sjaname = "me300";
+    $sjatime = 1;
+    $sjamem = 3000;
+    push @sjaarray, $cmd_str;
+    
+    &send_jobarray;
+
+#    &mysystem ("blueprint -b \"$cmd_str\" --mem 3000 --di --wa 1 -j --na me300_$outname");
+#    &reinvo_c ("merge_300","$pcaer_dir/blueprint_joblist_file-me300_$outname");
+}
+#exit;
+
+##################################
+### LD pruning
+###################################
+
+
+my $bfile300 = "$outname.me300";
+my $subdir_prune="prune_$bfile300";
+
+my $bfile300_cp=$bfile300."_fini.pruned";
+my $bfile300_prune = $bfile300_cp.".prune";	
+my $bfile300_prune2 = $bfile300_cp.".prune_2";	
+my $bfile300_found = $bfile300_cp.".found";	
+   
+my $bfile_mepr = "$outname.mepr";
+my $bfile_menv = "$outname.menv";
+
+my @created = mkpath(
+    "$subdir_prune",
+    {verbose => 0, mode => 0750},
+    );
+
+unless (-e "$subdir_prune/$bfile300_prune2.prune.in.check") {
+
+
+    chdir "$subdir_prune" or die $!;
+    
+    unless (-e "$bfile300.bed") {
+	&mysystem ("ln -sf $pcaer_dir/$bfile300.fam .");
+	&mysystem ("ln -sf $pcaer_dir/$bfile300.bed .");
+	&mysystem ("ln -sf $pcaer_dir/$bfile300.bim .");
+    }
+    
+    my $exclude_txt = "";
+    my $nwind_h = $nwind/2;
+    
+ 
+    ########################################
+    #### exlcude non-autosomal, MHC, chr8inv
+    #######################################
+    
+    die "$bfile300.bim: ".$! unless open FILE, "< $bfile300.bim";
+    die "$bfile300.excl: ".$! unless open RA, "> $bfile300.excl";
+    while (my $line = <FILE>){
+	my @cells = &split_line ($line);
+	if ($cells[0] == 6 && $cells[3] > 25000000 && $cells[3] < 35000000) {
+	    print RA $line;
+	}
+	if ($cells[0] == 8 && $cells[3] > 7000000 && $cells[3] < 13000000) {
+	    print RA $line;
+	}
+	if ($cells[0] < 1 || $cells[0] > 22) {
+	    print RA $line;
+	}
+    }
+    close FILE;
+    close RA;
+    
+    
+    if (0) {
+	########################################
+	#### take random subset of individuals 
+	#######################################
+	
+	my $nfam = &count_lines ("$bfile300.fam");
+	
+	die "$bfile300.fam: ".$! unless open FILE, "< $bfile300.fam";
+	die "$bfile300.idexcl: ".$! unless open RA, "> $bfile300.idexcl";
+	while (my $line = <FILE>){
+	    print RA $line if (rand() < $ld_subgr/$nfam);
+	}
+	close FILE;
+	close RA;
+    }
+    
+    
+    ########################################
+    #### do the pruning
+    #######################################
+    
+    my $cmd_str ;
+#    $cmd_str .= "$ploc/plink --keep $bfile300.idexcl --hwe2 0.001 --geno 0.02 --make-founders --bfile $bfile300 --out $bfile300_found --make-bed; " unless (-e "$bfile300_found.bed");
+    unless (-e "$bfile300_found.bed") {
+	$cmd_str = "$ploc/plink --hwe2 0.001 --geno 0.02 --make-founders --bfile $bfile300 --out $bfile300_found --make-bed ";
+
+
+
+	$sjadir = "$pcaer_dir/$subdir_prune";
+	$sjaname = "pruneprep";
+	$sjatime = 2;
+	$sjamem = 1000;
+	push @sjaarray, $cmd_str;
+
+	&send_jobarray;
+
+
+
+#	&mysystem ("blueprint -b \"$cmd_str\" --di --wa 2 -j --na pruneprep_$bfile300");
+#	&reinvo_c ("pruning_prep","$pcaer_dir/$subdir_prune/blueprint_joblist_file-pruneprep_$bfile300");
+    }
+
+    unless (-e "$bfile300_prune.prune.in"){
+	$cmd_str = "$ploc/plink --exclude $bfile300.excl --bfile $bfile300_found --indep-pairwise $nwind $nwind_h 0.2 --maf 0.05 --out $bfile300_prune " ;
+
+
+	$sjadir = "$pcaer_dir/$subdir_prune";
+	$sjaname = "prune1";
+	$sjatime = 2;
+	$sjamem = 1000;
+	push @sjaarray, $cmd_str;
+
+	&send_jobarray;
+
+#	&mysystem ("blueprint -b \"$cmd_str\" --di --wa 2 -j --na prune1_$bfile300");
+#	&reinvo_c ("pruning_1","$pcaer_dir/$subdir_prune/blueprint_joblist_file-prune1_$bfile300");
+    }
+
+    unless (-e "$bfile300_prune.bed"){
+	$cmd_str = "$ploc/plink --bfile $bfile300_found --extract $bfile300_prune.prune.in --out $bfile300_prune --make-bed " ;
+
+
+	$sjadir = "$pcaer_dir/$subdir_prune";
+	$sjaname = "prunebed";
+	$sjatime = 2;
+	$sjamem = 1000;
+	push @sjaarray, $cmd_str;
+
+	&send_jobarray;
+
+
+#	&mysystem ("blueprint -b \"$cmd_str\" --di --wa 2 -j --na prunebed_$bfile300");
+#	&reinvo_c ("pruning_bed","$pcaer_dir/$subdir_prune/blueprint_joblist_file-prunebed_$bfile300");
+    }
+
+    unless (-e "$bfile300_prune2.prune.in") {
+	$cmd_str = "$ploc/plink --bfile $bfile300_prune --indep-pairwise $nwind $nwind_h 0.2 --out $bfile300_prune2 " ;
+
+	$sjadir = "$pcaer_dir/$subdir_prune";
+	$sjaname = "prune2";
+	$sjatime = 2;
+	$sjamem = 1000;
+	push @sjaarray, $cmd_str;
+
+	&send_jobarray;
+
+#	&mysystem ("blueprint -b \"$cmd_str\" --di --wa 2 -j --na prune2_$bfile300");
+#	&reinvo_c ("pruning_2","$pcaer_dir/$subdir_prune/blueprint_joblist_file-prune2_$bfile300");
+    }
+
+
+    my @pns;
+    
+    die "$bfile300_prune2.prune.in: ".$! unless open PI, "< $bfile300_prune2.prune.in";
+    while (my $line = <PI>){
+	chomp($line);
+	push @pns, $line;
+    }
+    close PI;
+    my $maxn = 100000;
+    my $rand_sth = 1.1;
+    if (@pns > $maxn) {
+
+	$rand_sth = $maxn / @pns;
+	print "randomly shorten to $maxn SNPs: $rand_sth\n";
+    }
+    
+    die "$bfile300_prune2.prune.in.check.tmp: ".$! unless open PO, "> $bfile300_prune2.prune.in.check.tmp";
+    foreach my $sl (@pns) {
+	if (rand() < $rand_sth) {
+	    print PO $sl."\n";
+	}
+    }
+    close PO;
+    
+
+    &mysystem ("mv $bfile300_prune2.prune.in.check.tmp $bfile300_prune2.prune.in.check");
+
+    chdir ($pcaer_dir);
+    
+#    $cmd_str .= "$ploc/plink --nonfounders --bfile $bfile300 --extract $bfile300_prune2.prune.in --out $bfile300_cp --make-bed";
+    
+    
+#    &mysystem ("blueprint -b \"$cmd_str\" --di --wa 2 -j --na prune$bfile300");
+#    &reinvo_b ("pruning","$pcaer_dir/$subdir_prune/blueprint_joblist_file-prune$bfile300");
+    
+}
+
+#print "inlcude the further pruning from pcaer_8\n";
+#exit;
+
+&mysystem ("cp $subdir_prune/$bfile300_prune2.prune.in.check ./$bfile_mepr.pruned_snps") unless (-e "$bfile_mepr.pruned_snps");
+
+#exit;
+
+
+
+#####################################
+# merge all individuals on pruned SNPs
+#####################################
+
+my $bfile_mepr="$outname.mepr";
+
+unless (-e "$bfile_mepr.bim") {
+    
+    my $iefile_mepr = "$bfile_mepr.famex";
+
+
+
+    my $cmd_str = "$bcomb_script --flip --ref $reffile --autos --out $bfile_mepr --sfile $bfile_mepr.pruned_snps  @bimfiles";
+#    print "$cmd_str\n";
+#    exit;
+
+
+    $sjadir = "$pcaer_dir";
+    $sjaname = "mepr";
+    $sjatime = 2;
+    $sjamem = 3000;
+    push @sjaarray, $cmd_str;
+
+    &send_jobarray;
+
+#    &mysystem ("blueprint -b \"$cmd_str\" --mem 3000 --di --wa 3 -j --na mepr_$outname");
+#    &reinvo_c ("merge_pruned","$pcaer_dir/blueprint_joblist_file-mepr_$outname");
+}
+
+
+#exit;
+
+my $ns_pp = &count_lines ("$bfile_mepr.bim");
+
+
+#print "debug\n";
+#exit;
+
+#####################################
+# plink-genome-testing on parallel jobs
+#####################################
+
+
+unless ($onlymds) {
+unless (-e "$bfile_mepr.overlap.pdf") {
+
+    my $genome_dir = "$rootdir/pcaer_$outname/genome_dir";
+    my @created = mkpath(
+	$genome_dir,
+	{verbose => 0, mode => 0750},
+	);
+    chdir $genome_dir or die $!;
+
+
+    unless (-e "$bfile_mepr.fam") {
+	&mysystem("ln -sf $pcaer_dir/$bfile_mepr.bim .");
+	&mysystem("ln -sf $pcaer_dir/$bfile_mepr.bed .");
+	&mysystem("ln -sf $pcaer_dir/$bfile_mepr.fam .");
+    }
+
+
+    my $gj = 0; # good jobs
+
+
+    my %fam_arr = ();
+    my %out_arr = ();
+
+    my @files = ();
+    opendir(DIR, ".") || die "can't opendir .: $!";
+    @files = readdir(DIR);
+    closedir DIR;
+
+    my @logfiles = grep {/.log$/} @files;
+    my %log_hash = ();
+
+    foreach (@logfiles){
+	$log_hash {$_} = 1;
+    }
+
+    print "number of log_files: ".@logfiles."\n";
+
+
+
+#######################################################
+## analyse the number of individuals, create id-lists for batches
+######################################################
+    
+    my $n_mepr = &count_lines ("$bfile_mepr.bim");
+
+
+    my $fc0 = 0;
+    if ($dedup12) {
+	my $bimfiles0 = $bimfiles[0];
+	unless (-e "$bimfiles0.fam") {
+#	    print "$bimfiles0.fam\n";
+	    $bimfiles0 =~ s/.bim$//;
+#	    print "result: $bimfiles0\n";
+	    &mysystem("ln -sf $pcaer_dir/$bimfiles0.fam .");
+#	    print "$pcaer_dir/$bimfiles0.fam\n";
+	}
+
+	my @famout = ();
+
+	die "$! ($bimfiles0.fam)" unless open FAM, "< $bimfiles0.fam";
+	my $idc = 0;
+
+	my $tmp_file0 = "b0_tmp_file";
+	while (<FAM>){
+	    push @famout, $_;
+	    $idc++;
+	    if ($idc == $ni_max) {
+		$idc = 0;
+#		&a2file ($tmp_file0.$fc0,@famout);
+		$fc0 ++;
+		@famout = ();
+	    }
+	}
+	close FAM;
+	
+	if ($idc != 0){
+#	    &a2file ($tmp_file0.$fc0,@famout) if ($idc != 0);
+	    $fc0++;
+	}
+
+    }
+
+    my @famout = ();
+    die "$! ($bfile_mepr.fam)" unless open FAM, "< $bfile_mepr.fam";
+    my $idc = 0;
+    my $nids = 0;
+    my $fc = 0;
+    my $tmp_file = "tmp_file";
+    while (<FAM>){
+
+	push @famout, $_;
+	$idc++;
+	$nids++;
+	if ($idc == $ni_max) {
+	    $idc = 0;
+#	    &a2file ($tmp_file.$fc,@famout);
+	    $fc ++;
+	    @famout = ();
+	}
+    }
+    close FAM;
+    
+    if ($idc != 0){
+#	&a2file ($tmp_file.$fc,@famout) if ($idc != 0);
+	$fc++;
+    }
+	
+	
+	
+#####################
+## create genome joblist
+###################
+	
+    my $jc = 0;	
+    $gj = 0; # good jobs
+    my @job_arr;
+
+    if ($dedup12) {
+#unlink <"joblist">;
+#	die "$! (joblist)" unless open JL, "> joblist";
+	if (0) {  ## with plink not working any more
+	
+	foreach my $i (0..$fc0-1){
+	    foreach my $j (0..$fc-1){
+#	    foreach my $j (0..$i){
+		my $code = sprintf "%03d%03d",$i,$j;
+		if (-e "data.sub.$code.log") {
+		    my $fini = `tail -2 data.sub.$code.log | head -1`;		
+		    if ($fini =~ /^Analysis finished/) {
+			$gj ++;
+		    }
+		    else {
+			my $tmpstr = sprintf "b0_tmp_file%d tmp_file%d --out data.sub.%s",$i,$j,$code;
+			push @job_arr, $tmpstr;
+#			printf JL "b0_tmp_file%d tmp_file%d --out data.sub.%s\n",$i,$j,$code;
+			$jc++;
+		    }
+		}
+		else {
+		    my $tmpstr = sprintf "b0_tmp_file%d tmp_file%d --out data.sub.%s",$i,$j,$code;
+		    push @job_arr, $tmpstr;
+#		    printf JL "b0_tmp_file%d tmp_file%d --out data.sub.%s\n",$i,$j,$code;
+		    $jc++;
+		}
+	    }
+	}
+#	close JL;
+	}
+
+    }
+    else {
+
+	
+#####################
+## create joblist
+###################
+	my $npa = $nids / 200;
+	$npa = sprintf "%d",$npa;
+	$npa++;
+#	print "debug: fc: npa: $npa\n";
+#	exit;
+
+#	my $npa = 10; # number of parallel jobs
+	foreach my $i (1..$npa){
+#	    print "i: $i\n";
+	    my $fini = `tail -3 data.sub.$i.log | head -1`;		
+#	    print "fini: $fini\n";
+	    if ($fini =~ /^Finished/) {
+		$gj ++;
+#		print "outet: $i\n";
+	    }
+	    else {
+#		print "iner: $i\n";
+#		print "job not finidhed: data.sub.$i.log: $fini\n";
+		if ($npa == 1) {
+		    my $tmpstr = sprintf "--out data.sub.$i";
+		    push @job_arr, $tmpstr;
+		    $jc++;
+		}
+		else {
+		    my $tmpstr = sprintf "--parallel $i $npa --out data.sub.$i";
+		    push @job_arr, $tmpstr;
+		    $jc++;
+		}
+
+	    }
+	}
+
+    }
+
+
+#    print "dddedd: $jc\n";
+#    exit;
+
+
+    &mysystem ("$ploc/plink --allow-no-sex --bfile $bfile_mepr --nonfounders --freq --out $bfile_mepr.frq") unless (-e "$bfile_mepr.frq.frq");
+
+
+
+    my $rel_th_quat = $rel_th / 4;
+    my $rel_th_half = $rel_th / 2;
+    if ($jc > 0){
+	$walltime = 2;
+#	print "debug, n=".@job_arr."\n";
+
+	my @job_arr_out ;
+	foreach (@job_arr) {
+#	    print "$_\n";
+	    push @job_arr_out, "$ploc/plink --memory 2000  --allow-no-sex --bfile $bfile_mepr --read-freq $bfile_mepr.frq.frq --genome gz --min $rel_th_half $_";
+	}
+
+
+	$sjadir = $genome_dir;
+	$sjaname = "genome";
+	$sjatime = 2;
+	$sjamem = 4000;
+	@sjaarray = @job_arr_out;
+    
+	&send_jobarray;
+
+
+    }
+
+
+    
+
+
+################################################
+### genome-collection
+###############################################
+
+
+
+    unless (-e "$bfile_mepr.genome_ctr"){
+	
+
+	my $npa = $nids / 200;
+	$npa = sprintf "%d",$npa;
+	$npa++;
+#	print "debug: fc: npa: $npa\n";
+#	exit;
+
+	if ($npa == 1) {
+	    &mysystem ("zcat data.sub.1.genome.gz > $bfile_mepr.genome; ");
+	}
+	else {
+	    &mysystem ("zcat data.sub.*.genome.*.gz > $bfile_mepr.genome; ");
+	}
+
+	die "$bfile_mepr.genome: ".$! unless open FILE, "< $bfile_mepr.genome";
+	die "$bfile_mepr.overlap.unshuffled: ".$! unless open OUT, "> $bfile_mepr.overlap.unshuffled";
+	while (my $line = <FILE>){
+	    my @cells = &split_line ($line);
+	    print OUT $line if ($cells[9] > $rel_th);
+	}
+	close FILE;
+	close OUT;
+
+	&mysystem ("echo genome-writing-overlap-complete > $bfile_mepr.genome_ctr; ");
+
+    }
+
+
+
+#    print "debug\n";
+#    exit;
+
+################################################
+### overlap analyse
+###############################################
+
+
+
+    my %pl_rank = ();
+    my $cc = 1;
+    $pl_rank{"addA5.0"} = $cc++;
+    $pl_rank{"addI550K"} = $cc++;
+
+    $pl_rank{"AFFY5.0"} = $cc;
+
+    $pl_rank{"A500"} = $cc++;
+    $pl_rank{"A5.0"} = $cc++;
+    $pl_rank{"I317"} = $cc++;
+    $pl_rank{"I550K"} = $cc++;
+    $pl_rank{"I550"} = $cc++;
+    $pl_rank{"I650"} = $cc++;
+
+    $pl_rank{"A6.0"} = $cc++;
+    $pl_rank{"omni"} = $cc++;
+
+    $pl_rank{"I1M"} = $cc;
+    $pl_rank{"Ill1M"} = $cc++;
+
+
+
+
+    unless (-e "$bfile_mepr.famex" ){
+
+#	print "debug\n";#
+#	exit;
+
+	my %ov_count = ();
+	my %ov_excl = ();
+
+	######## shuffle overlap file
+	die $!." ($bfile_mepr.overlap.unshuffled)" unless open OV, "< $bfile_mepr.overlap.unshuffled";
+	my @ov_arr = ();
+	while (<OV>){
+	    my @cells = &split_line ($_);
+	    my $id1 = "$cells[0]\t$cells[1]";
+	    my $id2 = "$cells[2]\t$cells[3]";
+	    $ov_count {$id1}++;
+	    $ov_count {$id2}++;
+	    push @ov_arr, $_;
+	}
+	close OV;
+
+#    print @ov_arr."overlaps\n";
+	
+	&fisher_yates_shuffle (\@ov_arr);
+
+	die $!." ($bfile_mepr.overlap)" unless open OP, "> $bfile_mepr.overlap";
+	foreach (@ov_arr){
+	    print OP "$_";
+	}
+	close OP;
+
+	die $!." ($bfile_mepr.overlap.count)" unless open OP, "> $bfile_mepr.overlap.count";
+	foreach (keys %ov_count){
+	    print OP "$_\t$ov_count{$_}\n";
+	}
+	close OP;
+
+	## remove all occurencies with more than 10 in the overlap file.
+	foreach (keys %ov_count){
+	    $ov_excl{$_} = 1 if ($ov_count{$_} > $ov_count_max);
+	}
+
+#    print "queer\n";
+
+
+	## analyse and create famex
+	my %fam_ex = ();
+	my %fam_in = ();
+	die $!." ($bfile_mepr.overlap)" unless open OV, "< $bfile_mepr.overlap";
+	while (<OV>){
+	    my @cells = &split_line ($_);
+	    my $id1 = "$cells[0]\t$cells[1]";
+	    my $id2 = "$cells[2]\t$cells[3]";
+
+
+
+#	   print "queer1\n";
+	    next if (exists $ov_excl{$id1} || exists $ov_excl{$id2});
+
+#    print "queer\n";
+
+	    if ($platform){
+		my $pl1 = "$cells[0]";
+		my @tmp_arr = split(/_/,$pl1);
+		@tmp_arr = split(/\*/,$tmp_arr[4]);
+		$pl1 = $tmp_arr[0];
+		my $pl2 = "$cells[2]";
+		my @tmp_arr = split(/_/,$pl2);
+		@tmp_arr = split(/\*/,$tmp_arr[4]);
+		$pl2 = $tmp_arr[0];
+
+
+		die "$pl1 not listed" unless (exists $pl_rank{$pl1});
+		die "$pl2 not listed" unless (exists $pl_rank{$pl2});
+#	    print "$pl1\n";
+		####swap them by platform-ranking
+		if ($pl_rank{$pl1} > $pl_rank{$pl2}){
+		    my $temp = $id1;
+		    $id1 = $id2;
+		    $id2 = $temp;
+		}
+	    }
+	    else {
+		####swap them by chance
+		if (rand () < .5){
+		    my $temp = $id1;
+		    $id1 = $id2;
+		    $id2 = $temp;
+		}
+	    }
+
+
+	    if ($prefercase) {
+		if ($id1 =~ /^cas_/ || $id1 =~ /^case_/) {
+		    my $temp = $id1;
+		    $id1 = $id2;
+		    $id2 = $temp;
+		}
+	    }
+
+	    if ($preferfam) {
+		if ($id1 =~ /^fam_/) {
+		    my $temp = $id1;
+		    $id1 = $id2;
+		    $id2 = $temp;
+		}
+	    }
+
+	    my $printfam = "8683_0";
+
+	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		print "--------\n";
+	    }
+
+
+	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		print "famex1:$id1\t$id2\n";
+	    }
+
+	    if (exists $fam_in{$id1}  && exists $fam_in{$id2}){
+		###### kill second , point seond to first
+		###### point all to the first, who point to the second
+		foreach my $idt (keys %fam_ex) {
+		    if ($fam_ex{$idt} eq $id2) {
+			$fam_ex{$idt} = $id1 if ($id1 ne $idt);
+		    }
+		}
+		$fam_ex {$id2} = $id1;
+		delete $fam_in {$id2};
+		next;
+	    }
+
+	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		print "famex2:$id1\t$id2\n";
+	    }
+
+	    ## both have been already excluded
+	    if (exists $fam_ex{$id1}  && exists $fam_ex{$id2}){
+		next;
+	    }
+
+	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		print "famex3:$id1\t$id2\n";
+	    }
+
+
+	    ## one is already a reference
+	    if (exists $fam_in{$id1} ){
+		$fam_ex {$id2} = $id1 unless (exists $fam_ex {$id2});
+		die "totally screwed\n" if (exists $fam_in{$id2});
+		next;
+	    }
+
+	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		print "famex4:$id1\t$id2\n";
+	    }
+
+	    ## the other is already a reference
+	    if (exists $fam_in{$id2} ){
+		$fam_ex {$id1} = $id2 unless (exists $fam_ex {$id1});
+		die "oh gott\n" if (exists $fam_in{$id1});
+		next;
+	    }
+
+	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		print "famex5:$id1\t$id2\n";
+	    }
+
+	    ## one is already out
+	    if (exists $fam_ex{$id1} ){
+		$fam_ex {$id2} = $fam_ex{$id1} ;
+		next;
+	    }
+
+	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		print "famex6:$id1\t$id2\n";
+	    }
+
+	    ## one is already out
+	    if (exists $fam_ex{$id2} ){
+		$fam_ex {$id1} = $fam_ex{$id2} ;
+		next;
+	    }
+
+	    if ($cells[0] =~ /$printfam/ || $cells[2] =~ /$printfam/) {
+		print "famex7:$id1\t$id2\n";
+	    }
+
+
+	    ## here if both are unknown so far
+	    $fam_ex {$id1} = $id2;
+	    $fam_in {$id2} = 1;
+	    
+	}
+	close FILE;
+
+#	print "debiug sleep\n";
+#	sleep(6);
+
+#    &hk2file ("$bfile_mesp.id2exo",%excl);
+#    exit;
+
+
+	if ($trio){
+	    foreach my $bfile (@bimfiles) {
+		$bfile =~ s/.bim$//;
+		next if ($bfile =~ /^pop/);
+		die $!."($rootdir/$bfile.fam)" unless open FAM, "< $rootdir/$bfile.fam";
+		while (my $line = <FAM>){
+		    my @cells = &split_line ($line);
+		    if ($cells[2] ne "0") {
+			my $id2 = "$cells[0]\t$cells[2]";
+			my $id3 = "$cells[0]\t$cells[3]";
+			my $id1 = "$cells[0]\t$cells[1]";
+			$fam_ex {$id2} = $id1;
+			$fam_ex {$id3} = $id1;
+		    }
+		}
+		close FAM;
+	    }
+	}
+
+
+	&h2file ("> $bfile_mepr.famex",%fam_ex);
+	&h2file (">> $bfile_mepr.famex",%ov_excl);
+
+#	print "debugging stop\n";
+#	exit;
+    }
+
+#    print "debug-sleep\n";
+#    sleep(5);
+#exit;
+
+
+################################################
+### overlap report
+###############################################
+
+
+    unless (-e "$bfile_mepr.overlap.pdf"){
+	
+#	my $syst_str = "";
+#	my $syst_str = "blueprint -b \"rep_overlap $bfile_mepr.overlap";
+#	$syst_str .= "\" --wa 1 -j --di --na repov$bfile_mepr";
+#	print "$syst_str\n";
+	
+#	&mysystem ($syst_str);
+	
+	my $cmd_str = "$repov_script $bfile_mepr.overlap";
+
+	$sjadir = "$genome_dir";
+	$sjaname = "repov";
+	$sjatime = 1;
+	$sjamem = 1000;
+	push @sjaarray, $cmd_str;
+
+	&send_jobarray;
+
+
+#	&reinvo_c ("report-overlap","$genome_dir/blueprint_joblist_file-repov$bfile_mepr");
+    }
+
+
+    &mysystem("mv $bfile_mepr.overlap.pdf $pcaer_dir") unless (-e "$pcaer_dir/$bfile_mepr.overlap.pdf");
+    &mysystem("cp $bfile_mepr.famex $pcaer_dir") unless (-e "$pcaer_dir/$bfile_mepr.famex");
+    &mysystem("mv $bfile_mepr.genome $pcaer_dir") unless (-e "$pcaer_dir/$bfile_mepr.genome");
+#&mysystem("mv $bfile_mepr.genome_ctr $pcaer_dir");
+    &mysystem("mv $bfile_mepr.overlap $pcaer_dir") unless (-e "$pcaer_dir/$bfile_mepr.overlap");
+#    &mysystem("mv $bfile_mepr.overlap.pdf $pcaer_dir") unless (-e "$pcaer_dir/$bfile_mepr.overlap.pdf");
+    &mysystem("mv $bfile_mepr.overlap.count $pcaer_dir") unless (-e "$pcaer_dir/$bfile_mepr.overlap.count");
+
+    
+#####################################
+# merge 300 individuals on all overlapping SNPs
+#####################################
+    if ($nomds){
+	&mysystem ("$ploc/plink --allow-no-sex --bfile $bfile_mepr --out $bfile_mepr.dedup") unless (-e "$bfile_mepr.dedup");
+    }
+#    exit;
+#    &mysystem("rm -rf $genome_dir");
+    chdir $pcaer_dir or die $!;
+    
+}
+
+#####################################
+# create nonoverlapping bfile 
+#####################################
+
+unless (-e "$bfile_menv.bim"){
+    &mysystem ("$ploc/plink --allow-no-sex --remove $bfile_mepr.famex --bfile $bfile_mepr --out $bfile_menv --make-bed");
+}
+
+
+
+}
+
+
+
+else {
+
+#####################################
+# if onlymds, then just link the menv file
+#####################################
+
+    &mysystem ("ln -s $bfile_mepr.fam $bfile_menv.fam") unless (-e "$bfile_menv.fam");
+    &mysystem ("ln -s $bfile_mepr.bim $bfile_menv.bim") unless (-e "$bfile_menv.bim") ;
+    &mysystem ("ln -s $bfile_mepr.bed $bfile_menv.bed") unless (-e "$bfile_menv.bed") ;
+
+
+}
+
+
+
+
+
+
+if ($dedup12){
+    print "stop after dedup12\n";
+    exit;
+}
+
+
+################################################
+################################################
+### mds-creation with eigenstrat
+###############################################
+################################################
+
+my $subdir_mds="mds_$bfile_menv";
+
+#my $bfile_mepr_noov = "$outname.mepr.noov";
+
+my @created = mkpath(
+    "$subdir_mds",
+    {verbose => 0, mode => 0750},
+    );
+
+
+unless (-e "$bfile_menv.mds") {
+
+    my $warn= 0;
+    chdir "$subdir_mds" or die $!;
+    
+    unless (-e "$bfile_menv.bim") {
+	&mysystem ("ln -sf $pcaer_dir/$bfile_menv.fam .");
+	&mysystem ("ln -sf $pcaer_dir/$bfile_menv.bed .");
+	&mysystem ("ln -sf $pcaer_dir/$bfile_menv.bim .");
+    }
+
+    if ($refpop){
+	unless (-e "$refpop.bim") {
+	    &mysystem ("ln -sf $pcaer_dir/$refpop.fam .");
+	    &mysystem ("ln -sf $pcaer_dir/$refpop.bed .");
+	    &mysystem ("ln -sf $pcaer_dir/$refpop.bim .");
+	}
+    }
+
+
+
+    my @fam_arr;
+    my $bfile_ref = "$bfile_menv.ref";
+    my $n_noov = &count_lines ("$bfile_menv.fam");
+    my $n_bim = &count_lines ("$bfile_menv.bim");
+    ##### create a 1 percent reference dataset
+    if ($noproject) {
+	$nref = $n_noov + 1;
+    }
+    my $rand_th = $nref / $n_noov;
+
+
+    if ($refpop) {
+	$rand_th = .5;
+	$bfile_ref = "refpop.$bfile_menv.ref";
+    }
+
+#    print "$rand_th\n";
+
+    ##################################################
+    ##### if dataset is smaller than max reference
+    ##################################################
+
+    if ($rand_th > 1) {
+	my $ncells ;
+	my @emds = ();
+#	my $emds_hash = ();
+	my @job_arr = ();
+	if (-e "$bfile_menv.emds"){
+	    die $!." ($bfile_menv.emds)" unless open EMDS, "< $bfile_menv.emds";
+	    while (<EMDS>){
+		my @cells = &split_line ($_);
+		$ncells = @cells -2;
+		$cells[2] = "0 $cells[2]";
+		push @emds, "@cells\n";
+	    }
+	    close EMDS;
+	}
+	else {
+
+	    
+	    push @job_arr, "$eigen_script --ex_outl $outliter --dat $bfile_menv --npcas $npcas" unless (-e "$bfile_menv.emds");
+
+	}
+
+
+
+
+
+	if (@job_arr > 0 ) {
+
+
+
+	    $sjadir = "$pcaer_dir/$subdir_mds";
+	    $sjaname = "epca";
+	    $sjatime = 2;
+	    $sjamem = 2000;
+	    @sjaarray = @job_arr;
+
+	    if ($noproject) {
+		if ($n_bim > 40000 && $n_noov > 5000) {
+		    $sjaweek = 1;
+		}
+		if ($n_noov > 60000) {
+		    $sjamem = 8000;
+		} else {
+		    $sjamem = 6000;
+		}
+
+	    }
+
+	    
+	    &send_jobarray;
+
+
+
+#	    &a2file ("joblist_epca",@job_arr);
+#	    my $njobs = @job_arr;
+#	    my $walltime_eigen = 4;
+#	    &mysystem ("cat joblist_epca | blueprint -b \"prefix\" --wa $walltime_eigen -i 8,4 -j --fortran --na epca_$bfile_menv");
+#	    &reinvo_b ("started-emds-$njobs","$pcaer_dir/$subdir_mds/blueprint_joblist_file-epca_$bfile_menv");
+	}
+
+	my $emds_header = "FID IID SOL";
+	foreach (1..$ncells) {
+	    $emds_header .= " C$_";
+	}
+	$emds_header .= "\n";
+	unshift (@emds, $emds_header);
+	&a2file ("$bfile_menv.emds",@emds);
+
+	copy ("$bfile_menv.emds", "$pcaer_dir/$bfile_menv.mds");
+    }
+    else {
+
+	if ($refpop){
+	    die $!." ($bfile_menv.fam)" unless open NOOV, "< $bfile_menv.fam";
+	    while (<NOOV>){
+#		print $_."\n";
+		push @fam_arr, $_;
+	    }
+	    close NOOV;
+#	    print "debug: $bfile_ref\t$refpop\n";
+#	    system("pwd");
+	    my $sys_tmp = "$ploc/plink  --allow-no-sex  --extract $bfile_menv.bim --bfile $refpop --out $bfile_ref --make-bed";
+#	    print "$sys_tmp\n";
+	    &mysystem ($sys_tmp) unless (-e "$bfile_ref.bed");
+#	    exit;
+
+
+
+	}
+	else {
+	    unless (-e "$bfile_ref.bed") {
+		die $!." ($bfile_menv.fam)" unless open NOOV, "< $bfile_menv.fam";
+		die $!." ($bfile_ref.ref)" unless open REF, "> $bfile_ref.ref";
+		while (<NOOV>){
+		    print REF "$_" if (rand() < $rand_th);
+		    push @fam_arr, $_;
+		}
+		close NOOV;
+		close REF;
+		&mysystem ("$ploc/plink  --allow-no-sex --keep $bfile_ref.ref --bfile $bfile_menv --out $bfile_ref --make-bed");
+	    }
+
+	    else {
+		die $!." ($bfile_menv.fam)" unless open NOOV, "< $bfile_menv.fam";
+		while (<NOOV>){
+		    push @fam_arr, $_;
+		}
+		close NOOV;
+	    }
+
+		
+	}
+	
+
+	#########take subgroup
+	
+	my $count_chunk = 0;
+	my $nc = 0;
+	my @chunk_fam =();
+	
+	my @job_arr = ();
+	
+	my @emds = ();
+	my %emds_hash;
+
+	
+	my $ncells ;
+
+#	my %ref_hash
+#	my $ref_id;
+	my @ref_id_arr;
+	my @flip_arr;
+
+
+	print "$bfile_ref.fam\n";
+	die $!." ($bfile_ref.fam)" unless open REF, "< $bfile_ref.fam";
+	#	while (<REF>){
+	my $line_tmp = <REF>;
+	my @cells = &split_line ($line_tmp);
+	push @ref_id_arr, $cells[0];
+	push @ref_id_arr, $cells[1];
+	print "@ref_id_arr\n";
+#	my $ref_id = "$cells[0]\t$cells[1]";
+#	foreach my $cc (2..$#cells) {
+#	    push @ref_id_arr, $cells[$cc];	    
+#	}
+
+#	    $ref_hash{$idt} = "no_set";
+#	    print "$idt\n";
+#	}
+	close REF;
+
+	
+
+
+	
+#$bfile_ref
+
+	
+	while (@fam_arr > 0) {
+
+	    my $fam_tmp =  shift (@fam_arr) ;
+
+	    if ($refpop) {
+
+		my @cells = &split_line ($fam_tmp);
+#		exit;
+		if ($cells[0] =~ /^mis_pop_/) {
+#		    print "$fam_tmp\n";
+		    next;
+#		    exit;
+		}
+	    }
+
+	    push @chunk_fam, $fam_tmp ;
+	    $nc++;
+
+#	    print "$fam_tmp\n";
+
+	    if ($nc == $chunk_size || @fam_arr == 0 ){
+		&a2file ("chuids$count_chunk", @chunk_fam);
+		
+		if (-e "$bfile_menv.chuids$count_chunk.full.emds"){
+
+		    @flip_arr = ();
+		    push @flip_arr,1;
+		    push @flip_arr,1;
+		    ## here for determining the flipped PCAs with one reference.
+		    die $!." ($bfile_menv.chuids$count_chunk.full.emds)" unless open EMDS, "< $bfile_menv.chuids$count_chunk.full.emds";
+		    while (<EMDS>){
+			my @cells = &split_line ($_);
+
+			if ($cells[0] eq $ref_id_arr[0]) {
+			    if ($cells[1] eq $ref_id_arr[1]) {
+				if (@ref_id_arr == 2) {
+				    foreach my $cc (2..$#cells) {
+					push @flip_arr,1;
+					push @ref_id_arr,$cells[$cc];
+					if ($cells[$cc] == 0) {
+					    print "flip not determinable in  $cells[0], $cells[1], $bfile_menv.chuids$count_chunk.full.emds\n";
+					}
+					
+				    }
+				}
+				else {
+				    foreach my $cc (2..$#cells) {
+					if ($cells[$cc] == -1 * $ref_id_arr[$cc]) {
+					    $flip_arr[$cc] = -1;
+					}
+					elsif ($cells[$cc] == $ref_id_arr[$cc]) {
+					    $flip_arr[$cc] = 1;
+					}
+					else {
+					    print "Error: no match, not at all: $cells[$cc], $ref_id_arr[$cc], $cells[0], $cells[1], $bfile_menv.chuids$count_chunk.full.emds\n";
+					    exit;
+					}
+#					print $count_chunk."\t".$cells[$cc]."\t".$ref_id_arr[$cc]."\t".$flip_arr[$cc]."\n";
+				    }
+				}
+				last;
+			    }
+			}
+		    }
+		    close EMDS;
+		    
+
+		    die $!." ($bfile_menv.chuids$count_chunk.full.emds)" unless open EMDS, "< $bfile_menv.chuids$count_chunk.full.emds";
+		    while (<EMDS>){
+			my @cells_tmp = &split_line ($_);
+
+			my @cells;
+			$cells[0] = $cells_tmp[0];
+			$cells[1] = $cells_tmp[1];
+			foreach my $cc (2..$#cells_tmp) {
+			    $cells[$cc] = $cells_tmp[$cc] * $flip_arr[$cc];
+#			    $cells[$cc] = $cells_tmp[$cc] ;
+			}
+			
+			$ncells = @cells -2;
+			$cells[2] = "0 $cells[2]";
+#			push @emds, "@cells\n";
+			my $id_tmp = "$cells[0]\t$cells[1]";
+			if (exists $emds_hash{$id_tmp}) {
+			    if ( $emds_hash{$id_tmp} ne "@cells\n") {
+
+
+				my @s1 = &split_line ($emds_hash{$id_tmp});
+				my @s2 = &split_line ("@cells");
+
+				my $c = 0;
+				my $sigdiff = 0;
+				my $sigdiff_txt;
+				foreach (@s1) {
+				    if ($_ ne $s2[$c]) {
+					my $diff = $_ - $s2[$c];
+					if ($diff < -0.01 || $diff > 0.01) {
+					    $sigdiff = 1;
+					    $sigdiff_txt .= "different: $c\n";
+					    $sigdiff_txt .= "amount: $diff\n";
+					    $sigdiff_txt .= "1: $_\n";
+					    $sigdiff_txt .= "2: $s2[$c]\n";
+					}
+				    }
+				    $c++;
+				}
+				if ($sigdiff) {
+				    print "Error: different mds outcomes for $id_tmp in $bfile_menv.chuids$count_chunk.full.emds\n";
+				    print "$emds_hash{$id_tmp}";
+				    print "@cells\n";
+				    print "-------------------------------------\n";
+				    print "$sigdiff_txt\n";
+				    print "-------------------------------------\n";
+				    
+
+				    exit;
+
+				}
+				else {
+#				    print "Warning: trivial difference in mds outcomes for $id_tmp in $bfile_menv.chuids$count_chunk.full.emds\n";
+				    $warn++;
+				}
+				    
+				if (0) {
+				    my $s1 = $emds_hash{$id_tmp};
+				    my $s2 = "@cells\n";
+				    my $l1 = length($s1);
+				    my $l2 = length($s2);
+				    
+				    for ( my $c = 0; $c < $l1; $c++) {
+					my $su1 = substr ($s1, $c, 1);
+					my $su2 = substr ($s2, $c, 1);
+					if ($su1 eq $su2) {
+					    print "-";
+					}
+					else {
+					    print "^";
+					}
+				    }
+				    print "\n";
+				}
+				
+			    }
+			}
+			else {
+			    $emds_hash{$id_tmp} = "@cells\n";
+			}
+		    }
+		    close EMDS;
+		}
+		else {
+
+		    
+		    if ($refpop) {
+			push @job_arr, "$eigen_script --returnref --ex_outl $outliter --ref $bfile_ref --dat $bfile_menv --keep chuids$count_chunk --npcas $npcas" unless (-e "$bfile_menv.chuids$count_chunk.emds");
+		    }
+		    else {
+			push @job_arr, "$eigen_script --ex_outl $outliter --ref $bfile_ref --dat $bfile_menv --keep chuids$count_chunk --npcas $npcas" unless (-e "$bfile_menv.chuids$count_chunk.emds");
+		    }
+		    
+		    
+		    
+		}
+		@chunk_fam = ();
+		$count_chunk ++;
+		$nc =0;
+	    }
+	}
+	#	print @fam_arr." ".$chunk_size." ".$nc." hier\n";	    	
+	if (@job_arr > 0 ) {
+	    
+	    
+	    $sjadir = "$pcaer_dir/$subdir_mds";
+	    $sjaname = "epca";
+	    $sjatime = 2;
+	    $sjamem = 2000;
+	    @sjaarray = @job_arr;
+	    
+	    &send_jobarray;
+	    
+	    
+	    #	    &a2file ("joblist_epca",@job_arr);
+	    #	exit;
+	    #	    my $njobs = @job_arr;
+	    #	    my $walltime_eigen = 4;
+#	    &mysystem ("cat joblist_epca | blueprint -b \"prefix\" --wa $walltime_eigen -i 8,4 -j --fortran --na epca$bfile_menv");
+	    #	    &reinvo_b ("started-emds-$njobs","$pcaer_dir/$subdir_mds/blueprint_joblist_file-epca$bfile_menv");
+	}
+	else {
+	    my $emds_header = "FID IID SOL";
+	    foreach (1..$ncells) {
+		$emds_header .= " C$_";
+	    }
+	    $emds_header .= "\n";
+	    
+	    foreach (keys %emds_hash) {
+		push @emds, $emds_hash{$_};
+	    }
+	    
+	    unshift (@emds, $emds_header);
+	    &a2file ("$bfile_menv.emds",@emds) if (@emds > 1);
+	}
+	
+	####  DEBUGG
+	copy ("$bfile_menv.emds", "$pcaer_dir/$bfile_menv.mds");
+	
+	
+    }
+    print "$warn warnings\n";
+    #    exit;
+}
+
+#print "debug\n";
+#exit;
+
+#my $bfile = "";
+ 
+################################################
+### tranfuse back
+###############################################
+
+if (1) {
+    chdir $pcaer_dir or die $!;
+    unless (-e "$bfile_menv.trans.mds") {
+	my $sys = "cp $bfile_menv.mds $bfile_menv.trans.mds";
+	unless ($onlymds) {
+	    $sys = "$transfuse_script --out $bfile_menv.trans.mds $bfile_mepr.famex $bfile_menv.mds";
+	}
+
+	print $sys."\n";
+
+	&mysystem ($sys);
+#	exit;
+#	&reinvo_b ("started-transfusion","$pcaer_dir/blueprint_joblist_file-trans$bfile_menv");
+    }
+}
+
+#exit;
+
+
+###############################################################################
+### calculate lambdas of MDS scores as metric of their impact on pop strat
+#############################################################################
+
+
+my $subdir_asso="assomds_$bfile300";
+
+my @created = mkpath(
+    "$subdir_asso",
+    {verbose => 0, mode => 0750},
+    );
+
+
+unless (-e "$bfile_menv.mds.lambda") {
+
+
+
+#    print "mp?\n";
+#    exit;
+    
+    my @assocmd=();
+    chdir "$subdir_asso" or die $!;
+
+    &mysystem ("ln -sf $pcaer_dir/$bfile_menv.fam .");
+    &mysystem ("ln -sf $pcaer_dir/$bfile_menv.bed .");
+    &mysystem ("ln -sf $pcaer_dir/$bfile_menv.bim .");
+    &mysystem ("ln -sf $pcaer_dir/$bfile_menv.mds .");
+
+
+
+    foreach (1..$npcas){
+
+	push @assocmd, "$ploc/plink --memory 2000  --allow-no-sex --bfile $bfile_menv --assoc --pheno $bfile_menv.mds --pheno-name C$_ --out $bfile_menv.assomds.C$_" unless (-e "$bfile_menv.assomds.C$_.qassoc");
+    }
+
+    if (@assocmd > 0 ) {
+#	&a2file ("joblist_assocmd",@assocmd);
+#	&mysystem ("cat joblist_assocmd | blueprint -b \"prefix\" --wa $walltime -i 8,1 -j --na asso_$bfile_menv");
+#	&reinvo_b ("started-assomds","$pcaer_dir/$subdir_asso/blueprint_joblist_file-asso_$bfile_menv");
+
+
+
+	$sjadir = "$pcaer_dir/$subdir_asso";
+	$sjaname = "asso";
+	$sjatime = 1;
+	$sjamem = 2000;
+	@sjaarray = @assocmd;
+	
+	&send_jobarray;
+
+
+
+    }
+
+    my @las = ();
+
+    my $join_list = "";
+    my $join_list_q = "";
+    my $join_list_lh = "";
+
+
+    my @gcmd = ();
+    my @qcmd = ();
+    my @lcmd = ();
+    foreach my $cc (1..$npcas){
+
+
+
+	push @gcmd, "$gwapl_script --cols 2,9,1,3 --ceiling 40 --maxy 40 --sig-gwa --title C$cc $bfile_menv.assomds.C$cc.qassoc" unless (-e "C$cc"."_gwa.pdf");
+	unless (-e "qqC$cc-qq.pdf") {
+	    push @qcmd, "$qqpl_script --ceiling 20 --out qqC$cc --pcol 9 $bfile_menv.assomds.C$cc.qassoc";
+	}
+	else {
+	    my $lalilo = `head -n 1 $bfile_menv.assomds.C$cc.qassoc.qq.la`;
+#	my $lalilo = `grep Genomic $bfile_menv.assomds.C$cc.log`;
+	    chomp($lalilo);
+	    my $ii = $lalilo;
+#	$ii =~ s/[^0-9.]//g;
+	    $ii =~ s/\t.*//g;
+	    
+	    if ($ii eq "") {
+		print "something wrong with lambda: $lalilo\n";
+		die;
+	    }
+	    push @las, "PCA$cc\t$ii\n";
+	}
+
+	push @lcmd, "$lahu_script --out lahunt_C$cc.chr --c1 1,1 --pcol 9 --best 8 $bfile_menv.assomds.C$cc.qassoc" unless (-e "lahunt_C$cc.chr"."_lama-page1.pdf");
+	push @lcmd, "$lahu_script --out lahunt_C$cc.mis --c1 4,10 --pcol 9 --best 8 $bfile_menv.assomds.C$cc.qassoc" unless (-e "lahunt_C$cc.mis"."_lama-page1.pdf");
+
+	$join_list .= " C$cc"."_gwa.pdf";
+	$join_list_q .= " qqC$cc-qq.pdf";
+	$join_list_lh .= " lahunt_C$cc.chr"."_lama-page1.pdf lahunt_C$cc.mis"."_lama-page1.pdf";
+    }
+
+    if (@gcmd > 0 ) {
+
+
+
+	$sjadir = "$pcaer_dir/$subdir_asso";
+	$sjaname = "gwapl";
+	$sjatime = 1;
+	$sjamem = 2000;
+	@sjaarray = @gcmd;
+
+#	print "debig, shrink_pdf: ".$gcmd[0]."\n";
+#	exit;
+	
+	&send_jobarray;
+
+
+#	&a2file ("joblist_gwaplot",@gcmd);
+#	&mysystem ("cat joblist_gwaplot | blueprint -b \"prefix\" --wa $walltime -i 8,4 -j --na gwapl_$bfile_menv");
+#	&reinvo_b ("started-gwaplot","$pcaer_dir/$subdir_asso/blueprint_joblist_file-gwapl_$bfile_menv");
+    }
+
+   if (@qcmd > 0 ) {
+
+
+
+	$sjadir = "$pcaer_dir/$subdir_asso";
+	$sjaname = "qqpl";
+	$sjatime = 1;
+	$sjamem = 2000;
+	@sjaarray = @qcmd;
+
+	&send_jobarray;
+
+    }
+
+
+   if (@lcmd > 0 ) {
+
+
+
+	$sjadir = "$pcaer_dir/$subdir_asso";
+	$sjaname = "lahu";
+	$sjatime = 1;
+	$sjamem = 2000;
+	@sjaarray = @lcmd;
+
+#	print "debug: $sjaarray[0]\n";
+#	exit;
+
+	&send_jobarray;
+
+    }
+
+
+#    if (0) {
+#	if (@lcmd > 0 ) {
+#	    &a2file ("joblist_lahunt",@lcmd);
+#	    &mysystem ("cat joblist_lahunt | blueprint -b \"prefix\" --wa $walltime -i 8,4 -j --na lahu_$bfile_menv");
+#	    &reinvo_c ("started-lahunt","$pcaer_dir/$subdir_asso/blueprint_joblist_file-lahu_$bfile_menv");
+#	}
+ #   }
+
+    &mysystem ("$pdfjoin_script --outfile $bfile_menv.mds.asso.pdf $join_list");
+    &mysystem ("$pdfjoin_script --outfile $bfile_menv.mds.qq.pdf $join_list_q");
+    &mysystem ("$pdfjoin_script --outfile $bfile_menv.mds.lahu.pdf $join_list_lh");
+    &mysystem ("$pdfnup_script --nup 2x2 $bfile_menv.mds.asso.pdf ");
+    &mysystem ("$pdfnup_script --nup 2x2 $bfile_menv.mds.qq.pdf ");
+    &mysystem ("$pdfnup_script --nup 2x2 $bfile_menv.mds.lahu.pdf ");
+    &mysystem ("gzip $bfile_menv.mds.asso-nup.pdf ");
+    &mysystem ("gzip $bfile_menv.mds.qq-nup.pdf ");
+    &mysystem ("gzip $bfile_menv.mds.lahu-nup.pdf ");
+    &mysystem ("mv $bfile_menv.mds.asso-nup.pdf.gz $pcaer_dir/");
+    &mysystem ("mv $bfile_menv.mds.qq-nup.pdf.gz $pcaer_dir/");
+    &mysystem ("mv $bfile_menv.mds.lahu-nup.pdf.gz $pcaer_dir/");
+
+#    if (0) {
+#	&mysystem ("pdfjoin --outfile $bfile_menv.mds.lahu.pdf $join_list2");
+#	&mysystem ("pdfnup --nup 2x2 $bfile_menv.mds.lahu.pdf ");
+#	&mysystem ("gzip $bfile_menv.mds.lahu-nup.pdf ");
+#	&mysystem ("mv $bfile_menv.mds.lahu-nup.pdf.gz $pcaer_dir/");
+ #   }
+
+
+
+    chdir "$pcaer_dir/";
+    
+    print STDERR "something wrong with number of MDS: $npcas\n" if (@las != $npcas);
+    
+    &a2file("$bfile_menv.mds.lambda","PCA\tLambda\n",@las);
+}
+
+#print "debug\n";
+#exit;
+
+################################################
+### pca_plot
+###############################################
+
+
+unless (-e "$bfile_menv.mds.2d.pdf.gz") {
+#    &mysystem ("blueprint -b \"pca_plot_2 --nsnps $ns_pp --pla $bfile_menv.mds.lambda $bfile_menv.mds\" --na pcaplot_$bfile_menv --wa 1 -j --di" );
+
+
+    my $cmd_str = "$pcapl_script --nsnps $ns_pp --pla $bfile_menv.mds.lambda $bfile_menv.mds";
+
+    $sjadir = "$pcaer_dir";
+    $sjaname = "pcaplot";
+    $sjatime = 1;
+    $sjamem = 1000;
+    push @sjaarray, $cmd_str;
+
+    &send_jobarray;
+
+#    &reinvo_c ("started-pca-plot","$pcaer_dir/blueprint_joblist_file-pcaplot_$bfile_menv");
+}
+
+#exit;
+
+#interactively select IDs based on MDS plots
+my $R_interact = '
+
+read.delim("OWFILE",sep=" ")->mds
+library(splancs)
+
+
+mds_hm3 <- mds [grep("_hm3_",mds[,4]),]
+plot (mds[,"C1"], mds [,"C2"],col="red", cex=.6,  pch = 16)
+points (mds_hm3[,"C1"], mds_hm3 [,"C2"],col="black", cex=.7,  pch = 16)
+
+mds[,c(8,9)]->xy
+
+poly<-getpoly()
+io <- inout(xy, poly) 
+
+poly2<-getpoly()
+io2 <- inout(xy, poly2)
+
+summary (mds[mds[,3] == "fam",3]) -> all
+
+#### TWO
+summary (mds[io & mds[,3] == "fam" ,3])->eur
+summary (mds[!io & mds[,3] == "fam" ,3])->noeur
+
+
+#### THREE
+summary (mds[io2 & !io & mds[,3] == "fam",3])->aa
+summary (mds[!io & !io2 & mds[,3] == "fam",3])->ww
+
+
+
+###########  THREE
+plot.pca <- function (pca1,pca2)
+{
+
+    plot (mds[,pca1], mds [,pca2],col="red", cex=.6,  pch = 16,xlab=pca1,ylab=pca2)
+
+	points(mds[io,pca1], mds[io,pca2], cex=.4 , pch=16, col="orange")
+	points(mds[!io & io2,pca1], mds[!io & io2,pca2], cex=.4 , pch=16, col="blue")
+	points(mds[!io & !io2,pca1], mds[!io & !io2,pca2], cex=.4 , pch=16, col="green")
+	points (mds_hm3[,pca1], mds_hm3 [,pca2],col= mds_hm3 [,1], cex=.7,  pch = 16)
+
+	legend("bottomleft",legend=c(all,eur,aa,ww),cex=.7,fill=c("white","white","yellow","yellow","blue","blue","green","green"))
+
+
+}
+
+###########  TWO
+plot.pca <- function (pca1,pca2)
+{
+
+    plot (mds[,pca1], mds [,pca2],col="red", cex=.6,  pch = 16,xlab=pca1,ylab=pca2)
+	points(mds[io,pca1], mds[io,pca2], cex=.4 , pch=16, col="orange")
+
+
+### two
+	legend("bottomleft",legend=c(all,eur,noeur),cex=.7,fill=c("white","white","orange","orange","green","green"))
+	points(mds[!io,pca1], mds[!io,pca2], cex=.4 , pch=16, col="green")
+	points (mds_hm3[,pca1], mds_hm3 [,pca2],col= mds_hm3 [,1], cex=.7,  pch = 16)
+
+}
+
+pdf ("OWINC.pdf")
+
+    plot.pca("C1","C2");
+plot.pca("C3","C4");
+
+polygon(poly)
+    polygon(poly2)
+
+
+    dev.off()
+
+
+
+
+    write.table (mds[io & mds[,3] == "fam",], file ="OWINC.eur")
+
+
+#### THREEE
+    write.table (mds[io2 & !io  & mds[,3] == "fam",], file ="OWINC.aa")
+    write.table (mds[!io2 & !io  & mds[,3] == "fam",], file ="OWINC.ww")
+
+
+### TWO
+    write.table (mds[!io  & mds[,3] == "fam",], file ="OWINC.noeur")
+
+
+##########
+
+
+    awk \'{print $4"_"$5}\'  OWINC.eur | tr -d "\"" | sort | uniq -c
+awk \'{print $4"_"$5}\'  OWINC.noeur | tr -d "\"" | sort | uniq -c
+
+    awk \'{print $4"_"$5"*"$6}\' OWINC.eur | tr -d "\""  > OWINC.eur_fam
+awk \'{print $4"_"$5"*"$6}\' OWINC.noeur | tr -d "\""  > OWINC.noeur_fam
+    awk \'{print $4"_"$5"*"$6}\' OWINC.aa | tr -d "\""  > OWINC.aa_fam
+awk \'{print $4"_"$5"*"$6}\' OWINC.ww | tr -d "\""  > OWINC.ww_fam
+
+
+    cat *.fam | grep -F -f OWINC_eur_fam  > IDS_eur
+    cat *.fam | grep -F -f OWINC_noeur_fam  > IDS_noeur
+
+    ls *.bim|p | $blue_script -b "~/plink/plink --bfile prefix --out eur_prefix --keep IDS_eur --make-bed" --wa 4 -j
+    ls *.bim|p | $blue_script -b "~/plink/plink --bfile prefix --out noeur_prefix --keep IDS_noeur --make-bed" --wa 4 -j
+
+
+
+
+    awk \'{print $4"_"$5"*"$6,$7,0,0,0,-1*$3}\' OWINC | tr -d "\""  > OWINC.fam_long
+awk \'{print $6,$7,0,0,0,-1*$3}\' OWINC | tr -d "\""  > OWINC.fam
+    id_tager --nn OLDPREFIX OWINC.fam
+
+    ';
+
+$R_interact =~ s/OWFILE/$bfile_menv.mds.overworked/;
+$R_interact =~ s/OWINC/$bfile_menv/g;
+
+
+&a2file ("$bfile_menv.Rpoly.script",$R_interact);
+
+
+
+############
+### cleaning up
+############
+
+#&mysystem ("rm -r tmp*");
+#&mysystem ("rm -f *chuids*");
+#&mysystem ("rm -f *genome.gz");
+
+unless ($onlymds) {
+&mysystem ("tar -cvzf $bfile_menv.mds.tar.gz $bfile_mepr.overlap $bfile_mepr.overlap.count $bfile_mepr.overlap.pdf $bfile_mepr.famex $bfile_mepr.genome $bfile_menv.Rpoly.script");
+}
+
+
+
+chdir "$rootdir";
+print "$rootdir\n";
+
+
+
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds .");
+ &mysystem ("cp $pcaer_dir/$bfile_menv.trans.mds .");
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.1d.pdf.gz .");
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.2d.pdf.gz .");
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.2ds.pdf.gz .");
+
+if (-e "$pcaer_dir/$bfile_menv.mds.overworked.p_assoc.txt") {
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.overworked.p_assoc.txt .");
+}
+
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.2ds.pdf.gz .");
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.sum.pdf .");
+if (0) {
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.lahu-nup.pdf.gz .");
+}
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.asso-nup.pdf.gz .");
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.qq-nup.pdf.gz .");
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.lahu-nup.pdf.gz .");
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.single.pdf.gz .");
+ &mysystem ("cp $pcaer_dir/$bfile_menv.mds.tar.gz .");
+my $pseudo_txt = "";
+if ($trio) {
+$pseudo_txt = "--pseudo";
+}
+ &mysystem ("$mds2cov_script $pseudo_txt $bfile_menv.mds");
+# &mysystem ("rm -fr $workdir");
+
+# &reinvo_c ("everything-is-fine","everythingdone");
+
+
+
+
+#################################################################
+## print meta file
+#################################################################
+
+if (1) {
+### print options with timestamp
+
+my $now = localtime time;
+die "$!: $outname.meta" unless open META, ">> $outname.meta";
+
+my $prefercase_meta = "0";
+my $preferfam_meta = "0";
+if ($prefercase) {
+    $prefercase_meta = 1;
+}
+if ($preferfam) {
+    $preferfam_meta = 1;
+}
+
+$now =~ s/ /_/g;
+
+print META "----------------------\t-----($now)----------\n";
+print META "variable(see_also_help)\tvalue\n";
+print META "rel_th\t$rel_th\n";
+print META "npcas\t$npcas\n";
+print META "nso\t$nso\n";
+print META "prefercase\t$prefercase_meta\n";
+print META "preferfam\t$preferfam_meta\n";
+print META "pca_qc_hwe(hardcoded)\t0.001\n";
+print META "pca_qc_geno(hardcoded)\t0.02\n";
+print META "pca_qc_maf(hardcoded)\t0.05\n";
+print META "pca_qc_ambiguous_snps(hardcoded)\texcluded\n";
+print META "pca_qc_mhc_6_25_35(hardcoded)\texcluded\n";
+print META "pca_qc_inv_8_7_13(hardcoded)\texcluded\n";
+print META "nwind(independent-pairwise)\t$nwind\n";
+print META "r2(hardcoded)\t0.2\n";
+
+if ($noproject) {
+print META "projection\toff\n";
+}
+else {
+print META "nref(random_subset_for_projection)\t$nref\n";
+}
+
+print META "file_with_excluded_ids\t$bfile_mepr.famex\n";
+print META "related_pairs\t$bfile_mepr.overlap\n";
+print META "all_pairs_above_half_of_rel_th\t$bfile_mepr.genome\n";
+
+
+close META;
+
+}
+
+
+#############################################################
+## SUCCESSSS
+#############################################################
+
+$sjadir = $rootdir;
+$sjaname = "finished";
+push @sjaarray, "tmp";
+$sjatime = 2;
+$sjamem = 1000;
+
+    
+&send_jobarray;
+
+
+
+exit;
+
+
+
+
+
+
+
+
+
+
+
+
+
+

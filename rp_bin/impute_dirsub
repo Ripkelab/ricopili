@@ -312,6 +312,7 @@ minimac3 is now default imputation algorithm (its no flag any more), here eagle 
 
  --noref           no reference during prephasing 
                       (some SNPs are not well matched with eagle but are with minimac)
+                      (same problem with shapeit5, which has problems with A1/A2 flips)
 
  --vcf_no_bcf      take the vcf.gz instead of bcf.gz during phasing with eagle
 

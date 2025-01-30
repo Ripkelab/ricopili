@@ -1,0 +1,536 @@
+#!/usr/bin/perl
+use strict;
+
+my $version = "2.0.0";
+my $progname = $0;
+$progname =~ s!^.*/!!;
+
+#############################
+# read config file
+#############################
+
+my $conf_file = $ENV{HOME}."/ricopili.conf";
+my %conf = ();
+
+die $!."($conf_file)" unless open FILE, "< $conf_file";
+while (my $line = <FILE>){
+    my @cells = split /\s+/, $line;
+    $conf{$cells[0]} = $cells[1];
+}
+close FILE;
+
+sub trans {
+    my ($expr)=@_;
+    unless (exists $conf{$expr}) {
+	die "config file without entry: $expr\n";
+    }
+    $conf{$expr};
+}
+
+my $ploc = &trans("p2loc");
+
+
+
+
+print "Warnng: rewrite all offsprings in ms to cases and all founder to controls, otherwise phasing does not work\n";
+sleep (3);
+
+#exit;
+
+
+
+
+####################################
+#### triague_5 now with plink2
+
+##### help message
+my $usage = "
+Usage : $progname fam-files
+
+version: $version
+
+  --help            print this message and exit
+
+
+ analyzes famstructure 
+
+ created by Stephan Ripke 2008 at MGH, Boston, MA
+ in the frame of the PGC
+
+";
+
+use Getopt::Long;
+GetOptions( 
+    "help"=> \my $help,
+    );
+
+
+die ("wrong: $ARGV\n$usage") if ($help || @ARGV == 0);
+
+
+
+
+#####################################
+# print array to file
+####################################
+
+sub a2file {
+    my ($file, @lines)=@_;
+    die $! unless open FILE, "> $file";
+    foreach (@lines){
+	print FILE $_;
+    }
+    close FILE;
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line
+##########################################
+
+sub split_line {
+    my ($line)=@_;
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+#######################################
+## BEGIN
+########################################
+
+my @famfiles = @ARGV;
+
+
+
+
+foreach my $famfile (@famfiles) {
+
+
+
+
+    my $bfile = $famfile;
+    $bfile =~ s/.fam$//;
+
+
+#    my $pedfile = "ped.".$bfile;
+
+#    my $cmd_str ="$plinkmodule --bfile $bfile --out $pedfile --recode ";
+#    &mysystem ($cmd_str) unless (-e "$pedfile.ped");
+
+#    die $! unless open PED , "< $pedfile.ped";
+#    my @pedlines = <PED>;
+#    close PED;
+
+#    print "holla\n";
+#    sleep(30);
+
+    die $! unless open FAM , "< $famfile";
+    my @famlines = <FAM>;
+    close FAM;
+
+    my %id_hash = ();
+
+    my $aff2par=0;  ## affected with two parents
+    my %fam_hash_aff2par = (); # family hash, both parents must go in.
+    my $nfam_aff2par = 0;
+
+
+    my $affxpar=0;  ## affected with anything but two parents
+    my %fam_hash_affxpar = (); # family hash
+    my $nfam_affxpar = 0;
+
+    my @trio_extract_lines = (); ## per trio file one "line"
+    push @trio_extract_lines, "";
+    my %par_hash = (); # parent hash, will be set to founder
+    my %off_hash = (); # offspring hash, for control
+    
+    ## read all IDs
+    foreach my $line (@famlines) {
+	my @cells = &split_line($line);
+	my $idname = $cells[0]."\t".$cells[1];
+	$id_hash{$idname}=1;
+    }
+
+
+
+    my $triofile = "trio.".$bfile;
+    my $atriofile = "atrio.".$bfile;
+    my $cafile = "case.".$bfile;
+    my $osfile = "offspr.".$bfile;
+    my $fofile = "found.".$bfile;
+    die $! unless open FT, "> $triofile.trio";
+    die $! unless open AT, "> $atriofile.trio";
+    die $! unless open AX, "> $cafile.affx";
+    die $! unless open OS, "> $osfile.offspr";
+    die $! unless open FOU, "> $fofile.founder";
+
+    my $cc_atrio = 0;
+    
+    ## reread, looking for cases
+    foreach my $line (@famlines) {
+	my @cells = &split_line($line);
+	if ($cells[5] ==2){
+	    my $par1 = $cells[0]."\t".$cells[2];
+	    my $par2 = $cells[0]."\t".$cells[3];
+	    my $id = $cells[0]."\t".$cells[1];
+	    my $fam_id = $cells[0];
+	    if (exists $id_hash{$par1} && $id_hash{$par2}) {
+		$aff2par ++;
+
+		$par_hash{$par1} = 1;
+		$par_hash{$par2} = 1;
+		$off_hash{$id} = 1;
+
+		die "offspr_par_change: $id" if (exists $par_hash{$id});
+		die "offspr_par_change: $par1" if (exists $off_hash{$par1});
+		die "offspr_par_change: $par2" if (exists $off_hash{$par2});
+
+
+		my $inc = 1;
+		my $telc = 0;
+
+		while ($inc == 1) {
+
+		    $inc = 0 ;
+		    my @te_local = split /\n/, $trio_extract_lines[$telc];
+		    foreach (@te_local){
+			my $fam_txt = $_;
+			$fam_txt =~ s/\t.*//;
+			if ($_ eq $par1 || $_ eq $par2 || $fam_txt eq $fam_id){
+			    $telc ++;
+			    $inc=1;
+			    last;
+			}
+		    }
+		    $trio_extract_lines[$telc] .= "$id\n$par1\n$par2\n" if ($inc == 0);
+
+		}
+
+
+
+
+
+		##########
+		####  offsprings with two parents, no seen yet
+		unless (exists $fam_hash_aff2par{$cells[0]}){
+		    $fam_hash_aff2par{$cells[0]} = 1;
+		    $nfam_aff2par++;
+
+		    print FT "$par1\n";
+		    print FT "$par2\n";
+		    print FT "$id\n";
+
+		    print OS "$id\n";
+
+		    print FOU "$par1\n";
+		    print FOU "$par2\n";
+		}
+
+		###
+		####  offsprings with two parents, already seen, so extract and build own dataset.
+		else {
+		    print AT "$par1\n";
+		    print AT "$par2\n";
+		    print AT "$id\n";
+
+		    print OS "$id\n";
+
+		    $cc_atrio ++;
+
+		}
+
+
+	    }
+	    else {
+		$affxpar ++;
+		print AX "$id\n";
+
+		unless (exists $fam_hash_affxpar{$cells[0]}){
+		    $fam_hash_affxpar{$cells[0]} = 1;
+		    $nfam_affxpar++;
+		}
+	    }
+#	    my $idname = $cells[0]."\t".$cells[1];
+	}
+    }
+
+    close AX;
+    close FT;
+    close AT;
+    close OS;
+    close FOU;
+
+#    print "HALLO\n";
+
+    my $merge_txt = "";
+
+    foreach my $telc(0..$#trio_extract_lines) {
+	my $subtriofile = "subtrio$telc.".$bfile;
+
+	my $keep_file = "$subtriofile.keep";
+	&a2file ($keep_file, $trio_extract_lines[$telc]);
+
+	print "$subtriofile.bed\n";
+	my $cmd_str ="$ploc/plink --bfile $bfile --keep $keep_file --out $subtriofile --make-bed ";
+	$merge_txt .= " $subtriofile.bim";
+	unless (-e "$subtriofile.bed") {
+	    unless (-e "ms.$bfile.bed") {
+		&mysystem ($cmd_str);
+		
+		
+### rename fam
+		die $! unless open FA, "< $subtriofile.fam";
+		die $! unless open FAT, "> $subtriofile.fam.tmp";
+		
+		foreach my $line (<FA>) {
+		    chomp($line);
+		    my @cells = &split_line($line);
+		    
+		    my $id = $cells[0]."\t".$cells[1];
+		    if (exists $par_hash{$id}) {
+			$cells[2] =0;
+			$cells[3] =0;
+		    }
+		    $cells[0] .= "_$telc";
+		    
+		    print FAT $cells[0];
+		    print FAT " $cells[1]";
+		    print FAT " $cells[2]";
+		    print FAT " $cells[3]";
+		    print FAT " $cells[4]";
+		    print FAT " $cells[5]";
+		    print FAT "\n";
+		    
+		    
+#		my $idname = $cells[0]."\t".$cells[1];
+#		$id_hash{$idname}=1;
+		}
+		close FA;
+		close FAT;
+		&mysystem ("mv $subtriofile.fam.tmp $subtriofile.fam");
+
+#	    exit;
+		
+	    }
+	    
+#	my @te_local = split /\n/, $trio_extract_lines[$_];
+#	foreach (@te_local){
+#	    print "$telc: $_\n";
+#	}
+	}
+    }
+
+    if (@trio_extract_lines > 1) {
+#	die "have to work on that";
+	my $me_sys = "bcomb_3_p2 --out ms.$bfile $merge_txt";
+#	print "$me_sys\n";
+#q	exit;
+	&mysystem ($me_sys) unless (-e "ms.$bfile.fam");
+
+    }
+    else {
+	unless (-e "ms.$bfile.bed") {
+	    &mysystem ("mv subtrio0.$bfile.bim ms.$bfile.bim");
+	    &mysystem ("mv subtrio0.$bfile.fam ms.$bfile.fam");
+	    &mysystem ("mv subtrio0.$bfile.bed ms.$bfile.bed");
+	}
+    }
+
+
+#    print "no merge?\n";
+#    exit;
+
+#    my $cmd_str ="$plinkmodule --bfile $bfile --keep $triofile.trio --out $triofile --make-bed ";
+#    &mysystem ($cmd_str) unless (-e "$triofile.bed");
+
+#    my $cmd_str ="$plinkmodule --bfile $bfile --keep $atriofile.trio --out $atriofile --make-bed ";
+#    if ($cc_atrio > 0) {
+#	&mysystem ($cmd_str) unless (-e "$atriofile.bed" );
+#    }
+
+    my $cmd_str ="$ploc/plink --bfile $bfile --keep  $osfile.offspr --out  $osfile --make-bed ";
+    &mysystem ($cmd_str) unless (-e "$osfile.bed");
+    
+    my $cmd_str ="$ploc/plink --bfile $bfile --keep  $fofile.founder --out  $fofile --make-bed ";
+    &mysystem ($cmd_str) unless (-e "$fofile.bed");
+    
+    if ($affxpar > 0) {
+	my $cmd_str ="$ploc/plink --bfile $bfile --keep  $cafile.affx --out  $cafile --make-bed " ;
+	&mysystem ($cmd_str) unless (-e "$cafile.bed");
+    }
+
+
+
+
+    my $sumfile = "$bfile.triague.sum";
+    die $! unless open SUM, "> $sumfile";
+    
+    print SUM "study";
+    print SUM "\taffected_w_2_parents";
+    print SUM "\tN_fam";
+    
+    print SUM "\taffected_wo_2_parents";
+    print SUM "\tN_fam";
+    print SUM "\n";
+
+
+
+    print SUM "$famfile";
+    
+    print SUM "\t$aff2par";
+    print SUM "\t$nfam_aff2par";
+
+    print SUM "\t$affxpar";
+    print SUM "\t$nfam_affxpar";
+
+    print SUM "\n";
+
+
+
+    close SUM;
+
+
+
+
+
+
+
+
+
+
+
+}
+
+exit;
+
+
+
+
+
+
+print "study";
+print "\ttrio with one affected offspring";
+print "\ttrio with one unaffected offspring";
+print "\tsingle founder, affected";
+print "\tsingle founder, unaffected";
+print "\tsingle founder, unknown";
+print "\texcluded offspring, case, connected to trio";
+print "\texcluded offspring, control, connected to trio";
+print "\texcluded offspring, case, not connected to trio";
+print "\texcluded offspring, control, not connected to trio\n";
+
+
+foreach my $famfile (@famfiles) {
+    print "$famfile";
+my $sorfamfile = "sorted_".$famfile;
+my %par_hash = (); # parent hash
+my %fam_hash = (); # family hash
+my $fam;
+
+&mysystem ("sort -k1,1 -k3,3 -k4,4 -k6,6rn -k2,2n $famfile > $sorfamfile ");
+
+my $trio_aff=0;
+my $trio_uaff=0;
+my $rest_ca=0;
+my $rest_co=0;
+my $rest_noc=0;
+my $rest_member_ca=0;
+my $rest_member_co=0;
+my $rest_nomember_ca=0;
+my $rest_nomember_co=0;
+
+
+die $! unless open FAM , "< $sorfamfile";
+
+my $read = 1;
+while ($read){
+    $read = (my $line = <FAM>);
+
+    my @cells = &split_line($line);
+    if ($cells[0] ne $fam  || !$read) {
+	if (keys %par_hash != 0){
+#	    print "$fam is not a trio\n";
+	    foreach (keys %par_hash){
+		if ($par_hash{$_} == 2){
+		    $rest_ca++;
+		}
+		elsif ($par_hash{$_} == 1) {
+		    $rest_co++;
+		}
+		else {
+		    $rest_noc++;
+		}
+
+	    }
+	}
+	%par_hash = ();
+	$fam = $cells[0];
+
+    }
+    last unless ($read);
+    if ($cells[2] eq "0" && $cells[3] eq "0") {
+	$par_hash{$cells[1]} = $cells[5];
+	$fam_hash {$cells[0]} =1 ;
+    }
+    elsif (exists $par_hash{$cells[2]} && exists $par_hash{$cells[3]}) {
+	if ($cells[5] == 2){
+	    $trio_aff++;
+	}
+	else {
+	    $trio_uaff++;
+	}
+	delete $par_hash{$cells[2]};
+	delete $par_hash{$cells[3]};
+    }
+    else  {
+#	print "$cells[0]\t$cells[1] has not two parents\n";
+
+	if (exists $fam_hash{$cells[0]}){
+	    if ($cells[5] == 2){
+		$rest_member_ca++;  
+	    }  
+	    else {
+		$rest_member_co++;  
+	    }
+	}
+	else {
+	    if ($cells[5] == 2){
+		$rest_nomember_ca++;  
+	    }  
+	    else {
+		$rest_nomember_co++;  
+	    }
+	}
+    }
+}
+
+close FAM;
+
+
+print "\t$trio_aff";
+print "\t$trio_uaff";
+print "\t$rest_ca";
+print "\t$rest_co";
+print "\t$rest_noc";
+print "\t$rest_member_ca";
+print "\t$rest_member_co";
+print "\t$rest_nomember_ca";
+print "\t$rest_nomember_co";
+
+print "\n";
+
+}

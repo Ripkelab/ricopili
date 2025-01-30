@@ -24,6 +24,7 @@ my $gmloc = &trans("gmloc");
 my $bcloc = &trans("bcloc");
 my $bcloc_plugins = &trans("bcloc_plugins");
 my $p2loc = &trans("p2loc");
+my $plink2loc = &trans("plink2loc");
 my $ealoc = "";
 
 my $buffer = 1000;
@@ -47,7 +48,7 @@ Usage : my.preph --out BFILE --in BFILE --fam FAMFILE --gema GEMAFILE --multi IN
  --trio STRING     additional 3 column file containing the childs information (see shapeit5 documentation)
 
  --eaglvcf         use eagle with VCF output (suitable for Minimac3)
- --noref           do not use reference when using eaglevcf (saving important SNPs)
+ --noref           do not use reference when using eaglevcf and for shapeit5 (saving important SNPs)
 
  --ref STRING      path to the reference vcf.gz file (required for --eagle_vcf; otherwise not used)
  --nospli          do not perform second task (splitting into smaller chunks)
@@ -418,8 +419,15 @@ elsif ($shapeit5) {
 #	$opt_txt = "--vcfRef $ref --vcfTarget $outname.unphased0.vcf.gz  --allowRefAltSwap";
 #    }
     
-#    my $sys_loc_plink = "$p2loc/plink --silent --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out $outname.unphased0";
-    my $sys_loc_plink = "$p2loc/plink --silent --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf bgz --out $outname.unphased0";
+    #    my $sys_loc_plink = "$p2loc/plink --silent --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile --recode vcf-iid bgz --out $outname.unphased0";
+
+    my $plinkreftxt = "--ref-allele $ref.refalleles 4 2";
+    if ($noref) {
+	$plinkreftxt = "";
+    }
+
+    
+    my $sys_loc_plink = "$plink2loc --silent --memory 2000 --bed $outname.bed --bim $outname.bim --fam $famfile $plinkreftxt  --recode vcf bgz --out $outname.unphased0";
     print BC "$sys_loc_plink\n";
     print "starting: $sys_loc_plink\n"  if ($debug);
     $sc += system ($sys_loc_plink) ;

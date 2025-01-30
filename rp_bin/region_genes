@@ -1,0 +1,336 @@
+#!/usr/bin/env perl
+use strict;
+
+
+
+
+##########################################################################################
+#
+#         addes genes to a file with coordinats
+##
+#
+#
+#
+# stephanripke@vpn5-106:~/Downloads$ region_genes --refgene ENSG.genes.txt.gz.short --infile ST4 --debug --chrcol 1 --leftcol 10 --rightcol 11 --kbwin 0
+# stephanripke@vpn5-106:~/Downloads$ region_genes --refgene ENSG.genes.txt.gz.short --infile ST3 --debug --chrcol 2 --leftcol 26 --rightcol 27 --kbwin 50000
+# stephanripke@vpn5-106:~/Downloads$ region_genes --refgene ENSG.genes.txt.gz.short --infile ST2 --debug --chrcol 1 --leftcol 10 --rightcol 11 --kbwin 0
+# stephanripke@vpn5-106:~/Downloads$ region_genes --refgene ENSG.genes.txt.gz.short --infile ST1 --debug --chrcol 2 --leftcol 16 --rightcol 17 --kbwin 50000
+#
+#
+##########################################################################################
+
+
+my $out_name = "no_output";
+my $infile = "no_input";
+my $chrcol = 1; #
+my $leftcol = 2; #
+my $rightcol = 3; #
+    
+
+my $refgene_file = "/Users/stephanripke/tmp/refGene_0413.txt.out";
+
+my $kbwin = 0; ## window in kb for defining a region 
+
+
+my $refgene_file = "";
+my $gene_chrcol = 2; # ld friend column
+my $gene_leftcol = 3; # ld friend column
+my $gene_rightcol = 4; # ld friend column
+my $gene_namecol = 5; # ld friend column
+
+
+use Getopt::Long;
+GetOptions( 
+
+    "help"=> \my $help,
+    "infile=s"=> \my $infile,
+    "kbwin=i"=> \$kbwin,
+    "chrcol=i"=> \$chrcol,
+    "leftcol=i"=> \$leftcol,
+    "rightcol=i"=> \$rightcol,
+    "out=s"=> \$out_name,
+    "debug"=> \my $debug,
+    "refgene_file=s"=> \$refgene_file,
+
+ );
+
+#if ($help || $txt_name eq "no_input"){
+if ($help){
+    print "usage: $0 OPTIONS 1mhc-files
+
+      options:
+
+      	--help           print this message and exit
+        --infile STRING  name of input file
+        --kbwin INT      window in bases (overwrites r2)
+        --chrcol         column in input file for chromosome (starting with 1)
+        --leftcol         column in input file for left margin (starting with 1)
+        --rightcol         column in input file for left margin (starting with 1)
+
+       --refgene_file STRING   directly the genefile (overwrites refdir)
+
+then this format is used (no exome information)
+chr2	227596032	227663506    IRS1
+
+         --debug        extended output
+
+         --out STRING    define outputfiles (will be the input if not taken)
+
+ created by Stephan Ripke 2019 at MGH, Boston, MA
+ Psychiatric Genomics Consortium
+\n";
+    exit 2;
+}
+
+
+unless (-e $infile){
+    print "Error: inputfile ($infile) not existing\n";
+    exit;
+}
+
+if ($out_name eq "no_output"){
+    $out_name = "$infile.genes";
+}
+
+
+###################################################
+###  system call with test if successfull
+###################################################
+
+sub mysystem(){
+    my ($systemstr)="@_";
+    system($systemstr);
+    my $status = ($? >> 8);
+    die "$systemstr\n->system call failed: $status" if ($status != 0);
+}
+
+
+
+##########################################
+# subroutine to split a plink-output-line with references
+##########################################
+
+sub split_line_ref {
+    my ($line)=${$_[0]};
+    chomp($line);
+    $line =~ s/^[\s]+//g;
+    my @cols=  split /\s+/, $line;
+    \@cols;
+}
+
+
+
+######################################
+##  other reGene file if found in directory
+######################################
+
+
+
+die "no gene file: $refgene_file" unless (-e $refgene_file);
+
+
+
+#####################################
+### BEGIN
+#####################################
+
+#####################################
+## reading the gene file
+
+
+### clean the gene file a bit
+print  "rewrite gene-reference: $refgene_file\n" if ($debug);
+#unless (-e "refGene.loc") {
+    print "create local gene list\n" if ($debug);
+    die $! unless open GI, "< $refgene_file";
+    die $! unless open GO, "> refGene.loc.tmp";
+    while (my $line = <GI>){
+	my @cells = @{&split_line_ref(\$line)};
+	if ($debug) {
+#	    print $cells[$gene_chrcol-1];
+#	    print " ".$cells[$gene_leftcol-1];
+#	    print " ".$cells[$gene_rightcol-1];
+#	    print " ".$cells[$gene_namecol-1];
+#	    print "\n";
+	}
+	$cells[$gene_chrcol-1] =~ s/chr//;
+	$cells[$gene_chrcol-1] =~ s/_random//;
+
+	print GO $cells[$gene_chrcol-1];
+	print GO " ".$cells[$gene_leftcol-1];
+	print GO " ".$cells[$gene_rightcol-1];
+	print GO " ".$cells[$gene_namecol-1];
+	print GO "\n";
+
+    }
+    close GI;
+    close GO;
+    &mysystem("mv refGene.loc.tmp refGene.loc");
+#}
+
+
+
+## creating hash (per chromosome)
+my @gene_name_arr = ();
+my @gene_star_arr = ();
+my @gene_stop_arr = ();
+print  "sort refGene: refGene.loc\n" if ($debug);
+
+&mysystem("sort -k1,1n -k2,2n refGene.loc > refGene.loc.sorted.tmp");
+&mysystem("mv refGene.loc.sorted.tmp  refGene.loc.sorted");
+
+
+print "create gene arrays per chromosome\n" if ($debug);
+die $! unless open GI, "< refGene.loc.sorted";
+while (my $line = <GI>){
+    my @cells = @{&split_line_ref(\$line)};
+    my $chr_loc = $cells[0] * 1;
+    push @{ $gene_name_arr[$chr_loc] }, $cells[3];
+    push @{ $gene_star_arr[$chr_loc] }, $cells[1];
+    push @{ $gene_stop_arr[$chr_loc] }, $cells[2];
+}
+close GI;
+
+push @{ $gene_name_arr[23] }, "NA";
+push @{ $gene_star_arr[23] }, 0;
+push @{ $gene_stop_arr[23] }, 0;
+
+
+
+print "annotate regions\n" if ($debug);
+#################################################
+## go through infile
+##########################################
+
+
+#my $txt_name = $infile;
+my $txt_name_sorted = $out_name.".locsorted";
+my $chrcols = $chrcol - 1;
+my $leftcols = $leftcol - 1;
+my $rightcols = $rightcol - 1;
+
+
+my $sortsys = "sort -k$chrcol,$chrcol"."n  -k$leftcol,$leftcol"."n $infile > $txt_name_sorted";
+if ($debug) {
+    print "$sortsys\n";
+#    exit;
+}
+
+system($sortsys);
+
+
+die $!."($txt_name_sorted)" unless open IN, "< $txt_name_sorted";
+die $! unless open REGDET, "> $txt_name_sorted.regions.tmp";
+die $! unless open NG, "> $txt_name_sorted.regions.ngenes";
+
+####################################################################################
+#### continue here
+##################################################################
+
+my $line = <IN>;
+my @cells = @{&split_line_ref(\$line)};
+while (@cells==0){
+    $line = <IN>;
+    @cells = @{&split_line_ref(\$line)};
+}
+chomp($line);
+if ($debug){
+#    print "$line-----------------\n";
+#    print @cells."number of cells\n";
+#    exit;
+}
+print REGDET $line." N-genes genes genes_all\n";
+print NG "N-genes\n";
+
+
+while (my $line = <IN>){
+    chomp($line);
+    my @cells = @{&split_line_ref(\$line)};
+
+    my $chr_loc = 1 * $cells[$chrcols];
+    my $left_loc = 1 * $cells[$leftcols] - $kbwin;
+    my $right_loc = 1 * $cells[$rightcols] + $kbwin;
+
+
+    if ($debug) {
+#	print "$chr_loc";
+#	print "\t$left_loc";
+#	print "\t$right_loc";
+#	print "\n";
+    }
+    
+    
+    my @name_arr_loc = @{ $gene_name_arr[$chr_loc] };
+    my @star_arr_loc = @{ $gene_star_arr[$chr_loc] };
+    my @stop_arr_loc = @{ $gene_stop_arr[$chr_loc] };
+		
+    my $left_m = $left_loc;
+    my $right_m = $right_loc ;
+    my %gene_hash= ();
+    my $gene_str = "";
+    my $Ngenes = 0;
+    foreach my $ac (0..$#name_arr_loc) {
+	my $gene_left = $star_arr_loc[$ac];
+	my $gene_right = $stop_arr_loc[$ac];
+	my $name_loc = $name_arr_loc[$ac];
+	
+	if ($gene_left < $right_m ) {
+	    if ($gene_right > $left_m ) {
+		unless (exists $gene_hash{$name_loc}) {
+		    $gene_str .= $name_loc.",";
+		    $Ngenes++;
+		    $gene_hash{$name_loc} = 1;
+		}
+		
+	    }
+	}
+    }  ## end gene array
+
+    $gene_str =~ s/,$//;
+    #		$gene_str = $Ngenes.":".$gene_str;
+    $gene_str = "-" if ($gene_str eq "");
+
+    my $genes_out_str;
+    if ($Ngenes > 5) {
+	$genes_out_str = "5+";
+    }
+    else {
+	$genes_out_str = $gene_str;
+    }
+
+		
+    print REGDET "$line $Ngenes $genes_out_str $gene_str\n";
+    print NG "$Ngenes\n";
+#    $cc++;
+
+}
+
+close IN;
+close REGDET;
+close NG;
+
+#print "Warning\n";
+
+
+#&mysystem ("sort -k1,1g $txt_name_sorted.regplot.tmp > $txt_name_sorted.regplot");
+#&mysystem ("sort -k1,1g $txt_name_sorted.purregplot.tmp > $txt_name_sorted.purregplot");
+&mysystem ("mv $txt_name_sorted.regions.tmp $txt_name_sorted.regions");
+#&mysystem ("sort -k6,6 $txt_name_sorted.forplot > $txt_name_sorted.sorted.forplot");
+&mysystem ("txt2xls --cogr 1,9,11,12 --txt $txt_name_sorted.regions");
+
+
+&mysystem ("plothist2 --xlimright 30 --novert --color grey --title Distribution_of_ngenes_per_region  --fullsteps --out $txt_name_sorted.regions --pcol 1 $txt_name_sorted.regions.ngenes");
+
+
+
+
+#print "$cc regions\n" if ($debug);
+print "$txt_name_sorted.regions.xls\n" if ($debug);
+print "$txt_name_sorted.regions.pdf\n" if ($debug);
+exit;
+
+
+
+
+exit;
+
