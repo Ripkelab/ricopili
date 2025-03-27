@@ -290,6 +290,10 @@ while (my $line = <FI>){
 
     my @cells = @{&split_line_ref(\$line)};
     my $snp = $cells[$scol-1];
+    if  ($snp eq ".") {
+	$snp = $cells[$ccol-1]."_".$cells[$kcol-1]."_".$cells[$a1col-1]."_".$cells[$a2col-1];
+	$cells[$scol-1] = $snp;
+    }	
     while (exists $bim_hash{$snp}) {
 	print MU "$snp -> $snp.s\n";
 	$snp = $snp.".s";
@@ -310,6 +314,7 @@ print "number of multisnp renamings: $nmult\n" if ($debug);
 #exit;
 
 
+print "create .ow und .ow.det -file\n" if ($debug);
 
 ################################################
 ### work on snp names
@@ -334,7 +339,7 @@ while (my $line = <FI>){
 
 
     if ($snp !~ /^rs[0-9]*$/) {
-#	print "$snp\t";
+#	print "$snp\n";
 
 	if ($snp =~ /rs[0-9]/) {
 	    my $csnp = $snp;
@@ -414,12 +419,13 @@ while (my $line = <FI>){
 
 
     }
+#    print "debug\n" if ($debug);
     print FO "@cells\n";
 }
 close FI;
 close FO;
 close FD;
-
+#exit;
 
 
 
@@ -1052,7 +1058,7 @@ close BC;
 chdir ($rootdir);
 sleep(1);
 #exit;
-&mysystem ("rm -r $work_dir");
+&mysystem ("rm -r $work_dir") unless ($debug);
 
 
 exit;
@@ -1109,12 +1115,6 @@ unless ($nocreate){
 chdir ($rootdir);
 
 
-&mysystem ("rm -r $work_dir");
+&mysystem ("rm -r $work_dir") unless ($debug);
 
 print "have a look at this file: $bim_log\n" if ($debug);
-
-
-
-
-
-
