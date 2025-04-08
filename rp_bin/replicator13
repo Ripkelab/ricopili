@@ -23,43 +23,7 @@ use FindBin;
 use lib "$FindBin::Bin";
 use Ricopili::Utils qw(trans);
 
-#############################
-# write log-file
-#############################
-#print "begin3\n";
-
-
-my $progname = $0;
-$progname =~ s!^.*/!!;
-my $command_line = "$progname @ARGV";
-
-
-
-#print "begin4\n";
-
-#############################
-# read config file
-#############################
-
-my $ploc = &trans("p2loc");
-my $sloc = &trans("sloc");
-my $hmloc = &trans("hmloc");
-my $loloc = &trans("loloc");
-
-
-
-my $past_file = "$loloc/replicator_info";
-my $pwd_loc = $ENV{PWD};
-
-die $! unless open FILE, ">> $past_file";
-print FILE "$pwd_loc\t$command_line\n";
-close FILE;
-
-
-####################################################
-
-
-my $areat_name = "no_name";
+#############################";
 my $rep_name = "no_name";
 my $expr_name = "no_name";
 
@@ -1469,7 +1433,7 @@ else {
 
 
 
-
+unless ($repbfile) {
 if ($rformat == 0) {
 
     my $rep_name_ffile = "$rep_name.format.txt";
@@ -1630,6 +1594,7 @@ if ($rformat == 0) {
 
 #    print "$header\n";
 
+}
 }
 
 

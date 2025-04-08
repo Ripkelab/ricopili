@@ -1104,6 +1104,9 @@ $R_templ =~ s/NUMBERSNPS/$nsnps/g;
 #exit;
 
 my $systemR = "$r_sys < $R_in --vanilla $r_silent";
+if ($debug) {
+    print "$systemR";
+}
 #my $systemR = "source /broad/software/scripts/useuse; use R-2.14; R  --vanilla < $R_in";
 system ($systemR);
 

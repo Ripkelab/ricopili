@@ -2635,7 +2635,7 @@ if (SNP_REP_P != 0) {
   points(hit$POS, -(log10(rep_p)), pch=25, cex=hitsize, bg="pink")
   points(hit$POS, -(log10(rep_p)), pch=25, cex=innerhitsize, bg="black")
 
-#  text(hit$POS, -(log10(rep_p)), labels=c(paste (  "incl. replication (P = ",signif(rep_p,3),")", sep ="")    ), pos=2, offset=1, cex =.6)
+  text(hit$POS, -(log10(rep_p)), labels=c(paste (  "incl. replication (P = ",signif(rep_p,3),")", sep ="")    ), pos=2, offset=1, cex =.6)
 
 }
 

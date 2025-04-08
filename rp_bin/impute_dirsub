@@ -1877,9 +1877,12 @@ if ($suminfo_s_v2_sw == 0) {
 	push @refend_arr, $mega_end;
 
 
-	$gm_template =~ s/XXX/$chrind/;
+#	$gm_template =~ s/XXX/$chrind/;
 #	my $gema_file = "$refdir/genetic_map_chr$chrind"."_combined_b37.txt";
 	my $gema_file = "$refdir/$gm_template";
+	$gema_file =~ s/XXX/$chrind/;
+	
+#	print "$gema_file\n";
 	push @gema_arr, $gema_file;
 	
 	
@@ -1895,7 +1898,7 @@ if ($suminfo_s_v2_sw == 0) {
 	
     }
 }
-
+#exit;
 
 
 #cat reference_templ
@@ -2628,11 +2631,13 @@ if ($suminfo_s_v2_sw == 1) {
 	push  @refstart_arr_v2, $cells[1];
 	push  @refend_arr_v2, $cells[2];
 	push  @refchr_arr_v2, $cells[0];
-	
-	$gm_template =~ s/XXX/$chrind/;
+#	print "templ :".$gm_template."\n";
+#	$gm_template =~ s/XXX/$chrind/;
 	my $gema_file = "$refdir/$gm_template";
+	$gema_file =~ s/XXX/$chrind/;
 #	my $gema_file = "$refdir/genetic_map_chr$cells[0]"."_combined_b37.txt";
-	#	    print $gema_file."\n";
+#	print $gema_file."\n";
+#	print "chr: ".$chrind."\n";
 	push @gema_arr_v2, $gema_file;
 	
 	### test existence once per chromosome

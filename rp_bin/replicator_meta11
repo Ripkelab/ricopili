@@ -1778,7 +1778,20 @@ foreach my $snp_name (keys %comb_snps) {
 
 print "combined worksheet\n";
 
-my $worksheet_repl   = $workbook->add_worksheet("replication results");  
+my $worksheet_repl   = $workbook->add_worksheet("replication results");
+
+#die $! unless open REMETA_OUT_DISC, "> $outname.comb.gwsdisc.txt";
+#die $! unless open REMETA_OUT_REP, "> $outname.comb.gwsrep.txt";
+
+#my $ngws_rep;
+
+my $nsum_gws_comb = 0;
+my $nsum_gws_comb_smaller = 0;
+my $nsum_gws_comb_bigger = 0;
+my $nsum_gws_comb_lost = 0;
+my $nsum_gws_comb_gain = 0;
+
+
 $worksheet_repl->freeze_panes(1, 9);
 my $lc = 0;
 $worksheet_repl->set_column(3, 3,  4, $formats);
@@ -2089,6 +2102,18 @@ foreach my $snp_name (keys %comb_snps) {
 		$possum_gws++ if ($sumdir eq "+");
 		$nsum_gws++ if ($sumdir eq "+" || $sumdir eq "0");
 		push @p_coll_gws, $cells[$snp_col]." $p_2_loc";
+
+		if ($comb_p{$snp_name} < $disc_p_hash{$snp_name}) {
+		    $nsum_gws_comb_smaller++;
+		}
+		else{
+		    $nsum_gws_comb_bigger++;
+		}
+
+		if ($comb_p{$snp_name} > 0.00000005) {
+		    $nsum_gws_comb_lost++;
+		}
+		
 	    }
 
 	    if ($disc_p_hash{$snp_name} <= 0.00000001) {
@@ -2130,6 +2155,12 @@ foreach my $snp_name (keys %comb_snps) {
     $tmp_str .= "\t".$comb_i{$snp_name};
 
 
+    if ($comb_p{$snp_name} <= 0.00000005) {
+	$nsum_gws_comb++;
+	if ($disc_p_hash{$snp_name} > 0.00000005) {
+	    $nsum_gws_comb_gain++;
+	}
+    }
 
 
 
@@ -2540,6 +2571,8 @@ close REP;
 
 
 
+
+
 ###################################################################
 ## calculate sign tests
 ################################################################
@@ -2692,80 +2725,114 @@ if (0) {
 
 #if ($nreps > 1) {
 
+
+
+
+
 ## single sum results
 ##########################################
 
-    my $worksheet_sisu   = $workbook->add_worksheet("sign_tests");  
-    $worksheet_sisu->set_column(0, 0,  40, );
-    
-    my $lc = 0;
-    
-    my $tmp_str = "Name\tP_TH\tnpos\tnsum\tsign-test\tratio\tNcase\tNcontrol\n";
-    my @cells = @{&split_line_ref(\$tmp_str)};
-    $worksheet_sisu->write_row($lc, 0, \@cells);
-    
+die $! unless open SIGNCOLL, "> $out_name.comb.sign.txt";
+
+my $worksheet_sisu   = $workbook->add_worksheet("sign_tests");  
+$worksheet_sisu->set_column(0, 0,  40, );
+
+my $lc = 0;
+my $p_gws_sign = "nan";
+
+my $tmp_str = "Name\tP_TH\tnpos\tnsum\tsign-test\tratio\tNcase\tNcontrol\n";
+my @cells = @{&split_line_ref(\$tmp_str)};
+$worksheet_sisu->write_row($lc, 0, \@cells);
+
+print SIGNCOLL "@cells";
+print SIGNCOLL " P\n";
+
 #my $form="BINOMDIST(C2-(B2+1),C2,0.5,TRUE)";
+
+
+foreach my $rep_str (@repsum) {
+    $lc++;
+    @cells = @{&split_line_ref(\$rep_str)};
+    #	my $pv_loc = $cells[4] * 1;
+    my $pv_loc = 0;
+    my $nsum_loc = $cells[3];
+    my $npos_loc = $cells[2];
+    my $signout = "sign.$npos_loc.$nsum_loc";
     
-    
-    foreach my $rep_str (@repsum) {
-	$lc++;
-	@cells = @{&split_line_ref(\$rep_str)};
-#	my $pv_loc = $cells[4] * 1;
-	my $pv_loc = 0;
-	my $nsum_loc = $cells[3];
-	my $npos_loc = $cells[2];
-	my $signout = "sign.$npos_loc.$nsum_loc";
-	
-	if ($nsum_loc > 0) {
-	    unless (-e $signout) {
-		my $R_templ = '
+    if ($nsum_loc > 0) {
+	unless (-e $signout) {
+	    my $R_templ = '
                binom.test(NSUM-NPOS,NSUM,alternative="less")$p.value
             ';
-		$R_templ =~ s/NSUM/$nsum_loc/g;
-		$R_templ =~ s/NPOS/$npos_loc/g;
-		
-		&a2file ("$out_name.sign.R",$R_templ);
-		my $r_script = "$r_sys < $out_name.sign.R --vanilla > $signout";
-#		my $r_script = "source /broad/software/scripts/useuse; use R-2.14; R < $out_name.sign.R --vanilla > $signout";
-		print "$r_script\n";
-		&mysystem ($r_script);
-	    }
-	    die "$!" unless open SIGN, "< $signout"; 
-	    print "get p-values out of $signout\n";
-	    while (<SIGN>){
-		my @cells = @{&split_line_ref(\$_)};
-		if ($cells [0] eq "[1]") {
-		    $pv_loc = $cells[1];
-		}
-	    }
-	    if ($pv_loc == 0){
-		print "Error: problem in sign test, \n";
-		exit;
+	    $R_templ =~ s/NSUM/$nsum_loc/g;
+	    $R_templ =~ s/NPOS/$npos_loc/g;
+	    
+	    &a2file ("$out_name.sign.R",$R_templ);
+	    my $r_script = "$r_sys < $out_name.sign.R --vanilla > $signout";
+	    #		my $r_script = "source /broad/software/scripts/useuse; use R-2.14; R < $out_name.sign.R --vanilla > $signout";
+	    print "$r_script\n";
+	    &mysystem ($r_script);
+	}
+	die "$!" unless open SIGN, "< $signout"; 
+	print "get p-values out of $signout\n";
+	while (<SIGN>){
+	    my @cells = @{&split_line_ref(\$_)};
+	    if ($cells [0] eq "[1]") {
+		$pv_loc = $cells[1];
 	    }
 	}
-	else {
-	    $pv_loc = 1.0;
+	if ($pv_loc == 0){
+	    print "Error: problem in sign test, \n";
+	    exit;
 	}
-
-
-
-#	print "$pv_loc\n";
-#	print "@cells\n";
-
-	$worksheet_sisu->write_row($lc, 0, \@cells);
-
-#	my $pv_loc = 0.5;
-
-	if ($pv_loc < .05) {
-	    $worksheet_sisu->write($lc,4,$pv_loc , $formatred) 
-	}
-	if ($pv_loc > .95) {
-	    $worksheet_sisu->write($lc,4,$pv_loc , $formatorange) 
-	}
-#	$worksheet_sisu->write($lc,4,$cells[4] , $formatorange) if ($cells[4] > .95);
-#    $worksheet_sisu->write($lc,3,$cells[3] , $formatred) if ($cells[3] < .05);
+	close SIGN;
     }
+    else {
+	$pv_loc = 1.0;
+    }
+
+
+
+    #	print "$pv_loc\n";
+    #	print "@cells\n";
+
+    $worksheet_sisu->write_row($lc, 0, \@cells);
+    print SIGNCOLL "@cells";
+    print SIGNCOLL " $pv_loc\n";
+
+    if ($cells[0] eq "REPLICATION" && $cells[1] eq "5.0e-08") {
+	$p_gws_sign = $pv_loc;
+    }
+    #	my $pv_loc = 0.5;
+
+    if ($pv_loc < .05) {
+	$worksheet_sisu->write($lc,4,$pv_loc , $formatred) 
+    }
+    if ($pv_loc > .95) {
+	$worksheet_sisu->write($lc,4,$pv_loc , $formatorange) 
+    }
+    #	$worksheet_sisu->write($lc,4,$cells[4] , $formatorange) if ($cells[4] > .95);
+    #    $worksheet_sisu->write($lc,3,$cells[3] , $formatred) if ($cells[3] < .05);
+}
+close SIGNCOLL;
 #exit;
+
+
+
+###################################################################
+## summary of results
+###################################################################
+
+die $! unless open SUM, "> $out_name.summary.gws.txt";
+
+print SUM "GWS_disc GWS_comb GWS_netincrease GWS_lost GWS_gain GWS_disc_samesmaller GWS_disc_bigger GWS_disc_samesmaller_ratio ";
+print SUM "same_direction ratio P_sign N_cases N-controls\n";
+my $nsum_gws_incr = $nsum_gws_comb - $nsum_gws;
+my $nsum_gws_comb_smaller_ratio = $nsum_gws_comb_smaller / ($nsum_gws_comb_smaller+$nsum_gws_comb_bigger);
+print SUM "$nsum_gws $nsum_gws_comb $nsum_gws_incr $nsum_gws_comb_lost $nsum_gws_comb_gain $nsum_gws_comb_smaller $nsum_gws_comb_bigger $nsum_gws_comb_smaller_ratio ";
+print SUM "$possum_gws $ratio_gws $p_gws_sign $nca_glob $nco_glob\n";
+
+close SUM;
     
 
 ## regions
@@ -2845,10 +2912,14 @@ print "---------------------------------------------------\n";
 
 
 print "main replicator finished\n";
+print "output text-file GWS: $out_name.summary.gws.txt\n";
+print "output text-file sign tests: $out_name.comb.sign.txt\n";
+print "output text-file details: $out_name.rep.txt\n";
+print "main replicator finished\n";
 
 
 print ("trying this commmand: \nplot_or_regressions $out_name.rep.txt\n");
-&mysystem ("plot_or_regressions $out_name.rep.txt");
+#&mysystem ("plot_or_regressions $out_name.rep.txt");
 
 
 
